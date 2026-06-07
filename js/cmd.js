@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -20814,6 +20814,7 @@ function heroLauncherSkillMeta(launcher) {
     const skill = heroThrowLauncherSkill(launcher);
     if (skill === 'bow') return { skill: P_BOW, skillName: 'bow' };
     if (skill === 'crossbow') return { skill: P_CROSSBOW, skillName: 'crossbow' };
+    if (skill === 'sling') return { skill: P_SLING, skillName: 'sling' };
     return null;
 }
 
@@ -20926,11 +20927,23 @@ const HERO_LAUNCHER_AMMO_MONSTER_DATA = new Map([
     ['crossbow bolt', { smallDie: 4, smallAdd: 1, largeDie: 6, largeAdd: 1, skill: P_CROSSBOW, skillName: 'crossbow' }],
 ]);
 
+const HERO_SLING_GEM_AMMO_MONSTER_DATA = { smallDie: 3, largeDie: 3, skill: P_SLING, skillName: 'sling' };
+const HERO_SLING_FLINT_AMMO_MONSTER_DATA = { smallDie: 6, largeDie: 6, skill: P_SLING, skillName: 'sling' };
+
+function heroSlingGemAmmoData(obj) {
+    if (!heroThrownGemClassObject(obj)) return null;
+    const key = objectKindKey(obj);
+    const name = pickupObjectName({ ...obj, quan: 1 }).toLowerCase().replace(/^(?:an?|the)\s+/, '');
+    if (obj?.otyp === FLINT || /\bflint(?: stone)?s?\b/.test(key) || /\bflint(?: stone)?s?\b/.test(name))
+        return HERO_SLING_FLINT_AMMO_MONSTER_DATA;
+    return HERO_SLING_GEM_AMMO_MONSTER_DATA;
+}
+
 function heroLauncherAmmoData(obj) {
     const key = objectKindKey(obj);
     if (HERO_LAUNCHER_AMMO_MONSTER_DATA.has(key)) return HERO_LAUNCHER_AMMO_MONSTER_DATA.get(key);
     const name = pickupObjectName({ ...obj, quan: 1 }).toLowerCase().replace(/^(?:an?|the)\s+/, '');
-    return HERO_LAUNCHER_AMMO_MONSTER_DATA.get(name) || null;
+    return HERO_LAUNCHER_AMMO_MONSTER_DATA.get(name) || heroSlingGemAmmoData(obj);
 }
 
 function heroFiredLauncherAmmoHitValue(obj, mon, launcher) {
@@ -20972,6 +20985,19 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
     if (hitValue >= dieroll) {
+        if (heroThrownStoneMissileHarmlessRockPasser(obj, mon)) {
+            wakeMonsterFromHeroThrownHit(mon);
+            exerciseHeroProjectileHitDexterity();
+            const mulched = shouldMulchHeroProjectileMissile(obj);
+            if (mulched) rn2(100);
+            return {
+                handled: true,
+                hit: true,
+                damage: 0,
+                mulched,
+                messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName} but does no harm.`],
+            };
+        }
         const { damage, silverMessage } = heroFiredLauncherAmmoDamage(obj, mon, launcher);
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
@@ -68595,6 +68621,12 @@ export async function rhack(_cmd) {
             const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
+        } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
+            const ammoImpact = heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
+            impactMessage = (ammoImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!ammoImpact.mulched;
+            impactObjectHit = !!ammoImpact.hit;
+            impactPassiveTarget = ammoImpact.hit ? targetMon : null;
         } else if (targetMon && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(item)) {
             const unicornImpact = heroThrownUnicornGemImpact(thrownObject, targetMon);
             impactMessage = (unicornImpact.messages || []).join('  ');
@@ -68621,12 +68653,6 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
-        } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
-            const ammoImpact = heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
-            impactMessage = (ammoImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!ammoImpact.mulched;
-            impactObjectHit = !!ammoImpact.hit;
-            impactPassiveTarget = ammoImpact.hit ? targetMon : null;
         } else if (targetMon && heroThrownByHandAmmoObject(item, throwLauncher)) {
             const ammoImpact = heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
             impactMessage = (ammoImpact.messages || []).join('  ');

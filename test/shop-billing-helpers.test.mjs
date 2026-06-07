@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -65916,6 +65916,175 @@ test('f command slung flint multishot interleaves split ids and break tests', as
     assert.equal(landed.quan, shotCount);
     assert.equal(landed.ox, 15);
     assert.equal(landed.oy, 5);
+});
+
+test('f command slung glass gem hits monster through launcher path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 2,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SLING, P_EXPERT);
+    const launcher = {
+        ...monsterSling(87617310),
+        letter: 'a',
+        wielded: true,
+        line: 'a - a sling (weapon in right hand)',
+        dknown: true,
+        known: true,
+    };
+    const glass = carriedGlassGem(87617410, 'g', {
+        quivered: true,
+        line: 'g - a worthless piece of red glass (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, glass];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.match(game._pending_message, /The red gem hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|catches|not interested|accepts/);
+    assert.equal(goblin.mhp, 30 - (damageRoll + 4));
+    assert.notEqual(goblin.mhp, 30 - (damageRoll + 10));
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(glass), false);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)',
+    ]);
+});
+
+test('hero-thrown glass gem with matching sling attacks unicorn instead of gift', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SLING, P_EXPERT);
+    const launcher = {
+        ...monsterSling(87617311),
+        letter: 'a',
+        wielded: true,
+        line: 'a - a sling (weapon in right hand)',
+        dknown: true,
+        known: true,
+    };
+    const glass = carriedGlassGem(87617411, 'g', {
+        line: 'g - a worthless piece of red glass',
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.inventory = [launcher, glass];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('g');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.match(game._pending_message, /The red gem hits the white unicorn[.!]/);
+    assert.doesNotMatch(game._pending_message, /catches|not interested|accepts|gift/);
+    assert.equal(unicorn.mhp, 24 - (damageRoll + 2));
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)',
+    ]);
+});
+
+test('f command slung flint to rock-passer does no harm without damage roll', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SLING, P_EXPERT);
+    const launcher = {
+        ...monsterSling(87617312),
+        letter: 'a',
+        wielded: true,
+        line: 'a - a sling (weapon in right hand)',
+        dknown: true,
+        known: true,
+    };
+    const flint = floorGem(87617412, 'flint stone', {
+        letter: 'b',
+        line: 'b - a flint stone (in quiver)',
+        plural: 'flint stones',
+        gemDescription: 'flint stone',
+        quivered: true,
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [launcher, flint];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /The flint stone hits the earth elemental but does no harm\./);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|misses|shatters/);
+    assert.equal(elemental.mhp, 20);
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(elemental.meating, 0);
+    assert.equal(elemental.mstrategy, 0);
+    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(rngValuesForCall(rngLog, 'rnd(6)').length, 0);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 2), [
+        'rnd(20)', 'rn2(19)',
+    ]);
 });
 
 test('f command no-sling glass gem hits monster by hand', async () => {

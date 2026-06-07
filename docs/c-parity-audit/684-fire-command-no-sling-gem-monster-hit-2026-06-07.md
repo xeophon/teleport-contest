@@ -23,5 +23,5 @@
 
 ## Remaining Follow-Ups
 
-- True slung rock/gem monster hits for `f` and direct `t` still need the matching-launcher damage/skill path.
+- True slung rock/gem monster hits for `f` and direct `t` are covered by audit 685.
 - Object/furniture mimic reveal, poisoned ammo effects, and lethal projectile cleanup remain separate `thitmonst()`/`hmon()` slices.
