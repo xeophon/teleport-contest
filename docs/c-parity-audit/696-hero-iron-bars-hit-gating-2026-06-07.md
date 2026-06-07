@@ -30,4 +30,3 @@ The horizontal hero throw scan stopped every projectile at iron bars before appl
 - Pointblank bars impacts.
 - Heavy projectile damage to bars and iron-bars dissolution cases.
 - Full armor, tool, rock/statue, corpse, and food class matrices.
-- Multishot fired/thrown projectile bars pass-through beyond the singleton throw path.

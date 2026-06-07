@@ -21018,7 +21018,7 @@ function heroFiredLauncherAmmoDamage(obj, mon, launcher) {
     return { damage, silverMessage: special.silverMessage };
 }
 
-function heroFireProjectileFlightResult(startX, startY, dir, range) {
+function heroFireProjectileFlightResult(startX, startY, dir, range, obj = null, { ironBars = false } = {}) {
     let ox = startX;
     let oy = startY;
     let targetMon = null;
@@ -21026,7 +21026,18 @@ function heroFireProjectileFlightResult(startX, startY, dir, range) {
         const nx = ox + dir.dx;
         const ny = oy + dir.dy;
         const loc = game.level?.at(nx, ny);
-        if (!loc || IS_OBSTRUCTED(loc.typ)) break;
+        if (ironBars && loc?.typ === IRONBARS) {
+            const pointBlank = step === 0;
+            const forcedHit = pointBlank ? false : rn2(5) === 0;
+            if (forcedHit || heroThrownIronBarsClassHitObject(obj))
+                return {
+                    ox,
+                    oy,
+                    targetMon: null,
+                    ironBarsImpact: { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank, forcedHit },
+                };
+        }
+        if (!loc || (loc.typ === IRONBARS ? !ironBars : IS_OBSTRUCTED(loc.typ))) break;
         ox = nx;
         oy = ny;
         targetMon = (game.level?.monsters || []).find(mon =>
@@ -23108,6 +23119,17 @@ async function heroThrownIronBarsImpact(obj, impact) {
     projectileTopLevelBreakMessage(obj, breakKind, messages);
     await applyHeroThrownFragileBreakSideEffects(obj, messages, impact.x, impact.y);
     return { broke: true, messages };
+}
+
+async function appendHeroProjectileIronBarsImpact(projectileObject, flight, messages) {
+    if (!flight?.ironBarsImpact) return { handled: false, broke: false };
+    const barsImpact = await heroThrownIronBarsImpact(projectileObject, flight.ironBarsImpact);
+    messages.push(...barsImpact.messages);
+    if (barsImpact.broke) {
+        markThrownBrokenObjectDebt(projectileObject);
+        stopCarriedFigurineTimerOnLeave(projectileObject);
+    }
+    return { handled: true, broke: !!barsImpact.broke };
 }
 
 async function heroThrownFragileObjectSelfHitMessages(obj, action, ceilingName = heroThrowCeilingName()) {
@@ -67776,28 +67798,27 @@ export async function rhack(_cmd) {
             fireRange = heroHorizontalThrowFinalRange(item, airSplit.throwRange);
             fireRecoilResult = heroHorizontalThrowRecoilResult(dir, airSplit.recoilRange);
         }
-        const initialFlight = heroFireProjectileFlightResult(startX, startY, dir, fireRange);
-        let ox = initialFlight.ox;
-        let oy = initialFlight.oy;
-        let targetMon = initialFlight.targetMon;
         const oldQuan = item.quan || 1;
         const firedFromLauncher = !!(launcher && heroThrowAmmoAndLauncher(item, launcher));
         const fireShotLimit = Math.max(0, Math.trunc(Number(game._fire_count || 0)));
         const shotCount = firedFromLauncher
             ? heroLauncherAmmoMultishotCount(item, launcher, fireShotLimit)
             : heroThrownStackableWeaponMultishotCount(item, fireShotLimit);
+        const splitProjectileFlight = shotCount > 1;
+        const initialFlight = splitProjectileFlight
+            ? { ox: startX, oy: startY, targetMon: null, ironBarsImpact: null }
+            : heroFireProjectileFlightResult(startX, startY, dir, fireRange, item, { ironBars: true });
+        let ox = initialFlight.ox;
+        let oy = initialFlight.oy;
+        let targetMon = initialFlight.targetMon;
         let impactMessage = '';
         let landingMessage = '';
         const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
         const newsymTargets = [];
-        if (targetUsesImpact && shotCount > 1) {
+        if (splitProjectileFlight) {
             const impactMessages = [];
             const landingMessages = [];
             for (let shot = 0; shot < shotCount; shot++) {
-                const flight = heroFireProjectileFlightResult(startX, startY, dir, fireRange);
-                ox = flight.ox;
-                oy = flight.oy;
-                targetMon = flight.targetMon;
                 const shotId = oldQuan - shot > 1 ? next_ident() : item.id;
                 const splitShot = shotId !== item.id;
                 const projectileObject = {
@@ -67810,19 +67831,24 @@ export async function rhack(_cmd) {
                     o_id: splitShot ? undefined : item.o_id,
                     _shopBillObjectId: splitShot ? undefined : item._shopBillObjectId,
                     quan: 1,
-                    ox,
-                    oy,
                     glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
                     color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
                 };
+                const flight = heroFireProjectileFlightResult(startX, startY, dir, fireRange, projectileObject, { ironBars: true });
+                ox = flight.ox;
+                oy = flight.oy;
+                targetMon = flight.targetMon;
+                projectileObject.ox = ox;
+                projectileObject.oy = oy;
                 if (oldQuan - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
+                const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, flight, impactMessages);
                 const shotUsesImpact = heroFireProjectileTargetUsesImpact(projectileObject, targetMon, launcher, firedFromLauncher);
-                const impact = shotUsesImpact
+                const impact = !barsResult.handled && shotUsesImpact
                     ? heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
                 if (targetMon) newsymTargets.push(targetMon);
-                if (!impact.consumed) {
+                if (!impact.consumed && !barsResult.broke) {
                     const breakRoll = !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
                     const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
                         breakRoll,
@@ -67863,7 +67889,10 @@ export async function rhack(_cmd) {
             let impactConsumedProjectile = false;
             let impactObjectHit = false;
             let impactPassiveTarget = null;
-            if (targetMon) {
+            const projectileImpactMessages = [];
+            const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, initialFlight, projectileImpactMessages);
+            if (barsResult.handled) impactMessage = projectileImpactMessages.join('  ');
+            if (!barsResult.handled && targetMon) {
                 const impact = heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher);
                 if (impact.handled) {
                     impactMessage = (impact.messages || []).join('  ');
@@ -67873,7 +67902,7 @@ export async function rhack(_cmd) {
                     newsymTargets.push(targetMon);
                 }
             }
-            if (!impactConsumedProjectile && hardLanding) {
+            if (!impactConsumedProjectile && !barsResult.broke && hardLanding) {
                 projectileBreakRoll = null;
                 for (let shot = 0; shot < shotCount; shot++) {
                     if (!splitBeforeImpact && oldQuan - shot > 1) projectileId = next_ident();
@@ -67882,7 +67911,7 @@ export async function rhack(_cmd) {
                 }
             }
             if (!splitBeforeImpact && projectileId != null) projectileObject.id = projectileId;
-            const landing = impactConsumedProjectile
+            const landing = impactConsumedProjectile || barsResult.broke
                 ? { object: null, messages: [] }
                 : landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
                     breakRoll: projectileBreakRoll,
@@ -68776,13 +68805,31 @@ export async function rhack(_cmd) {
             );
             throwNoLauncherMessage = airSplit.noLauncherMessage || throwNoLauncherMessage;
         }
+        const itemQuantity = item.quan || 1;
+        const directLauncherAmmo = !!(heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher));
+        const directShotLimit = Math.max(0, Math.trunc(Number(game._throw_shot_limit || 0)));
+        const directLauncherShotCount = directLauncherAmmo
+            ? heroLauncherAmmoMultishotCount(item, throwLauncher, directShotLimit)
+            : 1;
+        const directThrownStackableWeapon = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(item);
+        const directThrownStackableWeaponShotCount = directThrownStackableWeapon
+            ? heroThrownStackableWeaponMultishotCount(item, directShotLimit)
+            : 1;
+        const directMultishotCount = directLauncherAmmo
+            ? directLauncherShotCount
+            : directThrownStackableWeaponShotCount;
+        const directCountForcesVolleyMessage = directShotLimit > 0
+            && (directLauncherAmmo || directThrownStackableWeapon);
+        const directProjectileVolley = (directLauncherAmmo || directThrownStackableWeapon)
+            && (directMultishotCount > 1 || directCountForcesVolleyMessage)
+            && !boomerangFlight.handled;
         let flightImpactMessage = '';
         if (boomerangFlight.handled) {
             ox = boomerangFlight.x ?? ox;
             oy = boomerangFlight.y ?? oy;
             targetMon = boomerangFlight.targetMon || null;
             flightImpactMessage = [boomerangPreRecoilMessage, boomerangFlight.message || ''].filter(Boolean).join('  ');
-        } else {
+        } else if (!directProjectileVolley) {
             for (let step = 0; step < throwRange; step++) {
                 const nx = ox + dir.dx;
                 const ny = oy + dir.dy;
@@ -68831,22 +68878,7 @@ export async function rhack(_cmd) {
             game.context.move = 0;
             return;
         }
-        const itemQuantity = item.quan || 1;
         const attachedBallThrow = heroThrownAttachedBallObject(item);
-        const directLauncherAmmo = !!(heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher));
-        const directShotLimit = Math.max(0, Math.trunc(Number(game._throw_shot_limit || 0)));
-        const directLauncherShotCount = directLauncherAmmo
-            ? heroLauncherAmmoMultishotCount(item, throwLauncher, directShotLimit)
-            : 1;
-        const directThrownStackableWeapon = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(item);
-        const directThrownStackableWeaponShotCount = directThrownStackableWeapon
-            ? heroThrownStackableWeaponMultishotCount(item, directShotLimit)
-            : 1;
-        const directMultishotCount = directLauncherAmmo
-            ? directLauncherShotCount
-            : directThrownStackableWeaponShotCount;
-        const directCountForcesVolleyMessage = directShotLimit > 0
-            && (directLauncherAmmo || directThrownStackableWeapon);
         const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
             ? attachedBallThrow
                 ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
@@ -68859,17 +68891,11 @@ export async function rhack(_cmd) {
             if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
             return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
         };
-        if ((directLauncherAmmo || directThrownStackableWeapon)
-            && (directMultishotCount > 1 || directCountForcesVolleyMessage)
-            && !boomerangFlight.handled && !ironBarsImpact) {
+        if (directProjectileVolley) {
             const impactMessages = [];
             const landingMessages = [];
             const newsymTargets = [];
             for (let shot = 0; shot < directMultishotCount; shot++) {
-                const flight = heroFireProjectileFlightResult(ux, uy, dir, throwRange);
-                ox = flight.ox;
-                oy = flight.oy;
-                targetMon = flight.targetMon;
                 const shotId = itemQuantity - shot > 1 ? next_ident() : item.id;
                 const splitShot = shotId !== item.id;
                 const projectileObject = {
@@ -68883,18 +68909,23 @@ export async function rhack(_cmd) {
                     o_id: splitShot ? undefined : item.o_id,
                     _shopBillObjectId: splitShot ? undefined : item._shopBillObjectId,
                     quan: 1,
-                    ox,
-                    oy,
                     glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
                     color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
                 };
+                const flight = heroFireProjectileFlightResult(ux, uy, dir, throwRange, projectileObject, { ironBars: true });
+                ox = flight.ox;
+                oy = flight.oy;
+                targetMon = flight.targetMon;
+                projectileObject.ox = ox;
+                projectileObject.oy = oy;
                 if (itemQuantity - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
-                const impact = targetMon
+                const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, flight, impactMessages);
+                const impact = !barsResult.handled && targetMon
                     ? heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, directLauncherAmmo)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
                 if (targetMon) newsymTargets.push(targetMon);
-                if (!impact.consumed) {
+                if (!impact.consumed && !barsResult.broke) {
                     const breakRoll = !impact.hit && !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
                     const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
                         breakRoll,
