@@ -18490,16 +18490,11 @@ function supportsHeroThrownPotionBodyHit(potion, mon = null, kind = thrownPotion
 }
 
 function isSaddlePotionHit(potion, mon, kind = thrownPotionEffectKind(potion)) {
-    return isPotionObject(potion) && !!monsterWornSaddleForPotionHit(mon)
-        && (kind === 'water'
-            || supportsHeroThrownPotionBodyHit(potion, mon, kind, { ignoreSaddle: true }));
+    return isPotionObject(potion) && !!monsterWornSaddleForPotionHit(mon);
 }
 
 function supportsHeroThrownPotionHit(potion, mon = null) {
-    if (!isPotionObject(potion)) return false;
-    const kind = thrownPotionEffectKind(potion);
-    return supportsHeroThrownPotionBodyHit(potion, mon, kind)
-        || isSaddlePotionHit(potion, mon, kind);
+    return isPotionObject(potion);
 }
 
 function wieldedConsumedBashObject(obj) {

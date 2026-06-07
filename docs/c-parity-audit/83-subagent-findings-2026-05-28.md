@@ -32,11 +32,11 @@ C blessed water can reduce a shifted vampire form to zero HP, but `killed()` rou
 
 JS currently sends lethal blessed-water vampshifter hits through ordinary monster death cleanup. A narrow implementation belongs inside `waterPotionHitShapechanger()` before `killMonsterFromPotionHit()`: revive/reform to base vampire data, emit the rise message, and skip XP/vanquish/drop/corpse removal.
 
-## Remaining Identity-Independent Direct Potion Gap
+## Implemented Follow-Up: Identity-Independent Direct Potion Route
 
-C sends any potion-class direct hit that passes the thrown-object hit roll through `potionhit()`. JS still requires a known supported identity or explicit index mapping before entering the shared route. Source anchors: `nethack-c/upstream/src/dothrow.c:2262`, `js/cmd.js` direct potion support gates, and prior audit 80.
+C sends any potion-class direct hit that passes the thrown-object hit roll through `potionhit()`. JS previously required a known supported identity or explicit index mapping before entering the shared route. Source anchors: `nethack-c/upstream/src/dothrow.c:2262`, `js/cmd.js` direct potion support gates, and prior audit 80.
 
-This remains intentionally deferred until the direct-hit route can handle unknown identity defaults without inventing hidden-test behavior. A source-shaped test would throw an unidentified potion-class object with no local `kind` or `potionIndex` and assert common crash/chip/wake/anger/consume behavior without effect-specific messages.
+Audit 679 broadens direct horizontal monster hits so any potion-class object enters the shared `heroThrownPotionHitMonster()` common shell. Appearance-only or minimally specified potions now get crash/chip/wake/anger/consume behavior without inventing an effect-specific branch, and unidentified potions can take the generic worn-saddle interception path.
 
 ## Verification
 

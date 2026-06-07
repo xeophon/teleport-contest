@@ -67018,6 +67018,51 @@ test('hero-thrown confusion potion can miss the saddle and confuse the monster',
     ]);
 });
 
+test('hero-thrown unidentified potion-class object can hit a worn saddle', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 87632,
+        cls: 'potion',
+        glyph: '!',
+        kind: 'magenta potion',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - a magenta potion',
+        dknown: true,
+    };
+    const saddle = wornSaddle(87633, { blessed: false, cursed: false, bknown: true });
+    const pony = ordinaryThrowTarget('pony', 7, 5, {
+        saddled: true,
+        misc_worn_check: W_SADDLE,
+        minvent: [saddle],
+    });
+    game.inventory = [potion];
+    game.level.monsters = [pony];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    markSquareVisible(pony.mx, pony.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /crashes on the pony's saddle and breaks into shards\./);
+    assert.match(game._pending_message, /The pony's saddle gets wet\./);
+    assert.doesNotMatch(game._pending_message, /evaporates|peculiar odor|misses|head|magenta potion evaporates/);
+    assert.equal(pony.mhp, 5);
+    assert.equal(pony.msleeping, 1);
+    assert.equal(pony.mpeaceful, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(10)', 'rn2(5)',
+    ]);
+});
+
 test('adjacent hero-thrown confusion potion can apply direct vapor after monster hit', async () => {
     installNonShopFloorState();
     initRng(3);
@@ -71581,6 +71626,47 @@ test('visible no-vapor potion hit skips call for already-called appearance', asy
     assert.match(game._pending_message, /The magenta potion evaporates\./);
     assert.equal(game._command_mode, null);
     assert.equal(game._message_more || 0, 0);
+});
+
+test('blind hero-thrown minimally specified potion uses common potionhit route', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.blind = true;
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = {
+        id: 88063,
+        cls: 'potion',
+        glyph: '!',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 'p',
+        line: 'p - a potion',
+        dknown: true,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        msleeping: 1,
+        mpeaceful: 1,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    assert.match(game._pending_message, /^Crash!$/);
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._message_more || 0, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
+    ]);
 });
 
 test('hero-thrown common no-effect potions use shared potionhit crash path', async () => {
