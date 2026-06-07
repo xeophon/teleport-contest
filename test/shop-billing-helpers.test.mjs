@@ -61722,6 +61722,28 @@ test('hero-thrown crystal ball shatters against iron bars before landing', async
     ]);
 });
 
+test('top-level throw count reports one crystal ball before iron bars shatter', async () => {
+    installHeroThrowIronBarsState();
+    initRng(1);
+    const ball = crystalBall(876087, 'c');
+    game.inventory = [ball];
+    enableRngLog({ reset: true });
+
+    await rhack('3');
+    await rhack('t');
+    await rhack('c');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /You throw 1 crystal ball\.  A crystal ball shatters into a thousand pieces!/);
+    assert.doesNotMatch(game._pending_message, /Clonk|hits the floor|falls through|misses|top of your head/);
+    assert.equal(game.inventory.includes(ball), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown mirror shatters against iron bars and gives bad luck', async () => {
     installHeroThrowIronBarsState();
     initRng(1);

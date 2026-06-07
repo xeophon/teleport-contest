@@ -31,4 +31,4 @@ Top-level count prefixes were only retained as prompt text or thrown-gold amount
 ## Remaining
 
 - Count-prefix coverage for additional non-launcher stackable weapon families such as daggers and spears would improve breadth.
-- Iron-bar and other early terrain-stop count-message paths remain outside this slice.
+- Audit 695 covers the fragile iron-bars break count-message path; other early terrain-stop count-message paths remain outside this slice.

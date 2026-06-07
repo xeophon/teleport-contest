@@ -68938,6 +68938,8 @@ export async function rhack(_cmd) {
                 stopCarriedFigurineTimerOnLeave(thrownObject);
                 removeInventoryItem(item, 1);
                 newsym(ironBarsImpact.x, ironBarsImpact.y);
+                if (directShotLimit > 0)
+                    barsImpact.messages.unshift(`You ${directLauncherAmmo ? 'shoot' : 'throw'} 1 ${heroProjectileVolleyName(item, 1)}.`);
                 prependHeroHorizontalThrowRecoilMessage(barsImpact.messages, ordinaryAirRecoilMessage);
                 await setMessage(barsImpact.messages.join('  '), ordinaryAirRecoilMore);
                 game._command_mode = null;
