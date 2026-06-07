@@ -21005,7 +21005,7 @@ function heroFireassistMatchingLauncher(projectile) {
     return unknownBucLauncher;
 }
 
-function stageHeroFireDirectionAfterLifecycle(projectile, launcher) {
+function stageHeroFireDirectionAfterMore(projectile, launcher) {
     game._fire_pending_item_letter = projectile?.letter || null;
     game._fire_pending_launcher_letter = launcher?.letter || null;
     game._fire_item_letter = null;
@@ -21044,8 +21044,8 @@ async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
         launcher.alternate = false;
         launcher.line = `${launcher.letter || '?'} - ${inventoryItemName(launcher)} (weapon in right hand)`;
     }
-    if (queuedLauncherLifecycle) {
-        stageHeroFireDirectionAfterLifecycle(projectile, launcher);
+    if (queuedLauncherLifecycle || readyMessage) {
+        stageHeroFireDirectionAfterMore(projectile, launcher);
     } else {
         game._fire_pending_item_letter = null;
         game._fire_pending_launcher_letter = null;
@@ -21054,13 +21054,12 @@ async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
     }
     if (readyMessage) {
         game._fire_direction_pending_after_more = 1;
-        if (launcher) {
+        if (launcher && queuedLauncherLifecycle) {
             game._fire_ready_launcher_line = `${launcher.line || `${launcher.letter || '?'} - ${inventoryItemName(launcher)}`}.`;
             game._fire_ready_swap_more_line = swapMoreLine;
             game._fire_time_pending_after_more = 1;
         }
         await setMessage(readyMessage, true);
-        if (!queuedLauncherLifecycle) game._command_mode = 'fireDirection';
         return;
     }
     if (launcher) {

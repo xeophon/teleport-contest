@@ -68442,14 +68442,25 @@ test('f command autoquiver beats alternate polearm fallback', async () => {
 
     await rhack('f');
 
-    assert.equal(game._command_mode, 'fireDirection');
-    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter || null, null);
     assert.equal(game._pending_message, 'You ready: b - an arrow.');
     assert.equal(missile.quivered, true);
     assert.equal(primary.wielded, true);
     assert.equal(weapon.wielded || false, false);
     assert.equal(weapon.alternate, true);
     assert.equal(goblin.mhp, 10);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
 });
 
 test('f command quivered ammo beats alternate polearm fallback', async () => {
@@ -69996,11 +70007,22 @@ test('f command autoquiver still beats wielded bullwhip fallback', async () => {
 
     await rhack('f');
 
-    assert.equal(game._command_mode, 'fireDirection');
-    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter || null, null);
     assert.equal(missile.quivered, true);
     assert.equal(game._pending_message, 'You ready: b - an arrow.');
     assert.doesNotMatch(game._pending_message, /bullwhip|What do you want to fire/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
 });
 
 test('f command quivered ammo with wielded bullwhip fires ammo instead of whip', async () => {
@@ -70066,15 +70088,24 @@ test('f command autoquiver prefers current launcher ammo over earlier missile', 
 
     await rhack('f');
 
-    assert.equal(game._fire_item_letter, 'c');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'c');
+    assert.equal(game._fire_pending_launcher_letter, 'a');
     assert.equal(missile.quivered, true);
     assert.equal(dart.quivered || false, false);
     assert.match(missile.line, /\(in quiver\)$/);
     assert.equal(game._pending_message, 'You ready: c - an arrow.');
 
     await rhack(' ');
-    assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
-    await rhack(' ');
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'c');
+    assert.equal(game._fire_launcher_letter, 'a');
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._fire_pending_launcher_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
+
     await rhack('l');
 
     assert.equal(game.inventory.includes(missile), false);
@@ -70104,14 +70135,23 @@ test('f command autoquiver prefers missile over alternate launcher ammo', async 
 
     await rhack('f');
 
-    assert.equal(game._fire_item_letter, 'c');
-    assert.equal(game._fire_launcher_letter, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'c');
+    assert.equal(game._fire_pending_launcher_letter || null, null);
     assert.equal(dart.quivered, true);
     assert.equal(missile.quivered || false, false);
     assert.equal(launcher.wielded || false, false);
     assert.equal(game._pending_message, 'You ready: c - a dart.');
 
     await rhack(' ');
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'c');
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
+
     await rhack('l');
 
     assert.equal(game.inventory.includes(dart), false);
