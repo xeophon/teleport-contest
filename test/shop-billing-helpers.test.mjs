@@ -68507,6 +68507,95 @@ test('f command wielded bullwhip flicks adjacent visible monster before ammo pro
     assert.deepEqual(getRngLog(), []);
 });
 
+test('wielded bullwhip around visible armed monster slips free when unproficient', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Wizard';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173224, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173225, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a dagger.  The bullwhip slips free.');
+    assert.equal(goblin.minvent.includes(weapon), true);
+    assert.equal(goblin.mw, weapon);
+    assert.equal(weapon.ocarry, goblin);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip yanks visible armed monster weapon to monster square when proficient', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173226, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173227, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, "You wrap your bullwhip around a dagger.  You yank the dagger from the goblin's hand!");
+    assert.equal(goblin.minvent.includes(weapon), false);
+    assert.equal(goblin.mw || null, null);
+    assert.equal(goblin.weapon_check, 1);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(weapon), true);
+    assert.equal(weapon.ox, 6);
+    assert.equal(weapon.oy, 5);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.letter || null, null);
+    assert.equal(weapon.ocarry || null, null);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(2)']);
+});
+
 test('wielded bullwhip into wall of water splashes before monster handling', async () => {
     installNonShopFloorState();
     initRng(2);
