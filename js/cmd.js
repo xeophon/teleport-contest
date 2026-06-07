@@ -11038,11 +11038,24 @@ function isProjectileItem(item) {
         || /arrow|bolt|ya|dart|dagger|knife|spear|shuriken|boomerang|rock|stone/.test(name);
 }
 
+function isManualFireWeaponItem(item) {
+    return itemClassKey(item) === 'weapon' || item?.glyph === ')' || item?.otyp === WEAPON_CLASS;
+}
+
+function isManualFireCoinItem(item) {
+    return itemClassKey(item) === 'coin' || item?.glyph === '$' || item?.otyp === GOLD_PIECE;
+}
+
+function isManualFireReadyItem(item) {
+    if (!item?.letter) return false;
+    return isProjectileItem(item) || isManualFireWeaponItem(item) || isManualFireCoinItem(item);
+}
+
 function isReadySuggestItem(item) {
     const name = inventoryItemName(item).toLowerCase();
     if (item.wielded || item.line?.includes('weapon in')) return false;
     if (/bow|sling/.test(name)) return false;
-    return isProjectileItem(item);
+    return isProjectileItem(item) || isManualFireWeaponItem(item) || isManualFireCoinItem(item);
 }
 
 function isThrowSuggestItem(item) {
@@ -20286,7 +20299,7 @@ function heroAutoquiverProjectile() {
     return oammo || omissile || altammo || omisc;
 }
 
-function heroReadyAutoquiverProjectile(item) {
+function heroReadyFireObject(item) {
     for (const invItem of game.inventory || []) {
         invItem.quivered = invItem === item;
         if (invItem !== item && invItem.line)
@@ -63030,16 +63043,22 @@ export async function rhack(_cmd) {
             return;
         }
         const itemByLetter = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (itemByLetter && isWornInventoryItem(itemByLetter) && !itemIsWielded(itemByLetter)) {
+            await setMessage('You cannot fire that!');
+            game._command_mode = null;
+            game._fire_count = null;
+            return;
+        }
         if (itemByLetter?.line?.includes('alternate weapon')) {
             game._fire_quiver_confirm_item = itemByLetter;
             await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
             game._command_mode = 'fireQuiverAlternateConfirm';
             return;
         }
-        const item = itemByLetter && isProjectileItem(itemByLetter) ? itemByLetter : null;
+        const item = itemByLetter && isManualFireReadyItem(itemByLetter) ? itemByLetter : null;
         if (item) {
             const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
-            heroReadyAutoquiverProjectile(item);
+            heroReadyFireObject(item);
             await beginHeroFireProjectile(item, { readyMessage });
             return;
         }
@@ -63058,7 +63077,7 @@ export async function rhack(_cmd) {
             return;
         }
         const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
-        heroReadyAutoquiverProjectile(item);
+        heroReadyFireObject(item);
         await beginHeroFireProjectile(item, { readyMessage });
         return;
     }
@@ -69534,7 +69553,12 @@ export async function rhack(_cmd) {
                 color: CLR_BROWN,
             });
         }
-        if (oldQuan > shotCount) {
+        if (shopBillableGold(item)) {
+            removeGoldFromHero(shotCount);
+            const money = (game.inventory || []).find(invItem =>
+                invItem.letter === '$' || invItem.cls === 'coin' || invItem.otyp === GOLD_PIECE);
+            if (money?.quivered) money.line = `${money.letter || '$'} - ${money.quan || 0} gold piece${(money.quan || 0) === 1 ? '' : 's'}${quiverSuffix(money)}`;
+        } else if (oldQuan > shotCount) {
             item.quan = oldQuan - shotCount;
             if (item.line) item.line = item.line.replace(/ - \d+ /, ` - ${item.quan} `);
             if (item.unpaid) syncUnpaidBillLine(item);
@@ -71047,7 +71071,7 @@ export async function rhack(_cmd) {
         let autoquiverFailed = false;
         const readiedItem = (game.inventory || []).find(item =>
             item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver'));
-        let projectile = readiedItem && isProjectileItem(readiedItem) ? readiedItem : null;
+        let projectile = readiedItem && isManualFireReadyItem(readiedItem) ? readiedItem : null;
         const returningWeapon = heroWieldedThrowAndReturnWeapon();
         if (returningWeapon && heroFireReturnWeaponBeatsQuiver(readiedItem)) {
             await beginHeroFireThrowAndReturnShortcut(returningWeapon, fireCount);
@@ -71057,7 +71081,7 @@ export async function rhack(_cmd) {
             projectile = heroAutoquiverProjectile();
             if (projectile) {
                 autoquiverMessage = `You ready: ${heroFireReadyLine(projectile)}.`;
-                heroReadyAutoquiverProjectile(projectile);
+                heroReadyFireObject(projectile);
             } else {
                 autoquiverFailed = true;
             }

@@ -67848,6 +67848,106 @@ test('f command empty quiver with autoquiver disabled prompts instead of auto-fi
     assert.match(game._pending_message, /^What do you want to fire\? \[b or \?\*\]$/);
 });
 
+test('f command manual prompt readies weapon before direction prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const weapon = dagger(876174150, 'd');
+    game.inventory = [weapon];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.match(game._pending_message, /^What do you want to fire\? \[d or \?\*\]$/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'd');
+    assert.equal(game._pending_message, 'You ready: d - a dagger.');
+    assert.equal(game._message_more, 1);
+    assert.equal(weapon.quivered, true);
+    assert.match(weapon.line, /\(at the ready\)$/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'd');
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
+});
+
+test('f command manual prompt can ready and fire one quivered coin', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const gold = goldPieces(876174151, 5);
+    game.inventory = [gold];
+    game._goldCount = 5;
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.match(game._pending_message, /^What do you want to fire\? \[\$ or \?\*\]$/);
+
+    await rhack('$');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_pending_item_letter, '$');
+    assert.equal(game._pending_message, 'You ready: $ - 5 gold pieces.');
+    assert.equal(gold.quivered, true);
+    assert.match(gold.line, /\(in quiver pouch\)$/);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, '$');
+    assert.equal(game._pending_message, 'In what direction?');
+
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._goldCount, 4);
+    assert.equal(gold.quan, 4);
+    assert.equal(gold.quivered, true);
+    assert.match(gold.line, /\$ - 4 gold pieces \(in quiver pouch\)$/);
+    const landed = game.level.objects.find(obj => obj.cls === 'coin');
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.glyph, '$');
+});
+
+test('f command manual prompt rejects worn armor after selection', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const armor = wornArmor(876174152, 'leather armor', 'a');
+    const weapon = dagger(876174153, 'd');
+    game.inventory = [armor, weapon];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.match(game._pending_message, /^What do you want to fire\? \[d or \?\*\]$/);
+
+    await rhack('a');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._pending_message, 'You cannot fire that!');
+    assert.equal(armor.worn, true);
+    assert.equal(weapon.quivered || false, false);
+});
+
 test('f command empty quiver with wielded polearm autohits before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);
