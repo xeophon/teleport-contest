@@ -62807,6 +62807,96 @@ test('attached ball fallback relocation triggers magic trap on new hero square',
     assert.equal(game._deferred_level_goto || null, null);
 });
 
+test('magic trap fate 20 uncurses active inventory and unpunishes hero', () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+    });
+    game._punished = 1;
+    const loadstone = carriedLoadstone(876257, 'l', {
+        cursed: true,
+        known: true,
+        dknown: true,
+        line: 'l - a cursed loadstone',
+    });
+    const ball = carriedAttachedIronBall(876258, 'b');
+    const chain = attachedIronChain(876259);
+    const magicTrap = { ttyp: MAGIC_TRAP, tx: 5, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [loadstone];
+    game.level.objects = [chain];
+    game.level.traps = [magicTrap];
+    installCoreRngValues([1, 19, 7, 42]);
+    enableRngLog({ reset: true });
+
+    const result = shop.magicTrapResultForTest(magicTrap);
+
+    assert.equal(result.message, 'You feel like someone is helping you.');
+    assert.equal(result.more, false);
+    assert.equal(magicTrap.tseen, true);
+    assert.equal(game.level.traps.includes(magicTrap), true);
+    assert.equal(loadstone.cursed, false);
+    assert.match(loadstone.line, /uncursed loadstone/);
+    assert.equal(game.u.upunished, false);
+    assert.equal(game._punished, 0);
+    assert.equal(game.u.uball, null);
+    assert.equal(game.u.uchain, null);
+    assert.equal(game.level.objects.includes(chain), false);
+    assert.equal(game.level.objects.includes(ball), true);
+    assert.equal(ball.worn, false);
+    assert.equal(ball.ox, 5);
+    assert.equal(ball.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(30)', 'rnd(20)', 'rn2(19)', 'rn2(100)']);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(30)'), [1]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
+test('magic trap fate 20 clears confusion only for remove curse effect', () => {
+    installNonShopFloorState();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+        _confusionTimeout: 10,
+    });
+    game._punished = 1;
+    const loadstone = carriedLoadstone(876260, 'l', {
+        cursed: true,
+        known: true,
+        dknown: true,
+        line: 'l - a cursed loadstone',
+    });
+    const ball = carriedAttachedIronBall(876261, 'b');
+    const chain = attachedIronChain(876262);
+    const magicTrap = { ttyp: MAGIC_TRAP, tx: 5, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [loadstone];
+    game.level.objects = [chain];
+    game.level.traps = [magicTrap];
+    installCoreRngValues([1, 19, 7, 42]);
+    enableRngLog({ reset: true });
+
+    const result = shop.magicTrapResultForTest(magicTrap);
+
+    assert.equal(result.message, 'You feel like someone is helping you.');
+    assert.equal(magicTrap.tseen, true);
+    assert.equal(game.level.traps.includes(magicTrap), true);
+    assert.equal(loadstone.cursed, false);
+    assert.equal(game.u.upunished, false);
+    assert.equal(game.u._confusionTimeout, 10);
+    assert.equal(game.u.uball, null);
+    assert.equal(game.u.uchain, null);
+    assert.equal(game.level.objects.includes(chain), false);
+    assert.equal(game.level.objects.includes(ball), true);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(30)', 'rnd(20)', 'rn2(19)', 'rn2(100)']);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(30)'), [1]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [20]);
+});
+
 test('attached ball fallback relocation triggers statue trap on new hero square', async () => {
     installNonShopFloorState();
     game.sokoban_dnum = 999;

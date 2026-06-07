@@ -32,5 +32,5 @@
 - Attached-ball fallback relocation still needs narrower canaries for bear, polymorph, dart, and rolling-boulder launch-path details.
 - Levitating/flying attached-ball throw recoil needs separate source-backed coverage before asserting whether fallback trap effects are reachable.
 - One-shot vault teleport trap fallback and ordinary random teleport-trap fallback still need narrower canaries beyond the fixed-destination branch.
-- Magic-trap fate 20 still needs remove-curse/unpunish parity for punished heroes.
+- Magic-trap fate 20 remove-curse/unpunish parity is covered by audit 661.
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.

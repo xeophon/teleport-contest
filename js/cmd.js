@@ -27196,6 +27196,39 @@ function removeCurseScrollEffect(item) {
     return { messages, learned, disintegrates };
 }
 
+function pseudoRemoveCurseSpellEffect({ blessed = false, confused = false } = {}) {
+    const messages = [removeCurseFeelingMessage(confused)];
+
+    if (!confused) {
+        for (const obj of game.inventory || []) {
+            if (obj.cls === 'coin' || obj.otyp === GOLD_PIECE || obj.glyph === '$') continue;
+            const selected = blessed || removeCurseActiveTarget(obj);
+            if (!selected || !obj.cursed) continue;
+            const payment = costlyUncurseWater(obj);
+            if (payment) messages.push(payment);
+            obj.cursed = false;
+            normalizeUncursedWaterPotion(obj);
+            syncCarriedFigurineTransformTimer(obj);
+            refreshInventoryLineAfterBucChange(obj);
+        }
+    } else {
+        for (const obj of game.inventory || []) {
+            if (obj.cls === 'coin' || obj.otyp === GOLD_PIECE || obj.glyph === '$') continue;
+            const selected = blessed || removeCurseActiveTarget(obj);
+            if (!selected) continue;
+            removeCurseBlessOrCurse(obj);
+            obj.bknown = false;
+            refreshInventoryLineAfterBucChange(obj);
+        }
+    }
+
+    const buriedBall = isBuriedBallTrapActive();
+    if (!confused) unpunishHero();
+    if (buriedBall && buriedBallToFreedom())
+        messages.push('The clasp on your leg vanishes.');
+    return { messages };
+}
+
 function scrollReadMessages(confusedReading) {
     const messages = ['As you read the scroll, it disappears.'];
     if (confusedReading)
@@ -32779,6 +32812,7 @@ export const __shopBillingTestHooks = {
     heroHasAntimagicForTest: heroHasAntimagic,
     heroHasColdResistanceForTest: heroHasColdResistance,
     heroHasSlowDigestionForTest: heroHasSlowDigestion,
+    magicTrapResultForTest: magicTrapResult,
     applyHeroOrdinaryHungerForTest: applyHeroOrdinaryHunger,
     applyAccessoryHungerForTest: applyAccessoryHunger,
     coldInventoryProtectionChanceForTest: coldInventoryProtectionChance,
@@ -49854,7 +49888,10 @@ function magicTrapResult(trap) {
         return { message: 'You are caught in a magical explosion!', afterMore: 'Your body absorbs some of the magical energy.' };
     }
 
-    const fate = rnd(20);
+    return magicTrapFateResult(rnd(20));
+}
+
+function magicTrapFateResult(fate) {
     if (fate < 10) {
         const count = rnd(4);
         const messages = [];
@@ -49902,9 +49939,13 @@ function magicTrapResult(trap) {
         17: 'You smell charred flesh.',
         18: 'You feel tired.',
         19: 'You feel charismatic!',
-        20: 'You feel like someone is helping you.',
     }[fate] || '';
     if (fate === 19 && game.u?.acurr?.a) game.u.acurr.a[A_CHA] = Math.min(25, (game.u.acurr.a[A_CHA] || 3) + 1);
+    if (fate === 20) {
+        exerciseAttribute(A_WIS, true);
+        const result = pseudoRemoveCurseSpellEffect();
+        return { message: result.messages.join('  '), more: result.messages.length > 1 };
+    }
     return { message };
 }
 
