@@ -25,6 +25,5 @@
 
 ## Remaining Follow-Ups
 
-- Broader non-ammo normal-ground strength/weight range is still separate; heavy crystal armor and other large objects need their own coverage before replacing the fixed ordinary fallback.
-- Boulder range 20 on normal ground, attached ball caps, buried-ball behavior, and full ball-and-chain landing/recoil fallout remain separate slices.
+- Full ball-and-chain throwing still needs dedicated attached-ball and buried/floor-stuck landing/recoil coverage.
 - Dedicated Valkyrie Mjollnir return-message and failed-catch canaries remain open; this slice only makes the object eligible for the existing generic return branch.

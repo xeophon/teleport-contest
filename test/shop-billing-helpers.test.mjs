@@ -59950,7 +59950,7 @@ test('hero-thrown mirror shatters against iron bars and gives bad luck', async (
     ]);
 });
 
-test('hero-thrown loadstone hits rock-passing monster harmlessly', async () => {
+test('hero-thrown loadstone falls short of rock-passing monster by C weight range', async () => {
     installNonShopFloorState();
     initRng(2);
     game.u.acurr.a[A_DEX] = 25;
@@ -59984,24 +59984,21 @@ test('hero-thrown loadstone hits rock-passing monster harmlessly', async () => {
     await rhack('l');
     await rhack('l');
 
-    assert.match(game._pending_message, /The loadstone hits the earth elemental but does no harm\./);
-    assert.doesNotMatch(game._pending_message, /misses|passes harmlessly/);
+    assert.equal(game._pending_message, '');
     assert.equal(elemental.mhp, 20);
-    assert.equal(elemental.msleeping, 0);
-    assert.equal(elemental.meating, 0);
-    assert.equal(elemental.mstrategy, 0);
-    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(elemental.msleeping, 1);
+    assert.equal(elemental.meating, 4);
+    assert.equal(elemental.mstrategy, STRAT_WAITFORU);
+    assert.equal(elemental.mpeaceful, 1);
     assert.equal(game.inventory.includes(loadstone), false);
     const landed = game.level.objects.find(obj => obj.id === loadstone.id);
     assert.ok(landed);
-    assert.equal(landed.ox, 7);
+    assert.equal(landed.ox, 6);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rn2(19)', 'rn2(100)',
-    ]);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
-test('hero-thrown stone missile miss against rock-passer stays a miss', async () => {
+test('hero-thrown stone missile range stops before rock-passer miss roll', async () => {
     installNonShopFloorState();
     initRng(2);
     Object.assign(game.u, { ulevel: 1, uluck: -10, uhitinc: -20 });
@@ -60037,18 +60034,15 @@ test('hero-thrown stone missile miss against rock-passer stays a miss', async ()
     await rhack('l');
     await rhack('l');
 
-    assert.match(game._pending_message, /The loadstone misses the earth elemental\./);
-    assert.doesNotMatch(game._pending_message, /does no harm|passes harmlessly/);
+    assert.equal(game._pending_message, '');
     assert.equal(elemental.mhp, 20);
-    assert.equal(elemental.msleeping, 0);
-    assert.equal(elemental.meating, 0);
-    assert.equal(elemental.mstrategy, 0);
-    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(elemental.msleeping, 1);
+    assert.equal(elemental.meating, 4);
+    assert.equal(elemental.mstrategy, STRAT_WAITFORU);
+    assert.equal(elemental.mpeaceful, 1);
     assert.equal(game.inventory.includes(loadstone), false);
-    assert.equal(game.level.objects.some(obj => obj.id === loadstone.id && obj.ox === 7 && obj.oy === 5), true);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
-        'rnd(20)', 'rn2(3)', 'rn2(100)',
-    ]);
+    assert.equal(game.level.objects.some(obj => obj.id === loadstone.id && obj.ox === 6 && obj.oy === 5), true);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
 test('hero-thrown glass gem harms rock-passing monster and survives landing', async () => {
@@ -61766,6 +61760,111 @@ test('hero-thrown unmatched crossbow bolt uses C half range and warning', async 
     const landed = game.level.objects.find(obj => obj.id === bolt.id);
     assert.ok(landed);
     assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('hero-thrown heavy ordinary weapon uses C weight range on normal ground', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5 });
+    game.u.acurr.a[A_STR] = 10;
+    const lance = upwardWeapon(876179, 'l', 'lance', 'l - a lance');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [lance];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('l');
+    await rhack('l');
+
+    assert.equal(game._pending_message, '');
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(lance), false);
+    const landed = game.level.objects.find(obj => obj.id === lance.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('hero-thrown high-strength ordinary weapon range exceeds old fixed fallback', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ux: 5, uy: 5 });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = dagger(876180, 'd');
+    game.inventory = [blade];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message, '');
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 14);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('hero-thrown boulder requires rock-throwing form', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const boulder = {
+        ...floorBoulder(876181),
+        letter: 'b',
+        line: 'b - a boulder',
+    };
+    game.inventory = [boulder];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "It's too heavy.");
+    assert.equal(game.inventory.includes(boulder), true);
+    assert.equal(game.level.objects.some(obj => obj.id === boulder.id), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('throws-rocks hero-thrown boulder uses C range twenty on normal ground', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        _polyself_form: { name: 'stone giant', throwsRocks: true },
+    });
+    const boulder = {
+        ...floorBoulder(876182),
+        letter: 'b',
+        line: 'b - a boulder',
+    };
+    game.inventory = [boulder];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, '');
+    assert.equal(game.inventory.includes(boulder), false);
+    const landed = game.level.objects.find(obj => obj.id === boulder.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 25);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
@@ -66814,7 +66913,7 @@ test('upward hero-thrown unpaid glass-material wand bills the broken object', as
     assert.equal(shkp.billct, 0);
 });
 
-test('direct hero-thrown crystal plate mail miss lands intact after resisted hard landing', async () => {
+test('direct hero-thrown crystal plate mail range-one landing remains intact after resisted hard landing', async () => {
     installNonShopFloorState();
     initRng(1);
     const armor = carriedGlassArmor(87695, 'a');
@@ -66828,23 +66927,23 @@ test('direct hero-thrown crystal plate mail miss lands intact after resisted har
     await rhack('a');
     await rhack('l');
 
-    assert.match(game._pending_message, /The crystal plate mail misses the goblin\./);
-    assert.doesNotMatch(game._pending_message, /cracks|shatters|thousand pieces|hits the goblin/);
+    assert.equal(game._pending_message, '');
+    assert.doesNotMatch(game._pending_message, /cracks|shatters|thousand pieces|hits the goblin|misses the goblin/);
+    assert.equal(goblin.mhp, 5);
+    assert.equal(goblin.msleeping, 1);
     assert.equal(game.inventory.includes(armor), false);
     assert.equal(game.level.objects.length, 1);
     const landed = game.level.objects[0];
     assert.equal(landed.kind, 'crystal plate mail');
     assert.equal(landed.oeroded || 0, 0);
-    assert.equal(landed.ox, goblin.mx);
-    assert.equal(landed.oy, goblin.my);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rn2(3)', 'rn2(100)',
-    ]);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
-test('direct hero-thrown crystal plate mail miss cracks on hard landing', async () => {
+test('direct hero-thrown crystal plate mail range-one landing cracks on hard landing', async () => {
     installNonShopFloorState();
-    initRng(19);
+    initRng(11);
     const armor = carriedGlassArmor(87696, 'a');
     const goblin = ordinaryThrowTarget('goblin', 7, 5);
     game.inventory = [armor];
@@ -66856,28 +66955,24 @@ test('direct hero-thrown crystal plate mail miss cracks on hard landing', async 
     await rhack('a');
     await rhack('l');
 
-    assert.match(game._pending_message, /The crystal plate mail misses the goblin\./);
-    assert.equal(game._queued_message_after_more, 'The mail cracks!');
-
-    await rhack(' ');
-
     assert.match(game._pending_message, /The mail cracks!/);
-    assert.doesNotMatch(game._pending_message, /thousand pieces|shatters/);
+    assert.doesNotMatch(game._pending_message, /misses the goblin|hits the goblin|thousand pieces|shatters/);
+    assert.equal(game._queued_message_after_more || '', '');
+    assert.equal(goblin.mhp, 5);
+    assert.equal(goblin.msleeping, 1);
     assert.equal(game.inventory.includes(armor), false);
     assert.equal(game.level.objects.length, 1);
     const landed = game.level.objects[0];
     assert.equal(landed.kind, 'crystal plate mail');
     assert.equal(landed.oeroded, 1);
-    assert.equal(landed.ox, goblin.mx);
-    assert.equal(landed.oy, goblin.my);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rn2(3)', 'rn2(100)',
-    ]);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
-test('direct hero-thrown fully cracked crystal plate mail miss shatters on hard landing', async () => {
+test('direct hero-thrown fully cracked crystal plate mail range-one landing shatters on hard landing', async () => {
     installNonShopFloorState();
-    initRng(19);
+    initRng(11);
     const armor = carriedGlassArmor(87697, 'a', { oeroded: 3 });
     const goblin = ordinaryThrowTarget('goblin', 7, 5);
     game.inventory = [armor];
@@ -66889,18 +66984,14 @@ test('direct hero-thrown fully cracked crystal plate mail miss shatters on hard 
     await rhack('a');
     await rhack('l');
 
-    assert.match(game._pending_message, /The crystal plate mail misses the goblin\./);
-    assert.equal(game._queued_message_after_more, 'The mail shatters!');
-
-    await rhack(' ');
-
     assert.match(game._pending_message, /The mail shatters!/);
-    assert.doesNotMatch(game._pending_message, /thousand pieces|cracks/);
+    assert.doesNotMatch(game._pending_message, /misses the goblin|hits the goblin|thousand pieces|cracks/);
+    assert.equal(game._queued_message_after_more || '', '');
+    assert.equal(goblin.mhp, 5);
+    assert.equal(goblin.msleeping, 1);
     assert.equal(game.inventory.includes(armor), false);
     assert.equal(game.level.objects.length, 0);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rnd(20)', 'rn2(3)', 'rn2(100)',
-    ]);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
 test('upward hero-thrown crystal plate mail self-hit cracks and lands', async () => {
@@ -70815,7 +70906,7 @@ test('thrown gold no-drop shaft impact precedes normal shop donation', () => {
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)', 'rn2(3)']);
 });
 
-test('throwing gold from inventory donates the whole purse and updates wallet state', async () => {
+test('throwing gold from inventory uses C weighted range before donation accounting', async () => {
     const { shkp } = installCommandShopState();
     shkp.debit = 5;
     shkp.loan = 5;
@@ -70832,8 +70923,17 @@ test('throwing gold from inventory donates the whole purse and updates wallet st
     assert.equal(game._command_mode, null);
     assert.equal(game._goldCount, 0);
     assert.equal(game.inventory.some(item => item.letter === '$' || item.cls === 'coin'), false);
-    assert.equal(game.level.objects.length, 1);
-    assert.equal(game.level.objects[0].quan, 16);
+    assert.equal(game.level.objects.length, 2);
+    const untouched = game.level.objects.find(obj => obj.id === floorGold.id);
+    assert.ok(untouched);
+    assert.equal(untouched.quan, 4);
+    assert.equal(untouched.ox, 5);
+    assert.equal(untouched.oy, 13);
+    const landed = game.level.objects.find(obj => obj.id === purse.id);
+    assert.ok(landed);
+    assert.equal(landed.quan, 12);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 10);
     assert.equal(shkp.debit, 0);
     assert.equal(shkp.loan, 0);
     assert.equal(shkp.credit, 7);
