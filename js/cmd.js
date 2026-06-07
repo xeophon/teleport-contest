@@ -25711,6 +25711,33 @@ function heroPolearmTargetDistance2(x, y) {
     return (x - (game.u?.ux || 0)) ** 2 + (y - (game.u?.uy || 0)) ** 2;
 }
 
+function isSnickersneeItem(item) {
+    if (!item) return false;
+    const artifact = String(item.artifact || item.oartifact || item.artifactName || '')
+        .toLowerCase().replace(/^the\s+/, '');
+    return artifact === 'snickersnee'
+        || /\bsnickersnee\b/.test(inventoryItemName(item).toLowerCase());
+}
+
+function heroSnickersneeDistanceTurn() {
+    return game.moves || 1;
+}
+
+function heroSnickersneeDistanceAttackUsedThisTurn(item) {
+    return itemIsPrimaryWielded(item) && isSnickersneeItem(item)
+        && game.context?.snickersnee_turn === heroSnickersneeDistanceTurn();
+}
+
+function beginHeroSnickersneeDistanceAttack(item, messages) {
+    if (!itemIsPrimaryWielded(item) || !isSnickersneeItem(item)) return false;
+    game.context ??= {};
+    const turn = heroSnickersneeDistanceTurn();
+    const free = game.context.snickersnee_turn !== turn;
+    game.context.snickersnee_turn = turn;
+    if (free && !heroIsDeaf() && Array.isArray(messages)) messages.push('Shkinng!');
+    return free;
+}
+
 function heroPolearmSkillMeta(item) {
     const name = item ? inventoryItemName(item).toLowerCase() : '';
     if (/\blance\b/.test(name)) return { skill: P_LANCE, skillName: 'lance' };
@@ -26058,10 +26085,18 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
         if (await heroPolearmAttackChecks(item, mon, x, y, { autohit, confirmed }))
             return true;
         rememberHeroPolearmHitmon(mon);
+        if (heroSnickersneeDistanceAttackUsedThisTurn(item)) {
+            await setMessage("The blade doesn't reach there!");
+            game.context.move = 0;
+            return true;
+        }
+        const messages = [];
+        const freeSnickersneeHit = beginHeroSnickersneeDistanceAttack(item, messages);
         const impact = heroAppliedPolearmImpact(item, mon);
-        await setMessage((impact.messages || []).join('  '), (impact.messages || []).length > 1);
+        messages.push(...(impact.messages || []));
+        await setMessage(messages.join('  '), messages.length > 1);
         newsym(x, y);
-        game.context.move = 1;
+        game.context.move = freeSnickersneeHit ? 0 : 1;
         wipeHeroPolearmEngraving();
         return true;
     }

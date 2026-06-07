@@ -54,6 +54,7 @@ const SPEAR = 10030;
 const DWARVISH_SPEAR = 10102;
 const STILETTO = 10109;
 const GLAIVE = 10057;
+const KATANA = 10125;
 const TALLOW_CANDLE = 370;
 const MIRROR = 10006;
 const WAN_MAKE_INVISIBLE = 10091;
@@ -66840,6 +66841,20 @@ function markCanaryGlaiveAsGeneratedPolearm(weapon) {
     return weapon;
 }
 
+function markCanaryWeaponAsSnickersnee(weapon) {
+    const letter = weapon.letter || 'g';
+    Object.assign(weapon, {
+        otyp: KATANA,
+        kind: 'katana named Snickersnee',
+        actualKind: 'katana',
+        artifact: 'Snickersnee',
+        known: true,
+        wielded: true,
+        line: `${letter} - a katana named Snickersnee (weapon in right hand)`,
+    });
+    return weapon;
+}
+
 async function beginApplyPolearmCanary() {
     await rhack('a');
     await rhack('g');
@@ -67141,6 +67156,48 @@ test('applying polearm miss skips rust monster passive object erosion', async ()
     assert.equal(weapon.oeroded || 0, 0);
     assert.equal(rustMonster.mhp, 50);
     assert.deepEqual(getRngLog().map(rngCallName), ['rnd(20)']);
+});
+
+test('applying Snickersnee distance attack is free once per turn', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const { weapon } = setupWieldedPolearmCanary({
+        monsters: [goblin],
+        visible: [[7, 5]],
+    });
+    markCanaryWeaponAsSnickersnee(weapon);
+    game.moves = 123;
+    installHeroDustEngraving();
+
+    await applyPolearmAtTarget(7, 5);
+
+    const hpAfterFirst = goblin.mhp;
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game.context.snickersnee_turn, 123);
+    assert.match(game._pending_message, /Shkinng!  You hit the goblin[.!]/);
+    assert.ok(hpAfterFirst < 20);
+    assert.equal(heroEngravingAtFeet(), null);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+
+    acknowledgePendingMessage();
+    installHeroDustEngraving();
+    game.context.move = 0;
+    enableRngLog({ reset: true });
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, "The blade doesn't reach there!");
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game.context.snickersnee_turn, 123);
+    assert.equal(goblin.mhp, hpAfterFirst);
+    assert.equal(heroEngravingAtFeet()?.text, '-');
+    assert.deepEqual(getRngLog(), []);
 });
 
 test('applying polearm to remembered unseen empty square says cannot see spot', async () => {

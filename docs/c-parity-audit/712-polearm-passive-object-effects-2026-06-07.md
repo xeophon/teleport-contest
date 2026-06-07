@@ -23,4 +23,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs Snickersnee distance-attack limits, worm cutting, and exact `tmiss()`/wakeup messaging.
+- Full `use_pole()` impact parity still needs worm cutting and exact `tmiss()`/wakeup messaging. Audit 713 covers Snickersnee distance timing.

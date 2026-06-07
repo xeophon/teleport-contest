@@ -32,7 +32,7 @@
 
 ## Remaining Follow-Ups
 
-- Full applied-polearm `thitmonst()` parity still needs artifacts/Snickersnee, tame and peaceful confirmation, invisible and statue glyph autohit targeting, impaired targeting under hallucination/confusion/stun, worm cutting, and exact miss/wakeup messaging. Audit 707 covers skill-dependent reach expansion; audit 711 covers engraving wiping; audit 712 covers passive object effects.
+- Full applied-polearm `thitmonst()` parity still needs other artifact-specific behavior, tame and peaceful confirmation, invisible and statue glyph autohit targeting, impaired targeting under hallucination/confusion/stun, worm cutting, and exact miss/wakeup messaging. Audit 707 covers skill-dependent reach expansion; audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing.
 - Audit 704 covers the empty-quiver bullwhip fallback.
 - Audit 705 covers the empty-quiver alternate-polearm queued swap/retry branch.
 - Audit 703 covers the thrown-and-return weapon shortcut for empty quiver or ammo quiver before the polearm fallback.

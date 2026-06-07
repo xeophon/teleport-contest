@@ -21,4 +21,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs Snickersnee distance-attack limits, worm cutting, and exact miss/wakeup messages. Audit 712 covers passive object effects.
+- Full `use_pole()` impact parity still needs worm cutting and exact miss/wakeup messages. Audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing.
