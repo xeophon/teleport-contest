@@ -20215,6 +20215,90 @@ function heroThrowAmmoAndLauncher(ammo, launcher) {
     return !!ammoSkill && heroThrowLauncherSkill(launcher) === ammoSkill;
 }
 
+function heroAutoquiverObjectDiscovered(item) {
+    return item?.known !== false || (game._discoveries || []).some(entry =>
+        entry.section === 'Gems/Stones'
+        && entry.known !== false
+        && String(entry.name || '').toLowerCase() === objectKindKey(item));
+}
+
+function heroAutoquiverRockAmmo(item) {
+    const kind = objectKindKey(item);
+    if (item?.otyp === ROCK || kind === 'rock') return true;
+    if (item?.otyp === FLINT_STONE || kind === 'flint' || kind === 'flint stone')
+        return heroAutoquiverObjectDiscovered(item);
+    return itemClassKey(item) === 'gem' && /\bglass\b/.test(kind)
+        && heroAutoquiverObjectDiscovered(item);
+}
+
+function heroAutoquiverSkipsItem(item) {
+    const line = String(item?.line || '');
+    return !item || item.owornmask || item.oartifact || item.artifact
+        || item.worn || itemIsWielded(item) || item.alternate
+        || /\b(?:being worn|alternate weapon)\b/.test(line)
+        || item.dknown === false;
+}
+
+function heroAutoquiverMissileItem(item) {
+    const kind = objectKindKey(item);
+    return item?.otyp === DART
+        || /\b(?:dart|shuriken|throwing star|boomerang)\b/.test(kind);
+}
+
+function heroAutoquiverThrowingWeapon(item) {
+    const kind = objectKindKey(item);
+    return itemClassKey(item) === 'weapon'
+        && HERO_THROWN_STACKABLE_MULTISHOT_WEAPON_KEYS.has(kind);
+}
+
+function heroAutoquiverProjectile() {
+    const inventory = game.inventory || [];
+    const primaryLauncher = heroWieldedThrowLauncher();
+    const alternateLauncher = inventory.find(item =>
+        (item.alternate || item.line?.includes('alternate weapon')) && heroThrowLauncherSkill(item));
+    let oammo = null;
+    let omissile = null;
+    let altammo = null;
+    let omisc = null;
+
+    for (const item of inventory) {
+        if (heroAutoquiverSkipsItem(item)) continue;
+        if (heroAutoquiverRockAmmo(item)) {
+            if (heroThrowAmmoAndLauncher(item, primaryLauncher)) oammo = item;
+            else if (heroThrowAmmoAndLauncher(item, alternateLauncher)) altammo = item;
+            else if (!omisc) omisc = item;
+        } else if (itemClassKey(item) === 'gem' || item?.glyph === '*' || item?.otyp === GEM_CLASS) {
+            continue;
+        } else if (heroThrowAmmoSkill(item)) {
+            if (heroThrowAmmoAndLauncher(item, primaryLauncher)) oammo = item;
+            else if (heroThrowAmmoAndLauncher(item, alternateLauncher)) altammo = item;
+            else omisc = item;
+        } else if (heroAutoquiverMissileItem(item)) {
+            omissile = item;
+        } else if (heroAutoquiverThrowingWeapon(item)) {
+            const kind = objectKindKey(item);
+            if (/\bdagger\b/.test(kind) && !omissile) omissile = item;
+            else if (kind === 'aklys') continue;
+            else omisc = item;
+        }
+    }
+
+    return oammo || omissile || altammo || omisc;
+}
+
+function heroReadyAutoquiverProjectile(item) {
+    for (const invItem of game.inventory || []) {
+        invItem.quivered = invItem === item;
+        if (invItem !== item && invItem.line)
+            invItem.line = invItem.line.replace(/ \((?:at the ready|in quiver(?: pouch)?)\).*$/, '');
+    }
+    item.line = `${item.letter || '?'} - ${inventoryItemName(item)}${quiverSuffix(item)}`;
+}
+
+function heroFireReadyLine(item) {
+    return `${item?.letter || '?'} - ${inventoryItemName(item)}`;
+}
+
 function heroFireassistBlessCurseKnown(item) {
     return item?.bknown === true || (item?.bknown !== false
         && /\b(?:blessed|uncursed|cursed)\b/.test(String(item?.line || '')));
@@ -20240,6 +20324,48 @@ function heroFireassistMatchingLauncher(projectile) {
         unknownBucLauncher ??= item;
     }
     return unknownBucLauncher;
+}
+
+async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
+    const launcher = heroFireassistMatchingLauncher(projectile);
+    let swapMoreLine = '';
+    if (launcher && !(launcher.wielded || launcher.line?.includes('weapon in'))) {
+        const launcherWasAlternate = launcher.alternate || launcher.line?.includes('alternate weapon');
+        const current = (game.inventory || []).find(item =>
+            item !== launcher && (item.wielded || item.line?.includes('weapon in')));
+        if (current) {
+            current.wielded = false;
+            current.alternate = true;
+            current.line = `${current.letter || '?'} - ${inventoryItemName(current)} (alternate weapon; not wielded)`;
+            if (launcherWasAlternate) swapMoreLine = `${current.line}.`;
+        }
+        launcher.wielded = true;
+        launcher.alternate = false;
+        launcher.line = `${launcher.letter || '?'} - ${inventoryItemName(launcher)} (weapon in right hand)`;
+    }
+    game._fire_item_letter = projectile.letter;
+    game._fire_launcher_letter = launcher?.letter || null;
+    if (readyMessage) {
+        game._fire_direction_pending_after_more = 1;
+        if (launcher) {
+            game._fire_ready_launcher_line = `${launcher.line || `${launcher.letter || '?'} - ${inventoryItemName(launcher)}`}.`;
+            game._fire_ready_swap_more_line = swapMoreLine;
+            game._fire_time_pending_after_more = 1;
+        }
+        await setMessage(readyMessage, true);
+        game._command_mode = 'fireDirection';
+        return;
+    }
+    if (launcher) {
+        game._fire_swap_more_line = swapMoreLine;
+        game._fire_time_pending_after_more = 1;
+        game._fire_direction_pending_after_more = 1;
+        await setMessage(`${launcher.line || `${launcher.letter || '?'} - ${inventoryItemName(launcher)}`}.`, true);
+        game._command_mode = 'fireDirection';
+        return;
+    }
+    await setMessage('In what direction?');
+    game._command_mode = 'fireDirection';
 }
 
 function heroWieldedThrowLauncher() {
@@ -54978,6 +55104,16 @@ export async function rhack(_cmd) {
                 }
                 return;
             }
+            if (game._fire_ready_launcher_line) {
+                const next = game._fire_ready_launcher_line;
+                game._fire_ready_launcher_line = '';
+                game._fire_swap_more_line = game._fire_ready_swap_more_line || '';
+                game._fire_ready_swap_more_line = '';
+                game._pending_message = next;
+                game._message_more = 1;
+                game._keep_pending_message = 1;
+                return;
+            }
             if (game._fire_swap_more_line) {
                 const next = game._fire_swap_more_line;
                 game._fire_swap_more_line = '';
@@ -61529,6 +61665,53 @@ export async function rhack(_cmd) {
         }
         item.line = `${item.letter || '?'} - ${inventoryItemName(item)}${quiverSuffix(item)}`;
         await setMessage(`${item.line}.`);
+        return;
+    }
+
+    if (game._command_mode === 'fireQuiverObject') {
+        if (ch === '\x1b' || ch === ' ') {
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            game._fire_count = null;
+            return;
+        }
+        if (ch === '-') {
+            await setMessage('You already have no ammunition readied!');
+            game._command_mode = null;
+            game._fire_count = null;
+            return;
+        }
+        const itemByLetter = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (itemByLetter?.line?.includes('alternate weapon')) {
+            game._fire_quiver_confirm_item = itemByLetter;
+            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
+            game._command_mode = 'fireQuiverAlternateConfirm';
+            return;
+        }
+        const item = itemByLetter && isProjectileItem(itemByLetter) ? itemByLetter : null;
+        if (item) {
+            const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
+            heroReadyAutoquiverProjectile(item);
+            await beginHeroFireProjectile(item, { readyMessage });
+            return;
+        }
+        await setMessage("You don't have that object.");
+        game._command_mode = null;
+        game._fire_count = null;
+        return;
+    }
+
+    if (game._command_mode === 'fireQuiverAlternateConfirm') {
+        const item = game._fire_quiver_confirm_item;
+        game._fire_quiver_confirm_item = null;
+        game._command_mode = null;
+        if (ch !== 'y' || !item) {
+            game._fire_count = null;
+            return;
+        }
+        const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
+        heroReadyAutoquiverProjectile(item);
+        await beginHeroFireProjectile(item, { readyMessage });
         return;
     }
 
@@ -69520,42 +69703,33 @@ export async function rhack(_cmd) {
             await setMessage('You are physically incapable of throwing or shooting anything.');
             return;
         }
-        const projectile = (game.inventory || []).find(item =>
-            isProjectileItem(item) && (item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver')))
-            || (game.inventory || []).find(isProjectileItem);
-        if (!projectile) {
-            game._fire_count = null;
-            await setMessage("You have no ammunition readied.");
-            return;
-        }
-        const launcher = heroFireassistMatchingLauncher(projectile);
-        let swapMoreLine = '';
-        if (launcher && !(launcher.wielded || launcher.line?.includes('weapon in'))) {
-            const launcherWasAlternate = launcher.alternate || launcher.line?.includes('alternate weapon');
-            const current = (game.inventory || []).find(item =>
-                item !== launcher && (item.wielded || item.line?.includes('weapon in')));
-            if (current) {
-                current.wielded = false;
-                current.alternate = true;
-                current.line = `${current.letter || '?'} - ${inventoryItemName(current)} (alternate weapon; not wielded)`;
-                if (launcherWasAlternate) swapMoreLine = `${current.line}.`;
+        let autoquiverMessage = '';
+        let autoquiverFailed = false;
+        let projectile = (game.inventory || []).find(item =>
+            isProjectileItem(item) && (item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver')));
+        if (!projectile && game.flags?.autoquiver) {
+            projectile = heroAutoquiverProjectile();
+            if (projectile) {
+                autoquiverMessage = `You ready: ${heroFireReadyLine(projectile)}.`;
+                heroReadyAutoquiverProjectile(projectile);
+            } else {
+                autoquiverFailed = true;
             }
-            launcher.wielded = true;
-            launcher.alternate = false;
-            launcher.line = `${launcher.letter || '?'} - ${inventoryItemName(launcher)} (weapon in right hand)`;
         }
-        game._fire_item_letter = projectile.letter;
-        game._fire_launcher_letter = launcher?.letter || null;
-        if (launcher) {
-            game._fire_swap_more_line = swapMoreLine;
-            game._fire_time_pending_after_more = 1;
-            game._fire_direction_pending_after_more = 1;
-            await setMessage(`${launcher.line || `${launcher.letter || '?'} - ${inventoryItemName(launcher)}`}.`, true);
-            game._command_mode = 'fireDirection';
+        if (!projectile) {
+            const letters = inventoryLetters(isReadySuggestItem);
+            if (!letters) {
+                game._fire_count = null;
+                await setMessage(autoquiverFailed
+                    ? 'You have nothing appropriate for your quiver.'
+                    : "You have no ammunition readied.");
+                return;
+            }
+            await setMessage(`What do you want to fire? [${getobjPromptLetters(letters)} or ?*]`);
+            game._command_mode = 'fireQuiverObject';
             return;
         }
-        await setMessage('In what direction?');
-        game._command_mode = 'fireDirection';
+        await beginHeroFireProjectile(projectile, { readyMessage: autoquiverMessage });
         return;
     }
 

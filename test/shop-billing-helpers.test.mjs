@@ -66695,6 +66695,120 @@ test('f command nofireassist carried bow leaves arrow on by-hand path', async ()
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)']);
 });
 
+test('f command empty quiver with autoquiver disabled prompts instead of auto-firing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const missile = arrow(876174108, 'b', { line: 'b - an arrow' });
+    game.inventory = [missile];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.match(game._pending_message, /^What do you want to fire\? \[b or \?\*\]$/);
+});
+
+test('f command failed autoquiver falls through to fire prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.autoquiver = true;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const gem = carriedRuby(876174109, 'r');
+    game.inventory = [gem];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(gem.quivered || false, false);
+    assert.match(game._pending_message, /^What do you want to fire\? \[r or \?\*\]$/);
+});
+
+test('f command autoquiver prefers current launcher ammo over earlier missile', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.autoquiver = true;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const launcher = bow(876173106, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const dart = dartStack(876174104, 'b', 1, { line: 'b - a dart' });
+    const missile = arrow(876174105, 'c', { line: 'c - an arrow' });
+    game.inventory = [launcher, dart, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._fire_item_letter, 'c');
+    assert.equal(missile.quivered, true);
+    assert.equal(dart.quivered || false, false);
+    assert.match(missile.line, /\(in quiver\)$/);
+    assert.equal(game._pending_message, 'You ready: c - an arrow.');
+
+    await rhack(' ');
+    assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
+    await rhack(' ');
+    await rhack('l');
+
+    assert.equal(game.inventory.includes(missile), false);
+    assert.equal(game.inventory.includes(dart), true);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 11);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)']);
+});
+
+test('f command autoquiver prefers missile over alternate launcher ammo', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.autoquiver = true;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const launcher = bow(876173107, 'a', { alternate: true, line: 'a - a bow (alternate weapon; not wielded)' });
+    const missile = arrow(876174106, 'b', { line: 'b - an arrow' });
+    const dart = dartStack(876174107, 'c', 1, { line: 'c - a dart' });
+    game.inventory = [launcher, missile, dart];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._fire_item_letter, 'c');
+    assert.equal(game._fire_launcher_letter, null);
+    assert.equal(dart.quivered, true);
+    assert.equal(missile.quivered || false, false);
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game._pending_message, 'You ready: c - a dart.');
+
+    await rhack(' ');
+    await rhack('l');
+
+    assert.equal(game.inventory.includes(dart), false);
+    assert.equal(game.inventory.includes(missile), true);
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)']);
+});
+
 test('f command basic slung flint fires one stone', async () => {
     installNonShopFloorState();
     initRng(2);

@@ -28,6 +28,6 @@
 
 ## Remaining Follow-Ups
 
-- Empty-quiver `autoquiver()` ranking is still not C-shaped.
+- Audit 701 covers the first empty-quiver prompt and `autoquiver()` ranking slice; broader manual `doquiver_core("fire")` edge cases remain there.
 - Empty-quiver wielded polearm/bullwhip fallback and alternate-polearm swap remain separate `dofire()` slices.
 - The JS fireassist swap/wield path still mutates state inline rather than queuing C's `doswapweapon`/`dowield`/retry sequence; current tests pin selected launcher behavior but not the full queued command lifecycle.
