@@ -26,5 +26,5 @@ The JS non-launcher multishot helper only recognized darts and shuriken. Direct 
 ## Remaining
 
 - C technically gates on any stackable `WEAPON_CLASS`; JS remains limited to weapon families whose thrown monster impact is already modeled.
-- Additional dagger and knife variants such as elven/orcish/silver dagger, athame, scalpel, stiletto, worm tooth, and crysknife still need object metadata and dedicated regressions.
+- Audit 692 adds dagger and knife variant metadata; additional dedicated regressions for the less common variants remain useful.
 - Explicit non-gold throw counts and early-stop wording remain separate from automatic multishot.

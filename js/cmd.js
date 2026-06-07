@@ -19912,7 +19912,15 @@ const HERO_PROJECTILE_MONSTER_SIZE_VALUES = new Map([
 
 const HERO_THROWN_WEAPON_MONSTER_DATA = new Map([
     ['dagger', { smallDie: 4, largeDie: 3, hitbon: 2, skill: P_DAGGER, skillName: 'dagger' }],
+    ['elven dagger', { smallDie: 5, largeDie: 3, hitbon: 2, skill: P_DAGGER, skillName: 'dagger' }],
+    ['orcish dagger', { smallDie: 3, largeDie: 3, hitbon: 2, skill: P_DAGGER, skillName: 'dagger' }],
+    ['silver dagger', { smallDie: 4, largeDie: 3, hitbon: 2, skill: P_DAGGER, skillName: 'dagger' }],
+    ['athame', { smallDie: 4, largeDie: 3, hitbon: 2, thrownHitAdj: -2, skill: P_DAGGER, skillName: 'dagger' }],
+    ['scalpel', { smallDie: 3, largeDie: 3, hitbon: 2, thrownHitAdj: -2, skill: P_KNIFE, skillName: 'knife' }],
     ['knife', { smallDie: 3, largeDie: 2, hitbon: 0, skill: P_KNIFE, skillName: 'knife' }],
+    ['stiletto', { smallDie: 3, largeDie: 2, hitbon: 0, skill: P_KNIFE, skillName: 'knife' }],
+    ['worm tooth', { smallDie: 2, largeDie: 2, hitbon: 0, thrownHitAdj: -2, skill: P_KNIFE, skillName: 'knife' }],
+    ['crysknife', { smallDie: 10, largeDie: 10, hitbon: 3, skill: P_KNIFE, skillName: 'knife' }],
     ['dart', { smallDie: 3, largeDie: 2, hitbon: 0, skill: P_DART, skillName: 'dart' }],
     ['shuriken', { smallDie: 8, largeDie: 6, hitbon: 2, skill: P_SHURIKEN, skillName: 'shuriken' }],
     ['spear', { smallDie: 6, largeDie: 8, hitbon: 0, skill: P_SPEAR, skillName: 'spear' }],
@@ -19928,7 +19936,15 @@ const HERO_THROWN_WEAPON_MONSTER_DATA = new Map([
 
 const HERO_THROWN_STACKABLE_MULTISHOT_WEAPON_KEYS = new Set([
     'dagger',
+    'elven dagger',
+    'orcish dagger',
+    'silver dagger',
+    'athame',
+    'scalpel',
     'knife',
+    'stiletto',
+    'worm tooth',
+    'crysknife',
     'dart',
     'shuriken',
     'throwing star',
@@ -20101,7 +20117,12 @@ function heroProjectileObjectIsWeaponLike(obj) {
 }
 
 function heroThrownWeaponHitValue(obj, mon) {
-    return heroProjectileBaseHitValue(obj, mon) + (tossUpWeaponObjectKey(obj) === 'boomerang' ? 4 : 2);
+    const key = tossUpWeaponObjectKey(obj);
+    const data = HERO_THROWN_WEAPON_MONSTER_DATA.get(key);
+    const thrownHitAdj = Number.isFinite(Number(data?.thrownHitAdj))
+        ? Math.trunc(Number(data.thrownHitAdj))
+        : key === 'boomerang' ? 4 : 2;
+    return heroProjectileBaseHitValue(obj, mon) + thrownHitAdj;
 }
 
 function heroThrowDirectionIndex(dir) {

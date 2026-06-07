@@ -67488,6 +67488,56 @@ test('hero-thrown stacked daggers hit monster as separate throws', async () => {
     ]);
 });
 
+test('hero-thrown silver dagger sears silver-hating monster and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DAGGER, P_EXPERT);
+    const blade = {
+        ...dagger(87618001, 'd'),
+        kind: 'silver dagger',
+        actualKind: 'silver dagger',
+        plural: 'silver daggers',
+        material: 'silver',
+        line: 'd - a silver dagger',
+    };
+    const vampire = ordinaryThrowTarget('vampire', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        data: { name: 'vampire', mlevel: 10, mlet: 'V', mac: 10 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [vampire];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    const silverDamage = rngValuesForCall(rngLog, 'rnd(20)')[1];
+    assert.match(game._pending_message, /The silver dagger hits the vampire!/);
+    assert.match(game._pending_message, /Your silver dagger sears the vampire's flesh!/);
+    assert.doesNotMatch(game._pending_message, /misses|gift|catches|shatters|Splat|You kill/);
+    assert.equal(vampire.mhp, 40 - (baseDamage + silverDamage + 2));
+    assert.equal(vampire.msleeping, 0);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.actualKind, 'silver dagger');
+    assert.equal(landed.material, 'silver');
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'rnd(20)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown dagger lethal target removes monster before projectile lands', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67688,6 +67738,55 @@ test('hero-thrown knife harms ordinary monster and survives landing', async () =
     assert.equal(landed.oy, 5);
     assert.equal(landed.otyp, KNIFE);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown stiletto uses knife-family monster impact and survives landing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_KNIFE, P_EXPERT);
+    const blade = upwardWeapon(87618002, 's', 'stiletto', 's - a stiletto', {
+        otyp: STILETTO,
+        plural: 'stilettos',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.match(game._pending_message, /The stiletto hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /gift|catches|misses|shatters|Splat/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.actualKind, 'stiletto');
+    assert.equal(landed.otyp, STILETTO);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 4), [
         'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(100)',
     ]);
 });
