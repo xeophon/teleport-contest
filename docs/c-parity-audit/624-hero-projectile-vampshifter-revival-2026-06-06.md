@@ -19,10 +19,11 @@
 ## Replay-free coverage
 
 - `hero-thrown dagger revives shifted vampire lethal target before cleanup`
+- Audit 742 adds canaries for first-kill conduct, deadly-poison unpoison ordering, fired arrows, and kicked gems through the same shared revival helper.
 - `known hero rolling boulder trap lethal target awards hero experience`
 
 ## Remaining candidates
 
-- Conduct accounting for shifted-vampire fake deaths remains a broader monster-death lifecycle cleanup; this slice does not introduce a generic `xkilled()` abstraction.
+- Broader monster-death lifecycle cleanup still does not introduce a generic `xkilled()` abstraction; audit 742 covers the first-kill conduct side effect for this fake-death path.
 - Door smash/explosion side effects from a vampire rising in a doorway remain outside this slice.
 - Remaining shifted-vampire death channels should continue one source-backed path at a time until the duplicated revival helpers can be collapsed safely.

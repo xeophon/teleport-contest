@@ -18856,6 +18856,7 @@ function reviveVampshifterFromPotionKill(mon, messages) {
 
 function killMonsterFromPotionHit(mon, messages, { heroFault = true } = {}) {
     if (!mon || mon.dead) return;
+    if (heroFault) recordHeroKillConduct();
     if (heroFault && reviveVampshifterFromPotionKill(mon, messages)) return;
     mon.dead = true;
     mon.mhp = 0;
@@ -19106,6 +19107,7 @@ function killMonsterFromSystemShock(mon, messages) {
     mon.dead = true;
     mon.mhp = 0;
     messages.push(`You kill ${name}!`);
+    recordHeroKillConduct();
     recordVanquished(mon);
     dropMonsterInventory(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
@@ -22554,6 +22556,7 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
         messages.push(...poison.messagesAfterHit);
         if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
         else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        messages.push(...poison.messagesAfterKill);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -22659,6 +22662,7 @@ function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLaunche
         messages.push(...poison.messagesAfterHit);
         if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
         else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        messages.push(...poison.messagesAfterKill);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -22731,6 +22735,7 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { ki
 
 function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
     if (!mon || mon.dead) return;
+    recordHeroKillConduct();
     if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage })) return;
     mon.dead = true;
     mon.mhp = 0;
@@ -22776,9 +22781,10 @@ function adjustHeroAlignmentForPoisonedWeaponUse(messages) {
 
 function heroProjectilePoisonResult(obj, mon, poisonApplies = false) {
     if (!poisonApplies || !obj?.opoisoned || !isPoisonableWeaponObject(obj))
-        return { messagesBeforeHit: [], messagesAfterHit: [], damage: 0, deadly: false };
+        return { messagesBeforeHit: [], messagesAfterHit: [], messagesAfterKill: [], damage: 0, deadly: false };
     const messagesBeforeHit = [];
     const messagesAfterHit = [];
+    const messagesAfterKill = [];
     adjustHeroAlignmentForPoisonedWeaponUse(messagesBeforeHit);
 
     const weight = Math.max(0, Math.trunc(Number(globObjectWeight({ ...obj, quan: 1 }) || 0)));
@@ -22803,9 +22809,9 @@ function heroProjectilePoisonResult(obj, mon, poisonApplies = false) {
     if (unpoisoned) {
         const name = pickupObjectName({ ...obj, opoisoned: false });
         const singular = Math.trunc(Number(obj?.quan || 1)) === 1;
-        messagesAfterHit.push(`Your ${name} ${singular ? 'is' : 'are'} no longer poisoned.`);
+        messagesAfterKill.push(`Your ${name} ${singular ? 'is' : 'are'} no longer poisoned.`);
     }
-    return { messagesBeforeHit, messagesAfterHit, damage, deadly };
+    return { messagesBeforeHit, messagesAfterHit, messagesAfterKill, damage, deadly };
 }
 
 function heroThrownWeaponPoisonApplies(obj) {
@@ -22837,6 +22843,7 @@ function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false 
         messages.push(...poison.messagesAfterHit);
         if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
         else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        messages.push(...poison.messagesAfterKill);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -25383,6 +25390,13 @@ function heroConduct() {
 function addConductCount(field, amount = 1) {
     const conduct = heroConduct();
     conduct[field] = (conduct[field] || 0) + amount;
+}
+
+function recordHeroKillConduct() {
+    if (game._chronicle_first_kill) return;
+    game._chronicle_entries ??= [];
+    game._chronicle_entries.push({ turn: game.moves || 1, text: 'killed for the first time' });
+    game._chronicle_first_kill = 1;
 }
 
 function recordLiterateConduct() {
@@ -51637,12 +51651,14 @@ function heroRollingBoulderKillMonster(mon, messages, visible, movingBoulder) {
         const verb = heroRollingBoulderMonsterDeathIsDestroyed(mon) ? 'destroyed' : 'killed';
         messages.push(`${heroRollingBoulderMonsterDeathName(mon)} is ${verb}!`);
     }
+    const heroAttributed = !!movingBoulder?.otrapped;
+    if (heroAttributed) recordHeroKillConduct();
     if (reviveVampshifterFromRollingBoulderKill(mon, messages, visible)) return;
     dropMonsterInventory(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== mon);
     mon.mhp = 0;
     mon.dead = true;
-    recordVanquished(mon, !!movingBoulder?.otrapped);
+    recordVanquished(mon, heroAttributed);
     newsym(mon.mx, mon.my);
 }
 
@@ -53974,11 +53990,7 @@ async function moveHero(dx, dy) {
         messages.push(`You ${killVerb} ${killedPet ? `the poor ${killedName}` : targetPhrase}!`);
         if (killedByNormalMelee)
             applyDirectMeleePassiveObject(mon, killingAttackWeapon, messages);
-        if (!game._chronicle_first_kill) {
-            game._chronicle_entries ??= [];
-            game._chronicle_entries.push({ turn: game.moves || 1, text: 'killed for the first time' });
-            game._chronicle_first_kill = 1;
-        }
+        recordHeroKillConduct();
         recordVanquished(mon);
         dropMonsterInventory(mon, messages);
         const potionCallPrompt = game._command_mode === 'callPotionAfterMore';

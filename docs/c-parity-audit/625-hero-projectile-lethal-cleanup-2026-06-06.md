@@ -29,5 +29,5 @@
 ## Remaining candidates
 
 - Broader hero projectile lethal cleanup for ammo/launcher paths should stay separate from this gem/dagger/knife slice.
-- Conduct/luck penalties for peaceful or tame projectile kills need a central `xkilled()` lifecycle pass rather than one-off additions.
+- Peaceful/tame projectile kill side effects still need a central `xkilled()` lifecycle pass rather than one-off additions; audit 742 covers first-kill conduct for hero-attributed projectile fake deaths.
 - Door smash/explosion side effects from shifted vampires rising in a doorway remain outside this slice.

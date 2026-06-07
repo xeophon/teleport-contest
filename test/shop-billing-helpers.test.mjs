@@ -22765,6 +22765,7 @@ test('known hero rolling boulder trap lethal target awards hero experience', asy
     assert.equal(goblin.dead, true);
     assert.equal(game._vanquished_counts?.goblin, 1);
     assert.equal(game.u.urexp > 0, true);
+    assert.equal(game._chronicle_first_kill, 1);
     assert.equal(boulder.ox, 8);
     assert.equal(boulder.oy, 3);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [5, 5]);
@@ -43917,6 +43918,66 @@ test('command kicked ruby lethal target removes monster before landing', async (
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
         'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
     ]);
+});
+
+test('command kicked ruby revives shifted vampire lethal target before cleanup', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 25;
+    const ruby = floorGem(512231, 'ruby', {
+        ox: 6,
+        oy: 5,
+        known: true,
+        actualKind: 'ruby',
+        gemDescription: 'ruby',
+        gemTough: true,
+    });
+    const carried = { id: 512232, cls: 'food', kind: 'food ration', quan: 1 };
+    const bat = ordinaryThrowTarget('vampire bat', 7, 5, {
+        mhp: 1,
+        mhpmax: 8,
+        m_lev: 5,
+        mlevel: 5,
+        msleeping: 1,
+        mpeaceful: 1,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        minvent: [carried],
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    game.level.objects = [ruby];
+    game.level.monsters = [bat];
+    enableRngLog({ reset: true });
+    markSquareVisible(bat.mx, bat.my);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You kick a ruby.  The ruby hits the vampire bat.  You kill the vampire bat!  The seemingly dead vampire bat suddenly transforms and rises as a vampire!');
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._chronicle_first_kill, 1);
+    assert.equal(game.level.objects.includes(ruby), true);
+    assert.equal(ruby.ox, 7);
+    assert.equal(ruby.oy, 5);
 });
 
 test('command kicked ruby miss against ordinary monster lands', async () => {
@@ -67107,6 +67168,76 @@ test('hero-thrown lawful poisoned crossbow bolt can wear off before deadly poiso
     ]);
 });
 
+test('hero-thrown deadly poisoned crossbow bolt revives shifted vampire before unpoison message', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 1, 0, 0, 1, 0]);
+    game._startup_role = 'Wizard';
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 7 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_BASIC);
+    const launcher = crossbow(87617392, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' });
+    const missile = crossbowBolt(87617492, 'b', {
+        opoisoned: true,
+        line: 'b - a poisoned crossbow bolt',
+    });
+    const bat = ordinaryThrowTarget('vampire bat', 6, 5, {
+        mhp: 30,
+        mhpmax: 8,
+        m_lev: 5,
+        mlevel: 5,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [bat];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    markSquareVisible(bat.mx, bat.my);
+    await rhack('l');
+
+    const message = game._pending_message;
+    const deadlyIndex = message.indexOf('The poison was deadly...');
+    const riseIndex = message.indexOf('The seemingly dead vampire bat suddenly transforms and rises as a vampire!');
+    const unpoisonIndex = message.indexOf('Your crossbow bolt is no longer poisoned.');
+    assert.ok(deadlyIndex >= 0, message);
+    assert.ok(riseIndex > deadlyIndex, message);
+    assert.ok(unpoisonIndex > riseIndex, message);
+    assert.doesNotMatch(message, /You kill the vampire bat!/);
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._chronicle_first_kill, 1);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.opoisoned, false);
+});
+
 test('f command arrow with matching bow uses C ammo range increment', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67133,6 +67264,67 @@ test('f command arrow with matching bow uses C ammo range increment', async () =
     assert.equal(landed.ox, 11);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('f command arrow revives shifted vampire lethal target before cleanup', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_BASIC);
+    const launcher = bow(8761732, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(8761742, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const bat = ordinaryThrowTarget('vampire bat', 7, 5, {
+        mhp: 1,
+        mhpmax: 8,
+        m_lev: 5,
+        mlevel: 5,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [bat];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    markSquareVisible(bat.mx, bat.my);
+    await rhack('l');
+
+    assert.match(game._pending_message, /The arrow hits the vampire bat[.!]/);
+    assert.match(game._pending_message, /You kill the vampire bat!/);
+    assert.match(game._pending_message, /The seemingly dead vampire bat suddenly transforms and rises as a vampire!/);
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._chronicle_first_kill, 1);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
 });
 
 test('f command empty quiver with wielded aklys throws it before autoquiver', async () => {
@@ -74029,6 +74221,8 @@ test('hero-thrown dagger revives shifted vampire lethal target before cleanup', 
     assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
     assert.equal(game._vanquished_counts?.vampire || 0, 0);
     assert.equal(game._vanquished_total || 0, 0);
+    assert.equal(game._chronicle_first_kill, 1);
+    assert.equal(game._chronicle_entries?.some(entry => entry.text === 'killed for the first time'), true);
     assert.equal(game.level.objects.some(obj => obj.kind === 'vampire bat corpse'), false);
     assert.equal(game.inventory.includes(blade), false);
     const landed = game.level.objects.find(obj => obj.id === blade.id);
