@@ -27,5 +27,5 @@ Launcher ammo multishot was split into per-projectile impacts for both `f` and d
 ## Remaining
 
 - This slice intentionally covered only darts and shuriken; audit 691 expands the same split path to the currently supported dagger, knife, spear, and javelin thrown-weapon families.
-- Audit 693 ports launcher-ammo multishot bonuses and crossbow strength reduction; explicit throw counts and broader dedicated launcher bonus regressions remain.
+- Audits 693 and 694 port launcher-ammo multishot bonuses, crossbow strength reduction, and explicit count caps; broader dedicated launcher bonus regressions remain.
 - Shop-specific unpaid non-launcher multishot billing coverage remains to be added.

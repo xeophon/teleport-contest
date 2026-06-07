@@ -28,4 +28,4 @@ Direct `t` and `f` matching launcher ammo both used a hard `rnd(2)` cap. That al
 ## Remaining
 
 - Dedicated regressions for elf/orc racial bow bonuses, Longbow of Diana quest-artifact bonus, and low-strength crossbow pre-roll would improve coverage.
-- Explicit count prefixes still need to cap launcher and non-launcher multishot after the C final RNG roll.
+- Audit 694 adds explicit count-prefix caps after the final multishot RNG roll.

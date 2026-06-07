@@ -11071,11 +11071,16 @@ function clearThrowMenuCountState() {
     game._throw_menu_count_backspaced = false;
 }
 
-function clearThrowCountState() {
+function clearThrowSelectionCountState() {
     game._throw_count_text = '';
     game._throw_count_backspaced = false;
     game._throw_count = null;
     clearThrowMenuCountState();
+}
+
+function clearThrowCountState() {
+    clearThrowSelectionCountState();
+    game._throw_shot_limit = null;
 }
 
 function throwSelectionCount() {
@@ -21101,11 +21106,12 @@ function heroLauncherIsCurrentRoleQuestArtifact(launcher) {
     ].some(name => questArtifactNameKey(name) === expected);
 }
 
-function heroLauncherAmmoMultishotCount(obj, launcher) {
+function heroLauncherAmmoMultishotCount(obj, launcher, shotLimit = 0) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const limit = Math.max(0, Math.trunc(Number(shotLimit || 0)));
     const meta = heroLauncherAmmoData(obj);
     if (quantity <= 1 || !meta || !heroThrowAmmoAndLauncher(obj, launcher)
-        || heroIsConfused() || heroIsStunned()) return 1;
+        || heroIsConfused() || heroIsStunned()) return limit > 0 ? Math.min(1, limit) : 1;
     const role = heroRoleName();
     const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
     const weak = role === 'Wizard' || role === 'Cleric' || role === 'Priest'
@@ -21126,13 +21132,25 @@ function heroLauncherAmmoMultishotCount(obj, launcher) {
         const threshold = heroRaceName() === 'gnome' ? 16 : 18;
         if (strength < threshold) multishot = rnd(multishot);
     }
-    return Math.min(quantity, rnd(Math.max(1, multishot)));
+    let count = Math.min(quantity, rnd(Math.max(1, multishot)));
+    if (limit > 0 && count > limit) count = limit;
+    return count;
 }
 
-function heroThrownStackableWeaponMultishotCount(obj) {
+function heroProjectileVolleyName(obj, count) {
+    if (count === 1)
+        return pickupObjectName({ ...obj, quan: 1 }).replace(/^(?:an?|the)\s+/i, '');
+    return inventoryItemName(obj)
+        .replace(/^\d+ /, '')
+        .replace(/^(?:uncursed|blessed|cursed) /, '');
+}
+
+function heroThrownStackableWeaponMultishotCount(obj, shotLimit = 0) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const limit = Math.max(0, Math.trunc(Number(shotLimit || 0)));
     const meta = heroThrownStackableWeaponMultishotMeta(obj);
-    if (quantity <= 1 || !meta || heroIsConfused() || heroIsStunned()) return 1;
+    if (quantity <= 1 || !meta || heroIsConfused() || heroIsStunned())
+        return limit > 0 ? Math.min(1, limit) : 1;
     const role = heroRoleName();
     const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
     const weak = role === 'Wizard' || role === 'Cleric'
@@ -21144,7 +21162,9 @@ function heroThrownStackableWeaponMultishotCount(obj) {
     if (skillLevel >= P_EXPERT) multishot++;
     if (skillLevel >= P_SKILLED && !weak) multishot++;
     multishot += heroThrownStackableWeaponMultishotClassBonus(obj, meta);
-    return Math.min(quantity, rnd(Math.max(1, multishot)));
+    let count = Math.min(quantity, rnd(Math.max(1, multishot)));
+    if (limit > 0 && count > limit) count = limit;
+    return count;
 }
 
 function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
@@ -67693,6 +67713,7 @@ export async function rhack(_cmd) {
         if (!dir) {
             game._fire_item_letter = null;
             game._fire_launcher_letter = null;
+            game._fire_count = null;
             setOverlay(CMDASSIST_DIRECTION_LINES, 24, true);
             game._command_mode = 'cmdassistMore';
             return;
@@ -67702,6 +67723,7 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             game._fire_item_letter = null;
             game._fire_launcher_letter = null;
+            game._fire_count = null;
             return;
         }
         const launcher = (game.inventory || [])
@@ -67726,9 +67748,10 @@ export async function rhack(_cmd) {
         let targetMon = initialFlight.targetMon;
         const oldQuan = item.quan || 1;
         const firedFromLauncher = !!(launcher && heroThrowAmmoAndLauncher(item, launcher));
+        const fireShotLimit = Math.max(0, Math.trunc(Number(game._fire_count || 0)));
         const shotCount = firedFromLauncher
-            ? heroLauncherAmmoMultishotCount(item, launcher)
-            : heroThrownStackableWeaponMultishotCount(item);
+            ? heroLauncherAmmoMultishotCount(item, launcher, fireShotLimit)
+            : heroThrownStackableWeaponMultishotCount(item, fireShotLimit);
         let impactMessage = '';
         let landingMessage = '';
         const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
@@ -67852,12 +67875,13 @@ export async function rhack(_cmd) {
         }
         updateWornDisplacement();
         game._pet_food_scan_inventory = game.inventory;
-        const name = inventoryItemName(item)
-            .replace(/^\d+ /, '')
-            .replace(/^(?:uncursed|blessed|cursed) /, '');
+        const name = heroProjectileVolleyName(item, shotCount);
         const fireMessage = !fireNoLauncherMessage && shotCount === 1
+            && fireShotLimit <= 0
             ? ''
             : shotCount > 1
+            ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
+            : fireShotLimit > 0
             ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
             : `${firedFromLauncher ? 'You shoot' : 'You throw'} ${name}.`;
         const message = fireNoLauncherMessage
@@ -67878,6 +67902,7 @@ export async function rhack(_cmd) {
         game._command_mode = null;
         game._fire_item_letter = null;
         game._fire_launcher_letter = null;
+        game._fire_count = null;
         game.context.move = 1;
         if (fireRecoilResult?.lifeSaving || fireRecoilResult?.fatal) {
             if (applyLifeSavingOrFatalCommandMode(fireRecoilResult)) return;
@@ -68027,7 +68052,7 @@ export async function rhack(_cmd) {
             game._throw_prompt = letters
                 ? `What do you want to throw? [${promptLetters} or ?*]`
                 : 'What do you want to throw? [*]';
-            clearThrowCountState();
+            clearThrowSelectionCountState();
             await setMessage(game._throw_prompt);
             game._command_mode = 'throwObject';
             return;
@@ -68771,16 +68796,19 @@ export async function rhack(_cmd) {
         const itemQuantity = item.quan || 1;
         const attachedBallThrow = heroThrownAttachedBallObject(item);
         const directLauncherAmmo = !!(heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher));
+        const directShotLimit = Math.max(0, Math.trunc(Number(game._throw_shot_limit || 0)));
         const directLauncherShotCount = directLauncherAmmo
-            ? heroLauncherAmmoMultishotCount(item, throwLauncher)
+            ? heroLauncherAmmoMultishotCount(item, throwLauncher, directShotLimit)
             : 1;
         const directThrownStackableWeapon = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(item);
         const directThrownStackableWeaponShotCount = directThrownStackableWeapon
-            ? heroThrownStackableWeaponMultishotCount(item)
+            ? heroThrownStackableWeaponMultishotCount(item, directShotLimit)
             : 1;
         const directMultishotCount = directLauncherAmmo
             ? directLauncherShotCount
             : directThrownStackableWeaponShotCount;
+        const directCountForcesVolleyMessage = directShotLimit > 0
+            && (directLauncherAmmo || directThrownStackableWeapon);
         const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
             ? attachedBallThrow
                 ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
@@ -68793,7 +68821,9 @@ export async function rhack(_cmd) {
             if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
             return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
         };
-        if ((directLauncherAmmo || directThrownStackableWeapon) && directMultishotCount > 1 && !boomerangFlight.handled && !ironBarsImpact) {
+        if ((directLauncherAmmo || directThrownStackableWeapon)
+            && (directMultishotCount > 1 || directCountForcesVolleyMessage)
+            && !boomerangFlight.handled && !ironBarsImpact) {
             const impactMessages = [];
             const landingMessages = [];
             const newsymTargets = [];
@@ -68858,9 +68888,7 @@ export async function rhack(_cmd) {
                     game._unburden_after_topline_more = 1;
                 }
             }
-            const volleyName = inventoryItemName(item)
-                .replace(/^\d+ /, '')
-                .replace(/^(?:uncursed|blessed|cursed) /, '');
+            const volleyName = heroProjectileVolleyName(item, directMultishotCount);
             const impactMessage = impactMessages.join('  ');
             const landingMessage = landingMessages.join('  ');
             const message = [`You ${directLauncherAmmo ? 'shoot' : 'throw'} ${directMultishotCount} ${volleyName}.`, ordinaryAirRecoilMessage, impactMessage]
@@ -69232,6 +69260,8 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 't') {
+        const throwShotLimit = throwCountTextValue(game._count_prefix);
+        game._count_prefix = '';
         if (polyselfNoHands()) {
             await setMessage('You are physically incapable of throwing or shooting anything.');
             return;
@@ -69245,8 +69275,8 @@ export async function rhack(_cmd) {
         game._throw_prompt = letters
             ? `What do you want to throw? [${promptLetters} or ?*]`
             : 'What do you want to throw? [*]';
-        game._count_prefix = '';
         clearThrowCountState();
+        game._throw_shot_limit = throwShotLimit > 0 ? throwShotLimit : null;
         await setMessage(game._throw_prompt);
         game._command_mode = 'throwObject';
         return;
@@ -69329,7 +69359,11 @@ export async function rhack(_cmd) {
 
 
     if (ch === 'f') {
+        const fireCount = throwCountTextValue(game._count_prefix);
+        game._count_prefix = '';
+        game._fire_count = fireCount > 0 ? fireCount : null;
         if (polyselfNoHands()) {
+            game._fire_count = null;
             await setMessage('You are physically incapable of throwing or shooting anything.');
             return;
         }
@@ -69337,6 +69371,7 @@ export async function rhack(_cmd) {
             isProjectileItem(item) && (item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver')))
             || (game.inventory || []).find(isProjectileItem);
         if (!projectile) {
+            game._fire_count = null;
             await setMessage("You have no ammunition readied.");
             return;
         }

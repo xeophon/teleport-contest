@@ -60512,6 +60512,23 @@ test('throw prompt count rejects multi-count non-gold stack before direction', a
     assert.equal(game.context.move || 0, 0);
 });
 
+test('throw prompt count rejects multi-count non-multishot stack before direction', async () => {
+    installNonShopFloorState();
+    const rations = foodRationStack(876145, 3, 'f');
+    game.inventory = [rations];
+
+    await rhack('t');
+    await rhack('2');
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.match(game._pending_message, /can only throw one at a time/);
+    assert.equal(game.inventory[0], rations);
+    assert.equal(rations.quan, 3);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
 test('throw prompt count backspace removes last digit before validation', async () => {
     installNonShopFloorState();
     const darts = dartStack(876046, 'd', 3);
@@ -60650,7 +60667,7 @@ test('throw prompt count clears after direction cancel', async () => {
     assert.equal(game.level.objects[0].quan, 5);
 });
 
-test('top-level throw count does not leak into prompt count', async () => {
+test('top-level throw count does not limit prompt-selected gold stack', async () => {
     installNonShopFloorState();
     const gold = goldPieces(876045, 5);
     game.inventory = [gold];
@@ -60714,6 +60731,28 @@ test('throw question inventory menu count rejects multi-count non-gold stack bef
     assert.equal(game._command_mode, 'throwObject');
     assert.match(game._pending_message, /can only throw one at a time/);
     assert.equal(darts.quan, 3);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('throw star inventory menu count rejects non-multishot stack before direction', async () => {
+    installNonShopFloorState();
+    const rations = foodRationStack(876150, 3, 'f');
+    game.inventory = [rations];
+
+    await rhack('t');
+    await rhack('*');
+    assert.equal(game._command_mode, 'throwInventory');
+
+    await rhack('2');
+    assert.equal(game._command_mode, 'throwInventory');
+    assert.match(game._pending_message, /Count: 2/);
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'throwObject');
+    assert.match(game._pending_message, /can only throw one at a time/);
+    assert.equal(rations.quan, 3);
     assert.equal(game.level.objects.length, 0);
     assert.equal(game.context.move || 0, 0);
 });
@@ -62079,6 +62118,46 @@ test('hero-thrown dart harms ordinary monster and survives landing', async () =>
     ]);
 });
 
+test('top-level throw count accepts single dart and forces one-shot volley', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const dart = dartStack(876137, 'd', 1);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [dart];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('3');
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You throw 1 dart\./);
+    assert.match(game._pending_message, /The dart hits the goblin\./);
+    assert.equal(goblin.mhp, 18);
+    assert.equal(game.inventory.includes(dart), false);
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown stacked darts hit monster as separate throws', async () => {
     installNonShopFloorState();
     initRng(3);
@@ -62124,6 +62203,48 @@ test('hero-thrown stacked darts hit monster as separate throws', async () => {
         'rnd(2)', 'rnd(2)',
         'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
         'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('top-level throw count caps dart multishot after roll', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const darts = dartStack(876140, 'd', 2);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [darts];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('1');
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.equal(rngCallName(rngLog[0]), 'rnd(2)');
+    assert.equal(rngCallValue(rngLog[0]), 2);
+    assert.match(game._pending_message, /You throw 1 dart\./);
+    assert.match(game._pending_message, /The dart hits the goblin\./);
+    assert.equal(goblin.mhp, 40 - (damageRoll + 1));
+    assert.equal(darts.quan, 1);
+    const landed = game.level.objects.find(obj => obj.kind === 'dart' && obj.ox === 7 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 7), [
+        'rnd(2)', 'rnd(2)', 'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
@@ -65973,6 +66094,64 @@ test('hero-thrown gnome skilled crossbow bolts use racial multishot bonus', asyn
     ]);
 });
 
+test('hero-thrown count prefix caps launcher multishot after roll', async () => {
+    installNonShopFloorState();
+    initRng(89);
+    game._startup_role = 'Archeologist';
+    game.urole = { ...(game.urole || {}), name: { m: 'Archeologist', f: 'Archeologist' } };
+    game._startup_race = 'gnome';
+    game.urace = { ...(game.urace || {}), noun: 'gnome', adj: 'gnomish' };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_SKILLED);
+    const launcher = crossbow(87617374, 'a', {
+        wielded: true,
+        line: 'a - a crossbow (weapon in right hand)',
+    });
+    const missile = crossbowBolt(87617474, 'b', {
+        quan: 3,
+        line: 'b - 3 crossbow bolts',
+    });
+    missile.line = 'b - 3 crossbow bolts';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 100,
+        mhpmax: 100,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('1');
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    assert.equal(rngCallName(rngLog[0]), 'rnd(3)');
+    assert.equal(rngCallValue(rngLog[0]), 3);
+    assert.match(game._pending_message, /You shoot 1 crossbow bolt\./);
+    assert.match(game._pending_message, /The crossbow bolt hits the goblin[.!]/);
+    assert.equal(goblin.mhp, 100 - (damageRoll + 2));
+    assert.equal(missile.quan, 2);
+    const landed = game.level.objects.find(obj => obj.kind === 'crossbow bolt' && obj.ox === 6 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 7), [
+        'rnd(3)', 'rnd(2)', 'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown arrow with matching bow miss wakes monster without by-hand warning', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66871,6 +67050,71 @@ test('f command Samurai skilled ya with yumi uses role multishot bonus', async (
         'rnd(2)',
         'rnd(20)', 'rnd(7)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
         'rnd(20)', 'rnd(7)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command count prefix caps launcher multishot after roll', async () => {
+    installNonShopFloorState();
+    initRng(89);
+    game._startup_role = 'Samurai';
+    game.urole = { ...(game.urole || {}), name: { m: 'Samurai', f: 'Samurai' } };
+    game._startup_race = 'human';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_SKILLED);
+    const launcher = bow(87617334, 'a', {
+        kind: 'yumi',
+        actualKind: 'yumi',
+        wielded: true,
+        line: 'a - a yumi (weapon in right hand)',
+    });
+    const missile = arrow(87617434, 'b', {
+        kind: 'ya',
+        actualKind: 'ya',
+        plural: 'ya',
+        quivered: true,
+        quan: 3,
+        line: 'b - 3 ya (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 100,
+        mhpmax: 100,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('1');
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(7)')[0];
+    assert.equal(rngCallName(rngLog[0]), 'rnd(3)');
+    assert.equal(rngCallValue(rngLog[0]), 3);
+    assert.match(game._pending_message, /You shoot 1 ya\./);
+    assert.match(game._pending_message, /The ya hits the goblin[.!]/);
+    assert.equal(goblin.mhp, 100 - (damageRoll + 1));
+    assert.equal(missile.quan, 2);
+    const landed = game.level.objects.find(obj => obj.kind === 'ya' && obj.ox === 6 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 7), [
+        'rnd(3)', 'rnd(2)', 'rnd(20)', 'rnd(7)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
