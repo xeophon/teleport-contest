@@ -20155,8 +20155,9 @@ async function heroKickedGemImpact(obj, mon) {
         const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`];
-        if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
-        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        const lethalHit = (mon.mhp || 0) <= 0;
+        if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!lethalHit && !mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -22561,10 +22562,11 @@ async function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
         ];
         if (ammoDamage.silverMessage) messages.push(ammoDamage.silverMessage);
         messages.push(...poison.messagesAfterHit);
+        const lethalHit = poison.deadly || (mon.mhp || 0) <= 0;
         if (poison.deadly) await killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
-        else if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        else if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         messages.push(...poison.messagesAfterKill);
-        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        if (!lethalHit && !mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -22669,10 +22671,11 @@ async function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowL
         ];
         if (ammoDamage.silverMessage) messages.push(ammoDamage.silverMessage);
         messages.push(...poison.messagesAfterHit);
+        const lethalHit = poison.deadly || (mon.mhp || 0) <= 0;
         if (poison.deadly) await killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
-        else if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        else if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         messages.push(...poison.messagesAfterKill);
-        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        if (!lethalHit && !mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -22978,10 +22981,11 @@ async function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = 
         ];
         if (weaponDamage.silverMessage) messages.push(weaponDamage.silverMessage);
         messages.push(...poison.messagesAfterHit);
+        const lethalHit = poison.deadly || (mon.mhp || 0) <= 0;
         if (poison.deadly) await killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
-        else if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        else if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         messages.push(...poison.messagesAfterKill);
-        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        if (!lethalHit && !mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -23018,8 +23022,9 @@ async function heroThrownGemImpact(obj, mon) {
         const damage = rnd(2);
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`];
-        if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
-        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        const lethalHit = (mon.mhp || 0) <= 0;
+        if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!lethalHit && !mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
         if (mulched) rn2(100);
@@ -27327,9 +27332,10 @@ async function heroAppliedPolearmImpact(item, mon, { targetX = mon?.mx, targetY 
         const damage = heroAppliedPolearmHitDamage(item, mon);
         if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`You hit ${targetName}${heroProjectileHitPunctuation(damage)}`];
-        if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        const lethalHit = (mon.mhp || 0) <= 0;
+        if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         let cutWorm = null;
-        if (!mon.dead) {
+        if (!lethalHit && !mon.dead) {
             wakeMonsterFromHeroThrownHit(mon);
             cutWorm = heroAppliedPolearmCutWorm(mon, targetX, targetY, messages);
         }

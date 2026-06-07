@@ -153,6 +153,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [745-hero-projectile-random-treasure-2026-06-08.md](745-hero-projectile-random-treasure-2026-06-08.md): hero projectile `xkilled()` random treasure gate, drop filtering, and command-level forced treasure canary.
 - [746-hero-projectile-live-xp-2026-06-08.md](746-hero-projectile-live-xp-2026-06-08.md): hero projectile live XP, level-up message folding, and shared monster XP calculation.
 - [747-hero-projectile-monster-lifesaving-2026-06-08.md](747-hero-projectile-monster-lifesaving-2026-06-08.md): hero projectile monster life saving, C-ordered medallion messages, and cleanup bypass.
+- [748-hero-projectile-lethal-lifesaving-followup-2026-06-08.md](748-hero-projectile-lethal-lifesaving-followup-2026-06-08.md): hero projectile lethal life-saving follow-up, deadly poison ordering, and genocided cleanup continuation.
 
 ## Cross-Cutting Themes
 

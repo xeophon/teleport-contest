@@ -74181,7 +74181,9 @@ test('hero-thrown dagger lethal target uses monster life saving before cleanup',
         mhp: 1,
         mhpmax: 3,
         msleeping: 1,
-        mpeaceful: 0,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
         minvent: [amulet, carried],
         data: { name: 'goblin', mlevel: 1, mlet: 'o' },
     });
@@ -74201,7 +74203,10 @@ test('hero-thrown dagger lethal target uses monster life saving before cleanup',
     assert.equal(goblin.dead, false);
     assert.equal(goblin.mhp, 10);
     assert.equal(goblin.mhpmax, 10);
-    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, 1);
+    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.mstrategy, STRAT_WAITFORU);
     assert.equal(goblin.mcanmove, true);
     assert.equal(goblin.mfrozen, 0);
     assert.equal(goblin.minvent.includes(amulet), false);
@@ -74238,7 +74243,9 @@ test('hero-thrown dagger unseen monster life saving says maybe not only', async 
         mhp: 1,
         mhpmax: 3,
         msleeping: 1,
-        mpeaceful: 0,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
         minvent: [amulet],
         data: { name: 'goblin', mlevel: 1, mlet: 'o' },
     });
@@ -74256,6 +74263,10 @@ test('hero-thrown dagger unseen monster life saving says maybe not only', async 
     assert.equal(game.level.monsters.includes(goblin), true);
     assert.equal(goblin.dead, false);
     assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, 1);
+    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.mstrategy, STRAT_WAITFORU);
     assert.equal(goblin.minvent.includes(amulet), false);
     assert.equal(game._vanquished_counts?.goblin || 0, 0);
     assert.equal(game.u.uexp, 0);
@@ -74264,6 +74275,153 @@ test('hero-thrown dagger unseen monster life saving says maybe not only', async 
         && entry.name === 'amulet of life saving' && entry.known), false);
     const calls = getRngLog().map(rngCallName);
     assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)']);
+});
+
+test('hero-thrown deadly poisoned crossbow bolt uses monster life saving before unpoison message', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 1, 0, 0, 1, 0]);
+    game._startup_role = 'Wizard';
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uexp: 0,
+        urexp: 0,
+        uluck: 10,
+        uhitinc: 30,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 7 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_BASIC);
+    const launcher = crossbow(8762301, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' });
+    const missile = crossbowBolt(876231, 'b', {
+        opoisoned: true,
+        line: 'b - a poisoned crossbow bolt',
+    });
+    const amulet = metalAmulet(876232, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const carried = { id: 876233, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        minvent: [amulet, carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const message = game._pending_message;
+    const evilIndex = message.indexOf('You feel like an evil coward for using a poisoned weapon.');
+    const hitIndex = message.indexOf('The crossbow bolt hits the goblin.');
+    const poisonIndex = message.indexOf('The poison was deadly...');
+    const waitIndex = message.indexOf('But wait...');
+    const unpoisonIndex = message.indexOf('Your crossbow bolt is no longer poisoned.');
+    assert.ok(evilIndex >= 0 && evilIndex < hitIndex, message);
+    assert.ok(hitIndex >= 0 && hitIndex < poisonIndex, message);
+    assert.ok(poisonIndex >= 0 && poisonIndex < waitIndex, message);
+    assert.ok(waitIndex >= 0 && waitIndex < unpoisonIndex, message);
+    assert.match(message, /The goblin's medallion begins to glow!/);
+    assert.match(message, /The goblin looks much better!/);
+    assert.match(message, /The medallion crumbles to dust!/);
+    assert.doesNotMatch(message, /You kill the goblin!/);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(goblin.dead, false);
+    assert.equal(goblin.mhp, 30);
+    assert.equal(goblin.mhpmax, 30);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, 1);
+    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.mstrategy, STRAT_WAITFORU);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    assert.equal(goblin.minvent.includes(carried), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game._vanquished_counts?.goblin || 0, 0);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uexp, 0);
+    assert.equal(game.u.urexp, 0);
+    assert.equal(missile.opoisoned, true);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.opoisoned, false);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'rn2(10)', 'rn2(10)', 'rn2(19)',
+    ]);
+});
+
+test('hero-thrown dagger genocided target consumes life saving before cleanup', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uluck: 10, uhitinc: 30, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876234, 'd');
+    const amulet = metalAmulet(876235, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const carried = { id: 876236, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 0,
+        minvent: [amulet, carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    game._genocided_monsters = ['goblin'];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3, 1, 1, 1, 1]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        "The dagger hits the goblin.  You kill the goblin!  But wait...  The goblin's medallion begins to glow!  The goblin looks much better!  The medallion crumbles to dust!  Unfortunately, the goblin is still genocided...");
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(goblin.mhp, 0);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    assert.equal(game.level.objects.some(obj => obj.id === amulet.id), false);
+    const dropped = game.level.objects.find(obj => obj.id === carried.id);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 7);
+    assert.equal(dropped.oy, 5);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uexp > 0, true);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), true);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)',
+    ]);
 });
 
 test('hero-thrown dagger lethal target ignores unworn monster life saving amulet', async () => {
@@ -74628,9 +74786,9 @@ test('hero-thrown dagger revives shifted vampire lethal target before cleanup', 
     assert.equal(bat.chamName, undefined);
     assert.equal(bat.cham, undefined);
     assert.equal(bat.msleeping, 0);
-    assert.equal(bat.meating, 0);
-    assert.equal(bat.mstrategy, 0);
-    assert.equal(bat.mpeaceful, 0);
+    assert.equal(bat.meating, 4);
+    assert.equal(bat.mstrategy, STRAT_WAITFORU);
+    assert.equal(bat.mpeaceful, 1);
     assert.equal(bat.mhp, bat.mhpmax);
     assert.equal(bat.mhp >= 10, true);
     assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
