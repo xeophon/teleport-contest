@@ -14,7 +14,7 @@
 - Attached-ball fallback relocation now routes `LEVEL_TELEP` and `MAGIC_PORTAL` through the existing movement transport trap result helper on the relocated hero square.
 - Level-teleport fallback relocation now shares ordinary movement behavior, including C-style trap deletion and the stable Amulet/Sokoban disorientation branch.
 - Magic-portal fallback relocation now shares ordinary movement behavior, including trap marking, brief stun, message-more gating, and deferred portal-arrival level change state.
-- This slice intentionally leaves same-level teleport traps, magic traps, anti-magic traps, and statue traps for narrower helper refactors.
+- This slice intentionally leaves same-level teleport traps, magic traps, and statue traps for narrower helper refactors; anti-magic fallback relocation is covered by audit 658.
 
 ## Tests
 
@@ -24,6 +24,6 @@
 
 ## Remaining Follow-Ups
 
-- Attached-ball fallback relocation still needs canaries for same-level teleport traps, magic traps, anti-magic traps, and statue traps.
+- Attached-ball fallback relocation still needs canaries for same-level teleport traps, magic traps, and statue traps.
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
 - Full rust trap parity still needs targeted water damage, lit item splashing, gremlin split, and iron-golem rust fallout beyond the current modeled movement branch.

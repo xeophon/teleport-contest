@@ -20159,6 +20159,7 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
 
     let result = null;
     if ([HOLE, TRAPDOOR, LEVEL_TELEP, MAGIC_PORTAL].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
+    else if (trap.ttyp === ANTI_MAGIC) result = movementAntiMagicTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
     else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
     else if (trap.ttyp === ROCKTRAP) result = movementRockTrapResult(trap);
@@ -47063,14 +47064,29 @@ function sitTeleportTrapMessage(trap, prefix) {
     return [prefix, materialize || 'You shudder for a moment.'].join('  ');
 }
 
-function sitAntiMagicTrapMessage(trap, prefix) {
+function antiMagicFootwearMessage(item) {
+    return `A lethargic aura surrounds your ${objectKindKey(item) || 'iron shoes'}.`;
+}
+
+function heroAntiMagicTrapResult(trap, prefix = '') {
     trap.tseen = true;
     const messages = [prefix];
+    const footwear = wornIronFootwearItem();
+    if (footwear && (footwear.spe || 0) > 0) {
+        messages.push(antiMagicFootwearMessage(footwear));
+        footwear.spe -= 1;
+        refreshInventoryObjectLine(footwear);
+        return { message: trapMessage(...messages) };
+    }
     if (heroHasAntimagic()) {
         const damage = rnd(4);
         const hp = game.u?.uhp || 1;
         if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
         messages.push(`You feel ${damage >= hp ? 'unbearably torpid!' : damage >= hp / 4 ? 'very lethargic.' : 'sluggish.'}`);
+        if ((game.u?.uhp || 0) <= 0) {
+            const fatalResult = heroDartTrapFatalResult(messages, 'anti-magic implosion');
+            return { message: trapMessage(...messages), ...fatalResult };
+        }
     }
     let drain = d(2, 6);
     const halfDrain = rnd(Math.max(1, Math.trunc(drain / 2)));
@@ -47100,7 +47116,19 @@ function sitAntiMagicTrapMessage(trap, prefix) {
         }
         messages.push(`You feel your magical energy drain away${exclaim ? '!' : '.'}`);
     }
-    return messages.join('  ');
+    return { message: trapMessage(...messages) };
+}
+
+function sitAntiMagicTrapMessage(trap, prefix) {
+    return heroAntiMagicTrapResult(trap, prefix).message;
+}
+
+function sitAntiMagicTrapResult(trap, prefix) {
+    return heroAntiMagicTrapResult(trap, prefix);
+}
+
+function movementAntiMagicTrapResult(trap) {
+    return heroAntiMagicTrapResult(trap, '');
 }
 
 function wornIronFootwearItem() {
@@ -48688,7 +48716,7 @@ async function sitTriggerTrap(trap) {
         return true;
     }
     if (trap.ttyp === ANTI_MAGIC) {
-        await finishSitMessage(sitAntiMagicTrapMessage(trap, prefix));
+        await finishHeroDartTrapResult(sitAntiMagicTrapResult(trap, prefix), { sit: true });
         return true;
     }
     if (trap.ttyp === POLY_TRAP) {
@@ -51213,6 +51241,11 @@ async function moveHero(dx, dy) {
         await setMessage(result.message);
         return;
     }
+    if (steppedTrap?.ttyp === ANTI_MAGIC) {
+        const result = movementAntiMagicTrapResult(steppedTrap);
+        await finishHeroDartTrapResult(result);
+        return;
+    }
     if (steppedTrap?.ttyp === STATUE_TRAP) {
         const message = await activateStatueTrap(steppedTrap, newx, newy);
         if (message) await setMessage(message);
@@ -51361,6 +51394,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
+        if (trapHere?.ttyp === ANTI_MAGIC) game._pending_anti_magic_trap = trapHere;
         if (trapHere?.ttyp === WEB) game._pending_web_trap = trapHere;
         return;
     }
@@ -51373,6 +51407,7 @@ async function moveHero(dx, dy) {
     if ((trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) && objectsHere.length > 1) game._pending_pit_trap = trapHere;
     if (trapHere?.ttyp === POLY_TRAP && objectsHere.length > 1) game._pending_poly_trap = trapHere;
     if (trapHere?.ttyp === BEAR_TRAP && objectsHere.length > 1) game._pending_bear_trap = trapHere;
+    if (trapHere?.ttyp === ANTI_MAGIC && objectsHere.length > 1) game._pending_anti_magic_trap = trapHere;
     if (trapHere?.ttyp === WEB && objectsHere.length > 1) game._pending_web_trap = trapHere;
     const goldHere = objectsHere.find(obj => obj.otyp === GOLD_PIECE || obj.glyph === '$');
     if (game._autopickup && goldHere) {
@@ -51497,6 +51532,7 @@ async function moveHero(dx, dy) {
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
         if (trapHere?.ttyp === BEAR_TRAP) game._pending_bear_trap = trapHere;
+        if (trapHere?.ttyp === ANTI_MAGIC) game._pending_anti_magic_trap = trapHere;
         if (trapHere?.ttyp === WEB) game._pending_web_trap = trapHere;
         return;
     }
@@ -51563,6 +51599,13 @@ async function moveHero(dx, dy) {
     }
     if (trapHere?.ttyp === POLY_TRAP) {
         const result = movementPolyTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (trapResultHasEffect(result))
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
+        return;
+    }
+    if (trapHere?.ttyp === ANTI_MAGIC) {
+        const result = movementAntiMagicTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (trapResultHasEffect(result))
             await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
@@ -51970,6 +52013,14 @@ export async function rhack(_cmd) {
                 game._pending_bear_trap = null;
                 if (result.message)
                     await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
+            if (game._pending_anti_magic_trap) {
+                const result = movementAntiMagicTrapResult(game._pending_anti_magic_trap);
+                game._pending_anti_magic_trap = null;
+                if (trapResultHasEffect(result))
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
             }
         }
         return;
@@ -52053,6 +52104,14 @@ export async function rhack(_cmd) {
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (result.message) await finishHeroDartTrapResult(result);
+                return;
+            }
+            if (game._pending_anti_magic_trap) {
+                const result = movementAntiMagicTrapResult(game._pending_anti_magic_trap);
+                game._pending_anti_magic_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (trapResultHasEffect(result)) await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_time_passed > 0) {

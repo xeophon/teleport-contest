@@ -555,6 +555,41 @@ function rngValuesForCall(log, call) {
     return log.filter(entry => rngCallName(entry) === call).map(rngCallValue);
 }
 
+function antiMagicEnergyDrainFromLog(log, { initialEnergy = 20, initialMax = 40, start = 0 } = {}) {
+    const calls = log.map(rngCallName);
+    let index = start;
+    assert.equal(calls[index], 'd(2,6)');
+    let drain = rngCallValue(log[index++]);
+    const halfCall = `rnd(${Math.max(1, Math.trunc(drain / 2))})`;
+    assert.equal(calls[index], halfCall);
+    const halfDrain = rngCallValue(log[index++]);
+    let uen = initialEnergy;
+    let uenmax = initialMax;
+    let exclaim = false;
+
+    if (uenmax > drain) {
+        uenmax -= halfDrain;
+        drain -= halfDrain;
+        exclaim = true;
+    }
+    if (uenmax < 1) return { uen: 0, uenmax: 0, exclaim, consumed: index - start };
+
+    if (drain > (uen + uenmax) / 3) {
+        assert.equal(calls[index], `rnd(${drain})`);
+        drain = rngCallValue(log[index++]);
+    }
+    exclaim = exclaim || drain > uen;
+    uen -= drain;
+    if (uen < 0) {
+        assert.equal(calls[index], `rnd(${-uen})`);
+        uenmax = Math.max(0, uenmax - rngCallValue(log[index++]));
+        uen = 0;
+    } else if (uen > uenmax) {
+        uen = uenmax;
+    }
+    return { uen, uenmax, exclaim, consumed: index - start };
+}
+
 function dartTrapDamageRollAfterHit(log, expectedCall) {
     const calls = log.map(rngCallName);
     const hitRoll = calls.lastIndexOf('rnd(20)');
@@ -25683,6 +25718,123 @@ test('flying hero crosses hidden sleep gas trap without gas effects', async () =
     assert.equal(trap.tseen, false);
 });
 
+test('known anti-magic field always drains energy without escape roll', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uen: 20,
+        uenmax: 40,
+    });
+    game.inventory = [];
+    const trap = { ttyp: ANTI_MAGIC, tx: 6, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const log = getRngLog();
+    const energy = antiMagicEnergyDrainFromLog(log, { initialEnergy: 20, initialMax: 40 });
+    assert.equal(log.map(rngCallName).includes('rn2(5)'), false);
+    assert.equal(game._pending_message, `You feel your magical energy drain away${energy.exclaim ? '!' : '.'}`);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.uen, energy.uen);
+    assert.equal(game.u.uenmax, energy.uenmax);
+    assert.equal(trap.tseen, true);
+});
+
+test('levitating hero still triggers hidden anti-magic field', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uen: 20,
+        uenmax: 40,
+        levitating: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: ANTI_MAGIC, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const energy = antiMagicEnergyDrainFromLog(getRngLog(), { initialEnergy: 20, initialMax: 40 });
+    assert.equal(game._pending_message, `You feel your magical energy drain away${energy.exclaim ? '!' : '.'}`);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uen, energy.uen);
+    assert.equal(game.u.uenmax, energy.uenmax);
+    assert.equal(trap.tseen, true);
+});
+
+test('enchanted iron shoes absorb anti-magic field before energy drain', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uen: 20,
+        uenmax: 40,
+    });
+    const shoes = wornArmor(876237, 'iron shoes', 's', 1);
+    game.inventory = [shoes];
+    const trap = { ttyp: ANTI_MAGIC, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'A lethargic aura surrounds your iron shoes.');
+    assert.equal(shoes.spe, 0);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.uen, 20);
+    assert.equal(game.u.uenmax, 40);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.level.traps.includes(trap), true);
+});
+
+test('magic-resistant hero anti-magic field damages hp before energy drain', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 20,
+        uenmax: 40,
+    });
+    const cloak = wornArmor(876238, 'cloak of magic resistance', 'c', 0);
+    game.inventory = [cloak];
+    const trap = { ttyp: ANTI_MAGIC, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const log = getRngLog();
+    const damage = rngCallValue(log[0]);
+    assert.equal(rngCallName(log[0]), 'rnd(4)');
+    const energy = antiMagicEnergyDrainFromLog(log, { initialEnergy: 20, initialMax: 40, start: 1 });
+    assert.equal(game._pending_message, `You feel sluggish.  You feel your magical energy drain away${energy.exclaim ? '!' : '.'}`);
+    assert.equal(game.u.uhp, 40 - damage);
+    assert.equal(game.u.uen, energy.uen);
+    assert.equal(game.u.uenmax, energy.uenmax);
+    assert.equal(trap.tseen, true);
+});
+
 test('ordinary movement onto falling rock trap drops rock and damages hero', async () => {
     installStableNonSokobanTrapState();
     vision_reset();
@@ -30352,6 +30504,40 @@ test('object list polymorph trap waits until more is dismissed', async () => {
     assert.equal(game._pending_poly_trap || null, null);
     assert.equal(game._pending_message, 'You step onto a polymorph trap!  You feel momentarily different.');
     assert.equal(game._message_more, 1);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.tseen, true);
+});
+
+test('object list anti-magic field waits until more is dismissed', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uen: 20,
+        uenmax: 40,
+    });
+    game.inventory = [];
+    const trap = { ttyp: ANTI_MAGIC, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [
+        [0, 0, 'a'], [1, 0, 'b'], [2, 0, 'c'], [3, 0, 'd'], [4, 0, 'e'],
+    ];
+    game._pending_anti_magic_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+
+    const energy = antiMagicEnergyDrainFromLog(getRngLog(), { initialEnergy: 20, initialMax: 40 });
+    assert.equal(game._pending_anti_magic_trap || null, null);
+    assert.equal(game._pending_message, `You feel your magical energy drain away${energy.exclaim ? '!' : '.'}`);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.u.uen, energy.uen);
+    assert.equal(game.u.uenmax, energy.uenmax);
     assert.equal(game.level.traps.includes(trap), true);
     assert.equal(trap.tseen, true);
 });
@@ -62529,6 +62715,57 @@ test('attached ball fallback relocation activates magic portal on new hero squar
     assert.equal(chain.ox, 9);
     assert.equal(chain.oy, 5);
     assert.equal(game._relocate_after_more || null, null);
+});
+
+test('attached ball fallback relocation triggers anti-magic field on new hero square', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uen: 20,
+        uenmax: 40,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876239, 'b');
+    const chain = attachedIronChain(876240);
+    const antiMagic = { ttyp: ANTI_MAGIC, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [antiMagic];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const log = getRngLog();
+    const drainStart = log.map(rngCallName).lastIndexOf('d(2,6)');
+    assert.notEqual(drainStart, -1);
+    const energy = antiMagicEnergyDrainFromLog(log, {
+        initialEnergy: 20,
+        initialMax: 40,
+        start: drainStart,
+    });
+    assert.equal(game._pending_message, `You feel your magical energy drain away${energy.exclaim ? '!' : '.'}`);
+    assert.equal(antiMagic.tseen, true);
+    assert.equal(game.level.traps.includes(antiMagic), true);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.uen, energy.uen);
+    assert.equal(game.u.uenmax, energy.uenmax);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
 });
 
 test('attached ball fallback relocation triggers web on new hero square', async () => {
