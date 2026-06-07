@@ -21,4 +21,4 @@ The direct throw path now preserved top-level count prefixes as `_throw_shot_lim
 
 ## Remaining
 
-- Nonbreaking bars hits and other early terrain-stop count-message paths still need separate source-backed coverage.
+- Nonbreaking bars hits are covered separately in audit 696; other early terrain-stop count-message paths still need source-backed coverage.

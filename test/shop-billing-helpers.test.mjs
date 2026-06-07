@@ -61744,6 +61744,71 @@ test('top-level throw count reports one crystal ball before iron bars shatter', 
     ]);
 });
 
+test('hero-thrown dagger clonks iron bars before landing', async () => {
+    installHeroThrowIronBarsState();
+    initRng(1);
+    const thrownDagger = dagger(876090, 'd');
+    game.inventory = [thrownDagger];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /Clonk!/);
+    assert.doesNotMatch(game._pending_message, /dagger hits|misses|top of your head/);
+    assert.equal(game.inventory.includes(thrownDagger), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'dagger');
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dart can pass through iron bars to hit a monster', async () => {
+    installHeroThrowIronBarsState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const dart = dartStack(876091, 'd', 1);
+    const goblin = ordinaryThrowTarget('goblin', 8, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    markSquareVisible(8, 5);
+    game.inventory = [dart];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.equal(game._command_mode, null);
+    assert.match(game._pending_message, /The dart hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /Clonk|Clink|misses/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 1));
+    assert.equal(game.inventory.includes(dart), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'dart');
+    assert.ok(landed);
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rn2(5)', 'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown mirror shatters against iron bars and gives bad luck', async () => {
     installHeroThrowIronBarsState();
     initRng(1);

@@ -23066,10 +23066,44 @@ function heroThrownIronBarsBreakableClassHitObject(obj) {
     return isGlassMaterialWandObject(obj);
 }
 
-async function heroThrownIronBarsBreakImpact(obj, impact) {
-    if (!impact?.pointBlank) rn2(5); // C bhit() evaluates the force-hit roll before hits_bars().
+function heroThrownIronBarsClassHitObject(obj) {
+    if (!obj) return false;
+    const cls = itemClassKey(obj);
+    const kind = objectKindKey(obj);
+    if (cls === 'weapon' || obj.glyph === ')') {
+        if (heroThrowAmmoSkill(obj)) return false;
+        const meta = HERO_THROWN_WEAPON_MONSTER_DATA.get(tossUpWeaponObjectKey(obj));
+        const launcherMeta = heroLauncherSkillMeta(obj);
+        const skill = meta?.skill || launcherMeta?.skill || null;
+        return ![P_BOW, P_CROSSBOW, P_DART, P_SHURIKEN, P_SPEAR, P_KNIFE].includes(skill);
+    }
+    if (cls === 'armor' || obj.glyph === '[')
+        return !/\b(?:gloves?|gauntlets?)\b/.test(kind);
+    if (cls === 'tool' || obj.glyph === '(') {
+        return !['skeleton key', 'lock pick', 'credit card', 'tallow candle',
+            'wax candle', 'lenses', 'tin whistle', 'magic whistle'].includes(kind);
+    }
+    if (cls === 'wand' || cls === 'spellbook' || cls === 'ball' || cls === 'chain') return true;
+    if (kind === 'boulder' || kind === 'heavy iron ball' || kind === 'iron ball') return true;
+    if (kind === 'meat stick' || kind === 'enormous meatball') return true;
+    return heroThrownIronBarsBreakableClassHitObject(obj);
+}
+
+function heroThrownIronBarsImpactSound(obj) {
+    if (heroIsDeaf()) return '';
+    const kind = objectKindKey(obj);
+    const material = String(obj?.material || obj?.oc_material || '').toLowerCase();
+    if (kind === 'boulder' || kind === 'heavy iron ball') return 'Whang!';
+    if (material === 'gold' || material === 'silver' || /\bsilver\b|\bgold(?:en)?\b/.test(kind)) return 'Clink!';
+    return 'Clonk!';
+}
+
+async function heroThrownIronBarsImpact(obj, impact) {
     const breakKind = projectileTopLevelBreakKind(obj);
-    if (!breakKind) return { broke: false, messages: ['Clonk!'] };
+    if (!breakKind) {
+        const sound = heroThrownIronBarsImpactSound(obj);
+        return { broke: false, messages: sound ? [sound] : [] };
+    }
     const messages = [];
     projectileTopLevelBreakMessage(obj, breakKind, messages);
     await applyHeroThrownFragileBreakSideEffects(obj, messages, impact.x, impact.y);
@@ -68754,10 +68788,14 @@ export async function rhack(_cmd) {
                 const ny = oy + dir.dy;
                 const loc = game.level?.at(nx, ny);
                 if (loc?.typ === IRONBARS) {
-                    ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank: step === 0 };
-                    break;
+                    const pointBlank = step === 0;
+                    const forcedHit = pointBlank ? false : rn2(5) === 0;
+                    if (forcedHit || heroThrownIronBarsClassHitObject(item)) {
+                        ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank, forcedHit };
+                        break;
+                    }
                 }
-                if (!loc || IS_OBSTRUCTED(loc.typ)) break;
+                if (!loc || (loc.typ !== IRONBARS && IS_OBSTRUCTED(loc.typ))) break;
                 ox = nx;
                 oy = ny;
                 targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
@@ -68930,8 +68968,8 @@ export async function rhack(_cmd) {
         let impactObjectHit = false;
         let impactPassiveTarget = null;
         let boomerangSelfHitResult = null;
-        if (ironBarsImpact && heroThrownIronBarsBreakableClassHitObject(thrownObject)) {
-            const barsImpact = await heroThrownIronBarsBreakImpact(thrownObject, ironBarsImpact);
+        if (ironBarsImpact) {
+            const barsImpact = await heroThrownIronBarsImpact(thrownObject, ironBarsImpact);
             if (barsImpact.broke) {
                 if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
                 markThrownBrokenObjectDebt(thrownObject);
