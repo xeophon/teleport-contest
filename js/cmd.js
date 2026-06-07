@@ -20158,7 +20158,7 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
     if (!trap) return { more: false, trapResult: null };
 
     let result = null;
-    if ([HOLE, TRAPDOOR].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
+    if ([HOLE, TRAPDOOR, LEVEL_TELEP, MAGIC_PORTAL].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
     else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
     else if (trap.ttyp === ROCKTRAP) result = movementRockTrapResult(trap);

@@ -62441,6 +62441,96 @@ test('attached ball throw onto occupied hole leaves hero behind without shaft ef
     assert.equal(game._deferred_level_goto || null, null);
 });
 
+test('attached ball fallback relocation triggers level teleporter on new hero square', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    game.u.uhave = { ...(game.u.uhave || {}), amulet: 1 };
+    const amulet = realAmuletOfYendor(876232, 'a');
+    const ball = carriedAttachedIronBall(876233, 'b');
+    const chain = attachedIronChain(876234);
+    const levelTeleporter = { ttyp: LEVEL_TELEP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [amulet, ball];
+    game.level.objects = [chain];
+    game.level.traps = [levelTeleporter];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You step onto a level teleport trap!  You feel very disoriented for a moment.  You feel disoriented.');
+    assert.equal(game._message_more || 0, 0);
+    assert.equal(levelTeleporter.tseen, true);
+    assert.equal(game.level.traps.includes(levelTeleporter), false);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation activates magic portal on new hero square', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+        stunned: false,
+        _stunTimeout: 0,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876235, 'b');
+    const chain = attachedIronChain(876236);
+    const portal = {
+        ttyp: MAGIC_PORTAL,
+        tx: 9,
+        ty: 5,
+        tseen: false,
+        madeby_u: false,
+        dst: { dnum: 0, dlevel: 2 },
+    };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [portal];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You activated a magic portal!');
+    assert.equal(game._message_more, 1);
+    assert.equal(portal.tseen, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u._stunTimeout >= 3, true);
+    assert.deepEqual(game._deferred_level_goto?.targetLevel, { dnum: 0, dlevel: 2 });
+    assert.equal(game._deferred_level_goto?.options?.portalArrival, true);
+    assert.equal(game._deferred_level_goto?.options?.preMessage, 'You feel slightly dizzy.');
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+});
+
 test('attached ball fallback relocation triggers web on new hero square', async () => {
     installNonShopFloorState();
     initRng(2);
