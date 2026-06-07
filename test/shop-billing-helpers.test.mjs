@@ -30667,7 +30667,7 @@ test('hero land mine on water level leaves no recursive pit', async () => {
     assert.equal(game.level.traps.includes(trap), false);
 });
 
-test('deferred hero land mine water-level blast deletes engraving', async () => {
+test('deferred hero land mine water-level blast deletes engraving and breaks door', async () => {
     installStableNonShopFloorState();
     vision_reset();
     const waterLevel = { dnum: 8, dlevel: 2 };
@@ -30681,6 +30681,9 @@ test('deferred hero land mine water-level blast deletes engraving', async () => 
         uhpmax: 20,
     });
     game.inventory = [];
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    const cells = new Map([['5,5', doorLoc]]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
     const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
     game.level.traps = [trap];
     game.level.engravings = [
@@ -30702,6 +30705,8 @@ test('deferred hero land mine water-level blast deletes engraving', async () => 
     assert.equal(game.u.utrap || 0, 0);
     assert.equal(game.u.utraptype || null, null);
     assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(doorLoc.doormask, D_BROKEN);
+    assert.equal(doorLoc.flags, D_BROKEN);
     assert.deepEqual(game.level.engravings, [{ x: 2, y: 2, text: 'ad aerarium', type: 1 }]);
 });
 

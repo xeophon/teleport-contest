@@ -47652,6 +47652,7 @@ function convertLandmineToPit(trap) {
 function landminePostBlastTrap(trap, messages = []) {
     if (!trap) return null;
     deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
+    landmineBreakDoorAt(trap.tx, trap.ty);
     if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
         deleteTrap(trap);
         return null;
@@ -48218,6 +48219,17 @@ function heroRollingBoulderApplyGenericFloorEffectsAt(x, y, movingBoulder, messa
 function deleteLandmineBlastEngravingAt(x, y) {
     if (!game.level?.engravings) return;
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
+}
+
+function landmineBreakDoorAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (loc?.typ !== DOOR) return false;
+    loc.doormask = D_BROKEN;
+    loc.flags = D_BROKEN;
+    vision_reset();
+    vision_recalc(0);
+    newsym(x, y);
+    return true;
 }
 
 function heroRollingBoulderTriggerLandmineAt(x, y, movingBoulder, messages) {
