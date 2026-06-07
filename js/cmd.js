@@ -20513,12 +20513,28 @@ function heroHorizontalThrowRecoilTrapPassOverMessageAt(x, y) {
     return `You pass right over ${sitTrapArticleName(trap)}.`;
 }
 
-function heroHorizontalThrowRecoilTrapEffectMessageAt(x, y) {
+function heroHorizontalThrowRecoilResultFromMessages(messages, options = {}) {
+    return {
+        message: messages.filter(Boolean).join('  '),
+        more: !!options.more,
+        trapResult: options.trapResult || null,
+    };
+}
+
+function heroHorizontalThrowRecoilTrapEffectAt(x, y) {
     const trap = heroHorizontalThrowRecoilTrapAt(x, y);
-    if (trap?.ttyp !== VIBRATING_SQUARE) return '';
+    if (trap?.ttyp === FIRE_TRAP) {
+        const result = movementFireTrapResult(trap, { allowLifeSaving: true });
+        return {
+            messages: result.message ? [result.message] : [],
+            more: !!result.more,
+            trapResult: result.fatal || result.lifeSaving ? result : null,
+        };
+    }
+    if (trap?.ttyp !== VIBRATING_SQUARE) return { messages: [] };
     trap.tseen = true;
     newsym(x, y);
-    return 'The ground vibrates as you pass it.';
+    return { messages: ['The ground vibrates as you pass it.'] };
 }
 
 function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, dx, dy) {
@@ -20566,23 +20582,25 @@ function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
     return `You bump into ${name}.`;
 }
 
-function heroHorizontalThrowRecoil(dir, range) {
+function heroHorizontalThrowRecoilResult(dir, range) {
     if (!heroHorizontalThrowAirRecoilActive() || !dir || (!dir.dx && !dir.dy) || range < 1 || game.u?.ustuck)
-        return '';
+        return heroHorizontalThrowRecoilResultFromMessages([]);
     if (game.u?.uball && !(game.inventory || []).includes(game.u.uball))
-        return 'You feel a tug from the iron ball.';
+        return heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.']);
     if (game.u?.utrap) {
         const trapName = game.u.utraptype === TT_WEB ? 'web'
             : game.u.utraptype === TT_LAVA ? 'lava'
                 : game.u.utraptype === TT_INFLOOR ? 'floor'
                     : game.u.utraptype === TT_BURIEDBALL ? 'buried ball'
                         : 'trap';
-        return `You are anchored by the ${trapName}.`;
+        return heroHorizontalThrowRecoilResultFromMessages([`You are anchored by the ${trapName}.`]);
     }
 
     const recoilRange = Math.max(1, Math.trunc(Number(range || 1)));
     const message = `You ${recoilRange > 1 ? 'hurtle' : 'float'} in the opposite direction.`;
     const messages = [message];
+    let more = false;
+    let trapResult = null;
     const dx = Math.sign(-dir.dx);
     const dy = Math.sign(-dir.dy);
     for (let step = 0; step < recoilRange; step++) {
@@ -20592,7 +20610,10 @@ function heroHorizontalThrowRecoil(dir, range) {
         const ny = oldy + dy;
         const loc = game.level?.at(nx, ny);
         if (!isok(nx, ny) || !loc)
-            return [...messages, 'You feel the spirits holding you back.'].join('  ');
+            return heroHorizontalThrowRecoilResultFromMessages(
+                [...messages, 'You feel the spirits holding you back.'],
+                { more, trapResult },
+            );
         const monster = heroHorizontalThrowRecoilMonsterAt(nx, ny);
         const openDoorFrame = loc.typ === DOOR && (loc.doormask & D_ISOPEN) && dx !== 0 && dy !== 0;
         const blockedByObstacle = IS_OBSTRUCTED(loc.typ)
@@ -20602,12 +20623,19 @@ function heroHorizontalThrowRecoil(dir, range) {
             || heroHorizontalThrowRecoilBoulderAt(nx, ny);
         if (blockedByObstacle) {
             const collision = heroHorizontalThrowRecoilObstacleCollision(loc, nx, ny, recoilRange - step, dx, dy);
-            if (collision.blocked) return [...messages, ...(collision.messages || [])].join('  ');
+            if (collision.blocked)
+                return heroHorizontalThrowRecoilResultFromMessages(
+                    [...messages, ...(collision.messages || [])],
+                    { more, trapResult },
+                );
             break;
         }
         if (monster) {
             const collisionMessage = heroHorizontalThrowRecoilMonsterCollision(monster, nx, ny);
-            return [...messages, collisionMessage].filter(Boolean).join('  ');
+            return heroHorizontalThrowRecoilResultFromMessages(
+                [...messages, collisionMessage],
+                { more, trapResult },
+            );
         }
         game.u.ux0 = oldx;
         game.u.uy0 = oldy;
@@ -20618,12 +20646,19 @@ function heroHorizontalThrowRecoil(dir, range) {
         newsym(nx, ny);
         if (game.level?.at(nx, ny) === loc) vision_recalc(0);
         else game.vision_full_recalc = 1;
-        const trapEffectMessage = heroHorizontalThrowRecoilTrapEffectMessageAt(nx, ny);
-        if (trapEffectMessage) messages.push(trapEffectMessage);
+        const trapEffect = heroHorizontalThrowRecoilTrapEffectAt(nx, ny);
+        if (trapEffect.messages?.length) messages.push(...trapEffect.messages);
+        more = more || !!trapEffect.more;
+        trapResult ||= trapEffect.trapResult || null;
+        if (trapResult) return heroHorizontalThrowRecoilResultFromMessages(messages, { more, trapResult });
         const trapMessage = heroHorizontalThrowRecoilTrapPassOverMessageAt(nx, ny);
         if (trapMessage) messages.push(trapMessage);
     }
-    return messages.join('  ');
+    return heroHorizontalThrowRecoilResultFromMessages(messages, { more, trapResult });
+}
+
+function heroHorizontalThrowRecoil(dir, range) {
+    return heroHorizontalThrowRecoilResult(dir, range).message;
 }
 
 function prependHeroHorizontalThrowRecoilMessage(messages, recoilMessage) {
@@ -68145,11 +68180,18 @@ export async function rhack(_cmd) {
         });
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
         let impactMessage = flightImpactMessage;
-        const ordinaryAirRecoilMessage = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
+        const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
             ? attachedBallThrow
-                ? 'You feel a tug from the iron ball.'
-                : heroHorizontalThrowRecoil(dir, ordinaryAirRecoilRange)
-            : '';
+                ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
+                : heroHorizontalThrowRecoilResult(dir, ordinaryAirRecoilRange)
+            : null;
+        const ordinaryAirRecoilMessage = ordinaryAirRecoilResult?.message || '';
+        const ordinaryAirRecoilMore = !!ordinaryAirRecoilResult?.more;
+        const ordinaryAirRecoilTrapResult = ordinaryAirRecoilResult?.trapResult || null;
+        const applyOrdinaryAirRecoilTrapResult = () => {
+            if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
+            return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
+        };
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
         let impactPassiveTarget = null;
@@ -68163,13 +68205,14 @@ export async function rhack(_cmd) {
                 removeInventoryItem(item, 1);
                 newsym(ironBarsImpact.x, ironBarsImpact.y);
                 prependHeroHorizontalThrowRecoilMessage(barsImpact.messages, ordinaryAirRecoilMessage);
-                await setMessage(barsImpact.messages.join('  '));
+                await setMessage(barsImpact.messages.join('  '), ordinaryAirRecoilMore);
                 game._command_mode = null;
                 game._throw_item_letter = null;
                 clearThrowCountState();
                 game._resume_time_after_more = 0;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
                 return;
             }
             impactMessage = barsImpact.messages.join('  ');
@@ -68188,12 +68231,13 @@ export async function rhack(_cmd) {
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
                 prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '));
+                await setMessage(messages.join('  '), ordinaryAirRecoilMore);
                 game._command_mode = null;
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
                 return;
             }
             const thrownName = pickupObjectName({ ...item, quan: 1 });
@@ -68209,12 +68253,13 @@ export async function rhack(_cmd) {
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
                 prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '));
+                await setMessage(messages.join('  '), ordinaryAirRecoilMore);
                 game._command_mode = null;
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
                 return;
             }
             const messages = [`The cream pie misses the ${targetMon.data?.name || 'creature'}.`];
@@ -68229,12 +68274,13 @@ export async function rhack(_cmd) {
                 removeInventoryItem(item, 1);
                 newsym(targetMon.mx, targetMon.my);
                 prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '), !!messages.more);
+                await setMessage(messages.join('  '), !!messages.more || ordinaryAirRecoilMore);
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
                 game.context.move = 0;
                 if (applyLifeSavingOrFatalCommandMode(messages)) return;
                 game._command_mode = null;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 return;
             }
@@ -68252,7 +68298,7 @@ export async function rhack(_cmd) {
                 newsym(targetMon.mx, targetMon.my);
                 const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
                 prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more);
+                await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more || ordinaryAirRecoilMore);
                 game._throw_item_letter = null;
                 game._resume_time_after_more = 0;
                 game.context.move = 0;
@@ -68270,6 +68316,7 @@ export async function rhack(_cmd) {
                     return;
                 }
                 if (!keepPotionCallPrompt) game._command_mode = null;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 return;
             }
@@ -68327,12 +68374,13 @@ export async function rhack(_cmd) {
             stopCarriedFigurineTimerOnLeave(thrownObject);
             removeInventoryItem(item, 1);
             newsym(targetMon.mx, targetMon.my);
-            await setMessage(impactMessage);
+            await setMessage(impactMessage, ordinaryAirRecoilMore);
             game._command_mode = null;
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game.context.move = 0;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
             return;
         }
         if (returningObjectThrow) {
@@ -68347,13 +68395,14 @@ export async function rhack(_cmd) {
                     if (!/\b(?:weapon|wielded) in (?:right hand|hands)\b/.test(String(item.line || '')))
                         item.line = normalInventoryLine({ ...item, line: '' });
                     newsym(ox, oy);
-                    await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '));
+                    await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '), ordinaryAirRecoilMore);
                     game._command_mode = null;
                     game._throw_item_letter = null;
                     clearThrowCountState();
                     game._resume_time_after_more = 0;
                     game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                     game.context.move = 0;
+                    if (applyOrdinaryAirRecoilTrapResult()) return;
                     return;
                 }
                 const armHit = !!rn2(2);
@@ -68372,13 +68421,14 @@ export async function rhack(_cmd) {
                 newsym(ux, uy);
                 removeInventoryItem(item);
                 await setMessage([impactMessage, badCatchMessage, landingMessage].filter(Boolean).join('  '),
-                    !!landingMessage);
+                    !!landingMessage || ordinaryAirRecoilMore);
                 game._command_mode = null;
                 game._throw_item_letter = null;
                 clearThrowCountState();
                 game._resume_time_after_more = 0;
                 game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                 game.context.move = 0;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
                 return;
             }
             impactMessage = [impactMessage, failMessage].filter(Boolean).join('  ');
@@ -68435,14 +68485,14 @@ export async function rhack(_cmd) {
             const followUpMessage = [impactMessage, landingMessage].filter(Boolean).join('  ');
             if (followUpMessage) game._queued_message_after_more = followUpMessage;
             if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
-            await setMessage(throwNoLauncherMessage, !!followUpMessage);
+            await setMessage(throwNoLauncherMessage, !!followUpMessage || ordinaryAirRecoilMore);
         }
         else if (impactMessage) {
             if (landingMessage) game._queued_message_after_more = landingMessage;
             if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
             await setMessage(impactMessage, true);
         }
-        else if (landingMessage) await setMessage(landingMessage, attachedBallLandingMore);
+        else if (landingMessage) await setMessage(landingMessage, attachedBallLandingMore || ordinaryAirRecoilMore);
         else {
             game._pending_message = '';
             game._message_more = 0;
@@ -68457,6 +68507,7 @@ export async function rhack(_cmd) {
         if (attachedBallTrapResult?.lifeSaving || attachedBallTrapResult?.fatal) {
             if (applyLifeSavingOrFatalCommandMode(attachedBallTrapResult)) return;
         }
+        if (applyOrdinaryAirRecoilTrapResult()) return;
         game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
         game.context.move = 0;
         return;

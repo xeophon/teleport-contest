@@ -63521,6 +63521,100 @@ test('levitating hero-thrown ordinary weapon recoil vibrates hidden vibrating sq
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil skips hidden fire trap', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 40,
+        uhpmax: 40,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876183, 'd');
+    const trap = { ttyp: FIRE_TRAP, tx: 4, ty: 5, tseen: false };
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [blade];
+    game.level.traps = [trap];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\./);
+    assert.doesNotMatch(game._pending_message, /tower of flame|pass right over a fire trap|float over a fire trap/);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 40);
+    assert.equal(game.u.uhpmax, 40);
+    assert.equal(trap.tseen, false);
+    assert.equal(goblin.msleeping, 1);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
+test('air-level hero-thrown ordinary weapon recoil triggers hidden fire trap', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.air_level = { dnum: 0, dlevel: 1 };
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: false,
+        flying: false,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 40,
+        uhpmax: 40,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876184, 'd');
+    const trap = { ttyp: FIRE_TRAP, tx: 4, ty: 5, tseen: false };
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [blade];
+    game.level.traps = [trap];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\.  A tower of flame erupts from the floor!/);
+    assert.doesNotMatch(game._pending_message, /pass right over a fire trap|float over a fire trap/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp < 40, true);
+    assert.equal(game.u.uhpmax <= 40, true);
+    assert.equal(trap.tseen, true);
+    assert.equal(goblin.msleeping, 1);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+});
+
 test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', async () => {
     installNonShopFloorState();
     initRng(2);
