@@ -47756,8 +47756,16 @@ function landmineScatterStoneObject(obj) {
 }
 
 function landmineScatterDeferredBreakageObject(obj) {
-    const material = String(obj?.material || obj?.oc_material || '').toLowerCase();
-    return isPotionObject(obj) || obj?.otyp === EGG || objectKindKey(obj) === 'egg' || material === 'glass';
+    return landmineScatterStackQuantity(obj) > 1
+        && (landmineScatterForcedBreakageObject(obj) || !!impactDropBreakKind(obj));
+}
+
+function landmineScatterForcedBreakageObject(obj) {
+    const material = String(obj?.material || obj?.oc_material || '').toLowerCase().replace(/^hi_/, '');
+    const kind = objectKindKey(obj);
+    return isPotionObject(obj) || isEggItem(obj) || material === 'glass'
+        || isMirrorObject(obj) || obj?.otyp === CRYSTAL_BALL
+        || kind === 'crystal ball' || kind === 'lenses';
 }
 
 function landmineScatterStackQuantity(obj) {
@@ -47794,10 +47802,12 @@ function splitLandmineScatterStackObject(obj) {
 }
 
 function landmineScatterDestroyBreakableObject(obj, x, y, messages) {
-    const breakKind = impactDropBreakKind(obj);
+    const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
-    if (floorObjectVisible(x, y)) magicBagScatterBreakMessage(obj, breakKind, messages);
-    markObjectTreeShopBillsUsedUp(obj);
+    if (floorObjectVisible(x, y)) projectileTopLevelBreakMessage(obj, breakKind, messages);
+    if (isLitOilPotionHit(obj)) explodeBurningOilPotion(obj, x, y, messages);
+    else brokenPotionBreathe(obj, x, y, messages);
+    applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y);
     removeFloorObject(obj);
     newsym(x, y);
     return true;
@@ -47850,7 +47860,10 @@ function landmineScatterFloorObjectsAt(x, y, messages = []) {
         }
         if (landmineFractureStoneObject(obj, x, y, messages)) continue;
         if (landmineScatterDeferredBreakageObject(obj)) continue;
-        if (!rn2(10) && landmineScatterDestroyBreakableObject(obj, x, y, messages)) continue;
+        const randomDestroy = !rn2(10);
+        if ((randomDestroy || landmineScatterForcedBreakageObject(obj))
+            && landmineScatterDestroyBreakableObject(obj, x, y, messages))
+            continue;
         scatter.push({ obj, ...landmineScatterLandingSpot(obj, x, y) });
     }
     for (const entry of scatter) {

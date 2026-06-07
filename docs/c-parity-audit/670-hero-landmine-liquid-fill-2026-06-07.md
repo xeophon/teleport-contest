@@ -17,7 +17,7 @@
 - `earthquakeLiquidFlow()` keeps existing earthquake behavior by default; the new `fillMessage` option is only supplied by landmine fallout when the square is visible.
 - Lava-filled landmine pits set the existing `lavaDeathMore` continuation while the landmine trap result only requests a More prompt, so generic trap fatal handling does not replace the lava-specific death flow.
 - Moat-filled pits use C-style hero entry wording (`moat`, not generic pool) while the fill message remains `water`.
-- After landmine liquid fill, same-square boulders are dunked after liquid object/hero fallout, matching C's post-`liquid_flow()` `maybe_dunk_boulders()` ordering; the boulder canary includes acid-potion damage before dry-land cleanup.
+- After landmine liquid fill, same-square boulders are dunked after liquid object/hero fallout, matching C's post-`liquid_flow()` `maybe_dunk_boulders()` ordering.
 - Liquid fill that replaces old ice now clears that square's melt-ice timers, matching C's trailing `spot_checks()` cleanup while preserving unrelated ice timers.
 - Landmine liquid fill now refreshes vision and the blast square after the post-liquid boulder pass, covering C's trailing `recalc_block_point()` behavior for consumed boulders.
 - Hero and rolling-boulder landmine blasts share engraving deletion at the blast square, including air/water-level cases where no pit remains.
@@ -25,6 +25,7 @@
 - Hero landmine blasts wake nearby monsters with C's `wake_nearto(..., 400)` radius semantics before the pit/liquid decision.
 - Hero landmine blasts now destroy a lowered drawbridge or adjacent drawbridge wall before liquid/pit fallout. The covered slice updates bridge and wall terrain, removes traps and engravings from both squares, refreshes vision, wakes monsters near the destroyed bridge, and records stronghold bridge state.
 - Hero landmine blasts now run a first floor-object scatter pass before engraving, door, drawbridge, liquid, and pit fallout. This slice covers the ordering canary where a non-fractured boulder remains blocked at the blast square and fills the resulting pit while a same-square dagger scatters away and is not buried.
+- Landmine scatter now evaluates C's `MAY_DESTROY` branch for singleton forced GLASS/potion/egg candidates: it consumes the `rn2(10)` destruction roll, applies the `breaktest()` resistance roll, breaks/removes successful candidates before assigning direction/range, and runs existing synchronous potion vapor/oil and pyrolisk-egg side effects without hero-caused mirror or egg luck penalties.
 
 ## Tests
 
@@ -35,15 +36,16 @@
 - `deferred hero land mine destroys drawbridge from portcullis square`
 - `hero land mine adjacent lava fills pit and uses lava death prompt`
 - `flying hero sitting on hidden land mine can air-current fill pit with water`
-- `deferred hero land mine liquid fill dunks same-square boulder after water fallout`
+- `deferred hero land mine scatter breaks acid before boulder pit fill`
 - `deferred land mine liquid fill refreshes consumed boulder glyph`
 - `deferred hero land mine liquid fill clears old ice melt timer`
 - `deferred hero land mine scatter moves dagger before boulder pit fill`
 - `deferred hero land mine scatter splits dagger stack before boulder pit fill`
 - `deferred hero land mine scatter destroys looking glass before pit fallout`
+- `deferred hero land mine scatter forces acid potion break before pit fallout`
 - `attached ball fallback land mine scatter moves dagger before boulder pit fill`
 - Focused verification: `node --test --test-reporter=dot --test-name-pattern "land mine|landmine" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
-- Full `blow_up_landmine()` fallout remains partial: ordinary durable non-shop stack splitting and random non-deferred breakable-object destruction are covered, but stone/fragile/shop stack splitting, forced glass/egg/potion breakage, hero/monster hit handling, shop accounting, complete fractured-fragment scattering, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: ordinary durable non-shop stack splitting, random non-deferred breakable-object destruction, and singleton forced GLASS/potion/egg breakage are covered, but stone/fragile/shop stack splitting, camera demon release, hero/monster hit handling, shop accounting, complete fractured-fragment scattering, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.

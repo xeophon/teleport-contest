@@ -30933,7 +30933,7 @@ test('hero land mine adjacent lava fills pit and uses lava death prompt', async 
     assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
 });
 
-test('deferred hero land mine liquid fill dunks same-square boulder after water fallout', async () => {
+test('deferred hero land mine scatter breaks acid before boulder pit fill', async () => {
     installStableNonShopFloorState();
     vision_reset();
     game.sokoban_dnum = 999;
@@ -30968,9 +30968,9 @@ test('deferred hero land mine liquid fill dunks same-square boulder after water 
     await rhack(' ');
 
     assert.deepEqual(getRngLog().map(rngCallName),
-        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(2)', 'rn2(20)', 'rn2(10)']);
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(10)', 'rn2(100)', 'rn2(2)', 'rn2(2)']);
     assert.equal(game._pending_message,
-        'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  A potion explodes!  You fall into the moat!  You sink like a rock.  You find yourself on dry land again!');
+        'KAABLAMM!!!  You triggered a land mine!  A potion of acid shatters!  You smell a peculiar odor...  The boulder fills a pit.');
     assert.equal(targetLoc.typ, ROOM);
     assert.equal(targetLoc.flags || 0, 0);
     assert.equal(game.level.objects.includes(boulder), false);
@@ -31229,10 +31229,12 @@ test('deferred hero land mine scatter destroys looking glass before pit fallout'
     const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
     const lookingGlass = {
         id: 40114,
+        otyp: MIRROR,
         cls: 'tool',
         glyph: '(',
         kind: 'looking glass',
         actualKind: 'looking glass',
+        material: 'glass',
         quan: 1,
         ox: 5,
         oy: 5,
@@ -31245,13 +31247,13 @@ test('deferred hero land mine scatter destroys looking glass before pit fallout'
     game._pending_landmine_trap = trap;
     game.context = {};
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 3, 0, 0, 1, 1, 2, 0, 1]);
+    installCoreRngValues([4, 2, 3, 0, 1, 1, 1, 1, 2, 0, 1]);
 
     await rhack(' ');
 
     const rngCalls = getRngLog().map(rngCallName);
     assert.deepEqual(rngCalls, [
-        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)',
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(100)',
         'rn2(5)', 'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
     ]);
     assert.equal(rngCalls.includes('rn2(8)'), false);
@@ -31261,6 +31263,51 @@ test('deferred hero land mine scatter destroys looking glass before pit fallout'
     assert.equal(game.level.buriedobjlist.includes(lookingGlass), false);
     assert.equal(game.u.uhp, 12);
     assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+});
+
+test('deferred hero land mine scatter forces acid potion break before pit fallout', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM, lit: true });
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const potion = { ...acidPotion(40115), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    game.level.traps = [trap];
+    game.level.objects = [potion];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 0, 7, 1, 1, 2, 0, 1]);
+
+    await rhack(' ');
+
+    const rngCalls = getRngLog().map(rngCallName);
+    assert.deepEqual(rngCalls, [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(100)',
+        'rn2(2)', 'rn2(5)', 'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
+    ]);
+    assert.equal(rngCalls.includes('rn2(8)'), false);
+    assert.match(game._pending_message, /A potion of acid shatters!/);
+    assert.match(game._pending_message, /You smell a peculiar odor\.\.\./);
+    assert.match(game._pending_message, /You fall into a pit!/);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(game.level.buriedobjlist.includes(potion), false);
+    assert.equal(game.u.uhp, 13);
+    assert.equal(game.u.utrap, 2);
     assert.equal(game.u.utraptype, 'pit');
     assert.equal(trap.tseen, true);
     assert.equal(trap.ttyp, PIT);
