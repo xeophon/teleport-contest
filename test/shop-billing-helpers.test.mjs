@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -68505,6 +68505,80 @@ test('f command wielded bullwhip flicks adjacent visible monster before ammo pro
     assert.equal(goblin.mpeaceful, 0);
     assert.equal(missile.quivered || false, false);
     assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip into wall of water splashes before monster handling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173222, 'bullwhip', 'w', 0);
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 6 && y === 5 ? WATER : ROOM,
+    });
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You cause a small splash.');
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip into wall of lava splashes and checks fire damage before monster handling', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uluck: 13,
+    });
+    const whip = wieldedWeapon(876173223, 'bullwhip', 'w', 0);
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 6 && y === 5 ? LAVAWALL : ROOM,
+    });
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You cause a small splash.');
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, true);
+    assert.equal(getRngLog().length, 1);
+    assert.match(getRngLog()[0], /^rn2\(20\)=/);
 });
 
 test('f command autoquiver still beats wielded bullwhip fallback', async () => {

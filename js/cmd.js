@@ -20428,6 +20428,17 @@ async function finishHeroBullwhipDirection(item, ch) {
         await setMessage('You miss.');
         return true;
     }
+    const targetLoc = game.level?.at?.(rx, ry);
+    if (!dir.dz && (targetLoc?.typ === WATER || targetLoc?.typ === LAVAWALL)) {
+        const messages = ['You cause a small splash.'];
+        if (targetLoc.typ === LAVAWALL
+            && ((game.u?.uluck || 0) + (game.u?.moreluck || 0) + 5) <= rn2(20)) {
+            erodeDirectMeleePassiveObject(item, 'fire', messages);
+        }
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
 
     const mon = (game.level?.monsters || []).find(candidate =>
         candidate.mx === rx && candidate.my === ry && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
