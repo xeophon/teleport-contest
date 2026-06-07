@@ -6388,7 +6388,7 @@ function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
     game.u.uinwater = 1;
     game.u.underwater = true;
     game.u.uunderwater = true;
-    messages.push('You fall into the pool of water!  You sink like a rock.');
+    messages.push(`You fall into the ${typ === MOAT ? 'moat' : 'pool of water'}!  You sink like a rock.`);
 }
 
 function earthquakeLiquidFlow(x, y, typ, trap, messages, { fillMessage = '' } = {}) {
@@ -6402,6 +6402,17 @@ function earthquakeLiquidFlow(x, y, typ, trap, messages, { fillMessage = '' } = 
     else messages.push(...applyMonsterLiquidEffectsAt(x, y, { heroCaused: true, recordKill: recordVanquished }));
     newsym(x, y);
     return true;
+}
+
+function landmineMaybeDunkLiquidBoulders(x, y, messages) {
+    const loc = game.level?.at?.(x, y);
+    while (earthBoulderHitsLiquid(loc)) {
+        const boulder = (game.level?.objects || []).find(obj =>
+            isBoulderObject(obj) && obj.ox === x && obj.oy === y && !obj.buried && !obj.transientProjectile);
+        if (!boulder) break;
+        if (!earthFloorEffects(boulder, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true })) break;
+        removeFloorObject(boulder);
+    }
 }
 
 function earthquakeMonsterName(mon, { capital = true, article = true } = {}) {
@@ -12344,6 +12355,8 @@ export function applyLiquidFlowFloorObjectDamage(x, y, typ) {
         let damaged;
         if (entry?.mode === 'flooreffects')
             damaged = liquidFlowFloorEffectsItem(obj, x, y, messages, visible, acidContext, queue, processSpilledFloorEffect);
+        else if (isBoulderObject(obj))
+            damaged = false;
         else if (typ === LAVAPOOL)
             damaged = fireDamageFloorItem(obj, messages, visible, {
                 spillQueue: queue, processSpill: processSpilledFloorEffect, x, y,
@@ -47635,8 +47648,11 @@ function landminePostBlastTrap(trap, messages = []) {
         const fillMessage = earthVisibleSquare(trap.tx, trap.ty)
             ? `The hole fills with ${fillType === LAVAPOOL ? 'lava' : 'water'}!`
             : '';
-        if (earthquakeLiquidFlow(trap.tx, trap.ty, fillType, trap, messages, { fillMessage }))
+        if (earthquakeLiquidFlow(trap.tx, trap.ty, fillType, trap, messages, { fillMessage })) {
+            if (game._command_mode !== 'lavaDeathMore' || game._death_cause !== 'burned by molten lava')
+                landmineMaybeDunkLiquidBoulders(trap.tx, trap.ty, messages);
             return null;
+        }
     }
     return trap;
 }

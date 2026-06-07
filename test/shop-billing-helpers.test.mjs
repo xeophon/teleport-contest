@@ -30694,7 +30694,7 @@ test('hero land mine adjacent moat fills pit before recursive fallout', async ()
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)']);
     assert.equal(game._pending_message,
-        'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  You fall into the pool of water!  You sink like a rock.');
+        'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  You fall into the moat!  You sink like a rock.');
     assert.equal(targetLoc.typ, MOAT);
     assert.equal(game.u.uhp, 15);
     assert.equal(game.u.uinwater, 1);
@@ -30749,6 +30749,56 @@ test('hero land mine adjacent lava fills pit and uses lava death prompt', async 
 
     assert.equal(game._command_mode, 'deathAttributesPrompt');
     assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
+});
+
+test('deferred hero land mine liquid fill dunks same-square boulder after water fallout', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const cells = new Map([
+        ['5,5', targetLoc],
+        ['5,4', { roomno: ROOMOFFSET, typ: MOAT }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const boulder = floorBoulder(40104, { ox: 5, oy: 5 });
+    const potion = { ...acidPotion(40105, 'a'), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    game.level.traps = [trap];
+    game.level.objects = [boulder, potion];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 1, 19, 9]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)', 'rn2(20)', 'rn2(10)']);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  A potion explodes!  You fall into the moat!  You sink like a rock.  You find yourself on dry land again!');
+    assert.equal(targetLoc.typ, ROOM);
+    assert.equal(targetLoc.flags || 0, 0);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(potion), false);
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.uinwater || 0, 0);
+    assert.equal(game.u.underwater || false, false);
+    assert.equal(game.u.uunderwater || false, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
 });
 
 test('deferred hero land mine blast fills resulting pit with same-square boulder', async () => {
