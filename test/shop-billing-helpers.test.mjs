@@ -67948,6 +67948,111 @@ test('f command manual prompt rejects worn armor after selection', async () => {
     assert.equal(weapon.quivered || false, false);
 });
 
+test('f command question menu shows ready suggestions and selection readies item', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const launcher = bow(876174154, 'a');
+    const missile = arrow(876174155, 'b');
+    const ration = foodRation(876174156, 'f');
+    const weapon = dagger(876174157, 'd');
+    const gold = goldPieces(876174158, 5);
+    const armor = wornArmor(876174159, 'leather armor', 'h');
+    game.inventory = [launcher, missile, ration, weapon, gold, armor];
+    game._goldCount = 5;
+    game.level.monsters = [];
+
+    await rhack('f');
+    await rhack('?');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /b - an arrow/);
+    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /\$ - 5 gold pieces/);
+    assert.doesNotMatch(menuText, /a - a bow/);
+    assert.doesNotMatch(menuText, /f - a food ration/);
+    assert.doesNotMatch(menuText, /h - a \+0 leather armor/);
+
+    await rhack('d');
+
+    assert.equal(game._overlay_lines || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_pending_item_letter, 'd');
+    assert.equal(game._pending_message, 'You ready: d - a dagger.');
+    assert.equal(weapon.quivered, true);
+});
+
+test('f command question menu falls back to downplayed inventory', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const ration = foodRation(876174160, 'f');
+    game.inventory = [ration];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.equal(game._pending_message, 'What do you want to fire? [*]');
+
+    await rhack('?');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /f - a food ration/);
+
+    await rhack('f');
+
+    assert.equal(game._overlay_lines || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_pending_item_letter, 'f');
+    assert.equal(game._pending_message, 'You ready: f - a food ration.');
+    assert.equal(ration.quivered, true);
+    assert.match(ration.line, /\(at the ready\)$/);
+});
+
+test('f command star menu exposes full inventory and rejects worn armor', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const armor = wornArmor(876174161, 'leather armor', 'a');
+    const weapon = dagger(876174162, 'd');
+    game.inventory = [armor, weapon];
+    game.level.monsters = [];
+
+    await rhack('f');
+    await rhack('*');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /a - a \+0 leather armor \(being worn\)/);
+    assert.match(menuText, /d - a dagger/);
+
+    await rhack('a');
+
+    assert.equal(game._overlay_lines || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'You cannot fire that!');
+    assert.equal(armor.worn, true);
+    assert.equal(weapon.quivered || false, false);
+});
+
+test('Q command shared ready prompt accepts suggested weapon', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = dagger(876174163, 'd');
+    game.inventory = [weapon];
+
+    await rhack('Q');
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.match(game._pending_message, /^What do you want to ready\? \[- d or \?\*\]$/);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(weapon.quivered, true);
+    assert.equal(game._pending_message, 'd - a dagger (at the ready).');
+});
+
 test('f command empty quiver with wielded polearm autohits before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);

@@ -11046,9 +11046,8 @@ function isManualFireCoinItem(item) {
     return itemClassKey(item) === 'coin' || item?.glyph === '$' || item?.otyp === GOLD_PIECE;
 }
 
-function isManualFireReadyItem(item) {
-    if (!item?.letter) return false;
-    return isProjectileItem(item) || isManualFireWeaponItem(item) || isManualFireCoinItem(item);
+function isReadySelectableItem(item) {
+    return !!item?.letter;
 }
 
 function isReadySuggestItem(item) {
@@ -11056,6 +11055,27 @@ function isReadySuggestItem(item) {
     if (item.wielded || item.line?.includes('weapon in')) return false;
     if (/bow|sling/.test(name)) return false;
     return isProjectileItem(item) || isManualFireWeaponItem(item) || isManualFireCoinItem(item);
+}
+
+function isReadyDownplayItem(item) {
+    return isReadySelectableItem(item) && !isReadySuggestItem(item);
+}
+
+function readyInventoryFilterMatch() {
+    if (game._ready_inventory_filter === 'suggest') return isReadySuggestItem;
+    if (game._ready_inventory_filter === 'downplay') return isReadyDownplayItem;
+    return null;
+}
+
+function readyPromptMessage(verb) {
+    const letters = inventoryLetters(isReadySuggestItem);
+    if (verb === 'fire')
+        return letters
+            ? `What do you want to fire? [${getobjPromptLetters(letters)} or ?*]`
+            : 'What do you want to fire? [*]';
+    return letters
+        ? `What do you want to ready? [- ${letters} or ?*]`
+        : 'What do you want to ready? [- or ?*]';
 }
 
 function isThrowSuggestItem(item) {
@@ -20299,7 +20319,7 @@ function heroAutoquiverProjectile() {
     return oammo || omissile || altammo || omisc;
 }
 
-function heroReadyFireObject(item) {
+function heroReadyObject(item) {
     for (const invItem of game.inventory || []) {
         invItem.quivered = invItem === item;
         if (invItem !== item && invItem.line)
@@ -20310,6 +20330,70 @@ function heroReadyFireObject(item) {
 
 function heroFireReadyLine(item) {
     return `${item?.letter || '?'} - ${inventoryItemName(item)}`;
+}
+
+function clearReadyInventoryOverlay() {
+    game._ready_inventory_page = 0;
+    game._ready_inventory_filter = null;
+    game._ready_inventory_verb = '';
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+}
+
+function showReadyInventoryOverlay(verb, filter = null, page = 0) {
+    game._ready_inventory_verb = verb;
+    game._ready_inventory_filter = filter;
+    game._ready_inventory_page = page;
+    showInventoryOverlay(page, false, readyInventoryFilterMatch());
+    game._command_mode = 'readyInventory';
+}
+
+async function restoreReadyPrompt(verb) {
+    clearReadyInventoryOverlay();
+    await setMessage(readyPromptMessage(verb));
+    game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
+}
+
+async function finishReadyObjectSelection(item, verb) {
+    if (!item) {
+        await setMessage("You don't have that object.");
+        game._command_mode = null;
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    if (isWornInventoryItem(item) && !itemIsWielded(item)) {
+        await setMessage(`You cannot ${verb} that!`);
+        game._command_mode = null;
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    if (item.line?.includes('alternate weapon')) {
+        if (verb === 'fire') {
+            game._fire_quiver_confirm_item = item;
+            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
+            game._command_mode = 'fireQuiverAlternateConfirm';
+        } else {
+            game._quiver_confirm_item = item;
+            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
+            game._command_mode = 'quiverAlternateConfirm';
+        }
+        return;
+    }
+    if (!isReadySelectableItem(item)) {
+        await setMessage("You don't have that object.");
+        game._command_mode = null;
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    if (verb === 'fire') {
+        const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
+        heroReadyObject(item);
+        await beginHeroFireProjectile(item, { readyMessage });
+        return;
+    }
+    heroReadyObject(item);
+    await setMessage(`${item.line}.`);
+    game._command_mode = null;
 }
 
 function heroWieldedPolearm() {
@@ -62986,6 +63070,15 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             return;
         }
+        if (ch === '*') {
+            showReadyInventoryOverlay('ready');
+            return;
+        }
+        if (ch === '?') {
+            const suggestLetters = inventoryLetters(isReadySuggestItem);
+            showReadyInventoryOverlay('ready', suggestLetters ? 'suggest' : 'downplay');
+            return;
+        }
         if (ch === '-') {
             for (const item of game.inventory || []) item.quivered = false;
             await setMessage('No ammunition readied.');
@@ -62993,25 +63086,7 @@ export async function rhack(_cmd) {
             return;
         }
         const itemByLetter = (game.inventory || []).find(invItem => invItem.letter === ch);
-        if (itemByLetter?.line?.includes('alternate weapon')) {
-            game._quiver_confirm_item = itemByLetter;
-            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
-            game._command_mode = 'quiverAlternateConfirm';
-            return;
-        }
-        const item = itemByLetter && isProjectileItem(itemByLetter) ? itemByLetter : null;
-        if (item) {
-            for (const invItem of game.inventory || []) {
-                invItem.quivered = invItem === item;
-                if (invItem !== item && invItem.line) invItem.line = invItem.line.replace(/ \((?:at the ready|in quiver(?: pouch)?)\).*$/, '');
-            }
-            item.line = `${item.letter || '?'} - ${inventoryItemName(item)}${quiverSuffix(item)}`;
-            await setMessage(`${item.line}.`);
-            game._command_mode = null;
-            return;
-        }
-        await setMessage("You don't have that object.");
-        game._command_mode = null;
+        await finishReadyObjectSelection(itemByLetter, 'ready');
         return;
     }
 
@@ -63036,6 +63111,15 @@ export async function rhack(_cmd) {
             game._fire_count = null;
             return;
         }
+        if (ch === '*') {
+            showReadyInventoryOverlay('fire');
+            return;
+        }
+        if (ch === '?') {
+            const suggestLetters = inventoryLetters(isReadySuggestItem);
+            showReadyInventoryOverlay('fire', suggestLetters ? 'suggest' : 'downplay');
+            return;
+        }
         if (ch === '-') {
             await setMessage('You already have no ammunition readied!');
             game._command_mode = null;
@@ -63043,28 +63127,7 @@ export async function rhack(_cmd) {
             return;
         }
         const itemByLetter = (game.inventory || []).find(invItem => invItem.letter === ch);
-        if (itemByLetter && isWornInventoryItem(itemByLetter) && !itemIsWielded(itemByLetter)) {
-            await setMessage('You cannot fire that!');
-            game._command_mode = null;
-            game._fire_count = null;
-            return;
-        }
-        if (itemByLetter?.line?.includes('alternate weapon')) {
-            game._fire_quiver_confirm_item = itemByLetter;
-            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
-            game._command_mode = 'fireQuiverAlternateConfirm';
-            return;
-        }
-        const item = itemByLetter && isManualFireReadyItem(itemByLetter) ? itemByLetter : null;
-        if (item) {
-            const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
-            heroReadyFireObject(item);
-            await beginHeroFireProjectile(item, { readyMessage });
-            return;
-        }
-        await setMessage("You don't have that object.");
-        game._command_mode = null;
-        game._fire_count = null;
+        await finishReadyObjectSelection(itemByLetter, 'fire');
         return;
     }
 
@@ -63077,8 +63140,34 @@ export async function rhack(_cmd) {
             return;
         }
         const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
-        heroReadyFireObject(item);
+        heroReadyObject(item);
         await beginHeroFireProjectile(item, { readyMessage });
+        return;
+    }
+
+    if (game._command_mode === 'readyInventory') {
+        const verb = game._ready_inventory_verb || 'ready';
+        if (ch === '*' && game._ready_inventory_filter) return;
+        if (ch === ' ') {
+            const page = (game._ready_inventory_page || 0) + 1;
+            if (page < (game._inventory_overlay_total_pages || 1)) {
+                game._ready_inventory_page = page;
+                showInventoryOverlay(page, false, readyInventoryFilterMatch());
+                return;
+            }
+            await restoreReadyPrompt(verb);
+            return;
+        }
+        if (ch === '\x1b') {
+            clearReadyInventoryOverlay();
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            if (verb === 'fire') game._fire_count = null;
+            return;
+        }
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        clearReadyInventoryOverlay();
+        await finishReadyObjectSelection(item, verb);
         return;
     }
 
@@ -66953,12 +67042,11 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'Q') {
-        const letters = inventoryLetters(isReadySuggestItem);
-        if (!letters) {
+        if (!(game.inventory || []).some(isReadySelectableItem)) {
             await setMessage("You don't have anything to ready.");
             return;
         }
-        await setMessage(`What do you want to ready? [- ${letters} or ?*]`);
+        await setMessage(readyPromptMessage('ready'));
         game._command_mode = 'quiverObject';
         return;
     }
@@ -71071,7 +71159,7 @@ export async function rhack(_cmd) {
         let autoquiverFailed = false;
         const readiedItem = (game.inventory || []).find(item =>
             item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver'));
-        let projectile = readiedItem && isManualFireReadyItem(readiedItem) ? readiedItem : null;
+        let projectile = readiedItem && isReadySelectableItem(readiedItem) ? readiedItem : null;
         const returningWeapon = heroWieldedThrowAndReturnWeapon();
         if (returningWeapon && heroFireReturnWeaponBeatsQuiver(readiedItem)) {
             await beginHeroFireThrowAndReturnShortcut(returningWeapon, fireCount);
@@ -71081,7 +71169,7 @@ export async function rhack(_cmd) {
             projectile = heroAutoquiverProjectile();
             if (projectile) {
                 autoquiverMessage = `You ready: ${heroFireReadyLine(projectile)}.`;
-                heroReadyFireObject(projectile);
+                heroReadyObject(projectile);
             } else {
                 autoquiverFailed = true;
             }
@@ -71103,15 +71191,14 @@ export async function rhack(_cmd) {
                 await beginHeroFireAlternatePolearmFallback(alternatePolearm);
                 return;
             }
-            const letters = inventoryLetters(isReadySuggestItem);
-            if (!letters) {
+            if (!(game.inventory || []).some(isReadySelectableItem)) {
                 game._fire_count = null;
                 await setMessage(autoquiverFailed
                     ? 'You have nothing appropriate for your quiver.'
-                    : "You have no ammunition readied.");
+                    : 'You have nothing to ready for firing.');
                 return;
             }
-            await setMessage(`What do you want to fire? [${getobjPromptLetters(letters)} or ?*]`);
+            await setMessage(readyPromptMessage('fire'));
             game._command_mode = 'fireQuiverObject';
             return;
         }
