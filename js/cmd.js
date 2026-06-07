@@ -47651,6 +47651,7 @@ function convertLandmineToPit(trap) {
 
 function landminePostBlastTrap(trap, messages = []) {
     if (!trap) return null;
+    deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
     if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
         deleteTrap(trap);
         return null;
@@ -48214,7 +48215,7 @@ function heroRollingBoulderApplyGenericFloorEffectsAt(x, y, movingBoulder, messa
     return { handled: consumed, consumed };
 }
 
-function deleteHeroRollingBoulderLandmineEngravingAt(x, y) {
+function deleteLandmineBlastEngravingAt(x, y) {
     if (!game.level?.engravings) return;
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== x || engr.y !== y);
 }
@@ -48227,7 +48228,7 @@ function heroRollingBoulderTriggerLandmineAt(x, y, movingBoulder, messages) {
     const suffix = (!game.u?.blind && cansee(x, y)) ? '  The rolling boulder triggers a land mine.' : '';
     messages.push(`KAABLAMM!!!${suffix}`);
     game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
-    deleteHeroRollingBoulderLandmineEngravingAt(x, y);
+    deleteLandmineBlastEngravingAt(x, y);
     game.level.objects = (game.level?.objects || []).filter(obj => obj !== movingBoulder);
     if (!game.u?.blind && cansee(x, y)) newsym(x, y);
     return true;

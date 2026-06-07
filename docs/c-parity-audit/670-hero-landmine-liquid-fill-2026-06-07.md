@@ -17,10 +17,13 @@
 - After landmine liquid fill, same-square boulders are dunked after liquid object/hero fallout, matching C's post-`liquid_flow()` `maybe_dunk_boulders()` ordering; the boulder canary includes acid-potion damage before dry-land cleanup.
 - Liquid fill that replaces old ice now clears that square's melt-ice timers, matching C's trailing `spot_checks()` cleanup while preserving unrelated ice timers.
 - Landmine liquid fill now refreshes vision and the blast square after the post-liquid boulder pass, covering C's trailing `recalc_block_point()` behavior for consumed boulders.
+- Hero and rolling-boulder landmine blasts share engraving deletion at the blast square, including air/water-level cases where no pit remains.
 
 ## Tests
 
 - `hero land mine adjacent moat fills pit before recursive fallout`
+- `hero land mine on water level leaves no recursive pit`
+- `deferred hero land mine water-level blast deletes engraving`
 - `hero land mine adjacent lava fills pit and uses lava death prompt`
 - `flying hero sitting on hidden land mine can air-current fill pit with water`
 - `deferred hero land mine liquid fill dunks same-square boulder after water fallout`
@@ -30,4 +33,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, and drawbridge destruction are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: scatter, wakeups, doors/drawbridges, and drawbridge destruction are outside this slice.
