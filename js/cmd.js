@@ -47757,6 +47757,7 @@ function landmineScatterStoneObject(obj) {
 
 function landmineScatterDeferredBreakageObject(obj) {
     return landmineScatterStackQuantity(obj) > 1
+        && shopObjectOrContentsUnpaid(obj)
         && (landmineScatterForcedBreakageObject(obj) || !!impactDropBreakKind(obj));
 }
 
@@ -47775,8 +47776,6 @@ function landmineScatterStackQuantity(obj) {
 function landmineScatterCanSplitStack(obj) {
     return landmineScatterStackQuantity(obj) > 1
         && !landmineScatterStoneObject(obj)
-        && !landmineScatterDeferredBreakageObject(obj)
-        && !impactDropBreakKind(obj)
         && !shopBillableGold(obj)
         && !shopObjectOrContentsUnpaid(obj);
 }
