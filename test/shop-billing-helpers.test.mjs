@@ -30734,6 +30734,89 @@ test('flying hero crosses known land mine with over-floor message', async () => 
     assert.equal(trap.ttyp, LANDMINE);
 });
 
+test('flying hero sitting on hidden land mine can land without discovery', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 1]);
+
+    await enterSitCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(3)']);
+    assert.equal(game._pending_message, 'You land.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, false);
+    assert.equal(trap.ttyp, LANDMINE);
+});
+
+test('flying hero sitting on hidden land mine can air-current detonate', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 0]);
+
+    await enterSitCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(3)']);
+    assert.equal(game._pending_message,
+        'You land.  You discover a trigger in a pile of soil below you.  KAABLAMM!!!  The air currents set it off!  You fly over a pit.');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.madeby_u, false);
+});
+
+test('flying hero sitting on known land mine can escape before air currents', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await enterSitCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+    assert.equal(game._pending_message, 'You land.  You escape a land mine.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, LANDMINE);
+});
+
 test('dismount object list consumes pending land mine trap', async () => {
     installStableNonShopFloorState();
     vision_reset();

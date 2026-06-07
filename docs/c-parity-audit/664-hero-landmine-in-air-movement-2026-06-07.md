@@ -14,7 +14,7 @@
 
 - `movementLandmineResult()` now uses the shared `movementFloorTriggerPrecheck()` before calling the landmine-specific helper.
 - Ordinary movement, attached-ball fallback relocation, and deferred object-list movement share this entry point, so flying/levitating landmine movement now follows C's generic floor-trigger ordering.
-- The existing landmine air-current helper remains in place for source-backed follow-up work around sitting, plunge, and force cases.
+- The existing landmine air-current helper remains in place for source-backed follow-up work around plunge and force cases; flying `#sit` entry is covered by `666-hero-landmine-sit-air-current-2026-06-07.md`.
 
 ## Tests
 
@@ -29,5 +29,5 @@
 ## Remaining Follow-Ups
 
 - Recursive pit fallout after ordinary landmine explosions is covered by `665-hero-landmine-recursive-pit-2026-06-07.md`; broader `blow_up_landmine()` terrain/object fallout remains open there.
-- Sitting and force/plunge landmine entry need separate canaries. In C, flying `#sit` reaches `dotrap(..., VIASITTING)`, while force flags bypass the ordinary in-air floor-trigger precheck.
+- Flying `#sit` landmine entry is covered by `666-hero-landmine-sit-air-current-2026-06-07.md`; force/plunge landmine entry still needs separate canaries because those paths bypass or alter the ordinary in-air precheck.
 - Object-list deferral has dismount coverage, but a direct multi-object landmine movement canary would make the deferred entry point more explicit.

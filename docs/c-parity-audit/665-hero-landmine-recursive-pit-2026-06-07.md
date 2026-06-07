@@ -32,4 +32,4 @@
 
 - Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, liquid fill, boulder pit-fill, and air/water level trap deletion are not covered by this slice.
 - Landmine lifesaving continuation through the converted pit still needs a source-backed canary and likely model work.
-- Sitting and force/plunge landmine entry remain separate from this recursive pit movement slice.
+- Flying `#sit` air-current entry is covered by `666-hero-landmine-sit-air-current-2026-06-07.md`; force/plunge landmine entry remains separate from this recursive pit movement slice.

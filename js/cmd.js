@@ -47639,7 +47639,7 @@ function applyHeroLandmineDamage(damage, messages) {
 
 function heroLandmineAirCurrentResult(trap, prefix, damage) {
     const alreadySeen = !!trap?.tseen;
-    if (!alreadySeen && rn2(3)) return { message: '', more: false };
+    if (!alreadySeen && rn2(3)) return { message: trapMessage(prefix), more: false };
     if (trap) trap.tseen = true;
     const triggerName = trap?.madeby_u ? 'the trigger of your mine' : 'a trigger';
     const messages = [
@@ -47654,7 +47654,12 @@ function heroLandmineAirCurrentResult(trap, prefix, damage) {
         const fatalResult = heroDartTrapFatalResult(messages, 'killed by a land mine');
         return { message: trapMessage(...messages), ...fatalResult };
     }
-    return { message: trapMessage(...messages) };
+    const pitResult = movementPitResult(trap, { recursive: true });
+    if (pitResult?.message) messages.push(pitResult.message);
+    return {
+        ...pitResult,
+        message: trapMessage(...messages),
+    };
 }
 
 function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
@@ -47686,7 +47691,7 @@ function movementLandmineResult(trap) {
 }
 
 function sitLandmineResult(trap, prefix) {
-    return heroLandmineResult(trap, prefix, { forceTrap: true });
+    return heroLandmineResult(trap, prefix);
 }
 
 function pitOwnerArticle(trap) {
