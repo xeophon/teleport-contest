@@ -22,4 +22,4 @@
 ## Remaining Follow-Ups
 
 - The post-recursive `fill_pit(u.ux,u.uy)` call at `nethack-c/upstream/src/trap.c:2597` still needs a dedicated scenario if recursive pit fallout can leave a fillable same-square boulder state not already consumed by `blow_up_landmine()`.
-- Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, liquid fill, `maybe_dunk_boulders()`, `recalc_block_point()`, and `spot_checks()` are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, `maybe_dunk_boulders()`, `recalc_block_point()`, and `spot_checks()` are outside this slice; liquid fill is covered by `670-hero-landmine-liquid-fill-2026-06-07.md`.

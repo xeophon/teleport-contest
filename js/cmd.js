@@ -6387,11 +6387,12 @@ function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
     messages.push('You fall into the pool of water!  You sink like a rock.');
 }
 
-function earthquakeLiquidFlow(x, y, typ, trap, messages) {
+function earthquakeLiquidFlow(x, y, typ, trap, messages, { fillMessage = '' } = {}) {
     if (!setEarthquakeLiquidTerrain(x, y, typ)) return false;
     deleteEarthquakeLiquidTrap(trap, x, y);
     objIceEffectsAt(x, y, { doBuried: true });
     unearthObjectsAt(x, y);
+    if (fillMessage) messages.push(fillMessage);
     messages.push(...applyLiquidFlowFloorObjectDamage(x, y, typ).messages);
     if (game.u?.ux === x && game.u?.uy === y) applyEarthquakeHeroLiquidEffects(x, y, typ, messages);
     else messages.push(...applyMonsterLiquidEffectsAt(x, y, { heroCaused: true, recordKill: recordVanquished }));
@@ -47618,11 +47619,19 @@ function convertLandmineToPit(trap) {
     newsym(game.u?.ux || trap.tx || 0, game.u?.uy || trap.ty || 0);
 }
 
-function landminePostBlastTrap(trap) {
+function landminePostBlastTrap(trap, messages = []) {
     if (!trap) return null;
     if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
         deleteTrap(trap);
         return null;
+    }
+    const fillType = earthquakeFillHoleType(trap.tx, trap.ty);
+    if (fillType !== ROOM) {
+        const fillMessage = earthVisibleSquare(trap.tx, trap.ty)
+            ? `The hole fills with ${fillType === LAVAPOOL ? 'lava' : 'water'}!`
+            : '';
+        if (earthquakeLiquidFlow(trap.tx, trap.ty, fillType, trap, messages, { fillMessage }))
+            return null;
     }
     return trap;
 }
@@ -47639,7 +47648,7 @@ function fillLandminePitWithBoulder(trap, messages) {
 }
 
 function landmineRecursivePitTrap(trap, messages) {
-    const pitTrap = landminePostBlastTrap(trap);
+    const pitTrap = landminePostBlastTrap(trap, messages);
     if (!pitTrap) return null;
     fillLandminePitWithBoulder(pitTrap, messages);
     return (game.level?.traps || []).includes(pitTrap) ? pitTrap : null;
