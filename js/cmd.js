@@ -20069,12 +20069,16 @@ function heroHorizontalThrowWeightedRange(obj, urangeBase = null) {
     const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
     const weightDivisor = heavyIronBall ? 100 : 40;
     let range = baseRange - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
-    if (obj === game.u?.uball || (obj?.id != null && obj.id === game.u?.uball?.id)) {
+    if (heroThrownAttachedBallObject(obj)) {
         if (game.u?.ustuck) range = 1;
         else if (range >= 5) range = 5;
     }
     if (range < 1) range = 1;
     return { range, urangeBase: baseRange };
+}
+
+function heroThrownAttachedBallObject(obj) {
+    return !!obj && (obj === game.u?.uball || (obj?.id != null && obj.id === game.u?.uball?.id));
 }
 
 function heroThrownMjollnirObject(obj) {
@@ -20101,11 +20105,41 @@ function heroHorizontalThrowFinalRange(obj, range, { mjollnirThrow = false, retu
     if (isBoulderObject(obj)) finalRange = 20;
     else if (mjollnirThrow) finalRange = heroHorizontalThrowMjollnirRangeCap(finalRange);
     else if (returningAklysThrow) finalRange = Math.min(finalRange, 4);
-    else if ((obj === game.u?.uball || (obj?.id != null && obj.id === game.u?.uball?.id))
-        && game.u?.utrap && game.u?.utraptype === TT_INFLOOR)
+    else if (heroThrownAttachedBallObject(obj) && game.u?.utrap && game.u?.utraptype === TT_INFLOOR)
         finalRange = 1;
     if (heroIsUnderwaterForThrow()) finalRange = 1;
     return finalRange;
+}
+
+function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
+    if (!heroThrownAttachedBallObject(obj) || !game.u?.uchain) return;
+    game.u.uball = obj;
+    game.level.objects ??= [];
+    if (!game.level.objects.includes(obj)) game.level.objects.push(obj);
+    if (!game.level.objects.includes(game.u.uchain)) game.level.objects.push(game.u.uchain);
+    if (x === game.u.ux && y === game.u.uy) return;
+
+    const dx = Math.sign(dir?.dx || 0);
+    const dy = Math.sign(dir?.dy || 0);
+    const newUx = x - dx;
+    const newUy = y - dy;
+    if (!isok(newUx, newUy)) return;
+
+    const oldUx = game.u.ux;
+    const oldUy = game.u.uy;
+    game.u.ux0 = oldUx;
+    game.u.uy0 = oldUy;
+    game.u.ux = newUx;
+    game.u.uy = newUy;
+    game.u.uchain.ox = newUx;
+    game.u.uchain.oy = newUy;
+    game.u.uchain.contained = false;
+    game.u.uchain.container = null;
+    game.u.uchain.hidden = false;
+    game.u.uchain.buried = false;
+    game.u.uchain.transientProjectile = false;
+    newsym(oldUx, oldUy);
+    newsym(newUx, newUy);
 }
 
 function heroThrowAmmoWeaponDescription(ammoSkill) {
@@ -20150,6 +20184,8 @@ function heroHorizontalThrowAirSplitRange(obj) {
 function heroHorizontalThrowRecoil(dir, range) {
     if (!heroHorizontalThrowAirRecoilActive() || !dir || (!dir.dx && !dir.dy) || range < 1 || game.u?.ustuck)
         return '';
+    if (game.u?.uball && !(game.inventory || []).includes(game.u.uball))
+        return 'You feel a tug from the iron ball.';
     if (game.u?.utrap) {
         const trapName = game.u.utraptype === TT_WEB ? 'web'
             : game.u.utraptype === TT_LAVA ? 'lava'
@@ -67054,8 +67090,12 @@ export async function rhack(_cmd) {
             if (item.otyp === DART || /\bdarts?\b/.test(lowerName)) rnd(1); // C throw_obj: multishot count.
             thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
         }
-        const thrownObject = {
+        const attachedBallThrow = heroThrownAttachedBallObject(item);
+        const thrownObject = attachedBallThrow ? item : {
             ...item,
+            id: thrownId ?? item.id,
+        };
+        Object.assign(thrownObject, {
             letter: undefined,
             line: undefined,
             wielded: false,
@@ -67063,15 +67103,16 @@ export async function rhack(_cmd) {
             quivered: false,
             ox,
             oy,
-            id: thrownId ?? item.id,
             quan: 1,
             glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
             color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-        };
+        });
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
         let impactMessage = flightImpactMessage;
         const ordinaryAirRecoilMessage = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
-            ? heroHorizontalThrowRecoil(dir, ordinaryAirRecoilRange)
+            ? attachedBallThrow
+                ? 'You feel a tug from the iron ball.'
+                : heroHorizontalThrowRecoil(dir, ordinaryAirRecoilRange)
             : '';
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
@@ -67324,6 +67365,8 @@ export async function rhack(_cmd) {
                 passiveTarget: impactPassiveTarget,
             });
         const landingMessage = landing.messages.join('  ');
+        if (attachedBallThrow && landing.object)
+            heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
         newsym(ox, oy);
         const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
         removeInventoryItem(item);
