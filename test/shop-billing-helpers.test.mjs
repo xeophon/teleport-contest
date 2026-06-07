@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -1597,6 +1597,7 @@ function setHeroWeaponSkill(skill, level) {
         [P_HAMMER, 'hammer'],
         [P_CLUB, 'club'],
         [P_BOOMERANG, 'boomerang'],
+        [P_POLEARMS, 'polearms'],
     ]);
     const skillName = skillNames.get(skill) || String(skill);
     game._weapon_skill_levels ??= {};
@@ -66842,6 +66843,124 @@ test('applying wielded polearm hits monster at range two', async () => {
     assert.equal(goblin.mhp, 10 - damageRoll);
 });
 
+test('applying skilled polearm hits monster at range five', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    setHeroWeaponSkill(P_POLEARMS, P_SKILLED);
+    const weapon = glaive(876173233, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 6);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('g');
+    await rhack('l');
+    await rhack('l');
+    await rhack('j');
+
+    assert.match(game._pending_message, /goblin/);
+    assert.doesNotMatch(game._pending_message, /too far/);
+
+    await rhack('.');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /Too far/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+});
+
+test('applying expert polearm hits monster at diagonal range eight', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    setHeroWeaponSkill(P_POLEARMS, P_EXPERT);
+    const weapon = glaive(876173234, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 7, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 7);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('g');
+    await rhack('l');
+    await rhack('l');
+    await rhack('j');
+    await rhack('j');
+
+    assert.match(game._pending_message, /goblin/);
+    assert.doesNotMatch(game._pending_message, /too far/);
+
+    await rhack('.');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /Too far/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+});
+
+test('applying basic polearm reports too far at range five', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    setHeroWeaponSkill(P_POLEARMS, P_BASIC);
+    const weapon = glaive(876173235, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 6);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('g');
+    await rhack('l');
+    await rhack('l');
+    await rhack('j');
+
+    assert.match(game._pending_message, /goblin \(too far\)/);
+
+    await rhack('.');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game._pending_message, 'Too far!');
+    assert.equal(goblin.mhp, 10);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('f command fireassist skips known cursed inventory launcher', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67038,6 +67157,80 @@ test('f command quivered ammo with reachable wielded polearm uses polearm before
     assert.equal(weapon.wielded, true);
     assert.equal(launcher.wielded || false, false);
     assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quivered, true);
+});
+
+test('f command skilled quivered ammo with reachable wielded polearm autohits range five', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    setHeroWeaponSkill(P_POLEARMS, P_SKILLED);
+    const weapon = glaive(876173236, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const launcher = bow(876173237, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174128, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, launcher, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 6);
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction|arrow|bow/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+    assert.equal(weapon.wielded, true);
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quivered, true);
+});
+
+test('f command basic quivered ammo with polearm range-five target falls through to launcher assist', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    setHeroWeaponSkill(P_POLEARMS, P_BASIC);
+    const weapon = glaive(876173238, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const launcher = bow(876173239, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174129, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, launcher, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 6);
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'a');
+    assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
+    assert.doesNotMatch(game._pending_message, /Too far|You hit/);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(launcher.wielded, true);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.alternate, true);
     assert.equal(missile.quivered, true);
 });
 
