@@ -35,7 +35,7 @@
 
 ## Remaining Follow-Ups
 
-- Audits 701 and 702 cover empty-quiver autoquiver ranking and the first wielded-polearm fallback slice.
-- Full `dofire()` fireassist parity still needs bullwhip fallback, alternate-polearm swap, reachable-polearm assist with quivered ammo, the thrown-and-return shortcut, the exact queued swap/wield/retry command lifecycle, and broader explicit count handling.
+- Audits 701, 702, and 703 cover empty-quiver autoquiver ranking, the first wielded-polearm fallback slice, and the throw-and-return shortcut.
+- Full `dofire()` fireassist parity still needs bullwhip fallback, alternate-polearm swap, reachable-polearm assist with quivered ammo, the exact queued swap/wield/retry command lifecycle, and broader explicit count handling.
 - Full fired-projectile combat parity still needs C multishot calculation and per-shot looping, intervening monster handling beyond the first ordinary target, object mimic reveal, lethal cleanup/vampire-shifter revival, poisoned/silver/blessed launcher ammo variants, and broader passive-object fallout.
 - The current fired combat helper is intentionally limited to single hero-fired launcher ammo; by-hand unmatched ammo monster hits and slung gem/rock variants still need separate source-backed slices.

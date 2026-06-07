@@ -20303,6 +20303,31 @@ function heroWieldedPolearm() {
     return (game.inventory || []).find(item => itemIsPrimaryWielded(item) && isPolearmItem(item));
 }
 
+function heroWieldedThrowAndReturnWeapon() {
+    return (game.inventory || []).find(item => {
+        if (!itemIsPrimaryWielded(item)) return false;
+        const key = tossUpWeaponObjectKey(item);
+        if (key === 'aklys' || key === 'boomerang') return true;
+        return heroThrownMjollnirObject(item) && heroRoleName() === 'Valkyrie'
+            && Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10)) >= STR19(25);
+    }) || null;
+}
+
+function heroFireReturnWeaponBeatsQuiver(item) {
+    return !item || !!heroThrowAmmoSkill(item);
+}
+
+async function beginHeroFireThrowAndReturnShortcut(item, shotLimit = null) {
+    game._fire_count = null;
+    game._fire_item_letter = null;
+    game._fire_launcher_letter = null;
+    clearThrowCountState();
+    game._throw_item_letter = item?.letter || null;
+    game._throw_shot_limit = shotLimit > 0 ? shotLimit : null;
+    await setMessage('In what direction?');
+    game._command_mode = 'throwDirection';
+}
+
 async function beginHeroFirePolearmFallback(item) {
     game._fire_count = null;
     const target = heroPolearmAutohitTarget();
@@ -69775,8 +69800,14 @@ export async function rhack(_cmd) {
         }
         let autoquiverMessage = '';
         let autoquiverFailed = false;
-        let projectile = (game.inventory || []).find(item =>
-            isProjectileItem(item) && (item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver')));
+        const readiedItem = (game.inventory || []).find(item =>
+            item.quivered || item.line?.includes('at the ready') || item.line?.includes('in quiver'));
+        let projectile = readiedItem && isProjectileItem(readiedItem) ? readiedItem : null;
+        const returningWeapon = heroWieldedThrowAndReturnWeapon();
+        if (returningWeapon && heroFireReturnWeaponBeatsQuiver(readiedItem)) {
+            await beginHeroFireThrowAndReturnShortcut(returningWeapon, fireCount);
+            return;
+        }
         if (!projectile && game.flags?.autoquiver) {
             projectile = heroAutoquiverProjectile();
             if (projectile) {

@@ -34,5 +34,5 @@
 
 - Full applied-polearm `thitmonst()` parity still needs artifacts/Snickersnee, tame and peaceful confirmation, invisible and statue glyph autohit targeting, impaired targeting under hallucination/confusion/stun, skilled/expert range expansion, passive object effects, worm cutting, exact miss/wakeup messaging, and engrave wiping.
 - Empty-quiver bullwhip fallback and alternate-polearm queued swap/retry remain separate `dofire()` branches.
-- The thrown-and-return weapon shortcut for empty quiver or ammo quiver remains separate from this polearm fallback slice.
+- Audit 703 covers the thrown-and-return weapon shortcut for empty quiver or ammo quiver before the polearm fallback.
 - Fireassist's reachable wielded-polearm priority with quivered ammo remains separate from this empty-quiver slice.

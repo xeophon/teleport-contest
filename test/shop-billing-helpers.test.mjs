@@ -66627,6 +66627,181 @@ test('f command arrow with matching bow uses C ammo range increment', async () =
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('f command empty quiver with wielded aklys throws it before autoquiver', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.autoquiver = true;
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CLUB, P_EXPERT);
+    const aklys = monsterAklys(876173301, {
+        letter: 'a',
+        line: 'a - an aklys (weapon in right hand)',
+        wielded: true,
+        ox: 5,
+        oy: 5,
+    });
+    const missile = arrow(876174301, 'b', { line: 'b - an arrow' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [aklys, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'throwDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(missile.quivered || false, false);
+
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /The aklys hits the goblin[.!]/);
+    assert.match(game._pending_message, /The aklys returns to your hand!/);
+    assert.doesNotMatch(game._pending_message, /You ready|arrow|What do you want to fire/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(game.inventory.includes(aklys), true);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quivered || false, false);
+    assert.equal(game.level.objects.some(obj => obj.id === aklys.id), false);
+    assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('f command ammo quiver with wielded aklys throws aklys instead of ammo', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CLUB, P_EXPERT);
+    const aklys = monsterAklys(876173302, {
+        letter: 'a',
+        line: 'a - an aklys (weapon in right hand)',
+        wielded: true,
+        ox: 5,
+        oy: 5,
+    });
+    const missile = arrow(876174302, 'b', {
+        quivered: true,
+        line: 'b - an arrow (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [aklys, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'throwDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /The aklys hits the goblin[.!]/);
+    assert.match(game._pending_message, /The aklys returns to your hand!/);
+    assert.doesNotMatch(game._pending_message, /arrow|What do you want to fire/);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 2));
+    assert.equal(game.inventory.includes(aklys), true);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quivered, true);
+    assert.equal(game.level.objects.some(obj => obj.id === aklys.id), false);
+});
+
+test('f command weak Valkyrie Mjollnir does not override ammo quiver', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Valkyrie';
+    game.urole = { ...(game.urole || {}), name: { m: 'Valkyrie', f: 'Valkyrie' } };
+    game.u.acurr.a[A_STR] = 18;
+    const mjollnir = monsterWarHammer(876173304, {
+        letter: 'm',
+        line: 'm - Mjollnir (weapon in right hand)',
+        artifact: 'Mjollnir',
+        kind: 'mjollnir',
+        actualKind: 'war hammer',
+        wielded: true,
+        known: true,
+        dknown: true,
+    });
+    const missile = arrow(876174304, 'b', {
+        quivered: true,
+        line: 'b - an arrow (in quiver)',
+    });
+    game.inventory = [mjollnir, missile];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._throw_item_letter || null, null);
+    assert.equal(game.inventory.includes(mjollnir), true);
+    assert.equal(game.inventory.includes(missile), true);
+});
+
+test('f command missile quiver does not use wielded aklys return shortcut', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_EXPERT);
+    const aklys = monsterAklys(876173303, {
+        letter: 'a',
+        line: 'a - an aklys (weapon in right hand)',
+        wielded: true,
+        ox: 5,
+        oy: 5,
+    });
+    const missile = dartStack(876174303, 'd', 1, {
+        quivered: true,
+        line: 'd - a dart (in quiver)',
+    });
+    game.inventory = [aklys, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+
+    await rhack('l');
+
+    assert.doesNotMatch(game._pending_message, /aklys|returns to your hand/);
+    assert.equal(game.inventory.includes(aklys), true);
+    assert.equal(aklys.wielded, true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+});
+
 test('applying wielded polearm hits monster at range two', async () => {
     installNonShopFloorState();
     initRng(2);

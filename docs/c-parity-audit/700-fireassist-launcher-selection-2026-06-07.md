@@ -30,4 +30,5 @@
 
 - Audit 701 covers the first empty-quiver prompt and `autoquiver()` ranking slice; broader manual `doquiver_core("fire")` edge cases remain there.
 - Audit 702 covers the first empty-quiver wielded-polearm fallback and ordinary monster hit slice; bullwhip fallback and alternate-polearm swap remain separate `dofire()` slices.
+- Audit 703 covers the throw-and-return shortcut that skips fireassist for empty quiver or ammo quiver.
 - The JS fireassist swap/wield path still mutates state inline rather than queuing C's `doswapweapon`/`dowield`/retry sequence; current tests pin selected launcher behavior but not the full queued command lifecycle.
