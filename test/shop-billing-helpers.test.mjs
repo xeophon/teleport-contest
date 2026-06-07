@@ -66753,6 +66753,93 @@ test('hero-thrown arrow with matching bow miss wakes monster without by-hand war
     assert.equal(rngLog.some(entry => entry.startsWith('rnd(6)=')), false);
 });
 
+test('hero-thrown matching bow arrow uses C glove-specific hit penalties', async (t) => {
+    const cases = [
+        {
+            name: 'leather gloves do not penalize',
+            gloves: wornArmor(876174810, 'leather gloves', 'g'),
+            rngValues: [10, 1, 1, 99],
+            expectHit: true,
+        },
+        {
+            name: 'gauntlets of dexterity do not penalize directly',
+            gloves: wornArmor(876174811, 'gauntlets of dexterity', 'g'),
+            rngValues: [10, 1, 1, 99],
+            expectHit: true,
+        },
+        {
+            name: 'generic fumbling does not penalize direct to-hit',
+            fumbling: true,
+            rngValues: [10, 1, 1, 99],
+            expectHit: true,
+        },
+        {
+            name: 'gauntlets of power apply -2 penalty',
+            gloves: wornArmor(876174812, 'gauntlets of power', 'g'),
+            rngValues: [10, 1, 99],
+            expectHit: false,
+        },
+        {
+            name: 'gauntlets of fumbling apply -3 penalty',
+            gloves: wornArmor(876174813, 'gauntlets of fumbling', 'g'),
+            rngValues: [9, 1, 99],
+            expectHit: false,
+        },
+    ];
+
+    for (const [index, entry] of cases.entries()) {
+        await t.test(entry.name, async () => {
+            installNonShopFloorState();
+            installCoreRngValues(entry.rngValues);
+            Object.assign(game.u, {
+                ux: 5,
+                uy: 5,
+                ulevel: 1,
+                uluck: 0,
+                uhitinc: 0,
+                udaminc: 0,
+                fumbling: !!entry.fumbling,
+            });
+            game.u.acurr.a[A_STR] = 18;
+            game.u.acurr.a[A_DEX] = 10;
+            game.u.weapon_skills = [];
+            setHeroWeaponSkill(P_BOW, P_BASIC);
+            const launcher = bow(876173810 + index, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+            const missile = arrow(876174820 + index, 'b', { line: 'b - an arrow' });
+            const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+                mhp: 20,
+                mhpmax: 20,
+                msleeping: 0,
+                mpeaceful: 1,
+            });
+            game.inventory = entry.gloves ? [launcher, missile, entry.gloves] : [launcher, missile];
+            game.level.monsters = [goblin];
+            enableRngLog({ reset: true });
+
+            await rhack('t');
+            await rhack('b');
+            await rhack('l');
+
+            const rngLog = getRngLog();
+            if (entry.expectHit) {
+                const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+                assert.match(game._pending_message, /The arrow hits the goblin\./);
+                assert.equal(goblin.mhp, 20 - damageRoll);
+                assert.deepEqual(rngLog.map(rngCallName).slice(0, 4), [
+                    'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)',
+                ]);
+            } else {
+                assert.match(game._pending_message, /The arrow misses the goblin\./);
+                assert.equal(goblin.mhp, 20);
+                assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+                    'rnd(20)', 'rn2(3)', 'rn2(100)',
+                ]);
+                assert.equal(rngLog.some(call => rngCallName(call) === 'rnd(6)'), false);
+            }
+        });
+    }
+});
+
 test('hero-thrown crossbow bolt with matching crossbow adds object-row damage', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66792,6 +66879,55 @@ test('hero-thrown crossbow bolt with matching crossbow adds object-row damage', 
     assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
         'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
+});
+
+test('hero-thrown matching crossbow bolt ignores bow glove hit penalties', async (t) => {
+    const cases = [
+        { name: 'gauntlets of power', gloves: wornArmor(876174830, 'gauntlets of power', 'g') },
+        { name: 'gauntlets of fumbling', gloves: wornArmor(876174831, 'gauntlets of fumbling', 'g') },
+    ];
+
+    for (const [index, entry] of cases.entries()) {
+        await t.test(entry.name, async () => {
+            installNonShopFloorState();
+            installCoreRngValues([10, 1, 1, 99]);
+            Object.assign(game.u, {
+                ux: 5,
+                uy: 5,
+                ulevel: 1,
+                uluck: 0,
+                uhitinc: 0,
+                udaminc: 0,
+            });
+            game.u.acurr.a[A_STR] = 18;
+            game.u.acurr.a[A_DEX] = 10;
+            game.u.weapon_skills = [];
+            setHeroWeaponSkill(P_CROSSBOW, P_BASIC);
+            const launcher = crossbow(876173830 + index, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' });
+            const missile = crossbowBolt(876174840 + index, 'b', { line: 'b - a crossbow bolt' });
+            const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+                mhp: 20,
+                mhpmax: 20,
+                msleeping: 0,
+                mpeaceful: 1,
+            });
+            game.inventory = [launcher, missile, entry.gloves];
+            game.level.monsters = [goblin];
+            enableRngLog({ reset: true });
+
+            await rhack('t');
+            await rhack('b');
+            await rhack('l');
+
+            const rngLog = getRngLog();
+            const damageRoll = rngValuesForCall(rngLog, 'rnd(4)')[0];
+            assert.match(game._pending_message, /The crossbow bolt hits the goblin\./);
+            assert.equal(goblin.mhp, 20 - (damageRoll + 1));
+            assert.deepEqual(rngLog.map(rngCallName).slice(0, 4), [
+                'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)',
+            ]);
+        });
+    }
 });
 
 test('hero-thrown lawful poisoned crossbow bolt can wear off before deadly poison cleanup', async () => {
@@ -72276,6 +72412,136 @@ test('f command arrow with matching bow hits monster through C projectile path',
     assert.equal(landed.oy, 5);
     assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
         'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command gauntlets of power penalize matching bow arrow hit', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([10, 1, 99]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_BASIC);
+    const launcher = bow(876173301, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(876174301, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const gloves = wornArmor(876174302, 'gauntlets of power', 'g');
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mpeaceful: 1,
+    });
+    game.inventory = [launcher, missile, gloves];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /The arrow misses the goblin\./);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+    assert.equal(rngLog.some(entry => rngCallName(entry) === 'rnd(6)'), false);
+});
+
+test('f command gauntlets of fumbling apply stronger bow arrow hit penalty', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([9, 1, 99]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_BASIC);
+    const launcher = bow(876173303, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(876174303, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const gloves = wornArmor(876174304, 'gauntlets of fumbling', 'g');
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mpeaceful: 1,
+    });
+    game.inventory = [launcher, missile, gloves];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /The arrow misses the goblin\./);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(game.inventory.includes(missile), false);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+    assert.equal(rngLog.some(entry => rngCallName(entry) === 'rnd(6)'), false);
+});
+
+test('f command gauntlets of power do not penalize matching crossbow bolt hit', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([10, 1, 1, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_BASIC);
+    const launcher = crossbow(876173305, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' });
+    const missile = crossbowBolt(876174305, 'b', { quivered: true, line: 'b - a crossbow bolt (in quiver pouch)' });
+    const gloves = wornArmor(876174306, 'gauntlets of power', 'g');
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mpeaceful: 1,
+    });
+    game.inventory = [launcher, missile, gloves];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    assert.match(game._pending_message, /The crossbow bolt hits the goblin\./);
+    assert.equal(goblin.mhp, 20 - (damageRoll + 1));
+    assert.equal(game.inventory.includes(missile), false);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)',
     ]);
 });
 

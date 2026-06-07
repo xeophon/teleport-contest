@@ -22323,11 +22323,22 @@ function heroFiredLauncherAmmoHitValue(obj, mon, launcher) {
     let hitValue = heroProjectileBaseHitValue(obj, mon);
     if (!heroThrowAmmoAndLauncher(obj, launcher)) return hitValue - 4;
     const meta = heroLauncherSkillMeta(launcher);
+    hitValue += heroFiredLauncherBowGloveHitPenalty(launcher);
     hitValue += Math.trunc(Number(launcher?.spe || 0)) - objectGreatestErosion(launcher);
     if (Number.isFinite(Number(launcher?.hitbon ?? launcher?.oc_hitbon)))
         hitValue += Math.trunc(Number(launcher.hitbon ?? launcher.oc_hitbon));
     if (meta) hitValue += heroWeaponHitSkillBonus(meta.skill, meta.skillName);
     return hitValue;
+}
+
+function heroFiredLauncherBowGloveHitPenalty(launcher) {
+    if (heroThrowLauncherSkill(launcher) !== 'bow') return 0;
+    const gloves = wornGlovesItem();
+    if (!gloves) return 0;
+    const kind = armorKind(gloves);
+    if (gloves.otyp === GAUNTLETS_OF_POWER || kind === 'gauntlets of power') return -2;
+    if (gloves.otyp === GAUNTLETS_OF_FUMBLING || kind === 'gauntlets of fumbling') return -3;
+    return 0;
 }
 
 function heroFiredLauncherAmmoDamage(obj, mon, launcher) {
