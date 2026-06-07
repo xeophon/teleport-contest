@@ -68720,6 +68720,177 @@ test('f command wielded bullwhip flicks adjacent visible monster before ammo pro
     assert.deepEqual(getRngLog(), []);
 });
 
+test('wielded bullwhip reveals hidden armed monster without disarming it', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173260, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173261, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mundetected: true,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, "A goblin is there that you couldn't see.  You flick your bullwhip towards the goblin.  Snap!");
+    assert.equal(goblin.mundetected || false, false);
+    assert.equal(goblin.minvent.includes(weapon), true);
+    assert.equal(goblin.mw, weapon);
+    assert.equal(weapon.ocarry, goblin);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(weapon), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip maps invisible unseen monster before snapping at it', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173262, 'bullwhip', 'w', 0);
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        minvis: true,
+        perminvis: true,
+        mpeaceful: true,
+    });
+    const targetLoc = { roomno: 0, typ: ROOM };
+    game.level.at = (x, y) => (x === 6 && y === 5 ? targetLoc : { roomno: 0, typ: ROOM });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, "A monster is there that you couldn't see.  You flick your bullwhip towards it.  Snap!");
+    assert.equal(targetLoc.map_invisible, true);
+    assert.equal(targetLoc.remembered_glyph?.ch, 'I');
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip can disarm telepathically sensed invisible monster', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+        seeInvisible: false,
+    });
+    const whip = wieldedWeapon(876173264, 'bullwhip', 'w', 0);
+    const helm = wornArmor(876173265, 'helm of telepathy', 'h');
+    const weapon = dagger(876173266, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        minvis: true,
+        perminvis: true,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip, helm];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, "You wrap your bullwhip around a dagger.  You yank the dagger from the goblin's hand!");
+    assert.doesNotMatch(game._pending_message, /is there that you couldn't see|A monster/);
+    assert.equal(goblin.minvent.includes(weapon), false);
+    assert.equal(goblin.mw || null, null);
+    assert.equal(goblin.weapon_check, 1);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(weapon), true);
+    assert.equal(weapon.ox, 6);
+    assert.equal(weapon.oy, 5);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.ocarry || null, null);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(2)']);
+});
+
+test('wielded bullwhip reveals disguised mimic without snap', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173263, 'bullwhip', 'w', 0);
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        mhp: 18,
+        mhpmax: 18,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        mpeaceful: true,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic' },
+    });
+    game.inventory = [whip];
+    game.level.monsters = [mimic];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, "Wait!  That's a large mimic!");
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj || null, null);
+    assert.equal(mimic.appearGlyph || null, null);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.mpeaceful, 0);
+    assert.doesNotMatch(game._pending_message, /Snap|flick your bullwhip/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('wielded bullwhip around visible armed monster slips free when unproficient', async () => {
     installNonShopFloorState();
     initRng(2);

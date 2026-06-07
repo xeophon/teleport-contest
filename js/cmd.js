@@ -20378,10 +20378,67 @@ function heroBullwhipProficiency() {
     return Math.max(0, Math.min(3, proficient));
 }
 
-function heroCanSpotBullwhipTarget(mon) {
-    return !!mon && !game.u?.blind && !mon.minvis && !mon.mundetected
-        && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
-        && couldsee(mon.mx, mon.my);
+function heroBullwhipSensesMonster(mon) {
+    return !!mon && (sensesTelepathically(mon)
+        || heroHasMonsterDetection()
+        || mon.detected || mon.sensed || mon.warned || mon.mwarned);
+}
+
+function heroCanSpotBullwhipMonster(mon) {
+    return !!mon && ((!game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my))
+        || heroBullwhipSensesMonster(mon));
+}
+
+function bullwhipInvisibleGlyphAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    return !!(loc?.map_invisible || loc?.remembered_glyph?.ch === 'I');
+}
+
+function bullwhipMapInvisibleAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc) return;
+    loc.map_invisible = true;
+    loc.waslit = true;
+    newsym(x, y);
+    loc.remembered_glyph = { ch: 'I', color: NO_COLOR, dec: false };
+}
+
+function bullwhipUnseenMonsterName(mon) {
+    const name = fireScrollMonsterName(mon);
+    if (!/^The /i.test(name)) return name;
+    return sentenceCase(articleFor(name.replace(/^The /i, '')));
+}
+
+function bullwhipDisguisedMimic(mon) {
+    const appearance = M_AP_TYPE(mon);
+    return !!mon && (appearance === M_AP_OBJECT || appearance === M_AP_FURNITURE
+        || mon.appearObj != null || mon.appearGlyph);
+}
+
+function revealHeroBullwhipMimic(mon, messages) {
+    if (!bullwhipDisguisedMimic(mon)) return false;
+    const name = mon?.givenName || articleFor(mon?.data?.name || mon?.name || 'mimic');
+    messages.push(`Wait!  That's ${name}!`);
+    mon.m_ap_type = 0;
+    mon.appearObj = null;
+    mon.appearGlyph = null;
+    mon.appearColor = null;
+    mon.mundetected = 0;
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function revealHeroBullwhipUnseenTarget(mon, x, y, messages) {
+    if (!mon || heroCanSpotBullwhipMonster(mon)) return heroCanSpotBullwhipMonster(mon);
+    mon.mundetected = 0;
+    const spotItNow = heroCanSpotBullwhipMonster(mon);
+    if (spotItNow || !bullwhipInvisibleGlyphAt(x, y)) {
+        messages.push(`${spotItNow ? bullwhipUnseenMonsterName(mon) : 'A monster'} is there that you ${game.u?.blind ? "hadn't noticed" : "couldn't see"}.`);
+        if (spotItNow) newsym(x, y);
+        else bullwhipMapInvisibleAt(x, y);
+    }
+    return spotItNow;
 }
 
 function heroCanSpotBullwhipPitMonster(mon) {
@@ -20763,10 +20820,14 @@ async function finishHeroBullwhipDirection(item, ch) {
     if (await finishHeroBullwhipPitDirection(rx, ry, targetLoc, mon)) return true;
     if (mon) {
         const proficient = heroBullwhipProficiency();
-        const targetWeapon = heroCanSpotBullwhipTarget(mon) ? monsterWieldedWeapon(mon) : null;
+        const messages = [];
+        const initiallySpotted = heroCanSpotBullwhipMonster(mon);
+        const visibleAfterReveal = initiallySpotted
+            || revealHeroBullwhipUnseenTarget(mon, rx, ry, messages);
+        const targetWeapon = initiallySpotted ? monsterWieldedWeapon(mon) : null;
         if (targetWeapon) {
             const targetWeaponName = inventoryItemName(targetWeapon);
-            const messages = [`You wrap your bullwhip around ${targetWeaponName}.`];
+            messages.push(`You wrap your bullwhip around ${targetWeaponName}.`);
             const gotit = proficient > 0 && (!heroIsFumbling() || !rn2(10));
             if (gotit) {
                 if (monsterWeaponIsWelded(mon, targetWeapon)) {
@@ -20785,8 +20846,12 @@ async function finishHeroBullwhipDirection(item, ch) {
             game.context.move = 1;
             return true;
         }
-        const targetName = fireScrollMonsterName(mon).replace(/^The /, 'the ');
-        const messages = [`You flick your bullwhip towards ${targetName}.`, 'Snap!'];
+        const mimicRevealed = bullwhipDisguisedMimic(mon) && !heroBullwhipSensesMonster(mon)
+            && revealHeroBullwhipMimic(mon, messages);
+        if (!mimicRevealed) {
+            const targetName = visibleAfterReveal ? fireScrollMonsterName(mon).replace(/^The /, 'the ') : 'it';
+            messages.push(`You flick your bullwhip towards ${targetName}.`, 'Snap!');
+        }
         mon.msleeping = 0;
         mon.meating = 0;
         setHeroObjectHitMonsterAngry(mon);
