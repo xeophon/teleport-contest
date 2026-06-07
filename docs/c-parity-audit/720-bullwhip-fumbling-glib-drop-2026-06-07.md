@@ -27,4 +27,5 @@
 
 - Exact C `dropx()` side effects remain broader than this ordinary room-floor slice: ship sales, altar blessing knowledge, unpaid shop billing prompts, encumbrance messages, and object-specific floor effects should be audited separately if they become visible for bullwhip drops.
 - Exact polyself body-part naming beyond ordinary `hand` remains deferred.
-- Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, proficient `force_attack()`, floor snaring, dead-horse feedback, self/down steed mistakes, underwater/swallowed details, and exact wakeup visibility.
+- Audit 721 covers the first ordinary pit branch after this drop gate: no-anchor snap and no-monster boulder slip/yank escape.
+- Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, full pit escape with monster anchors, proficient `force_attack()`, floor snaring, dead-horse feedback, self/down steed mistakes, underwater/swallowed details, and exact wakeup visibility.

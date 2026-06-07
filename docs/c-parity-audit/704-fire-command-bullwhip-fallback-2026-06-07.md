@@ -37,6 +37,7 @@
 - Audit 718 covers the higher-proficiency visible armed-monster hero-square and inventory-snatch disarm destinations.
 - Audit 719 covers visible armed-monster welded-weapon feedback, curse knowledge, and slip-free preservation.
 - Audit 720 covers the pre-pit/pre-monster Fumbling/Glib `rn2(5)` bullwhip drop branch.
+- Audit 721 covers the first ordinary pit branch: no-anchor snap and no-monster boulder slip/yank escape.
 - Audit 705 covers the empty-quiver alternate-polearm queued swap/retry branch.
 - Audit 706 covers the reachable wielded-polearm priority with quivered/readied ammo.
 - Fireassist launcher swaps still mutate state inline instead of queuing C's `doswapweapon`/`dowield`/retry sequence.

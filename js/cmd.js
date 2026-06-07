@@ -20486,6 +20486,69 @@ function finishHeroBullwhipDisarm(mon, weapon, messages, roll, weaponName) {
     }
 }
 
+function heroBullwhipPitTrapped() {
+    return !!(game.u?.utrap && (game.u.utraptype === TT_PIT || game.u.utraptype === 'pit'));
+}
+
+function bullwhipPitBoulderAnchorAt(x, y) {
+    return (game.level?.objects || []).some(obj =>
+        isBoulderObject(obj) && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+}
+
+function bullwhipPitAnchorName(x, y, loc) {
+    if (bullwhipPitBoulderAnchorAt(x, y)) return 'a boulder';
+    if (loc && IS_FURNITURE(loc.typ)) return 'something';
+    return '';
+}
+
+function yankHeroOutOfPitTo(x, y) {
+    if (!game.u) return;
+    const oldX = game.u.ux || 0;
+    const oldY = game.u.uy || 0;
+    game.u.ux0 = oldX;
+    game.u.uy0 = oldY;
+    game.u.utrap = 0;
+    game.u.utraptype = null;
+    game.u.ux = x;
+    game.u.uy = y;
+    game.u.umoved = true;
+    if (game.u.usteed) {
+        game.u.usteed.mx = x;
+        game.u.usteed.my = y;
+    }
+    newsym(oldX, oldY);
+    newsym(x, y);
+    game.vision_full_recalc = 1;
+}
+
+async function finishHeroBullwhipPitDirection(rx, ry, targetLoc, mon) {
+    if (!heroBullwhipPitTrapped()) return false;
+    const anchor = bullwhipPitAnchorName(rx, ry, targetLoc);
+    if (!anchor) {
+        if (mon) return false;
+        await setMessage('Snap!');
+        game.context.move = 1;
+        return true;
+    }
+
+    const proficient = heroBullwhipProficiency();
+    const messages = [`You wrap your bullwhip around ${anchor}.`];
+    if (proficient && rn2(proficient + 2)) {
+        messages.push('You yank yourself out of the pit!');
+        if (!mon) yankHeroOutOfPitTo(rx, ry);
+    } else {
+        messages.push('The bullwhip slips free.');
+    }
+    if (mon) {
+        mon.msleeping = 0;
+        mon.meating = 0;
+        setHeroObjectHitMonsterAngry(mon);
+    }
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+    return true;
+}
+
 async function beginHeroBullwhipApply(item) {
     if (!item || !isBullwhipItem(item)) return false;
     if (!itemIsPrimaryWielded(item)) {
@@ -20567,6 +20630,7 @@ async function finishHeroBullwhipDirection(item, ch) {
 
     const mon = (game.level?.monsters || []).find(candidate =>
         candidate.mx === rx && candidate.my === ry && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
+    if (await finishHeroBullwhipPitDirection(rx, ry, targetLoc, mon)) return true;
     if (mon) {
         const proficient = heroBullwhipProficiency();
         const targetWeapon = heroCanSpotBullwhipTarget(mon) ? monsterWieldedWeapon(mon) : null;
