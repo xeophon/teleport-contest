@@ -68201,6 +68201,67 @@ test('Q command declining primary wielded weapon keeps it wielded', async () => 
     assert.equal(game.context.move || 0, 0);
 });
 
+test('Q command selecting unknown cursed primary weapon reports weld and spends time', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = wieldedWeapon(876174175, 'dagger', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = false;
+    game.inventory = [weapon];
+
+    await rhack('Q');
+    await rhack('w');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Your cursed +0 dagger is welded to your hand!');
+    assert.equal(game.context.move, 1);
+    assert.equal(weapon.bknown, true);
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.quivered || false, false);
+    assert.equal(weapon.line, 'w - a cursed +0 dagger (weapon in right hand)');
+});
+
+test('Q command selecting known cursed two-handed primary weapon reports welded hands without time', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = wieldedWeapon(876174176, 'two-handed sword', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = true;
+    weapon.line = 'w - a cursed +0 two-handed sword (weapon in hands)';
+    game.inventory = [weapon];
+
+    await rhack('Q');
+    await rhack('w');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Your cursed +0 two-handed sword is welded to your hands!');
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(weapon.bknown, true);
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.quivered || false, false);
+});
+
+test('Q command treats explicit welded primary flag as cursed weld', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = wieldedWeapon(876174178, 'dagger', 'w', 0);
+    weapon.welded = true;
+    weapon.bknown = false;
+    game.inventory = [weapon];
+
+    await rhack('Q');
+    await rhack('w');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Your cursed +0 dagger is welded to your hand!');
+    assert.equal(game.context.move, 1);
+    assert.equal(weapon.cursed, true);
+    assert.equal(weapon.bknown, true);
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.quivered || false, false);
+    assert.equal(weapon.line, 'w - a cursed +0 dagger (weapon in right hand)');
+});
+
 test('Q command confirming primary wielded weapon unwields and readies it with time', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -68217,6 +68278,28 @@ test('Q command confirming primary wielded weapon unwields and readies it with t
     assert.equal(game._twoweapon || false, false);
     assert.equal(game.context.move, 1);
     assert.equal(game._pending_message, 'w - a +0 dagger (at the ready).  You are now empty handed.');
+});
+
+test('f command selecting unknown cursed primary weapon reports weld without direction prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = wieldedWeapon(876174177, 'dagger', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = false;
+    game.inventory = [weapon];
+    game.level.monsters = [];
+
+    await rhack('f');
+    await rhack('w');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Your cursed +0 dagger is welded to your hand!');
+    assert.equal(game.context.move, 1);
+    assert.equal(weapon.bknown, true);
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.quivered || false, false);
+    assert.equal(game._fire_count || null, null);
+    assert.equal(game._fire_item_letter || null, null);
 });
 
 test('f command confirming primary wielded weapon preserves ready time before direction cancel', async () => {

@@ -20439,6 +20439,39 @@ function readyWieldedWeaponTimeMessage(slot) {
     return 'You are no longer using two weapons at once.';
 }
 
+function readyBlessCurseKnown(item) {
+    return item?.bknown === true || (item?.bknown !== false && /\b(?:blessed|uncursed|cursed)\b/.test(String(item?.line || '')));
+}
+
+function readyPrimaryWillWeld(item) {
+    if (!itemIsPrimaryWielded(item)) return false;
+    if (item?.welded === true) return true;
+    if (!item?.cursed) return false;
+    const cls = itemClassKey(item);
+    const kind = objectKindKey(item);
+    return cls === 'weapon' || item?.glyph === ')' || cls === 'ball' || cls === 'chain'
+        || item?.otyp === HEAVY_IRON_BALL || item?.otyp === IRON_CHAIN
+        || item?.otyp === TIN_OPENER || kind === 'tin opener'
+        || (cls === 'tool' && APPLY_WEAPON_NAME_RE.test(kind));
+}
+
+function readyWeldedPrimaryMessage(item) {
+    const name = readyObjectSimpleName(item);
+    const verb = readyObjectPlural(item) ? 'are' : 'is';
+    const hand = isTwoHandedWieldItem(item) ? 'hands' : 'hand';
+    return `Your ${name} ${verb} welded to your ${hand}!`;
+}
+
+async function handleReadyPrimaryWelded(item) {
+    const unknownCurse = !readyBlessCurseKnown(item);
+    if (item.welded === true) item.cursed = true;
+    item.bknown = true;
+    item.line = heroWieldedLineForItem(item);
+    await setMessage(readyWeldedPrimaryMessage(item));
+    game._command_mode = null;
+    if (unknownCurse) game.context.move = 1;
+}
+
 function refreshReadyWieldedParentLine(item, slot, wasTwoweap = game._twoweapon) {
     if (!item) return;
     if (slot === 'primary') {
@@ -20616,6 +20649,11 @@ async function finishReadyObjectSelection(selectedItem, verb) {
     }
     const wieldedSlot = readyWieldedWeaponSlot(item);
     if (wieldedSlot) {
+        if (wieldedSlot === 'primary' && readyPrimaryWillWeld(item)) {
+            await handleReadyPrimaryWelded(item);
+            if (verb === 'fire') game._fire_count = null;
+            return;
+        }
         await stageReadyWieldedConfirm(item, verb, wieldedSlot);
         return;
     }
