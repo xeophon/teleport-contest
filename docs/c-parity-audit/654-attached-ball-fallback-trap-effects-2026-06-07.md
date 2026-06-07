@@ -10,6 +10,7 @@
 ## Port Notes
 
 - Attached-ball fallback relocation now reuses existing movement trap result helpers for sleep gas, web, bear trap, land mine, polymorph, arrow, and dart traps on the relocated hero square behind the ball.
+- Arrow and dart fallback floor-trigger in-air skips, known-trap escape ordering, and spent-dart deletion canaries were later tightened in `663-attached-ball-fallback-floor-trigger-prechecks-2026-06-07.md`.
 - Fatal and lifesaving-capable trap results are returned to the throw finalizer, preserving the existing post-message command-mode handling.
 - Levitating pool, pit, and hole landings now have canaries proving the hero stays behind the ball and does not trigger ball-square terrain or trap effects.
 
@@ -19,6 +20,9 @@
 - `attached ball fallback relocation triggers sleep gas on new hero square`
 - `attached ball fallback relocation triggers land mine on new hero square`
 - `attached ball fallback relocation triggers arrow trap on new hero square`
+- `attached ball fallback known spent dart trap can vanish before missile RNG`
+- `attached ball fallback hidden bear trap wounds and traps hero`
+- `attached ball fallback polymorph antimagic leaves trap after relocation`
 - `levitating attached ball landing on pool leaves hero behind without ball-square effects`
 - `levitating attached ball landing on pit leaves hero behind without ball-square effects`
 - `levitating attached ball landing on hole leaves hero behind without ball-square effects`
@@ -27,5 +31,5 @@
 ## Remaining Follow-Ups
 
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
-- Attached-ball fallback relocation still needs canaries for bear, polymorph, and dart trap result details.
+- Bear, polymorph, dart, and floor-trigger in-air canaries are covered by audit 663.
 - Rust, fire, and rolling-boulder fallback traps were added in `655-attached-ball-fallback-floor-traps-2026-06-07.md`; broader extraction of every ordinary `spoteffects(TRUE)` trap class remains open.

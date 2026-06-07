@@ -20184,14 +20184,14 @@ async function heroDropBallTrapRelocationEffect(x, y, messages) {
     else if (trap.ttyp === ROCKTRAP) result = movementRockTrapResult(trap);
     else if (trap.ttyp === SQKY_BOARD) result = movementSqueakyBoardTrapResult(trap);
     else if (trap.ttyp === RUST_TRAP) result = movementRustTrapResult(trap);
-    else if (trap.ttyp === FIRE_TRAP) result = heroFireTrapResult(trap, '', { allowLifeSaving: true });
-    else if (trap.ttyp === ROLLING_BOULDER_TRAP) result = heroRollingBoulderTrapResult(trap);
+    else if (trap.ttyp === FIRE_TRAP) result = movementFireTrapResult(trap, { allowLifeSaving: true });
+    else if (trap.ttyp === ROLLING_BOULDER_TRAP) result = movementRollingBoulderTrapResult(trap);
     else if (trap.ttyp === WEB) result = movementWebTrapResult(trap);
     else if (trap.ttyp === BEAR_TRAP) result = movementBearTrapResult(trap);
     else if (trap.ttyp === LANDMINE) result = movementLandmineResult(trap);
     else if (trap.ttyp === POLY_TRAP) result = movementPolyTrapResult(trap);
-    else if (trap.ttyp === ARROW_TRAP) result = heroArrowTrapResult(trap, '', !!trap.tseen);
-    else if (trap.ttyp === DART_TRAP) result = heroDartTrapResult(trap, '', !!trap.tseen);
+    else if (trap.ttyp === ARROW_TRAP) result = movementArrowTrapResult(trap);
+    else if (trap.ttyp === DART_TRAP) result = movementDartTrapResult(trap);
     if (!trapResultHasEffect(result)) return { more: false, trapResult: null };
 
     if (result.message) messages.push(result.message);
@@ -46662,6 +46662,37 @@ function heroDartTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen) {
     };
 }
 
+function movementFloorTriggerPrecheck(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (game.u?.levitating || game.u?.flying) {
+        return {
+            handled: true,
+            alreadySeen,
+            result: { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false },
+        };
+    }
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5)) {
+        return {
+            handled: true,
+            alreadySeen,
+            result: { message: movementTrapEscapeMessage(trap), more: false },
+        };
+    }
+    return { handled: false, alreadySeen };
+}
+
+function movementArrowTrapResult(trap) {
+    const precheck = movementFloorTriggerPrecheck(trap);
+    if (precheck.handled) return precheck.result;
+    return heroArrowTrapResult(trap, '', precheck.alreadySeen);
+}
+
+function movementDartTrapResult(trap) {
+    const precheck = movementFloorTriggerPrecheck(trap);
+    if (precheck.handled) return precheck.result;
+    return heroDartTrapResult(trap, '', precheck.alreadySeen);
+}
+
 async function finishHeroDartTrapResult(result, { sit = false, more = false } = {}) {
     if (sit) await finishSitMessage(result.message, { more: more || !!result.more });
     else await setMessage(result.message, more || !!result.more);
@@ -47077,6 +47108,8 @@ function sitRustTrapMessage(trap, prefix) {
 }
 
 function movementRustTrapResult(trap) {
+    const precheck = movementFloorTriggerPrecheck(trap);
+    if (precheck.handled) return precheck.result;
     if (trap) trap.tseen = true;
     rn2(5);
     return { message: 'A gush of water hits you!' };
@@ -47117,6 +47150,12 @@ function heroFireTrapResult(trap, prefix = '', { allowLifeSaving = false } = {})
         lifeSaving: !!inventoryFire.lifeSaving,
         fatal: !!inventoryFire.fatal,
     };
+}
+
+function movementFireTrapResult(trap, options = {}) {
+    const precheck = movementFloorTriggerPrecheck(trap);
+    if (precheck.handled) return precheck.result;
+    return heroFireTrapResult(trap, '', options);
 }
 
 function heroFireTrapMessage(trap, prefix = '') {
@@ -48720,6 +48759,12 @@ function heroRollingBoulderTrapResult(trap, prefix = '') {
         released,
         message: suffix ? `${message}  ${suffix}` : message,
     };
+}
+
+function movementRollingBoulderTrapResult(trap) {
+    const precheck = movementFloorTriggerPrecheck(trap);
+    if (precheck.handled) return precheck.result;
+    return heroRollingBoulderTrapResult(trap);
 }
 
 function sitRollingBoulderMessage(trap, prefix) {
@@ -51340,13 +51385,13 @@ async function moveHero(dx, dy) {
         return;
     }
     if (steppedTrap?.ttyp === FIRE_TRAP) {
-        const result = heroFireTrapResult(steppedTrap, '', { allowLifeSaving: true });
+        const result = movementFireTrapResult(steppedTrap, { allowLifeSaving: true });
         await setMessage(result.message, result.more);
         applyHeroFireTrapFatalResult(result);
         return;
     }
     if (steppedTrap?.ttyp === ROLLING_BOULDER_TRAP) {
-        const result = heroRollingBoulderTrapResult(steppedTrap);
+        const result = movementRollingBoulderTrapResult(steppedTrap);
         await setMessage(result.message);
         return;
     }
@@ -51721,14 +51766,14 @@ async function moveHero(dx, dy) {
         return;
     }
     if (trapHere?.ttyp === ARROW_TRAP) {
-        const result = heroArrowTrapResult(trapHere, '', !!trapHere.tseen);
+        const result = movementArrowTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message)
             await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
     if (trapHere?.ttyp === DART_TRAP) {
-        const result = heroDartTrapResult(trapHere, '', !!trapHere.tseen);
+        const result = movementDartTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message)
             await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
@@ -52084,16 +52129,18 @@ export async function rhack(_cmd) {
             }
             if (game._pending_arrow_trap) {
                 const trap = game._pending_arrow_trap;
-                const alreadySeen = !!trap.tseen;
                 game._pending_arrow_trap = null;
-                await finishHeroDartTrapResult(heroArrowTrapResult(trap, '', alreadySeen));
+                const result = movementArrowTrapResult(trap);
+                if (result.message)
+                    await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_dart_trap) {
                 const trap = game._pending_dart_trap;
-                const alreadySeen = !!trap.tseen;
                 game._pending_dart_trap = null;
-                await finishHeroDartTrapResult(heroDartTrapResult(trap, '', alreadySeen));
+                const result = movementDartTrapResult(trap);
+                if (result.message)
+                    await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_landmine_trap) {

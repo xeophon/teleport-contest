@@ -21144,6 +21144,7 @@ test('hero rolling boulder trap with no boulder reports no release', async () =>
 test('known hero rolling boulder trap with no boulder uses known wording', async () => {
     const { trap } = installHeroRollingBoulderTrapState({ tseen: true });
     enableRngLog({ reset: true });
+    installCoreRngValues([1]);
 
     await rhack('l');
 
@@ -22662,7 +22663,7 @@ test('known hero rolling boulder trap lethal target awards hero experience', asy
     game.u.urexp = 0;
     game.level.monsters.push(goblin);
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 4]);
+    installCoreRngValues([1, 4, 4]);
     markHeroNeighborhoodVisible();
     for (let x = 4; x <= 8; x++) markSquareVisible(x, 3);
 
@@ -31023,11 +31024,11 @@ test('hero known spent arrow trap can vanish before generating an arrow', async 
     const trap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: true, once: true };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([0]);
+    installCoreRngValues([1, 0]);
 
     await rhack('l');
 
-    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(15)']);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)', 'rn2(15)']);
     assert.equal(game._pending_message, 'You hear a loud click!');
     assert.doesNotMatch(game._pending_message, /shoots|hit|miss/);
     assert.equal(game.level.traps.includes(trap), false);
@@ -31578,11 +31579,11 @@ test('hero known spent dart trap can vanish before generating a dart', async () 
     const trap = { ttyp: DART_TRAP, tx: 6, ty: 5, tseen: true, once: true };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([0]);
+    installCoreRngValues([1, 0]);
 
     await rhack('l');
 
-    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(15)']);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)', 'rn2(15)']);
     assert.match(game._pending_message, /soft click/);
     assert.doesNotMatch(game._pending_message, /shoots|hit|miss/);
     assert.equal(game.level.traps.includes(trap), false);
@@ -62627,6 +62628,50 @@ test('attached ball throw onto occupied hole leaves hero behind without shaft ef
     assert.equal(game._deferred_level_goto || null, null);
 });
 
+function installAttachedBallFallbackTrapState(trap, {
+    heroProps = {},
+    hp = 40,
+    extraObjects = [],
+    ballId = 876300,
+    chainId = 876301,
+} = {}) {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: hp,
+        uhpmax: hp,
+        upunished: true,
+        ...heroProps,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(ballId, 'b');
+    const chain = attachedIronChain(chainId);
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain, ...extraObjects];
+    game.level.traps = [trap];
+    return { ball, chain, trap };
+}
+
+async function throwAttachedBallEast() {
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+}
+
+function assertAttachedBallFallbackPosition(ball, chain) {
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+}
+
 test('attached ball fallback relocation triggers level teleporter on new hero square', async () => {
     installNonShopFloorState();
     game.sokoban_dnum = 999;
@@ -63444,6 +63489,148 @@ test('attached ball fallback relocation triggers rolling boulder trap on new her
     assert.equal((game.level.objects || []).some(obj => obj.otyp === BOULDER), false);
     assert.equal(game._relocate_after_more || null, null);
     assert.equal(game._deferred_level_goto || null, null);
+});
+
+for (const { name, trap, extraObjects = [], check = () => {} } of [
+    {
+        name: 'arrow trap',
+        trap: { ttyp: ARROW_TRAP, tx: 9, ty: 5, tseen: false, once: false, madeby_u: false },
+    },
+    {
+        name: 'dart trap',
+        trap: { ttyp: DART_TRAP, tx: 9, ty: 5, tseen: false, once: false, madeby_u: false },
+    },
+    {
+        name: 'rust trap',
+        trap: { ttyp: RUST_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false },
+    },
+    {
+        name: 'fire trap',
+        trap: { ttyp: FIRE_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false },
+    },
+    {
+        name: 'rolling boulder trap',
+        trap: {
+            ttyp: ROLLING_BOULDER_TRAP,
+            tx: 9,
+            ty: 5,
+            tseen: false,
+            madeby_u: false,
+            launch: { x: 9, y: 3 },
+            launch2: { x: 9, y: 7 },
+        },
+        extraObjects: [floorBoulder(876302, { ox: 9, oy: 7 })],
+        check: boulder => {
+            assert.equal(boulder.ox, 9);
+            assert.equal(boulder.oy, 7);
+        },
+    },
+]) {
+    test(`flying attached ball fallback over hidden ${name} skips floor trigger`, async () => {
+        const { ball, chain } = installAttachedBallFallbackTrapState(trap, {
+            heroProps: { flying: true },
+            extraObjects,
+        });
+        enableRngLog({ reset: true });
+
+        await throwAttachedBallEast();
+
+        assert.doesNotMatch(game._pending_message || '', /shoots|gush|tower of flame|rolling boulder|released|hit|miss/);
+        assert.equal(trap.tseen, false);
+        assert.equal(trap.once || false, false);
+        assert.equal(game.u.uhp, 40);
+        assertAttachedBallFallbackPosition(ball, chain);
+        check(extraObjects[0]);
+        assert.equal(rngValuesForCall(getRngLog(), 'rn2(5)').length, 0);
+        assert.equal(rngValuesForCall(getRngLog(), 'rn2(15)').length, 0);
+        assert.equal(rngValuesForCall(getRngLog(), 'd(2,4)').length, 0);
+        assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    });
+}
+
+test('attached ball fallback hidden bear trap wounds and traps hero', async () => {
+    const bearTrap = { ttyp: BEAR_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    const { ball, chain } = installAttachedBallFallbackTrapState(bearTrap, { hp: 20 });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0, 1, 2, 1, 3, 0]);
+
+    await throwAttachedBallEast();
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(100)', 'd(2,4)', 'rn2(4)', 'rn2(2)', 'rn2(10)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message, 'A bear trap closes on your foot!');
+    assert.equal(bearTrap.tseen, true);
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game.u.utrap, 6);
+    assert.equal(game.u.utraptype, 'beartrap');
+    assert.equal(game.u._woundedLegSide, 'right');
+    assert.equal(game.u._woundedLegTurns, 13);
+    assertAttachedBallFallbackPosition(ball, chain);
+});
+
+test('attached ball fallback known spent dart trap can vanish before missile RNG', async () => {
+    const dartTrap = { ttyp: DART_TRAP, tx: 9, ty: 5, tseen: true, once: true, madeby_u: false };
+    const { ball, chain } = installAttachedBallFallbackTrapState(dartTrap, { hp: 30 });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 0]);
+
+    await throwAttachedBallEast();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)', 'rn2(5)', 'rn2(15)']);
+    assert.equal(game._pending_message, 'You hear a soft click.');
+    assert.equal(game.level.traps.includes(dartTrap), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'dart'), false);
+    assert.equal(game.u.uhp, 30);
+    assertAttachedBallFallbackPosition(ball, chain);
+});
+
+test('attached ball fallback polymorph antimagic leaves trap after relocation', async () => {
+    const polyTrap = { ttyp: POLY_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    const { ball, chain } = installAttachedBallFallbackTrapState(polyTrap, {
+        heroProps: { magicResistance: true },
+    });
+    enableRngLog({ reset: true });
+
+    await throwAttachedBallEast();
+
+    assert.equal(game._pending_message,
+        'You step onto a polymorph trap!  You feel momentarily different.');
+    assert.equal(polyTrap.tseen, true);
+    assert.equal(game.level.traps.includes(polyTrap), true);
+    assert.equal(game.u._polyself_form || null, null);
+    assertAttachedBallFallbackPosition(ball, chain);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)']);
+});
+
+test('attached ball fallback rolling boulder launches across relocated hero', async () => {
+    const boulderTrap = {
+        ttyp: ROLLING_BOULDER_TRAP,
+        tx: 9,
+        ty: 5,
+        tseen: false,
+        madeby_u: false,
+        launch: { x: 9, y: 3 },
+        launch2: { x: 9, y: 7 },
+    };
+    const launchBoulder = floorBoulder(876303, { ox: 9, oy: 7 });
+    const { ball, chain } = installAttachedBallFallbackTrapState(boulderTrap, {
+        hp: 20,
+        extraObjects: [launchBoulder],
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 8, 19]);
+
+    await throwAttachedBallEast();
+
+    assert.equal(game._pending_message,
+        'Click!  You trigger a rolling boulder trap!  A boulder misses you.');
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(20)'), [9, 20]);
+    assert.equal(boulderTrap.tseen, true);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(launchBoulder.ox, 9);
+    assert.equal(launchBoulder.oy, 3);
+    assertAttachedBallFallbackPosition(ball, chain);
 });
 
 test('attached ball fallback relocation triggers land mine on new hero square', async () => {
