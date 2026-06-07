@@ -25,5 +25,4 @@
 
 ## Remaining Follow-Ups
 
-- The secondary stack all-instead decline path is covered by the shared ready state machine but still lacks a dedicated canary.
 - Ready-menu count editing still does not mirror every C `get_count()` editing key.

@@ -66391,6 +66391,57 @@ test('hero-thrown stacked arrows with matching bow hit monster as separate shots
     ]);
 });
 
+test('hero-thrown prompt count one matching launcher ammo suppresses multishot', async () => {
+    installNonShopFloorState();
+    initRng(5);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 2,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_EXPERT);
+    const launcher = bow(876173720, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(876174720, 'b', {
+        quan: 3,
+        line: 'b - 3 arrows',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 80,
+        mhpmax: 80,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('1');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The arrow hits the goblin[.!]/g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(6)');
+    assert.doesNotMatch(game._pending_message, /You shoot/);
+    assert.equal(hitMessages.length, 1);
+    assert.equal(damageRolls.length, 1);
+    assert.equal(goblin.mhp, 80 - (damageRolls[0] + 4));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quan, 2);
+    assert.equal(rngLog.some(entry => rngCallName(entry) === 'rnd(3)'), false);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 6), [
+        'rnd(2)', 'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown gnome skilled crossbow bolts use racial multishot bonus', async () => {
     installNonShopFloorState();
     initRng(89);
@@ -69028,6 +69079,40 @@ test('Q command accepting wielded stack split leaves one wielded and readies the
     assert.notEqual(split.letter, 'w');
     assert.equal(game.context.move || 0, 0);
     assert.equal(game._pending_message, `${split.letter} - 2 +0 daggers (at the ready).`);
+});
+
+test('Q command declining alternate weapon stack all-instead keeps secondary weapon', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const primary = wieldedWeapon(876174179, 'mace', 'm', 0);
+    primary.line = 'm - a +0 mace (weapon in right hand)';
+    const secondary = wieldedWeapon(876174180, 'dagger', 's', 0);
+    secondary.quan = 3;
+    secondary.wielded = false;
+    secondary.alternate = true;
+    secondary.line = 's - 3 +0 daggers (alternate weapons; not wielded)';
+    game.inventory = [primary, secondary];
+
+    await rhack('Q');
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'quiverWieldedConfirm');
+    assert.equal(game._pending_message, 'Your alternate weapon is 3 +0 daggers.  Ready 2 of them? [ynq] (q)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'quiverWieldedConfirm');
+    assert.equal(game._pending_message, 'Ready all of them instead? [ynq] (q)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(primary.wielded, true);
+    assert.equal(secondary.alternate, true);
+    assert.equal(secondary.quivered || false, false);
+    assert.equal(secondary.quan, 3);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game._pending_message, 'Your +0 daggers remain as secondary weapon.');
 });
 
 test('f command empty quiver with wielded polearm autohits before ammo prompt', async () => {

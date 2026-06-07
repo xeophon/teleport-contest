@@ -70176,7 +70176,7 @@ export async function rhack(_cmd) {
             }
         }
         game._throw_item_letter = ch;
-        game._throw_count = countGiven && shopBillableGold(item) ? throwCount : null;
+        game._throw_count = countGiven ? throwCount : null;
         game._throw_count_text = '';
         game._throw_count_backspaced = false;
         clearThrowMenuCountState();
@@ -70280,7 +70280,7 @@ export async function rhack(_cmd) {
         game._overlay_lines = null;
         game._overlay_hide_status = 0;
         game._throw_item_letter = ch;
-        game._throw_count = countGiven && shopBillableGold(item) ? throwCount : null;
+        game._throw_count = countGiven ? throwCount : null;
         game._throw_count_text = '';
         game._throw_count_backspaced = false;
         clearThrowMenuCountState();
@@ -70304,7 +70304,7 @@ export async function rhack(_cmd) {
             clearThrowCountState();
             return;
         }
-        const item = (game.inventory || []).find(invItem => invItem.letter === game._throw_item_letter);
+        let item = (game.inventory || []).find(invItem => invItem.letter === game._throw_item_letter);
         if ((ch === '<' || ch === '>') && item && heroThrownAttachedBallObject(item)) {
             const x = game.u?.ux || item.ox || 0;
             const y = game.u?.uy || item.oy || 0;
@@ -70869,6 +70869,9 @@ export async function rhack(_cmd) {
             game.context.move = 0;
             return;
         }
+        const selectedThrowCount = Math.max(0, Math.trunc(Number(game._throw_count || 0)));
+        if (selectedThrowCount > 0 && !shopBillableGold(item))
+            item = splitCarriedInventoryItemCount(item, selectedThrowCount);
         let ux = game.u?.ux || 0;
         let uy = game.u?.uy || 0;
         const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'

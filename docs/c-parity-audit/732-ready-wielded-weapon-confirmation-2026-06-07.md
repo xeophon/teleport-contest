@@ -25,9 +25,9 @@
 - `f command confirming primary wielded weapon preserves ready time before direction cancel`
 - `Q command confirming live left-hand weapon stops two-weapon combat with time`
 - `Q command accepting wielded stack split leaves one wielded and readies the rest`
+- `Q command declining alternate weapon stack all-instead keeps secondary weapon`
 
 ## Remaining Follow-Ups
 
 - Welded primary-weapon readiness still needs exact `weldmsg()` and unknown-curse time behavior.
-- The secondary stack all-instead decline path is covered by the shared state machine but not yet pinned by a dedicated canary.
 - Ready-menu count editing still does not mirror every C `get_count()` editing key.

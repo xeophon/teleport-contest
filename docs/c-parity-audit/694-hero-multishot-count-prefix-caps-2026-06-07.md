@@ -18,7 +18,7 @@ Top-level count prefixes were only retained as prompt text or thrown-gold amount
 - Stored `f` count prefixes until direction selection.
 - Applied optional shot limits after launcher-ammo and non-launcher stackable-weapon multishot RNG.
 - Forced the C-shaped `You shoot/throw 1 ...` volley message when a count was supplied and the cap reduces the result to one shot.
-- Restored prompt/menu counts for `throw` selection to gold-only behavior; non-gold prompt counts still reject before direction.
+- Kept prompt/menu-selected counts separate from top-level shot limits; non-gold selected counts above one still reject before direction, while audit 737 covers count-one stack splitting.
 
 ## Coverage
 

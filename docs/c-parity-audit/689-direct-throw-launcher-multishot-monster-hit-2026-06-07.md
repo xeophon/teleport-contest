@@ -24,6 +24,6 @@ The JS `f` path now resolves fired monster-impact volleys one projectile at a ti
 
 ## Remaining
 
-- Full C multishot calculation for role, race, skill, crossbow strength limits, and explicit throw counts is still not implemented.
+- Prompt-selected count-one stack splitting is covered by audit 737, and top-level throw shot limits are covered by audit 694.
 - The direct branch is scoped to matching launcher ammo; non-ammo stackable weapon multishot still needs a separate slice.
 - Shop-specific direct multishot billing coverage remains to be added.

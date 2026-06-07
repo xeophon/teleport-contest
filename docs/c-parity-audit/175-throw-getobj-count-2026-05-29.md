@@ -17,7 +17,7 @@ Implemented the narrow `getobj(GETOBJ_ALLOWCNT)` count behavior for the throw ob
 - Added pre-direction count validation for direct throw selections:
   - counted non-gold stacks above one stay in the throw prompt and use C-shaped rejection text;
   - counted gold above the carried amount stays in the throw prompt and uses the C-shaped "You only have N." text;
-  - count one and uncounted non-gold keep existing one-object throw behavior.
+- Applied valid counted non-gold selections to the later throw-direction path so count one uses a selected one-object split rather than the full parent stack.
 - Applied valid counted gold to the later throw-direction path while preserving uncounted gold as whole-purse throwing.
 - Cleared throw count state on prompt cancel, inventory-menu transitions, invalid selection, direction cancel, invalid direction help, loadstone refusal, and completed throws.
 - Cleared top-level `_count_prefix` when entering `t`, so command-prefix counts do not leak into prompt counts.
@@ -34,6 +34,7 @@ Added focused coverage in `test/shop-billing-helpers.test.mjs`:
 - `throw prompt count rejects too much gold before direction`
 - `throw prompt count clears after direction cancel`
 - `top-level throw count does not leak into prompt count`
+- `hero-thrown prompt count one matching launcher ammo suppresses multishot` is covered by audit 737.
 
 Focused verification:
 
@@ -66,5 +67,5 @@ A parallel monster-thrown audit selected `drop_throw(ohit)` hit-state fallout:
 
 - Throw inventory-menu count return is covered locally for throw selection by audit 193; reusable `getobj()` extraction remains separate.
 - Prompt-count backspace editing is covered by audit 192.
-- Top-level throw shot limits remain separate from this prompt-count slice.
+- Top-level throw shot limits remain tracked separately from prompt-selected object counts.
 - Kicked floor-object shipping, monster-thrown `drop_throw(ohit)`, floor-statue saved traits, and generic `lamp` object-range wishes remain separate slices.
