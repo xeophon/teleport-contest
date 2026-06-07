@@ -30643,7 +30643,7 @@ test('mounted hero land mine killing steed dismounts and still hurts hero', asyn
     assert.equal(trap.ttyp, PIT);
 });
 
-test('flying hero may cross hidden land mine without triggering', async () => {
+test('flying hero crosses hidden land mine without trigger RNG', async () => {
     installStableNonShopFloorState();
     vision_reset();
     Object.assign(game.u, {
@@ -30657,17 +30657,43 @@ test('flying hero may cross hidden land mine without triggering', async () => {
     const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 1]);
 
     await rhack('l');
 
-    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(3)']);
+    assert.deepEqual(getRngLog().map(rngCallName), []);
     assert.equal(game._pending_message || '', '');
     assert.equal(game.u.uhp, 20);
     assert.equal(game.u.ux, 6);
     assert.equal(game.u.uy, 5);
     assert.equal(game.u.utrap || 0, 0);
     assert.equal(trap.tseen, false);
+    assert.equal(trap.ttyp, LANDMINE);
+});
+
+test('flying hero crosses known land mine with over-floor message', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: true };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), []);
+    assert.equal(game._pending_message, 'You fly over a land mine.');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, true);
     assert.equal(trap.ttyp, LANDMINE);
 });
 
@@ -63509,6 +63535,10 @@ for (const { name, trap, extraObjects = [], check = () => {} } of [
         trap: { ttyp: FIRE_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false },
     },
     {
+        name: 'land mine',
+        trap: { ttyp: LANDMINE, tx: 9, ty: 5, tseen: false, madeby_u: false },
+    },
+    {
         name: 'rolling boulder trap',
         trap: {
             ttyp: ROLLING_BOULDER_TRAP,
@@ -63535,7 +63565,7 @@ for (const { name, trap, extraObjects = [], check = () => {} } of [
 
         await throwAttachedBallEast();
 
-        assert.doesNotMatch(game._pending_message || '', /shoots|gush|tower of flame|rolling boulder|released|hit|miss/);
+        assert.doesNotMatch(game._pending_message || '', /shoots|gush|tower of flame|rolling boulder|land mine|KAABLAMM|released|hit|miss/);
         assert.equal(trap.tseen, false);
         assert.equal(trap.once || false, false);
         assert.equal(game.u.uhp, 40);
@@ -63544,6 +63574,7 @@ for (const { name, trap, extraObjects = [], check = () => {} } of [
         assert.equal(rngValuesForCall(getRngLog(), 'rn2(5)').length, 0);
         assert.equal(rngValuesForCall(getRngLog(), 'rn2(15)').length, 0);
         assert.equal(rngValuesForCall(getRngLog(), 'd(2,4)').length, 0);
+        assert.equal(rngValuesForCall(getRngLog(), 'rnd(16)').length, 0);
         assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
     });
 }

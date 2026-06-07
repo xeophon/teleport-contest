@@ -47675,10 +47675,8 @@ function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
 }
 
 function movementLandmineResult(trap) {
-    const alreadySeen = !!trap?.tseen;
-    if (alreadySeen && !(game.u?.levitating || game.u?.flying)
-        && sitTrapEscapeAllowed(trap) && !rn2(5))
-        return { message: movementTrapEscapeMessage(trap), more: false };
+    const precheck = movementFloorTriggerPrecheck(trap);
+    if (precheck.handled) return precheck.result;
     return heroLandmineResult(trap, '');
 }
 

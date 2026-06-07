@@ -35,4 +35,4 @@
 
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
 - Full rust trap parity still needs targeted water damage, lit item splashing, gremlin split, and iron-golem rust fallout beyond the current modeled movement branch.
-- Landmine in-air behavior has a separate JS air-current path and should stay in its own source-backed audit instead of being folded into this floor-trigger precheck slice.
+- Landmine in-air ordinary movement is covered by `664-hero-landmine-in-air-movement-2026-06-07.md`; sitting, force/plunge, and recursive pit fallout remain open there.
