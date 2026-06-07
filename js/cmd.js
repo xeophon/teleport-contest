@@ -20998,11 +20998,18 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
                 messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName} but does no harm.`],
             };
         }
-        const { damage, silverMessage } = heroFiredLauncherAmmoDamage(obj, mon, launcher);
+        const ammoDamage = heroFiredLauncherAmmoDamage(obj, mon, launcher);
+        const poison = heroProjectilePoisonResult(obj, mon, heroLauncherAmmoPoisonApplies(obj, launcher));
+        const damage = ammoDamage.damage + poison.damage;
         mon.mhp = (mon.mhp || 1) - damage;
-        const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
-        if (silverMessage) messages.push(silverMessage);
-        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        const messages = [
+            ...poison.messagesBeforeHit,
+            `${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`,
+        ];
+        if (ammoDamage.silverMessage) messages.push(ammoDamage.silverMessage);
+        messages.push(...poison.messagesAfterHit);
+        if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
+        else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -21073,7 +21080,7 @@ function heroProjectileHitPunctuation(damage) {
     return damage <= 4 ? '.' : '!';
 }
 
-function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName) {
+function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage = true } = {}) {
     const baseName = vampshifterRevivalBaseName(mon);
     if (!baseName) return false;
     const currentName = String(mon?.data?.name || mon?.name || '').toLowerCase();
@@ -21085,7 +21092,8 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName) {
     const oldData = mon.data || {};
     const nonliving = oldData.nonliving || oldData.mlet === 'Z' || oldData.glyph === 'Z'
         || String(oldData.name || '').includes('zombie') || String(oldData.name || '').endsWith(' golem');
-    messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName || heroThrownVenomTargetName(mon)}!`);
+    if (killMessage)
+        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName || heroThrownVenomTargetName(mon)}!`);
 
     const oldVisible = monsterCanBeSeenForPotionEffect(mon);
     const oldDisplayName = potionHitMonsterName(mon);
@@ -21120,15 +21128,16 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName) {
     return true;
 }
 
-function killMonsterFromHeroProjectileHit(mon, messages, targetName) {
+function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
     if (!mon || mon.dead) return;
-    if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName)) return;
+    if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage })) return;
     mon.dead = true;
     mon.mhp = 0;
     const data = mon.data || {};
     const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
         || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
-    messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName || heroThrownVenomTargetName(mon)}!`);
+    if (killMessage)
+        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName || heroThrownVenomTargetName(mon)}!`);
     recordVanquished(mon, true);
     dropMonsterInventory(mon, messages);
 
@@ -21145,16 +21154,84 @@ function killMonsterFromHeroProjectileHit(mon, messages, targetName) {
     newsym(mon.mx, mon.my);
 }
 
-function heroProjectileWeaponImpact(obj, mon, hitValue) {
+function adjustHeroAlignmentForPoisonedWeaponUse(messages) {
+    const role = heroRoleName();
+    const alignType = Number(game.u?.ualign?.type ?? A_NEUTRAL);
+    const record = Number(game.u?.ualign?.record ?? 0);
+    if (role === 'Samurai') {
+        messages.push('You dishonorably use a poisoned weapon!');
+        if (game.u?.ualign) {
+            game.u.ualign.record = record - Math.sign(alignType);
+            game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 1;
+        }
+    } else if (alignType === A_LAWFUL && record > -10) {
+        messages.push('You feel like an evil coward for using a poisoned weapon.');
+        if (game.u?.ualign) {
+            game.u.ualign.record = record - 1;
+            game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 1;
+        }
+    }
+}
+
+function heroProjectilePoisonResult(obj, mon, poisonApplies = false) {
+    if (!poisonApplies || !obj?.opoisoned || !isPoisonableWeaponObject(obj))
+        return { messagesBeforeHit: [], messagesAfterHit: [], damage: 0, deadly: false };
+    const messagesBeforeHit = [];
+    const messagesAfterHit = [];
+    adjustHeroAlignmentForPoisonedWeaponUse(messagesBeforeHit);
+
+    const weight = Math.max(0, Math.trunc(Number(globObjectWeight({ ...obj, quan: 1 }) || 0)));
+    const nopoison = Math.max(2, 10 - Math.trunc(weight / 10));
+    let unpoisoned = false;
+    if (!isPermanentPoisonedWeaponObject(obj) && !rn2(nopoison)) {
+        obj.opoisoned = false;
+        unpoisoned = true;
+    }
+
+    let damage = 0;
+    let deadly = false;
+    if (monsterResistsPoison(mon)) {
+        messagesAfterHit.push(`The poison doesn't seem to affect ${heroThrownVenomTargetName(mon)}.`);
+    } else if (rn2(10)) {
+        damage += rnd(6);
+    } else {
+        deadly = true;
+        messagesAfterHit.push('The poison was deadly...');
+    }
+
+    if (unpoisoned) {
+        const name = pickupObjectName({ ...obj, opoisoned: false });
+        const singular = Math.trunc(Number(obj?.quan || 1)) === 1;
+        messagesAfterHit.push(`Your ${name} ${singular ? 'is' : 'are'} no longer poisoned.`);
+    }
+    return { messagesBeforeHit, messagesAfterHit, damage, deadly };
+}
+
+function heroThrownWeaponPoisonApplies(obj) {
+    return isPoisonableWeaponObject(obj) && ['dart', 'shuriken', 'throwing star'].includes(tossUpWeaponObjectKey(obj));
+}
+
+function heroLauncherAmmoPoisonApplies(obj, launcher) {
+    return isPoisonableWeaponObject(obj) && heroThrowAmmoAndLauncher(obj, launcher);
+}
+
+function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false } = {}) {
     if (!heroProjectileSupportedWeaponObject(obj)) return { handled: false, messages: [] };
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
     if (hitValue >= dieroll) {
-        const { damage, silverMessage } = heroProjectileWeaponDamage(obj, mon);
+        const weaponDamage = heroProjectileWeaponDamage(obj, mon);
+        const poison = heroProjectilePoisonResult(obj, mon, poisonApplies);
+        const damage = weaponDamage.damage + poison.damage;
         mon.mhp = (mon.mhp || 1) - damage;
-        const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
-        if (silverMessage) messages.push(silverMessage);
-        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        const messages = [
+            ...poison.messagesBeforeHit,
+            `${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`,
+        ];
+        if (weaponDamage.silverMessage) messages.push(weaponDamage.silverMessage);
+        messages.push(...poison.messagesAfterHit);
+        if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
+        else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -21173,7 +21250,9 @@ function heroProjectileWeaponImpact(obj, mon, hitValue) {
 }
 
 function heroThrownWeaponImpact(obj, mon) {
-    return heroProjectileWeaponImpact(obj, mon, heroThrownWeaponHitValue(obj, mon));
+    return heroProjectileWeaponImpact(obj, mon, heroThrownWeaponHitValue(obj, mon), {
+        poisonApplies: heroThrownWeaponPoisonApplies(obj),
+    });
 }
 
 function heroKickedWeaponImpact(obj, mon) {

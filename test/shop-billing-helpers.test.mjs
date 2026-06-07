@@ -62076,6 +62076,53 @@ test('hero-thrown dart harms ordinary monster and survives landing', async () =>
     ]);
 });
 
+test('hero-thrown poisoned dart applies C poison after weapon damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.ualign = { type: A_CHAOTIC, record: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const dart = dartStack(876138, 'd', 1, {
+        opoisoned: true,
+        line: 'd - a poisoned dart',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+    });
+    game.inventory = [dart];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const calls = rngLog.map(rngCallName);
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    const poisonRolls = calls
+        .map((call, index) => call === 'rn2(10)' ? index : -1)
+        .filter(index => index >= 0);
+    assert.match(game._pending_message, /The (?:poisoned )?dart hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /misses|gift|catches|shatters|Splat/);
+    assert.equal(poisonRolls.length >= 2, true, rngLog.join(', '));
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(3)', 'rn2(10)', 'rn2(10)']);
+    if (rngCallValue(rngLog[poisonRolls[1]]) === 0) {
+        assert.match(game._pending_message, /The poison was deadly\.\.\./);
+        assert.doesNotMatch(game._pending_message, /You kill the goblin!/);
+        assert.equal(goblin.dead, true);
+    } else {
+        const poisonDamage = rngValuesForCall(rngLog, 'rnd(6)')[0];
+        assert.equal(goblin.mhp, 30 - (baseDamage + 1) - poisonDamage);
+        assert.equal(goblin.dead || false, false);
+    }
+});
+
 test('hero-thrown shuriken harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66231,6 +66278,53 @@ test('f command no-launcher dart hits monster through thrown weapon path', async
     ]);
 });
 
+test('f command no-launcher poisoned dart respects monster poison resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_CHAOTIC, record: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const dart = dartStack(87617415, 'd', 1, {
+        opoisoned: true,
+        quivered: true,
+        line: 'd - a poisoned dart (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        poisonResistance: true,
+        data: { name: 'goblin', mlevel: 1, poisonResistance: true },
+    });
+    game.inventory = [dart];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(3)')[0];
+    assert.match(game._pending_message, /The (?:poisoned )?dart hits the goblin\./);
+    assert.match(game._pending_message, /The poison doesn't seem to affect the goblin\./);
+    assert.doesNotMatch(game._pending_message, /The poison was deadly|You kill the goblin!/);
+    assert.equal(goblin.mhp, 20 - (baseDamage + 1));
+    assert.equal(goblin.dead || false, false);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(3)', 'rn2(10)', 'rn2(19)', 'rn2(3)',
+    ]);
+});
+
 test('f command no-launcher dart miss wakes monster without damage roll', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66358,6 +66452,54 @@ test('f command arrow with matching bow hits monster through C projectile path',
     assert.equal(landed.oy, 5);
     assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
         'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command poisoned arrow with matching bow respects monster poison resistance', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_CHAOTIC, record: 0 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_BASIC);
+    const launcher = bow(87617331, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(87617431, 'b', {
+        opoisoned: true,
+        quivered: true,
+        line: 'b - a poisoned arrow (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        poisonResistance: true,
+        data: { name: 'goblin', mlevel: 1, poisonResistance: true },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /The (?:poisoned )?arrow hits the goblin[.!]/);
+    assert.match(game._pending_message, /The poison doesn't seem to affect the goblin\./);
+    assert.doesNotMatch(game._pending_message, /The poison was deadly|You kill the goblin!/);
+    assert.equal(goblin.mhp, 20 - damageRoll);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(6)', 'rn2(10)', 'rn2(19)', 'rn2(3)',
     ]);
 });
 
@@ -66673,6 +66815,54 @@ test('hero-thrown unmatched crossbow bolt can hit monster by hand after warning'
     assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
         'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
+});
+
+test('hero-thrown poisoned unmatched crossbow bolt hits by hand without poison branch', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 2,
+    });
+    game.u.ualign = { type: A_CHAOTIC, record: 0 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    const bolt = crossbowBolt(8761755, 'b', {
+        opoisoned: true,
+        line: 'b - a poisoned crossbow bolt',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        msleeping: 1,
+        poisonResistance: true,
+        data: { name: 'goblin', mlevel: 1, poisonResistance: true },
+    });
+    game.inventory = [bolt];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a crossbow, so you throw your bolt by hand.");
+
+    await rhack(' ');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(2)')[0];
+    assert.match(game._pending_message, /The poisoned crossbow bolt hits the goblin!/);
+    assert.doesNotMatch(game._pending_message, /The poison doesn't seem to affect|The poison was deadly|evil coward/);
+    assert.equal(goblin.mhp, 40 - (damageRoll + 8));
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+    assert.equal(rngLog.some(entry => entry.startsWith('rn2(10)=')), false);
 });
 
 test('weak hero-thrown unmatched crossbow bolt uses C zero range and warning', async () => {
