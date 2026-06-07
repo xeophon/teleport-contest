@@ -4076,6 +4076,19 @@ function teleportHeroToFixedTrapDestination(trap, options = {}) {
     return teleportHeroSameLevel(dst.x, dst.y, options);
 }
 
+function vaultTeleportDestination() {
+    const vaultRoom = (game.level?.rooms || []).find(room => room.rtype === VAULT);
+    const spot = {};
+    if (vaultRoom && somexyspace(vaultRoom, spot) && sameLevelTeleportOk(spot.x, spot.y, false))
+        return spot;
+    return null;
+}
+
+function teleportHeroToVault(options = {}) {
+    const spot = vaultTeleportDestination();
+    return spot ? teleportHeroSameLevel(spot.x, spot.y, options) : null;
+}
+
 function applySameLevelTeleportNutritionPenalty() {
     if (!game.u) return;
     game.u.uhunger = (game.u.uhunger ?? 900) - 100;
@@ -46197,7 +46210,14 @@ function movementTeleportTrapResult(trap, options = {}) {
     if (heroHasAntimagic() || In_endgame(game.u?.uz) || heroNoTeleportLevel())
         return { message: 'You feel a wrenching sensation.', more: false };
 
-    if (trap.once) deleteTrap(trap);
+    if (trap.once) {
+        deleteTrap(trap);
+        const vaultTeleport = teleportHeroToVault(options);
+        if (vaultTeleport)
+            return { message: vaultTeleport, more: true };
+        const materialize = safeTeleportHeroSameLevel(options);
+        return { message: materialize || 'You shudder for a moment.', more: true };
+    }
     const fixedTeleport = teleportHeroToFixedTrapDestination(trap, options);
     if (fixedTeleport === '')
         return { message: 'You shudder for a moment.', more: true };

@@ -21,5 +21,5 @@
 
 ## Remaining Follow-Ups
 
-- One-shot vault teleport trap fallback and ordinary random teleport-trap fallback still need narrower canaries beyond the fixed-destination branch.
+- One-shot vault teleport trap fallback and ordinary random teleport-trap fallback are covered by audit 662.
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.

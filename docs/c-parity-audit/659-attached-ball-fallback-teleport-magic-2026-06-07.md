@@ -15,6 +15,7 @@
 
 - Added a result-returning movement teleport trap helper for attached-ball fallback relocation.
 - Fixed-destination `TELEP_TRAP` fallback now marks the trap seen, bypasses the known-trap escape roll, and applies same-level materialization on the relocated hero square.
+- One-shot vault and ordinary random `TELEP_TRAP` fallback coverage is extended by audit 662.
 - Added a movement magic-trap wrapper so fallback relocation can reuse the existing magic-trap effect and preserve `afterMore` top-line follow-up state.
 - Attached-ball fallback teleport skips immediate full vision recalculation in the synchronous throw-finalization path; the helper still redraws the old and new hero/ball/chain squares.
 - `trapResultHasEffect()` now accepts an explicit `effect` marker so message-less magic-trap fates still count as trap activation.
@@ -22,12 +23,14 @@
 ## Tests
 
 - `attached ball fallback relocation triggers fixed teleport trap on new hero square`
+- `attached ball fallback relocation triggers one-shot vault teleporter on new hero square`
+- `attached ball fallback relocation triggers ordinary random teleport trap on new hero square`
 - `attached ball fallback relocation triggers magic trap on new hero square`
-- Focused verification: `node --test --test-reporter=dot --test-name-pattern "attached ball fallback relocation triggers fixed teleport|attached ball fallback relocation triggers magic trap|attached ball fallback relocation triggers level teleporter|attached ball fallback relocation activates magic portal|attached ball fallback relocation triggers anti-magic" test/shop-billing-helpers.test.mjs`
+- Focused verification: `node --test --test-reporter=dot --test-name-pattern "attached ball fallback relocation triggers fixed teleport|attached ball fallback relocation triggers one-shot vault|attached ball fallback relocation triggers ordinary random teleport|attached ball fallback relocation triggers magic trap|attached ball fallback relocation triggers level teleporter|attached ball fallback relocation activates magic portal|attached ball fallback relocation triggers anti-magic" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
 - Statue-trap attached-ball fallback relocation is covered by audit 660.
-- One-shot vault teleport trap fallback and ordinary random teleport-trap fallback still need narrower canaries beyond the fixed-destination branch.
+- One-shot vault teleport trap fallback and ordinary random teleport-trap fallback are covered by audit 662.
 - Magic-trap fate 20 remove-curse/unpunish parity is covered by audit 661.
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
