@@ -68624,12 +68624,113 @@ export async function rhack(_cmd) {
             game.context.move = 0;
             return;
         }
+        const itemQuantity = item.quan || 1;
+        const attachedBallThrow = heroThrownAttachedBallObject(item);
+        const directLauncherAmmo = !!(heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher));
+        const directLauncherVolleyLimit = directLauncherAmmo && itemQuantity > 1 ? 2 : 1;
+        const directLauncherShotCount = directLauncherVolleyLimit > 1
+            ? Math.min(itemQuantity, rnd(directLauncherVolleyLimit))
+            : 1;
+        const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
+            ? attachedBallThrow
+                ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
+                : heroHorizontalThrowRecoilResult(dir, ordinaryAirRecoilRange)
+            : null;
+        const ordinaryAirRecoilMessage = ordinaryAirRecoilResult?.message || '';
+        const ordinaryAirRecoilMore = !!ordinaryAirRecoilResult?.more;
+        const ordinaryAirRecoilTrapResult = ordinaryAirRecoilResult?.trapResult || null;
+        const applyOrdinaryAirRecoilTrapResult = () => {
+            if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
+            return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
+        };
+        if (directLauncherAmmo && directLauncherShotCount > 1 && !boomerangFlight.handled && !ironBarsImpact) {
+            const impactMessages = [];
+            const landingMessages = [];
+            const newsymTargets = [];
+            for (let shot = 0; shot < directLauncherShotCount; shot++) {
+                const flight = heroFireProjectileFlightResult(ux, uy, dir, throwRange);
+                ox = flight.ox;
+                oy = flight.oy;
+                targetMon = flight.targetMon;
+                const shotId = itemQuantity - shot > 1 ? next_ident() : item.id;
+                const splitShot = shotId !== item.id;
+                const projectileObject = {
+                    ...item,
+                    letter: undefined,
+                    line: undefined,
+                    wielded: false,
+                    worn: false,
+                    quivered: false,
+                    id: shotId,
+                    o_id: splitShot ? undefined : item.o_id,
+                    _shopBillObjectId: splitShot ? undefined : item._shopBillObjectId,
+                    quan: 1,
+                    ox,
+                    oy,
+                    glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
+                    color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
+                };
+                if (itemQuantity - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
+                const impact = targetMon
+                    ? heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, true)
+                    : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
+                if (impact.handled) impactMessages.push(...impact.messages);
+                if (targetMon) newsymTargets.push(targetMon);
+                if (!impact.consumed) {
+                    const breakRoll = !impact.hit && !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
+                    const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
+                        breakRoll,
+                        ohit: impact.hit,
+                        passiveTarget: impact.passiveTarget,
+                    });
+                    landingMessages.push(...landing.messages);
+                }
+            }
+            for (const mon of newsymTargets) newsym(mon.mx, mon.my);
+            const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
+            removeInventoryItem(item, directLauncherShotCount);
+            if (wasBurdened) {
+                let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
+                for (const invItem of game.inventory || []) {
+                    if (isGoldObject(invItem)) continue;
+                    const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
+                    const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
+                        : invItem.otyp === SCROLL_CLASS ? 'scroll'
+                            : invItem.otyp === POTION_CLASS ? 'potion'
+                                : invItem.otyp === WAND_CLASS ? 'wand'
+                                    : invItem.otyp === GEM_CLASS ? 'gem' : '');
+                    carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
+                }
+                const stats = game.u?.acurr?.a || [];
+                const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+                if (carriedWeight <= capacity) {
+                    game._topline_after_more = 'Your movements are now unencumbered.';
+                    game._unburden_after_topline_more = 1;
+                }
+            }
+            const volleyName = inventoryItemName(item)
+                .replace(/^\d+ /, '')
+                .replace(/^(?:uncursed|blessed|cursed) /, '');
+            const impactMessage = impactMessages.join('  ');
+            const landingMessage = landingMessages.join('  ');
+            const message = [`You shoot ${directLauncherShotCount} ${volleyName}.`, ordinaryAirRecoilMessage, impactMessage]
+                .filter(Boolean).join('  ');
+            if (landingMessage) game._queued_message_after_more = landingMessage;
+            await setMessage(message, !!landingMessage || ordinaryAirRecoilMore);
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game._resume_time_after_more = 0;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
         let thrownId = null;
-        if ((item.quan || 1) > 1) {
-            if (item.otyp === DART || /\bdarts?\b/.test(lowerName)) rnd(1); // C throw_obj: multishot count.
+        if (itemQuantity > 1) {
+            if (!directLauncherAmmo && (item.otyp === DART || /\bdarts?\b/.test(lowerName))) rnd(1); // C throw_obj: multishot count.
             thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
         }
-        const attachedBallThrow = heroThrownAttachedBallObject(item);
         const thrownObject = attachedBallThrow ? item : {
             ...item,
             id: thrownId ?? item.id,
@@ -68648,18 +68749,6 @@ export async function rhack(_cmd) {
         });
         const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
         let impactMessage = flightImpactMessage;
-        const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
-            ? attachedBallThrow
-                ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
-                : heroHorizontalThrowRecoilResult(dir, ordinaryAirRecoilRange)
-            : null;
-        const ordinaryAirRecoilMessage = ordinaryAirRecoilResult?.message || '';
-        const ordinaryAirRecoilMore = !!ordinaryAirRecoilResult?.more;
-        const ordinaryAirRecoilTrapResult = ordinaryAirRecoilResult?.trapResult || null;
-        const applyOrdinaryAirRecoilTrapResult = () => {
-            if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
-            return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
-        };
         let impactConsumedThrownObject = false;
         let impactObjectHit = false;
         let impactPassiveTarget = null;
