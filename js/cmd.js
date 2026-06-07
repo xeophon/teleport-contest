@@ -20141,6 +20141,40 @@ function heroDropBallLandingPullsHeroOntoBall(x, y) {
     return !!trap && (is_pit(trap.ttyp) || is_hole(trap.ttyp));
 }
 
+function heroDropBallPoolRelocationEffect(x, y, messages) {
+    const loc = game.level?.at?.(x, y);
+    if (!movementIsPoolAt(x, y, loc)) return { more: false, trapResult: null };
+
+    const targetMoveTyp = movementSurfaceTerrain(loc);
+    polyselfWaterFallLanding(x, y, targetMoveTyp);
+    messages.push(targetMoveTyp === WATER
+        ? 'You plunge into the wall of water!  You try to crawl out of the water.'
+        : 'You fall into the pool of water!  You sink like a rock.');
+    return { more: true, trapResult: null };
+}
+
+function heroDropBallTrapRelocationEffect(x, y, messages) {
+    const trap = heroDropBallTrapAt(x, y);
+    if (!trap) return { more: false, trapResult: null };
+
+    let result = null;
+    if ([HOLE, TRAPDOOR].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
+    else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
+    if (!trapResultHasEffect(result)) return { more: false, trapResult: null };
+
+    if (result.message) messages.push(result.message);
+    return {
+        more: !!result.more,
+        trapResult: result.fatal || result.lifeSaving ? result : null,
+    };
+}
+
+function heroDropBallPostRelocationEffects(x, y, messages) {
+    const poolResult = heroDropBallPoolRelocationEffect(x, y, messages);
+    if (poolResult.more || poolResult.trapResult) return poolResult;
+    return heroDropBallTrapRelocationEffect(x, y, messages);
+}
+
 function heroDropBallFillPitAt(x, y, messages) {
     const trap = earthBoulderPitTrapAt(x, y);
     if (!trap) return false;
@@ -20190,24 +20224,24 @@ function heroDropBallReleaseTrapMessages(x, y) {
 }
 
 function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
-    const messages = [];
-    if (!heroThrownAttachedBallObject(obj) || !game.u?.uchain) return messages;
+    const result = { messages: [], more: false, trapResult: null };
+    if (!heroThrownAttachedBallObject(obj) || !game.u?.uchain) return result;
     game.u.uball = obj;
     game.level.objects ??= [];
     if (!game.level.objects.includes(obj)) game.level.objects.push(obj);
     if (!game.level.objects.includes(game.u.uchain)) game.level.objects.push(game.u.uchain);
-    if (x === game.u.ux && y === game.u.uy) return messages;
+    if (x === game.u.ux && y === game.u.uy) return result;
 
     const dx = Math.sign(dir?.dx || 0);
     const dy = Math.sign(dir?.dy || 0);
     const oldUx = game.u.ux;
     const oldUy = game.u.uy;
-    messages.push(...heroDropBallReleaseTrapMessages(oldUx, oldUy));
+    result.messages.push(...heroDropBallReleaseTrapMessages(oldUx, oldUy));
     const heroOnBall = !heroDropBallLevitating() && !heroDropBallMonsterAt(x, y) && !game.u?.utrap
         && heroDropBallLandingPullsHeroOntoBall(x, y);
     const newUx = heroOnBall ? x : x - dx;
     const newUy = heroOnBall ? y : y - dy;
-    if (!isok(newUx, newUy)) return messages;
+    if (!isok(newUx, newUy)) return result;
 
     game.u.ux0 = oldUx;
     game.u.uy0 = oldUy;
@@ -20222,7 +20256,10 @@ function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
     game.u.uchain.transientProjectile = false;
     newsym(oldUx, oldUy);
     newsym(newUx, newUy);
-    return messages;
+    const post = heroDropBallPostRelocationEffects(newUx, newUy, result.messages);
+    result.more = !!post.more;
+    result.trapResult = post.trapResult;
+    return result;
 }
 
 function prepareHeroThrownAttachedBallVerticalObject(obj, x, y) {
@@ -67523,8 +67560,14 @@ export async function rhack(_cmd) {
                 ohit: impactObjectHit,
                 passiveTarget: impactPassiveTarget,
             });
-        if (attachedBallThrow && landing.object)
-            landing.messages.push(...heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir));
+        let attachedBallLandingMore = false;
+        let attachedBallTrapResult = null;
+        if (attachedBallThrow && landing.object) {
+            const attachedDrop = heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
+            landing.messages.push(...attachedDrop.messages);
+            attachedBallLandingMore = !!attachedDrop.more;
+            attachedBallTrapResult = attachedDrop.trapResult;
+        }
         const landingMessage = landing.messages.join('  ');
         newsym(ox, oy);
         const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
@@ -67551,13 +67594,15 @@ export async function rhack(_cmd) {
         if (throwNoLauncherMessage) {
             const followUpMessage = [impactMessage, landingMessage].filter(Boolean).join('  ');
             if (followUpMessage) game._queued_message_after_more = followUpMessage;
+            if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
             await setMessage(throwNoLauncherMessage, !!followUpMessage);
         }
         else if (impactMessage) {
             if (landingMessage) game._queued_message_after_more = landingMessage;
+            if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
             await setMessage(impactMessage, true);
         }
-        else if (landingMessage) await setMessage(landingMessage);
+        else if (landingMessage) await setMessage(landingMessage, attachedBallLandingMore);
         else {
             game._pending_message = '';
             game._message_more = 0;
@@ -67568,6 +67613,9 @@ export async function rhack(_cmd) {
         game._resume_time_after_more = 0;
         if (boomerangSelfHitResult?.lifeSaving || boomerangSelfHitResult?.fatal) {
             if (applyLifeSavingOrFatalCommandMode(boomerangSelfHitResult)) return;
+        }
+        if (attachedBallTrapResult?.lifeSaving || attachedBallTrapResult?.fatal) {
+            if (applyLifeSavingOrFatalCommandMode(attachedBallTrapResult)) return;
         }
         game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
         game.context.move = 0;

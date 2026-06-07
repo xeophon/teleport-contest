@@ -62134,14 +62134,134 @@ test('attached ball throw into pool pulls hero onto ball square', async () => {
     await rhack('b');
     await rhack('l');
 
-    assert.equal(game._pending_message, '');
+    assert.match(game._pending_message, /You fall into the pool of water!  You sink like a rock\./);
+    assert.equal(game._message_more, 1);
     assert.equal(ball.ox, 10);
     assert.equal(ball.oy, 5);
     assert.equal(game.u.ux, 10);
     assert.equal(game.u.uy, 5);
     assert.equal(chain.ox, 10);
     assert.equal(chain.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(20)']);
+    const relocate = game._relocate_after_more;
+    assert.equal(relocate.fromX, 10);
+    assert.equal(relocate.fromY, 5);
+    assert.equal(Math.max(Math.abs(relocate.x - 10), Math.abs(relocate.y - 5)), 1);
+    assert.notEqual(game.level.at(relocate.x, relocate.y).typ, POOL);
+    assert.ok(getRngLog().some(entry => rngCallName(entry) === 'rn2(20)'));
+});
+
+test('attached ball throw into unseen pit triggers post-relocation pit effects', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876206, 'b');
+    const chain = attachedIronChain(876207);
+    const pit = { ttyp: PIT, tx: 10, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [pit];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You fall into a pit!/);
+    assert.equal(pit.tseen, true);
+    assert.equal(game.u.ux, 10);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(game.u.utrap >= 2 && game.u.utrap <= 7, true);
+    assert.equal(game.u.uhp < 20, true);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 10);
+    assert.equal(chain.oy, 5);
+});
+
+test('attached ball throw into unseen hole schedules post-relocation fall through', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, { ux: 5, uy: 5, upunished: true });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876208, 'b');
+    const chain = attachedIronChain(876209);
+    const hole = { ttyp: HOLE, tx: 10, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [hole];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /There's a gaping hole under you!/);
+    assert.equal(game._message_more, 1);
+    assert.equal(hole.tseen, true);
+    assert.equal(game.u.ux, 10);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 10);
+    assert.equal(chain.oy, 5);
+    assert.equal(queuedImpactDropsFor().includes(ball), false);
+    assert.deepEqual(game._deferred_level_goto?.targetLevel, { dnum: 0, dlevel: 2 });
+    assert.equal(game._deferred_level_goto?.options?.falling, true);
+});
+
+test('attached ball throw onto occupied hole leaves hero behind without shaft effects', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, { ux: 5, uy: 5, upunished: true });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876210, 'b');
+    const chain = attachedIronChain(876211);
+    const hole = { ttyp: HOLE, tx: 10, ty: 5, tseen: false, madeby_u: false };
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+    });
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [hole];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.doesNotMatch(game._pending_message || '', /gaping hole|trap door|falls? .*through|falls into a hole/);
+    assert.equal(hole.tseen, false);
+    assert.equal(goblin.mx, 10);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(queuedImpactDropsFor().includes(ball), false);
+    assert.equal(game._deferred_level_goto || null, null);
 });
 
 test('levitating hero-thrown arrow with matching bow uses C ammo range increment', async () => {
