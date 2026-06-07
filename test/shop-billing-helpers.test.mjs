@@ -63329,6 +63329,106 @@ test('levitating hero-thrown ordinary weapon recoils after C split range flight'
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil bumps boulder with C damage and wake', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([2, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876168, 'd');
+    const boulder = floorBoulder(876169, { ox: 4, oy: 5 });
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    const newt = ordinaryThrowTarget('newt', 4, 6, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mstrategy: 99,
+    });
+    game.inventory = [blade];
+    game.level.objects = [boulder];
+    game.level.monsters = [goblin, newt];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\.  You bump into a boulder\.  Ouch!/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 17);
+    assert.equal(newt.msleeping, 0);
+    assert.equal(newt.mstrategy, 0);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(game.inventory.includes(blade), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(100)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil bumps monster without damage', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876170, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    const newt = ordinaryThrowTarget('newt', 4, 5, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mpeaceful: true,
+        mstrategy: 99,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin, newt];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\.  You bump into a newt\./);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(newt.mhp, 4);
+    assert.equal(newt.msleeping, 0);
+    assert.equal(newt.mpeaceful, 0);
+    assert.equal(newt.mstrategy, 0);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
 test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', async () => {
     installNonShopFloorState();
     initRng(2);

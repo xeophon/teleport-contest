@@ -20491,6 +20491,61 @@ function heroHorizontalThrowAirSplitRange(obj) {
     return { recoilRange, throwRange: range, noLauncherMessage: ammoRange?.noLauncherMessage || '' };
 }
 
+function heroHorizontalThrowRecoilBoulderAt(x, y) {
+    return (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
+}
+
+function heroHorizontalThrowRecoilMonsterAt(x, y) {
+    return (game.level?.monsters || []).find(mon =>
+        mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0));
+}
+
+function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, dx, dy) {
+    if (!loc) return { blocked: false };
+    const diagonal = dx !== 0 && dy !== 0;
+    const openDoorFrame = loc.typ === DOOR && (loc.doormask & D_ISOPEN) && diagonal;
+    const closedDoor = loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+    const boulder = heroHorizontalThrowRecoilBoulderAt(x, y);
+    let why = '';
+    const messages = [];
+
+    if (loc.typ === IRONBARS) {
+        why = 'crashing into iron bars';
+        messages.push('You crash into some iron bars.  Ouch!');
+    } else if (IS_OBSTRUCTED(loc.typ) || closedDoor || openDoorFrame) {
+        why = IS_TREE(loc.typ) ? 'bumping into a tree'
+            : IS_OBSTRUCTED(loc.typ) ? 'bumping into a wall'
+                : openDoorFrame ? 'bumping into a door frame'
+                    : 'bumping into a closed door';
+        if (openDoorFrame) messages.push('You hit the door frame!');
+        messages.push('Ouch!');
+    } else if (boulder) {
+        why = 'bumping into a boulder';
+        messages.push('You bump into a boulder.  Ouch!');
+    }
+
+    if (!why) return { blocked: false };
+    const damage = maybeHalfPhysicalDamage(rnd(2 + Math.max(0, Math.trunc(Number(remainingRange || 0)))));
+    if (game.u) {
+        game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u.uhp || 0) <= 0) game._death_cause = why;
+    }
+    wakeNearbyMonstersAt(x, y, 10);
+    return { blocked: true, messages };
+}
+
+function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
+    if (!mon) return '';
+    const name = articleFor(mon.data?.name || mon.name || 'creature');
+    mon.mundetected = 0;
+    mon.msleeping = 0;
+    mon.meating = 0;
+    setHeroObjectHitMonsterAngry(mon);
+    wakeNearbyMonstersAt(x, y, 10);
+    return `You bump into ${name}.`;
+}
+
 function heroHorizontalThrowRecoil(dir, range) {
     if (!heroHorizontalThrowAirRecoilActive() || !dir || (!dir.dx && !dir.dy) || range < 1 || game.u?.ustuck)
         return '';
@@ -20515,13 +20570,24 @@ function heroHorizontalThrowRecoil(dir, range) {
         const nx = oldx + dx;
         const ny = oldy + dy;
         const loc = game.level?.at(nx, ny);
-        const closedDoor = loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
-        const blockedByBoulder = (game.level?.objects || []).some(obj =>
-            !obj.transientProjectile && obj.ox === nx && obj.oy === ny && obj.otyp === BOULDER);
-        const blockedByMonster = (game.level?.monsters || []).some(mon =>
-            mon.mx === nx && mon.my === ny && !mon.dead && (mon.mhp == null || mon.mhp > 0));
-        if (!isok(nx, ny) || !loc || IS_OBSTRUCTED(loc.typ) || closedDoor || blockedByBoulder || blockedByMonster)
+        if (!isok(nx, ny) || !loc)
+            return [message, 'You feel the spirits holding you back.'].join('  ');
+        const monster = heroHorizontalThrowRecoilMonsterAt(nx, ny);
+        const openDoorFrame = loc.typ === DOOR && (loc.doormask & D_ISOPEN) && dx !== 0 && dy !== 0;
+        const blockedByObstacle = IS_OBSTRUCTED(loc.typ)
+            || loc.typ === IRONBARS
+            || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))
+            || openDoorFrame
+            || heroHorizontalThrowRecoilBoulderAt(nx, ny);
+        if (blockedByObstacle) {
+            const collision = heroHorizontalThrowRecoilObstacleCollision(loc, nx, ny, recoilRange - step, dx, dy);
+            if (collision.blocked) return [message, ...(collision.messages || [])].join('  ');
             break;
+        }
+        if (monster) {
+            const collisionMessage = heroHorizontalThrowRecoilMonsterCollision(monster, nx, ny);
+            return [message, collisionMessage].filter(Boolean).join('  ');
+        }
         game.u.ux0 = oldx;
         game.u.uy0 = oldy;
         game.u.ux = nx;
