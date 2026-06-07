@@ -22,9 +22,10 @@
 - `f command no-launcher poisoned dart respects monster poison resistance`
 - `f command poisoned arrow with matching bow respects monster poison resistance`
 - `hero-thrown poisoned unmatched crossbow bolt by hand respects monster poison resistance`
+- `f command Samurai poisoned arrow applies alignment penalty before nonfatal poison damage`
+- `hero-thrown lawful poisoned crossbow bolt can wear off before deadly poison cleanup`
 
 ## Remaining Follow-Ups
 
-- Samurai/lawful alignment penalties are implemented in the helper but still need dedicated role/alignment tests.
 - Permanent poison artifact handling, if added to thrown artifact support later, still needs the C `dieroll <= 5` gate.
 - Broader poison/death interactions with shapeshifters, lifesaving-style cleanup, passives, and multishot stacks remain separate slices.

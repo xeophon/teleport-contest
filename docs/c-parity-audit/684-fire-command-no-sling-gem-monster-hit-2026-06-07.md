@@ -24,4 +24,4 @@
 ## Remaining Follow-Ups
 
 - True slung rock/gem monster hits for `f` and direct `t` are covered by audit 685.
-- Object/furniture mimic reveal, poisoned ammo effects, and lethal projectile cleanup remain separate `thitmonst()`/`hmon()` slices.
+- Object/furniture mimic reveal is covered by audit 738, and poisoned ammo effects are covered by audits 687 and 739. Lethal projectile cleanup remains a separate `thitmonst()`/`hmon()` slice.

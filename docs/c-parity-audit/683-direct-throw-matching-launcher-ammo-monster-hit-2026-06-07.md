@@ -26,4 +26,4 @@
 ## Remaining Follow-Ups
 
 - Direct-throw matching launcher multishot is covered by audit 689, top-level shot limits by audit 694, prompt-selected count-one stack splitting by audit 737, and object/furniture mimic reveal by audit 738.
-- By-hand/slung rocks and gems, poisoned arrow/bolt side effects, and lethal special cleanup remain separate projectile slices.
+- By-hand/slung rocks and gems and lethal special cleanup remain separate projectile slices. Poisoned arrow/bolt side effects are covered by audits 687 and 739.

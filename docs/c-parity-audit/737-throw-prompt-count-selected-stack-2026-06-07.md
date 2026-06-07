@@ -25,4 +25,4 @@ JS accepted `t1b` for non-gold stacks, but only retained prompt/menu counts for 
 
 ## Remaining
 
-- Broader direct projectile gaps such as poisoned ammo side effects and some special cleanup remain separate slices. Hero projectile mimic reveal is covered by audit 738.
+- Broader direct projectile special cleanup remains a separate slice. Hero projectile mimic reveal is covered by audit 738, and poisoned ammo side effects are covered by audits 687 and 739.

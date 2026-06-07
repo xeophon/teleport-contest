@@ -30,4 +30,4 @@ The direct hero projectile hit helpers woke and angered surviving targets, but d
 
 ## Remaining
 
-- Lethal direct projectile hit cleanup, poisoned ammo side effects, and broader special projectile cleanup remain separate slices.
+- Lethal direct projectile hit cleanup and broader special projectile cleanup remain separate slices. Poisoned ammo side effects are covered by audits 687 and 739.

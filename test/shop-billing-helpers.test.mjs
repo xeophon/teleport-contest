@@ -66794,6 +66794,61 @@ test('hero-thrown crossbow bolt with matching crossbow adds object-row damage', 
     ]);
 });
 
+test('hero-thrown lawful poisoned crossbow bolt can wear off before deadly poison cleanup', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 1, 0, 0, 1, 0]);
+    game._startup_role = 'Wizard';
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 7 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_BASIC);
+    const launcher = crossbow(87617391, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' });
+    const missile = crossbowBolt(87617491, 'b', {
+        opoisoned: true,
+        line: 'b - a poisoned crossbow bolt',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        mpeaceful: 0,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const message = game._pending_message;
+    assert.ok(message.indexOf('You feel like an evil coward for using a poisoned weapon.') < message.indexOf('The crossbow bolt hits the goblin.'));
+    assert.match(message, /The poison was deadly\.\.\./);
+    assert.match(message, /Your crossbow bolt is no longer poisoned\./);
+    assert.doesNotMatch(message, /You kill the goblin!|dishonorably/);
+    assert.equal(goblin.dead, true);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 8);
+    assert.equal(missile.opoisoned, true);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.opoisoned, false);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 6), [
+        'rnd(20)', 'rnd(4)', 'rn2(10)', 'rn2(10)', 'rn2(3)', 'rn2(19)',
+    ]);
+});
+
 test('f command arrow with matching bow uses C ammo range increment', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -72575,6 +72630,61 @@ test('f command poisoned arrow with matching bow respects monster poison resista
     assert.equal(goblin.mhp, 20 - damageRoll);
     assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
         'rnd(20)', 'rnd(6)', 'rn2(10)', 'rn2(19)', 'rn2(3)',
+    ]);
+});
+
+test('f command Samurai poisoned arrow applies alignment penalty before nonfatal poison damage', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 2, 1, 1, 4, 1, 0, 99]);
+    game._startup_role = 'Samurai';
+    game.urole = { ...(game.urole || {}), name: { m: 'Samurai', f: 'Samurai' } };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.ualign = { type: A_LAWFUL, record: 5, abuse: 2 };
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_BASIC);
+    const launcher = bow(87617332, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(87617432, 'b', {
+        opoisoned: true,
+        quivered: true,
+        line: 'b - a poisoned arrow (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const message = game._pending_message;
+    const baseDamage = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    const poisonDamage = rngValuesForCall(rngLog, 'rnd(6)')[1];
+    assert.ok(message.indexOf('You dishonorably use a poisoned weapon!') < message.indexOf('The poisoned arrow hits the goblin!'));
+    assert.doesNotMatch(message, /evil coward|The poison was deadly|no longer poisoned/);
+    assert.equal(goblin.mhp, 30 - baseDamage - poisonDamage);
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 3);
+    assert.equal(missile.opoisoned, true);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.opoisoned, true);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 8), [
+        'rnd(20)', 'rnd(6)', 'rn2(10)', 'rn2(10)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });
 
