@@ -66831,6 +66831,15 @@ function setupWieldedPolearmCanary({
     return { weapon };
 }
 
+function markCanaryGlaiveAsGeneratedPolearm(weapon) {
+    Object.assign(weapon, {
+        kind: 'single-edged polearm',
+        actualKind: 'glaive',
+        known: true,
+    });
+    return weapon;
+}
+
 async function beginApplyPolearmCanary() {
     await rhack('a');
     await rhack('g');
@@ -67082,6 +67091,56 @@ test('applying basic polearm too far preserves dust engraving under hero', async
     assert.equal(goblin.mhp, 10);
     assert.equal(heroEngravingAtFeet()?.text, '-');
     assert.deepEqual(getRngLog(), []);
+});
+
+test('applying polearm hit applies rust monster passive object erosion', async () => {
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 7, 5, {
+        mhp: 50,
+        mhpmax: 50,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const { weapon } = setupWieldedPolearmCanary({
+        monsters: [rustMonster],
+        visible: [[7, 5]],
+    });
+    markCanaryGlaiveAsGeneratedPolearm(weapon);
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the rust monster[.!]/);
+    assert.match(game._pending_message, /Your glaive rusts!/);
+    assert.equal(weapon.oeroded, 1);
+    assert.match(weapon.line, /rusty .*glaive/);
+    assert.equal(rustMonster.mhp < 50, true);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('applying polearm miss skips rust monster passive object erosion', async () => {
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 7, 5, {
+        mhp: 50,
+        mhpmax: 50,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const { weapon } = setupWieldedPolearmCanary({
+        monsters: [rustMonster],
+        visible: [[7, 5]],
+    });
+    markCanaryGlaiveAsGeneratedPolearm(weapon);
+    game.u.uhitinc = -200;
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /The glaive misses the rust monster\./);
+    assert.doesNotMatch(game._pending_message, /rusts|corrodes|smoulders|less effective/);
+    assert.equal(weapon.oeroded || 0, 0);
+    assert.equal(rustMonster.mhp, 50);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(20)']);
 });
 
 test('applying polearm to remembered unseen empty square says cannot see spot', async () => {

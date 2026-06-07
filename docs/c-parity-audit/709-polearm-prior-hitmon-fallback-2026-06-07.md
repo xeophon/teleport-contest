@@ -19,4 +19,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs Snickersnee distance-attack limits, passive effects, worm cutting, and exact miss/wakeup messages. Audit 711 covers engraving wiping.
+- Full `use_pole()` impact parity still needs Snickersnee distance-attack limits, worm cutting, and exact miss/wakeup messages. Audit 711 covers engraving wiping; audit 712 covers passive object effects.

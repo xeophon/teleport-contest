@@ -26017,7 +26017,8 @@ function heroAppliedPolearmImpact(item, mon) {
         if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
-        return { hit: true, damage, messages };
+        const passiveObject = applyDirectMeleePassiveObject(mon, item, messages);
+        return { hit: true, damage, messages, passiveObject };
     }
     mon.msleeping = 0;
     mon.meating = 0;
@@ -38009,6 +38010,12 @@ const FIRE_NONFLAMMABLE_ARMOR_KINDS = new Set([
     'shield of reflection', 'gauntlets of power', 'iron shoes', 'kicking boots',
 ]);
 
+const IRON_POLEARM_KINDS = new Set([
+    'partisan', 'ranseur', 'spetum', 'glaive', 'halberd', 'bardiche',
+    'voulge', 'fauchard', 'guisarme', 'bill-guisarme', 'lucern hammer',
+    'bec de corbin',
+]);
+
 function wishedDamageProfile(item) {
     const kind = objectKindKey(item);
     const cls = itemClassKey(item);
@@ -38026,6 +38033,7 @@ function wishedDamageProfile(item) {
     const nonflammableArmor = armor && FIRE_NONFLAMMABLE_ARMOR_KINDS.has(kind);
     const copperLike = /\b(?:copper|bronze)\b/.test(kind);
     const ironLike = !flammableArmor && !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
+        || IRON_POLEARM_KINDS.has(kind)
         || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart|shuriken|throwing star)\b/.test(kind));
     const flammableLike = flammableArmor || (!nonflammableArmor && !glassArmor && !ironLike && !copperLike && !excludedMetal
         && /\b(?:leather|cloth|cloak|robe|shirt|boots|gloves|wooden|small shield|bow|crossbow|arrow|club|quarterstaff|aklys|bullwhip|sling)\b/.test(kind));
