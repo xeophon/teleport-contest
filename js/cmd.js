@@ -22339,17 +22339,49 @@ function supportsHeroThrownFragileObjectUpwardHit(obj) {
     return impactDropBreakKind(obj) === 'pieces';
 }
 
-async function releaseBrokenCameraDemon(obj, messages, x = null, y = null) {
-    if (!isExpensiveCameraObject(obj) || rn2(3)) return null;
-    const data = monsterByRndName(rn2(3) ? 'homunculus' : 'imp') || { name: 'imp', mlet: 'i', glyph: 'i', mlevel: 3, hpLevel: 4 };
-    const releaseX = x ?? game.u?.ux ?? obj.ox ?? 0;
-    const releaseY = y ?? game.u?.uy ?? obj.oy ?? 0;
-    const mon = await makemon(data, releaseX, releaseY, MM_NOMSG);
-    if (!mon) return null;
+function cameraDemonReleaseMonsterData() {
+    return monsterByRndName(rn2(3) ? 'homunculus' : 'imp')
+        || { name: 'imp', mlet: 'i', glyph: 'i', mlevel: 3, hpLevel: 4 };
+}
+
+function appendBrokenCameraDemonReleaseMessage(mon, messages) {
     if (!game.u?.blind && cansee(mon.mx, mon.my)) {
         const released = heroIsHallucinating() ? sentenceCase(articleFor(getbogusmon())) : 'The picture-painting demon';
         messages.push(`${released} is released!`);
     }
+}
+
+async function releaseBrokenCameraDemon(obj, messages, x = null, y = null) {
+    if (!isExpensiveCameraObject(obj) || rn2(3)) return null;
+    const data = cameraDemonReleaseMonsterData();
+    const releaseX = x ?? game.u?.ux ?? obj.ox ?? 0;
+    const releaseY = y ?? game.u?.uy ?? obj.oy ?? 0;
+    const mon = await makemon(data, releaseX, releaseY, MM_NOMSG);
+    if (!mon) return null;
+    appendBrokenCameraDemonReleaseMessage(mon, messages);
+    mon.mpeaceful = obj.cursed ? 0 : 1;
+    set_malign(mon);
+    return mon;
+}
+
+function releaseBrokenCameraDemonImmediately(obj, messages, x = null, y = null) {
+    if (!isExpensiveCameraObject(obj) || rn2(3)) return null;
+    const data = cameraDemonReleaseMonsterData();
+    const releaseX = x ?? game.u?.ux ?? obj.ox ?? 0;
+    const releaseY = y ?? game.u?.uy ?? obj.oy ?? 0;
+    game.level.monsters ??= [];
+    const previousMonsters = new Set(game.level.monsters);
+    const result = makemon(data, releaseX, releaseY, MM_NOMSG);
+    if (result && typeof result.catch === 'function') result.catch(() => {});
+    let mon = null;
+    for (let i = game.level.monsters.length - 1; i >= 0; i--) {
+        if (!previousMonsters.has(game.level.monsters[i])) {
+            mon = game.level.monsters[i];
+            break;
+        }
+    }
+    if (!mon) return null;
+    appendBrokenCameraDemonReleaseMessage(mon, messages);
     mon.mpeaceful = obj.cursed ? 0 : 1;
     set_malign(mon);
     return mon;
@@ -47804,8 +47836,14 @@ function landmineScatterDestroyBreakableObject(obj, x, y, messages) {
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
     if (floorObjectVisible(x, y)) projectileTopLevelBreakMessage(obj, breakKind, messages);
-    if (isLitOilPotionHit(obj)) explodeBurningOilPotion(obj, x, y, messages);
-    else brokenPotionBreathe(obj, x, y, messages);
+    if (isExpensiveCameraObject(obj)) {
+        releaseBrokenCameraDemonImmediately(obj, messages, x, y);
+        rn2(100); // C delobj() calls obj_resists(obj, 0, 0) after breakobj().
+    } else if (isLitOilPotionHit(obj)) {
+        explodeBurningOilPotion(obj, x, y, messages);
+    } else {
+        brokenPotionBreathe(obj, x, y, messages);
+    }
     applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y);
     removeFloorObject(obj);
     newsym(x, y);

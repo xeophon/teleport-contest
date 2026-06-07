@@ -31407,6 +31407,62 @@ test('deferred hero land mine scatter destroys looking glass before pit fallout'
     assert.equal(trap.ttyp, PIT);
 });
 
+test('deferred hero land mine scatter breaks expensive camera and releases demon before pit fallout', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM, lit: true });
+    markHeroNeighborhoodVisible();
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const camera = { ...expensiveCamera(40120, undefined), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    game.level.traps = [trap];
+    game.level.objects = [camera];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        4, 2, 3, 0,
+        0, 1, 0, 1,
+        0, 0, 0, 0, 0, 0, 0,
+        1, 7, 7, 7, 1, 49, 99, 99,
+        1, 1, 2, 0, 1,
+    ]);
+
+    await rhack(' ');
+
+    const rngCalls = getRngLog().map(rngCallName);
+    assert.deepEqual(rngCalls.slice(0, 8), [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(100)',
+        'rn2(3)', 'rn2(3)',
+    ]);
+    const message = game._pending_message || '';
+    assert.match(message, /An expensive camera shatters into a thousand pieces!/);
+    assert.match(message, /The picture-painting demon is released!/);
+    assert.match(message, /You (?:fall into|escape) a pit[.!]/);
+    const pitIndex = Math.max(message.indexOf('You fall into a pit!'), message.indexOf('You escape a pit.'));
+    assert.equal(message.indexOf('shatters') < message.indexOf('picture-painting demon'), true);
+    assert.equal(message.indexOf('picture-painting demon') < pitIndex, true);
+    const released = game.level.monsters.find(mon => mon.data?.name === 'homunculus');
+    assert.ok(released);
+    assert.notDeepEqual([released.mx, released.my], [5, 5]);
+    assert.equal(Math.abs(released.mx - 5) <= 1 && Math.abs(released.my - 5) <= 1, true);
+    assert.equal(released.mpeaceful, 1);
+    assert.equal(game.level.objects.includes(camera), false);
+    assert.equal(game.level.buriedobjlist.includes(camera), false);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+});
+
 test('deferred hero land mine scatter forces acid potion break before pit fallout', async () => {
     installStableNonShopFloorState();
     vision_reset();
