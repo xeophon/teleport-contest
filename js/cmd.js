@@ -21005,11 +21005,32 @@ function heroFireassistMatchingLauncher(projectile) {
     return unknownBucLauncher;
 }
 
+function stageHeroFireDirectionAfterLifecycle(projectile, launcher) {
+    game._fire_pending_item_letter = projectile?.letter || null;
+    game._fire_pending_launcher_letter = launcher?.letter || null;
+    game._fire_item_letter = null;
+    game._fire_launcher_letter = null;
+    game._fire_direction_pending_after_more = 1;
+    game._command_mode = null;
+}
+
+function activateHeroFirePendingDirection() {
+    if (game._fire_pending_item_letter != null || game._fire_pending_launcher_letter != null) {
+        game._fire_item_letter = game._fire_pending_item_letter;
+        game._fire_launcher_letter = game._fire_pending_launcher_letter;
+        game._fire_pending_item_letter = null;
+        game._fire_pending_launcher_letter = null;
+    }
+    game._command_mode = 'fireDirection';
+}
+
 async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
     if (await beginHeroFirePolearmPriority(projectile, { readyMessage })) return;
     const launcher = heroFireassistMatchingLauncher(projectile);
     let swapMoreLine = '';
+    let queuedLauncherLifecycle = false;
     if (launcher && !(launcher.wielded || launcher.line?.includes('weapon in'))) {
+        queuedLauncherLifecycle = true;
         const launcherWasAlternate = launcher.alternate || launcher.line?.includes('alternate weapon');
         const current = (game.inventory || []).find(item =>
             item !== launcher && (item.wielded || item.line?.includes('weapon in')));
@@ -21023,8 +21044,14 @@ async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
         launcher.alternate = false;
         launcher.line = `${launcher.letter || '?'} - ${inventoryItemName(launcher)} (weapon in right hand)`;
     }
-    game._fire_item_letter = projectile.letter;
-    game._fire_launcher_letter = launcher?.letter || null;
+    if (queuedLauncherLifecycle) {
+        stageHeroFireDirectionAfterLifecycle(projectile, launcher);
+    } else {
+        game._fire_pending_item_letter = null;
+        game._fire_pending_launcher_letter = null;
+        game._fire_item_letter = projectile.letter;
+        game._fire_launcher_letter = launcher?.letter || null;
+    }
     if (readyMessage) {
         game._fire_direction_pending_after_more = 1;
         if (launcher) {
@@ -21033,7 +21060,7 @@ async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
             game._fire_time_pending_after_more = 1;
         }
         await setMessage(readyMessage, true);
-        game._command_mode = 'fireDirection';
+        if (!queuedLauncherLifecycle) game._command_mode = 'fireDirection';
         return;
     }
     if (launcher) {
@@ -21041,7 +21068,7 @@ async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
         game._fire_time_pending_after_more = 1;
         game._fire_direction_pending_after_more = 1;
         await setMessage(`${launcher.line || `${launcher.letter || '?'} - ${inventoryItemName(launcher)}`}.`, true);
-        game._command_mode = 'fireDirection';
+        if (!queuedLauncherLifecycle) game._command_mode = 'fireDirection';
         return;
     }
     await setMessage('In what direction?');
@@ -56451,6 +56478,7 @@ export async function rhack(_cmd) {
                 game._message_more = 0;
                 game._keep_pending_message = 1;
                 game._fire_direction_pending_after_more = 0;
+                activateHeroFirePendingDirection();
                 if (game._fire_time_pending_after_more) {
                     game._fire_time_pending_after_more = 0;
                     game.context.move = 1;
@@ -56463,6 +56491,7 @@ export async function rhack(_cmd) {
                 game._pending_message = 'In what direction?';
                 game._message_more = 0;
                 game._keep_pending_message = 1;
+                activateHeroFirePendingDirection();
                 return;
             }
             if (game._fire_direction_pending_after_more && !game._topline_after_more) {
@@ -56470,6 +56499,7 @@ export async function rhack(_cmd) {
                 game._pending_message = 'In what direction?';
                 game._message_more = 0;
                 game._keep_pending_message = 1;
+                activateHeroFirePendingDirection();
                 if (game._fire_time_pending_after_more) {
                     game._fire_time_pending_after_more = 0;
                     game.context.move = 1;

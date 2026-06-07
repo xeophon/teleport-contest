@@ -67691,8 +67691,21 @@ test('f command fireassist skips known cursed inventory launcher', async () => {
 
     assert.equal(cursedLauncher.wielded || false, false);
     assert.equal(cleanLauncher.wielded, true);
-    assert.equal(game._fire_launcher_letter, 'c');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter, 'c');
     assert.match(game._pending_message, /^c - a bow \(weapon in right hand\)\.$/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'c');
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._fire_pending_launcher_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
 });
 
 test('f command fireassist prefers known non-cursed launcher over unknown BUC match', async () => {
@@ -67718,8 +67731,69 @@ test('f command fireassist prefers known non-cursed launcher over unknown BUC ma
 
     assert.equal(unknownLauncher.wielded || false, false);
     assert.equal(knownLauncher.wielded, true);
-    assert.equal(game._fire_launcher_letter, 'c');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter, 'c');
     assert.match(game._pending_message, /^c - a bow \(weapon in right hand\)\.$/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'c');
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._fire_pending_launcher_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
+});
+
+test('f command fireassist queued alternate launcher shows swap line before direction prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const primary = wieldedWeapon(876173106, 'mace', 'w', 0);
+    const launcher = bow(876173107, 'a', {
+        alternate: true,
+        line: 'a - a bow (alternate weapon; not wielded)',
+    });
+    const missile = arrow(876174104, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    game.inventory = [primary, launcher, missile];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter, 'a');
+    assert.equal(launcher.wielded, true);
+    assert.equal(primary.alternate, true);
+    assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter, 'a');
+    assert.match(game._pending_message, /^w - a \+0 mace \(alternate weapon; not wielded\)\.$/);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal((game.level.objects || []).some(obj => obj.id === missile.id), false);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'a');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal((game.level.objects || []).some(obj => obj.id === missile.id), false);
 });
 
 test('f command nofireassist carried bow leaves arrow on by-hand path', async () => {
@@ -67990,9 +68064,11 @@ test('f command basic quivered ammo with polearm range-five target falls through
 
     await rhack('f');
 
-    assert.equal(game._command_mode, 'fireDirection');
-    assert.equal(game._fire_item_letter, 'b');
-    assert.equal(game._fire_launcher_letter, 'a');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter, 'a');
     assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
     assert.doesNotMatch(game._pending_message, /Too far|You hit/);
     assert.equal(goblin.mhp, 10);
@@ -68000,6 +68076,17 @@ test('f command basic quivered ammo with polearm range-five target falls through
     assert.equal(weapon.wielded || false, false);
     assert.equal(weapon.alternate, true);
     assert.equal(missile.quivered, true);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'a');
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._fire_pending_launcher_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(goblin.mhp, 10);
+    assert.equal(game.inventory.includes(missile), true);
 });
 
 test('f command autoquivered ammo with reachable wielded polearm readies then uses polearm', async () => {
@@ -68131,15 +68218,27 @@ test('f command quivered ammo with wielded polearm but no target still uses laun
 
     await rhack('f');
 
-    assert.equal(game._command_mode, 'fireDirection');
-    assert.equal(game._fire_item_letter, 'b');
-    assert.equal(game._fire_launcher_letter, 'a');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(game._fire_pending_item_letter, 'b');
+    assert.equal(game._fire_pending_launcher_letter, 'a');
     assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
     assert.doesNotMatch(game._pending_message, /Don't know what to hit/);
     assert.equal(launcher.wielded, true);
     assert.equal(weapon.wielded || false, false);
     assert.equal(weapon.alternate, true);
     assert.equal(missile.quivered, true);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'a');
+    assert.equal(game._fire_pending_item_letter || null, null);
+    assert.equal(game._fire_pending_launcher_letter || null, null);
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game.inventory.includes(missile), true);
 });
 
 test('f command empty quiver swaps alternate polearm and retries before ammo prompt', async () => {
