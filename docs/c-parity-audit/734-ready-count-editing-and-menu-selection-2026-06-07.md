@@ -14,6 +14,7 @@
 - Top-level `Q` counts no longer become ready-selection counts; `2Qd` readies the whole selected stack.
 - `Q2d` and manual `f2d` still use the prompt-entered count as the ready-selection count.
 - Ready prompt count entry now mirrors C echo behavior for first digit, multi-digit counts, backspace, and delete.
+- Invalid direct prompt keys after ordinary input or count entry now continue the prompt in `735`.
 - Ready inventory menu counts use a separate buffer: uncounted menu picks preserve a prompt count, while menu-entered counts override it.
 - Escape in the ready menu follows the existing JS throw-menu convention: it clears an active menu count before cancelling the menu.
 - Filtered ready inventory menus now accept only the visible menu letters, preventing hidden downplayed items from being selected through a suggestion menu.

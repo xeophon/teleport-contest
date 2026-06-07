@@ -20680,13 +20680,21 @@ function readyInventoryItemByVisibleLetter(ch) {
     return (game.inventory || []).find(invItem => invItem.letter === ch) || null;
 }
 
-async function finishReadyObjectSelection(selectedItem, verb) {
+function objectPromptQuitKey(ch) {
+    return ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n';
+}
+
+async function finishReadyObjectSelection(selectedItem, verb, { keepPromptOnMissing = false } = {}) {
     let item = selectedItem;
     if (!item) {
         clearReadySelectionCount();
         await setMessage("You don't have that object.");
-        game._command_mode = null;
-        if (verb === 'fire') game._fire_count = null;
+        if (keepPromptOnMissing) {
+            game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
+        } else {
+            game._command_mode = null;
+            if (verb === 'fire') game._fire_count = null;
+        }
         return;
     }
     const count = readySelectionCountValue();
@@ -63406,7 +63414,7 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'quiverObject') {
-        if (ch === '\x1b') {
+        if (objectPromptQuitKey(ch)) {
             clearReadySelectionCount();
             await setMessage('Never mind.');
             game._command_mode = null;
@@ -63435,7 +63443,7 @@ export async function rhack(_cmd) {
             return;
         }
         const itemByLetter = (game.inventory || []).find(invItem => invItem.letter === ch);
-        await finishReadyObjectSelection(itemByLetter, 'ready');
+        await finishReadyObjectSelection(itemByLetter, 'ready', { keepPromptOnMissing: true });
         return;
     }
 
@@ -63453,7 +63461,7 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'fireQuiverObject') {
-        if (ch === '\x1b' || ch === ' ') {
+        if (objectPromptQuitKey(ch)) {
             clearReadySelectionCount();
             await setMessage('Never mind.');
             game._command_mode = null;
@@ -63479,7 +63487,7 @@ export async function rhack(_cmd) {
             return;
         }
         const itemByLetter = (game.inventory || []).find(invItem => invItem.letter === ch);
-        await finishReadyObjectSelection(itemByLetter, 'fire');
+        await finishReadyObjectSelection(itemByLetter, 'fire', { keepPromptOnMissing: true });
         return;
     }
 

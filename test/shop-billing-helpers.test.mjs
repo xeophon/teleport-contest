@@ -68250,6 +68250,105 @@ test('Q command prompt count first digit stays quiet and backspace clears it', a
     assert.equal(game._pending_message, 'd - 3 darts (at the ready).');
 });
 
+test('Q command invalid prompt letter keeps ready prompt active', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174190, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quivered, true);
+});
+
+test('Q command invalid prompt letter after count clears count and keeps prompt active', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174191, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('2');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(game._ready_count_text || '', '');
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quan, 3);
+    assert.equal(stack.quivered, true);
+});
+
+test('Q command prompt count quit keys cancel ready prompt', async () => {
+    for (const [label, key] of [['escape', '\x1b'], ['space', ' '], ['return', '\r'], ['newline', '\n']]) {
+        installNonShopFloorState();
+        initRng(2);
+        const stack = dartStack(876174194, 'd', 3);
+        game.inventory = [stack];
+
+        await rhack('Q');
+        await rhack('2');
+        await rhack(key);
+
+        assert.equal(game._command_mode || null, null, label);
+        assert.equal(game._pending_message, 'Never mind.', label);
+        assert.equal(game._ready_count_text || '', '', label);
+        assert.equal(stack.quivered || false, false, label);
+    }
+});
+
+test('Q command extra backspace after erased count is invalid object and keeps prompt active', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174192, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('2');
+    await rhack(KEY_BACKSPACE);
+
+    assert.equal(game._ready_count_text, '');
+    assert.equal(game._pending_message, 'Count: ');
+
+    await rhack(KEY_BACKSPACE);
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(stack.quivered || false, false);
+});
+
+test('Q command extra delete after erased count is invalid object and keeps prompt active', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174195, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('2');
+    await rhack(KEY_DELETE);
+
+    assert.equal(game._ready_count_text, '');
+    assert.equal(game._pending_message, 'Count: ');
+
+    await rhack(KEY_DELETE);
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(stack.quivered || false, false);
+});
+
 test('Q command prompt count backspace removes last digit before selection', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -68275,6 +68374,88 @@ test('Q command prompt count backspace removes last digit before selection', asy
     assert.equal(stack.quan, 4);
     assert.equal(split.quan, 1);
     assert.equal(game._pending_message, `${split.letter} - a +0 dart (at the ready).`);
+});
+
+test('f command invalid manual prompt letter keeps fire prompt and shot limit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174193, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+
+    await rhack('2');
+    await rhack('f');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quivered, true);
+});
+
+test('f command prompt count Escape cancels fire prompt and clears shot limit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174196, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+
+    await rhack('2');
+    await rhack('f');
+    await rhack('3');
+    await rhack('\x1b');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Never mind.');
+    assert.equal(game._ready_count_text || '', '');
+    assert.equal(game._fire_count || null, null);
+    assert.equal(stack.quivered || false, false);
+});
+
+test('f command invalid prompt letter after count clears prompt count and keeps shot limit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174197, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+
+    await rhack('2');
+    await rhack('f');
+    await rhack('3');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(game._ready_count_text || '', '');
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quan, 5);
+    assert.equal(stack.quivered, true);
 });
 
 test('Q command ready inventory count delete edits count before menu selection', async () => {
