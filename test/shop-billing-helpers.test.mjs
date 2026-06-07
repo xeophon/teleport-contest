@@ -61770,6 +61770,109 @@ test('hero-thrown unmatched crossbow bolt uses C half range and warning', async 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('hero-thrown wielded Mjollnir uses C heavy artifact range cap', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Wizard';
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    game.u.acurr.a[A_DEX] = 25;
+    const mjollnir = monsterWarHammer(876176, {
+        letter: 'm',
+        line: 'm - Mjollnir (weapon in right hand)',
+        artifact: 'Mjollnir',
+        kind: 'mjollnir',
+        actualKind: 'war hammer',
+        wielded: true,
+        known: true,
+        dknown: true,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 12, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [mjollnir];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('l');
+
+    assert.doesNotMatch(game._pending_message, /hits the goblin|misses the goblin|returns to your hand|fails to return/);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(mjollnir), false);
+    const landed = game.level.objects.find(obj => obj.id === mjollnir.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 11);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('hero-thrown Mjollnir must be wielded before throwing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_STR] = STR19(25);
+    const mjollnir = monsterWarHammer(876177, {
+        letter: 'm',
+        line: 'm - Mjollnir',
+        artifact: 'Mjollnir',
+        kind: 'mjollnir',
+        actualKind: 'war hammer',
+        known: true,
+        dknown: true,
+    });
+    game.inventory = [mjollnir];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'Mjollnir must be wielded before it can be thrown.');
+    assert.equal(game.inventory.includes(mjollnir), true);
+    assert.equal(game.level.objects.some(obj => obj.id === mjollnir.id), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('hero-thrown wielded Mjollnir requires C maximum strength', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_STR] = 18;
+    const mjollnir = monsterWarHammer(876178, {
+        letter: 'm',
+        line: 'm - Mjollnir (weapon in right hand)',
+        artifact: 'Mjollnir',
+        kind: 'mjollnir',
+        actualKind: 'war hammer',
+        wielded: true,
+        known: true,
+        dknown: true,
+    });
+    game.inventory = [mjollnir];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "It's too heavy.");
+    assert.equal(game.inventory.includes(mjollnir), true);
+    assert.equal(game.level.objects.some(obj => obj.id === mjollnir.id), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('hero-thrown dagger harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
     initRng(2);

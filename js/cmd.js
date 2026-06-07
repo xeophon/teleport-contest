@@ -20057,6 +20057,41 @@ function heroWieldedThrowLauncher() {
         (item.wielded || item.line?.includes('weapon in')) && heroThrowLauncherSkill(item));
 }
 
+function heroThrowCondensedStrength() {
+    const strength = Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10));
+    if (strength <= STR18(0)) return Math.max(strength, 3);
+    if (strength <= STR19(21)) return 19 + Math.trunc(strength / 50);
+    return Math.min(strength, STR19(25)) - 100;
+}
+
+function heroHorizontalThrowWeightedRange(obj, urangeBase = null) {
+    const baseRange = urangeBase ?? Math.max(0, Math.trunc(heroThrowCondensedStrength() / 2));
+    const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
+    const weightDivisor = heavyIronBall ? 100 : 40;
+    let range = baseRange - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
+    if (range < 1) range = 1;
+    return { range, urangeBase: baseRange };
+}
+
+function heroThrownMjollnirObject(obj) {
+    const artifact = String(obj?.artifact || obj?.oartifact || '').toLowerCase();
+    return artifact === 'mjollnir'
+        || objectKindKey(obj) === 'mjollnir'
+        || /mjollnir/i.test(inventoryItemName(obj));
+}
+
+function heroHorizontalThrowMjollnirRangeCap(range) {
+    return Math.max(1, Math.trunc((Math.max(1, Math.trunc(Number(range || 1))) + 1) / 2));
+}
+
+function heroThrownMjollnirThrowName(obj) {
+    return upstartText(inventoryItemName(obj).replace(/^(?:an?|the) /i, ''));
+}
+
+function heroThrownMjollnirAutoReturn(obj) {
+    return heroThrownMjollnirObject(obj) && itemIsPrimaryWielded(obj) && heroRoleName() === 'Valkyrie';
+}
+
 function heroThrowAmmoWeaponDescription(ammoSkill) {
     if (ammoSkill === 'crossbow') return 'bolt';
     if (ammoSkill === 'bow') return 'arrow';
@@ -20066,17 +20101,12 @@ function heroThrowAmmoWeaponDescription(ammoSkill) {
 function heroHorizontalThrowAmmoRange(obj) {
     const ammoSkill = heroThrowAmmoSkill(obj);
     if (!ammoSkill) return null;
-    const stats = game.u?.acurr?.a || [];
-    const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
     const launcherSkill = heroThrowLauncherSkill(heroWieldedThrowLauncher());
     const matchedLauncher = launcherSkill === ammoSkill;
     if (ammoSkill === 'sling' && !matchedLauncher) return null;
     const crossbowing = matchedLauncher && launcherSkill === 'crossbow';
-    const urangeBase = Math.max(0, Math.trunc((crossbowing ? 18 : strength) / 2));
-    const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
-    const weightDivisor = heavyIronBall ? 100 : 40;
-    let range = urangeBase - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
-    if (range < 1) range = 1;
+    const urangeBase = Math.max(0, Math.trunc((crossbowing ? 18 : heroThrowCondensedStrength()) / 2));
+    let { range } = heroHorizontalThrowWeightedRange(obj, urangeBase);
     let noLauncherMessage = '';
     if (matchedLauncher) {
         range = crossbowing ? BOLT_LIM : range + 1;
@@ -20089,13 +20119,9 @@ function heroHorizontalThrowAmmoRange(obj) {
 
 function heroHorizontalThrowAirSplitRange(obj) {
     const ammoRange = heroHorizontalThrowAmmoRange(obj);
-    const stats = game.u?.acurr?.a || [];
-    const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
-    const urangeBase = ammoRange?.urangeBase ?? Math.max(0, Math.trunc(strength / 2));
-    const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
-    const weightDivisor = heavyIronBall ? 100 : 40;
-    let range = ammoRange?.range ?? urangeBase - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
-    if (range < 1) range = 1;
+    const weightedRange = ammoRange ? null : heroHorizontalThrowWeightedRange(obj);
+    const urangeBase = ammoRange?.urangeBase ?? weightedRange.urangeBase;
+    let range = ammoRange?.range ?? weightedRange.range;
 
     let recoilRange = urangeBase - range;
     if (recoilRange < 1) recoilRange = 1;
@@ -66877,6 +66903,25 @@ export async function rhack(_cmd) {
         }
         const name = inventoryItemName(item);
         const lowerName = name.toLowerCase();
+        const mjollnirThrow = heroThrownMjollnirObject(item);
+        if (mjollnirThrow && !itemIsPrimaryWielded(item)) {
+            await setMessage(`${heroThrownMjollnirThrowName(item)} must be wielded before it can be thrown.`);
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game.context.move = 0;
+            return;
+        }
+        if (mjollnirThrow && Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10)) < STR19(25)) {
+            await setMessage("It's too heavy.");
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            return;
+        }
         let ux = game.u?.ux || 0;
         let uy = game.u?.uy || 0;
         const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'
@@ -66903,14 +66948,18 @@ export async function rhack(_cmd) {
         const returningAklysThrow = itemIsPrimaryWieldedAklys(item);
         const returningBoomerangOrdinaryThrow = heroIsUnderwaterForThrow()
             && tossUpWeaponObjectKey(item) === 'boomerang';
-        const returningObjectThrow = returningAklysThrow || returningBoomerangOrdinaryThrow;
+        const returningMjollnirThrow = heroThrownMjollnirAutoReturn(item);
+        const returningObjectThrow = returningAklysThrow || returningBoomerangOrdinaryThrow || returningMjollnirThrow;
         let ox = ux;
         let oy = uy;
         let targetMon = null;
         let ironBarsImpact = null;
         const ammoRange = heroHorizontalThrowAmmoRange(item);
         let throwNoLauncherMessage = ammoRange?.noLauncherMessage || '';
-        let throwRange = heroIsUnderwaterForThrow() ? 1 : returningAklysThrow ? 4 : ammoRange?.range ?? 8;
+        let throwRange = heroIsUnderwaterForThrow() ? 1
+            : returningAklysThrow ? 4
+                : mjollnirThrow ? heroHorizontalThrowMjollnirRangeCap(heroHorizontalThrowWeightedRange(item).range)
+                    : ammoRange?.range ?? 8;
         let ordinaryAirRecoilRange = 0;
         if (!boomerangFlight.handled && heroHorizontalThrowAirRecoilActive()) {
             const airSplit = heroHorizontalThrowAirSplitRange(item);
@@ -66918,6 +66967,7 @@ export async function rhack(_cmd) {
             throwRange = airSplit.throwRange;
             throwNoLauncherMessage = airSplit.noLauncherMessage || throwNoLauncherMessage;
             if (isBoulderObject(item)) throwRange = 20;
+            else if (mjollnirThrow) throwRange = heroHorizontalThrowMjollnirRangeCap(throwRange);
             else if (returningAklysThrow) throwRange = Math.min(throwRange, 4);
             if (heroIsUnderwaterForThrow()) throwRange = 1;
         }
