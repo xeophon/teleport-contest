@@ -68761,6 +68761,89 @@ test('proficient wielded bullwhip force-attacks visible unarmed monster without 
         ['rn2(20)', 'rn2(19)', 'rnd(20)', 'rn2(19)', 'rnd(2)', 'rn2(25)', 'rn2(3)']);
 });
 
+test('proficient wielded bullwhip can stop at safe tame target without snap', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0, 2]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173269, 'bullwhip', 'w', 0);
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mtame: 5,
+        pet: true,
+        mpeaceful: true,
+        data: { name: 'dog', mlevel: 4, mac: 5 },
+    });
+    game.inventory = [whip];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You flick your bullwhip towards the dog.  You stop.  Your dog is in the way!');
+    assert.doesNotMatch(game._pending_message, /Snap|You hit/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(dog.mx, 6);
+    assert.equal(dog.my, 5);
+    assert.equal(dog.mhp, 10);
+    assert.equal(dog.mflee, 1);
+    assert.equal(dog.mfleetim, 3);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(7)', 'rnd(6)']);
+});
+
+test('proficient wielded bullwhip safe tame evade snaps without swapping', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([1]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173270, 'bullwhip', 'w', 0);
+    const dog = ordinaryThrowTarget('dog', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mtame: 5,
+        pet: true,
+        mpeaceful: true,
+        data: { name: 'dog', mlevel: 4, mac: 5 },
+    });
+    game.inventory = [whip];
+    game.level.monsters = [dog];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You flick your bullwhip towards the dog.  Snap!');
+    assert.doesNotMatch(game._pending_message, /You hit|swap places/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(dog.mx, 6);
+    assert.equal(dog.my, 5);
+    assert.equal(dog.mhp, 10);
+    assert.equal(dog.mflee || 0, 0);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(7)']);
+});
+
 test('wielded bullwhip reveals hidden armed monster without disarming it', async () => {
     installNonShopFloorState();
     initRng(2);

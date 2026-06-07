@@ -20453,6 +20453,29 @@ async function forceHeroBullwhipMonsterAttack(mon, dx, dy, messages) {
     return true;
 }
 
+function heroBullwhipSafeTargetingProtected(mon) {
+    return !!mon && game.flags?.safe_pet !== false && mon.mpeaceful
+        && heroCanSpotBullwhipMonster(mon)
+        && !heroIsConfused() && !heroIsHallucinating() && !heroIsStunned();
+}
+
+async function finishHeroBullwhipSafeTameForceAttempt(mon, messages) {
+    if (!(mon?.mtame || mon?.pet) || !heroBullwhipSafeTargetingProtected(mon))
+        return 'not-safe';
+    if (rn2(7) !== 0) return 'evaded';
+
+    let fleeTime = rnd(6);
+    if (fleeTime === 1) fleeTime++;
+    mon.mflee = 1;
+    mon.mfleetim = Math.min(fleeTime + (mon.mfleetim || 0), 127);
+    clearMonsterTrack(mon);
+    const petName = mon.givenName || `${mon.saddled ? 'saddled ' : ''}${mon.data?.name || 'pet'}`;
+    messages.push(`You stop.  ${mon.givenName ? petName : `Your ${petName}`} is in the way!`);
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+    return 'stopped';
+}
+
 function heroCanSpotBullwhipPitMonster(mon) {
     return !!mon && ((!game.u?.blind && !mon.mundetected
         && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my))
@@ -20860,18 +20883,19 @@ async function finishHeroBullwhipDirection(item, ch) {
         }
         const mimicRevealed = bullwhipDisguisedMimic(mon) && !heroBullwhipSensesMonster(mon)
             && revealHeroBullwhipMimic(mon, messages);
-        if (mimicRevealed) {
-            if (proficient && !mon.mtame && !mon.pet)
-                return forceHeroBullwhipMonsterAttack(mon, dir.dx || 0, dir.dy || 0, messages);
-        } else {
+        let doSnap = !mimicRevealed;
+        if (!mimicRevealed) {
             const targetName = visibleAfterReveal ? fireScrollMonsterName(mon).replace(/^The /, 'the ') : 'it';
             const flickMessage = `You flick your bullwhip towards ${targetName}.`;
-            if (proficient && !mon.mtame && !mon.pet) {
-                messages.push(flickMessage);
-                return forceHeroBullwhipMonsterAttack(mon, dir.dx || 0, dir.dy || 0, messages);
-            }
-            messages.push(flickMessage, 'Snap!');
+            messages.push(flickMessage);
         }
+        if (proficient) {
+            const safeTameResult = await finishHeroBullwhipSafeTameForceAttempt(mon, messages);
+            if (safeTameResult === 'stopped') return true;
+            if (safeTameResult !== 'evaded' && !mon.mtame && !mon.pet)
+                return forceHeroBullwhipMonsterAttack(mon, dir.dx || 0, dir.dy || 0, messages);
+        }
+        if (doSnap) messages.push('Snap!');
         mon.msleeping = 0;
         mon.meating = 0;
         setHeroObjectHitMonsterAngry(mon);
