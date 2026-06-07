@@ -18,10 +18,10 @@
 
 - `hero land mine adjacent moat fills pit before recursive fallout`
 - `hero land mine adjacent lava fills pit and uses lava death prompt`
+- `flying hero sitting on hidden land mine can air-current fill pit with water`
 - Focused verification: `node --test --test-reporter=dot --test-name-pattern "land mine|landmine" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
-- Flying `#sit` air-current liquid fill needs a separate canary because hero consequences differ from movement-triggered landmine fallout.
 - `maybe_dunk_boulders()`, `recalc_block_point()`, and `spot_checks()` after landmine blast liquid fill remain open.
 - Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, and drawbridge destruction are outside this slice.

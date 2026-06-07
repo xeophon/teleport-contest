@@ -31020,6 +31020,45 @@ test('flying hero sitting on hidden land mine can air-current detonate', async (
     assert.equal(trap.madeby_u, false);
 });
 
+test('flying hero sitting on hidden land mine can air-current fill pit with water', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        flying: true,
+    });
+    game.inventory = [];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const cells = new Map([
+        ['5,5', targetLoc],
+        ['5,4', { roomno: ROOMOFFSET, typ: MOAT }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 0, 1]);
+
+    await enterSitCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(3)', 'rn2(2)']);
+    assert.equal(game._pending_message,
+        'You land.  You discover a trigger in a pile of soil below you.  KAABLAMM!!!  The air currents set it off!  The hole fills with water!');
+    assert.equal(targetLoc.typ, MOAT);
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.uinwater || 0, 0);
+    assert.equal(game.u.underwater || false, false);
+    assert.equal(game.u.uunderwater || false, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+});
+
 test('flying hero land mine life saving continues over recursive pit', async () => {
     installStableNonShopFloorState();
     vision_reset();
