@@ -61944,6 +61944,47 @@ test('attached ball throw pulls hero out of pit without deleting pit trap', asyn
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('attached ball throw pull-out lets old-square boulder fill pit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+        utrap: 4,
+        utraptype: TT_PIT,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876203, 'b');
+    const chain = attachedIronChain(876204);
+    const boulder = floorBoulder(876205, { ox: 5, oy: 5 });
+    const pit = { ttyp: PIT, tx: 5, ty: 5, tseen: true };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain, boulder];
+    game.level.traps = [pit];
+    markHeroNeighborhoodVisible();
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'The ball pulls you out of the pit!  The boulder fills a pit.');
+    assert.equal(game.level.traps.includes(pit), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('attached ball throw pulls hero out of lava trap state', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -62012,6 +62053,57 @@ test('attached ball throw pulls hero out of bear trap and wounds leg', async () 
     assert.equal(game.u.utrap, 0);
     assert.equal(game.u.utraptype, null);
     assert.equal(game.u.uhp, 18);
+    assert.equal(['left', 'right'].includes(game.u._woundedLegSide), true);
+    assert.equal(game.u._woundedLegTurns >= 500 && game.u._woundedLegTurns <= 1499, true);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)', 'rn2(3)', 'rn2(1000)']);
+});
+
+test('mounted attached ball throw pulls hero out of bear trap without HP loss', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        upunished: true,
+        utrap: 4,
+        utraptype: TT_BEARTRAP,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    game.u.acurr.a[A_DEX] = 10;
+    const pony = mountBearTrapPony(20);
+    const ball = carriedAttachedIronBall(876201, 'b');
+    const chain = attachedIronChain(876202);
+    const bearTrap = { ttyp: BEAR_TRAP, tx: 5, ty: 5, tseen: true };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [bearTrap];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'The ball pulls you out of the bear trap!');
+    assert.equal(game.level.traps.includes(bearTrap), true);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(pony.mhp, 20);
+    assert.equal(game.u.usteed, pony);
+    assert.equal(pony.mx, 5);
+    assert.equal(pony.my, 5);
+    assert.equal(game.u._woundedDexPenalty, 1);
+    assert.equal(game.u.acurr.a[A_DEX], 9);
     assert.equal(['left', 'right'].includes(game.u._woundedLegSide), true);
     assert.equal(game.u._woundedLegTurns >= 500 && game.u._woundedLegTurns <= 1499, true);
     assert.equal(ball.ox, 10);

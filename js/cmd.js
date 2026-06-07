@@ -20141,6 +20141,16 @@ function heroDropBallLandingPullsHeroOntoBall(x, y) {
     return !!trap && (is_pit(trap.ttyp) || is_hole(trap.ttyp));
 }
 
+function heroDropBallFillPitAt(x, y, messages) {
+    const trap = earthBoulderPitTrapAt(x, y);
+    if (!trap) return false;
+    const boulder = (game.level?.objects || []).find(obj =>
+        isBoulderObject(obj) && obj.ox === x && obj.oy === y);
+    if (!boulder) return false;
+    removeFloorObject(boulder);
+    return earthFloorEffects(boulder, x, y, messages, 'settle', { usedUpShopBillOnDestroy: true });
+}
+
 function heroDropBallReleaseTrapMessages(x, y) {
     if (!game.u?.utrap) return [];
     const trapState = heroDropBallTrapState(game.u.utraptype);
@@ -20174,6 +20184,7 @@ function heroDropBallReleaseTrapMessages(x, y) {
     if (messages.length && game.u) {
         game.u.utrap = 0;
         game.u.utraptype = null;
+        heroDropBallFillPitAt(x, y, messages);
     }
     return messages;
 }
