@@ -30685,7 +30685,21 @@ test('deferred hero land mine water-level blast deletes engraving and breaks doo
     const cells = new Map([['5,5', doorLoc]]);
     game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
     const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const nearbySleeper = ordinaryThrowTarget('goblin', 10, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    const uniqueSleeper = ordinaryThrowTarget('Oracle', 11, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'Oracle', unique: true, uniq: true },
+    });
+    const farSleeper = ordinaryThrowTarget('goblin', 30, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
     game.level.traps = [trap];
+    game.level.monsters = [nearbySleeper, uniqueSleeper, farSleeper];
     game.level.engravings = [
         { x: 5, y: 5, text: 'Elbereth', type: 1 },
         { x: 2, y: 2, text: 'ad aerarium', type: 1 },
@@ -30707,6 +30721,12 @@ test('deferred hero land mine water-level blast deletes engraving and breaks doo
     assert.equal(game.level.traps.includes(trap), false);
     assert.equal(doorLoc.doormask, D_BROKEN);
     assert.equal(doorLoc.flags, D_BROKEN);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(uniqueSleeper.msleeping, 0);
+    assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(farSleeper.msleeping, 1);
+    assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
     assert.deepEqual(game.level.engravings, [{ x: 2, y: 2, text: 'ad aerarium', type: 1 }]);
 });
 

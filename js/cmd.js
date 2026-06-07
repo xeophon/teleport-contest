@@ -19090,8 +19090,7 @@ function monsterResistsCold(mon) {
         || data.coldResistance || data.resistsCold || data.resists_cold);
 }
 
-function wakeNearbyMonstersFromExplosion(x, y, damage) {
-    const distance = Math.max(damage * damage, 50);
+function wakeNearbyMonstersAt(x, y, distance) {
     for (const sleeper of game.level?.monsters || []) {
         if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
         const dx = (sleeper.mx || 0) - x;
@@ -19100,6 +19099,10 @@ function wakeNearbyMonstersFromExplosion(x, y, damage) {
         sleeper.msleeping = 0;
         if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
     }
+}
+
+function wakeNearbyMonstersFromExplosion(x, y, damage) {
+    wakeNearbyMonstersAt(x, y, Math.max(damage * damage, 50));
 }
 
 function burningOilExplosionVisible(x, y) {
@@ -47652,6 +47655,7 @@ function convertLandmineToPit(trap) {
 function landminePostBlastTrap(trap, messages = []) {
     if (!trap) return null;
     deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
+    wakeNearbyMonstersAt(trap.tx, trap.ty, 400);
     landmineBreakDoorAt(trap.tx, trap.ty);
     if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
         deleteTrap(trap);

@@ -19,6 +19,7 @@
 - Landmine liquid fill now refreshes vision and the blast square after the post-liquid boulder pass, covering C's trailing `recalc_block_point()` behavior for consumed boulders.
 - Hero and rolling-boulder landmine blasts share engraving deletion at the blast square, including air/water-level cases where no pit remains.
 - Hero landmine blasts break a door on the blast square before the air/water-level deletion gate, matching C's pre-pit fallout order.
+- Hero landmine blasts wake nearby monsters with C's `wake_nearto(..., 400)` radius semantics before the pit/liquid decision.
 
 ## Tests
 
@@ -34,4 +35,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `blow_up_landmine()` fallout remains partial: scatter, wakeups, drawbridge-wall handling, and drawbridge destruction are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: scatter, drawbridge-wall handling, and drawbridge destruction are outside this slice.
