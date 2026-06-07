@@ -20303,6 +20303,96 @@ function heroWieldedPolearm() {
     return (game.inventory || []).find(item => itemIsPrimaryWielded(item) && isPolearmItem(item));
 }
 
+function isBullwhipItem(item) {
+    if (!item) return false;
+    if (item.otyp === BULLWHIP) return true;
+    return itemClassKey(item) === 'weapon' && /\bbullwhip\b/.test(inventoryItemName(item).toLowerCase());
+}
+
+function heroWieldedBullwhip() {
+    return (game.inventory || []).find(item => itemIsPrimaryWielded(item) && isBullwhipItem(item)) || null;
+}
+
+async function beginHeroBullwhipApply(item) {
+    if (!item || !isBullwhipItem(item)) return false;
+    if (!itemIsPrimaryWielded(item)) {
+        const line = wieldItemForApply(item);
+        await setMessage(`${line}.`);
+        game.context.move = 1;
+        return true;
+    }
+    game._apply_bullwhip_letter = item.letter || null;
+    await setMessage('In what direction?');
+    game._command_mode = 'applyBullwhipDirection';
+    return true;
+}
+
+async function finishHeroBullwhipDirection(item, ch) {
+    game._apply_bullwhip_letter = null;
+    game._command_mode = null;
+    if (!item || !isBullwhipItem(item)) {
+        await setMessage('Never mind.');
+        return true;
+    }
+    if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+        await setMessage('Never mind.');
+        return true;
+    }
+    const dir = movementDirection(ch);
+    if (!dir) return true;
+
+    if (game.u?.uswallow) {
+        await setMessage('There is not enough room to flick your bullwhip.');
+        game.context.move = 1;
+        return true;
+    }
+    if (game.u?.underwater || game.u?.uunderwater || game.u?.Underwater) {
+        await setMessage('There is too much resistance to flick your bullwhip.');
+        game.context.move = 1;
+        return true;
+    }
+    if (dir.dz < 0) {
+        await setMessage('You flick a bug off of the ceiling.');
+        game.context.move = 1;
+        return true;
+    }
+
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const rx = ux + (dir.dx || 0);
+    const ry = uy + (dir.dy || 0);
+    if ((!dir.dx && !dir.dy) || dir.dz > 0) {
+        const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + Math.trunc(Number(item.spe || 0)));
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
+        await setMessage('You hit your foot with your bullwhip.');
+        game.context.move = 1;
+        return true;
+    }
+    if (!isok(rx, ry)) {
+        await setMessage('You miss.');
+        return true;
+    }
+
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate.mx === rx && candidate.my === ry && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
+    if (mon) {
+        const targetName = fireScrollMonsterName(mon).replace(/^The /, 'the ');
+        const messages = [`You flick your bullwhip towards ${targetName}.`, 'Snap!'];
+        mon.msleeping = 0;
+        mon.meating = 0;
+        setHeroObjectHitMonsterAngry(mon);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    await setMessage(Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)
+        ? 'You snap your whip through thin air.'
+        : 'Snap!');
+    game.context.move = 1;
+    return true;
+}
+
 function heroWieldedThrowAndReturnWeapon() {
     return (game.inventory || []).find(item => {
         if (!itemIsPrimaryWielded(item)) return false;
@@ -62366,6 +62456,10 @@ export async function rhack(_cmd) {
             game._command_mode = 'applyPickDigDirection';
             return;
         }
+        if (isBullwhipItem(item)) {
+            await beginHeroBullwhipApply(item);
+            return;
+        }
         if (isPolearmItem(item)) {
             if (!itemIsWielded(item)) {
                 const line = wieldItemForApply(item);
@@ -62590,6 +62684,12 @@ export async function rhack(_cmd) {
             return;
         }
         game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'applyBullwhipDirection') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_bullwhip_letter);
+        await finishHeroBullwhipDirection(item, ch);
         return;
     }
 
@@ -69821,6 +69921,12 @@ export async function rhack(_cmd) {
             const polearm = !game.flags?.autoquiver && heroWieldedPolearm();
             if (polearm) {
                 await beginHeroFirePolearmFallback(polearm);
+                return;
+            }
+            const bullwhip = !game.flags?.autoquiver && heroWieldedBullwhip();
+            if (bullwhip) {
+                game._fire_count = null;
+                await beginHeroBullwhipApply(bullwhip);
                 return;
             }
             const letters = inventoryLetters(isReadySuggestItem);

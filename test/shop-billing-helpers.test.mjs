@@ -67003,6 +67003,173 @@ test('f command empty quiver with wielded polearm and no target does not prompt 
     assert.deepEqual(getRngLog(), []);
 });
 
+test('applying wielded bullwhip uses direction prompt and snaps with no target', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173204, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+
+    assert.equal(game._command_mode, 'applyObject');
+    assert.match(game._pending_message, /What do you want to use or apply\? \[w or \?\*\]/);
+
+    await rhack('w');
+
+    assert.equal(game._command_mode, 'applyBullwhipDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'Snap!');
+    assert.equal(whip.wielded, true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('applying wielded bullwhip off map misses without time', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 0,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173209, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('h');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game._pending_message, 'You miss.');
+    assert.equal(whip.wielded, true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('f command empty quiver with wielded bullwhip applies it before ammo prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173205, 'bullwhip', 'w', 0);
+    const missile = arrow(876174112, 'b', { line: 'b - an arrow' });
+    game.inventory = [whip, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'applyBullwhipDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'Snap!');
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|arrow/);
+    assert.equal(whip.wielded, true);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('f command wielded bullwhip flicks adjacent visible monster before ammo prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173206, 'bullwhip', 'w', 0);
+    const missile = arrow(876174113, 'b', { line: 'b - an arrow' });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+    });
+    game.inventory = [whip, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You flick your bullwhip towards the goblin\./);
+    assert.match(game._pending_message, /Snap!/);
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|arrow/);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(missile.quivered || false, false);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('f command autoquiver still beats wielded bullwhip fallback', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.autoquiver = true;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173207, 'bullwhip', 'w', 0);
+    const missile = arrow(876174114, 'b', { line: 'b - an arrow' });
+    game.inventory = [whip, missile];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(missile.quivered, true);
+    assert.equal(game._pending_message, 'You ready: b - an arrow.');
+    assert.doesNotMatch(game._pending_message, /bullwhip|What do you want to fire/);
+});
+
+test('f command quivered ammo with wielded bullwhip fires ammo instead of whip', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173208, 'bullwhip', 'w', 0);
+    const missile = arrow(876174115, 'b', {
+        quivered: true,
+        line: 'b - an arrow (in quiver)',
+    });
+    game.inventory = [whip, missile];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._apply_bullwhip_letter || null, null);
+    assert.equal(whip.wielded, true);
+    assert.equal(missile.quivered, true);
+});
+
 test('f command failed autoquiver falls through to fire prompt', async () => {
     installNonShopFloorState();
     initRng(2);

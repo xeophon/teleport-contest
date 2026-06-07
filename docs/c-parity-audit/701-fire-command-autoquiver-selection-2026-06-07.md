@@ -35,6 +35,7 @@
 ## Remaining Follow-Ups
 
 - Manual `doquiver_core("fire")` parity is still broader than the current JS prompt: coins, generic weapon suggestions, downplayed items, count-based splitting, no-inventory feedback, and worn/alternate edge cases remain separate work.
-- Audit 702 covers the first empty-quiver wielded-polearm fallback and ordinary monster hit slice; bullwhip fallback and alternate-polearm swap remain separate `dofire()` slices.
+- Audit 702 covers the first empty-quiver wielded-polearm fallback and ordinary monster hit slice; audit 704 covers the empty-quiver wielded-bullwhip fallback.
 - Audit 703 covers the thrown-and-return weapon shortcut for an empty quiver or ammo quiver before autoquiver.
+- Alternate-polearm swap remains a separate `dofire()` slice.
 - The JS fireassist swap/wield path still mutates state inline rather than queuing C's `doswapweapon`/`dowield`/retry sequence.

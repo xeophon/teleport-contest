@@ -30,6 +30,7 @@
 
 ## Remaining Follow-Ups
 
-- Full `dofire()` parity still needs bullwhip fallback, alternate-polearm queued swap/retry, and reachable wielded-polearm priority with quivered ammo.
+- Audit 704 covers the empty-quiver bullwhip fallback.
+- Full `dofire()` parity still needs alternate-polearm queued swap/retry and reachable wielded-polearm priority with quivered ammo.
 - Fireassist launcher swaps still mutate state inline instead of queuing C's `doswapweapon`/`dowield`/retry sequence.
 - Broader direct throw return parity remains tracked by the throw-specific audits: exact Mjollnir artifact self-hit details, inventory-slot restoration, autoquiver-on-return side effects, and complete shop/timer behavior after rare fail-to-return.
