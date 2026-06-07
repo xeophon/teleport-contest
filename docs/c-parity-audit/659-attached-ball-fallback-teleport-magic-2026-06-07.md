@@ -27,7 +27,7 @@
 
 ## Remaining Follow-Ups
 
-- Attached-ball fallback relocation still needs a source-backed slice for statue traps.
+- Statue-trap attached-ball fallback relocation is covered by audit 660.
 - One-shot vault teleport trap fallback and ordinary random teleport-trap fallback still need narrower canaries beyond the fixed-destination branch.
 - Magic-trap fate 20 still needs remove-curse/unpunish parity for punished heroes.
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.

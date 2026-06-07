@@ -62807,6 +62807,132 @@ test('attached ball fallback relocation triggers magic trap on new hero square',
     assert.equal(game._deferred_level_goto || null, null);
 });
 
+test('attached ball fallback relocation triggers statue trap on new hero square', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876245, 'b');
+    const chain = attachedIronChain(876246);
+    const statue = statueTrapStatue(876247, 9, 5, 'goblin');
+    const ration = putObjectInContainer(statue, foodRation(876248));
+    const statueTrap = { ttyp: STATUE_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain, statue];
+    game.level.traps = [statueTrap];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message || '', /statue.*comes to life/);
+    assert.equal(game.level.traps.includes(statueTrap), false);
+    assert.equal(game.level.objects.includes(statue), false);
+    const monster = game.level.monsters.find(mon => mon.data?.name === 'goblin');
+    assert.ok(monster);
+    assert.equal(monster.mpeaceful, 0);
+    assert.equal(monster.msleeping, 0);
+    assert.equal(monster.mundetected, false);
+    assert.equal(monster.minvent.includes(ration), true);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation gives known statue trap escape prelude', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876249, 'b');
+    const chain = attachedIronChain(876250);
+    const statue = statueTrapStatue(876251, 9, 5, 'goblin');
+    const statueTrap = { ttyp: STATUE_TRAP, tx: 9, ty: 5, tseen: true, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain, statue];
+    game.level.traps = [statueTrap];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const escapeRoll = getRngLog().find(entry => rngCallName(entry) === 'rn2(5)');
+    assert.ok(escapeRoll, 'known statue trap should make its escape prelude roll');
+    const escaped = rngCallValue(escapeRoll) === 0;
+    if (escaped) {
+        assert.equal(game._pending_message, 'You escape a statue trap.');
+        assert.equal(game.level.traps.includes(statueTrap), true);
+        assert.equal(game.level.objects.includes(statue), true);
+        assert.equal(game.level.monsters.some(mon => mon.data?.name === 'goblin'), false);
+    } else {
+        assert.match(game._pending_message || '', /statue.*comes to life/);
+        assert.equal(game.level.traps.includes(statueTrap), false);
+        assert.equal(game.level.objects.includes(statue), false);
+        assert.ok(game.level.monsters.find(mon => mon.data?.name === 'goblin'));
+    }
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation deletes statue trap with no statue to animate', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876255, 'b');
+    const chain = attachedIronChain(876256);
+    const statueTrap = { ttyp: STATUE_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [statueTrap];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message || '', '');
+    assert.equal(game.level.traps.includes(statueTrap), false);
+    assert.equal(game.level.monsters.some(mon => mon.data?.name === 'goblin'), false);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
 test('attached ball fallback relocation triggers anti-magic field on new hero square', async () => {
     installNonShopFloorState();
     game.sokoban_dnum = 999;

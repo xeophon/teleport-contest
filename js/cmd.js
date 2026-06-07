@@ -20153,7 +20153,7 @@ function heroDropBallPoolRelocationEffect(x, y, messages) {
     return { more: true, trapResult: null };
 }
 
-function heroDropBallTrapRelocationEffect(x, y, messages) {
+async function heroDropBallTrapRelocationEffect(x, y, messages) {
     const trap = heroDropBallTrapAt(x, y);
     if (!trap) return { more: false, trapResult: null };
 
@@ -20164,6 +20164,7 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
         result = movementMagicTrapResult(trap);
         if (result?.afterMore) game._topline_after_more = result.afterMore;
     }
+    else if (trap.ttyp === STATUE_TRAP) result = await movementStatueTrapResult(trap, x, y);
     else if (trap.ttyp === ANTI_MAGIC) result = movementAntiMagicTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
     else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
@@ -20187,7 +20188,7 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
     };
 }
 
-function heroDropBallPostRelocationEffects(x, y, messages) {
+async function heroDropBallPostRelocationEffects(x, y, messages) {
     const poolResult = heroDropBallPoolRelocationEffect(x, y, messages);
     if (poolResult.more || poolResult.trapResult) return poolResult;
     return heroDropBallTrapRelocationEffect(x, y, messages);
@@ -20241,7 +20242,7 @@ function heroDropBallReleaseTrapMessages(x, y) {
     return messages;
 }
 
-function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
+async function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
     const result = { messages: [], more: false, trapResult: null };
     if (!heroThrownAttachedBallObject(obj) || !game.u?.uchain) return result;
     game.u.uball = obj;
@@ -20274,7 +20275,7 @@ function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
     game.u.uchain.transientProjectile = false;
     newsym(oldUx, oldUy);
     newsym(newUx, newUy);
-    const post = heroDropBallPostRelocationEffects(newUx, newUy, result.messages);
+    const post = await heroDropBallPostRelocationEffects(newUx, newUy, result.messages);
     result.more = !!post.more;
     result.trapResult = post.trapResult;
     return result;
@@ -46185,6 +46186,14 @@ function movementMagicTrapResult(trap) {
     };
 }
 
+async function movementStatueTrapResult(trap, x = game.u?.ux || 0, y = game.u?.uy || 0) {
+    if (!trap) return null;
+    if (movementTrapAlreadySeen(trap) && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    const message = await activateStatueTrap(trap, x, y);
+    return { message, effect: true };
+}
+
 function placeSitTrapProjectile(projectile) {
     const obj = {
         quan: 1,
@@ -67766,7 +67775,7 @@ export async function rhack(_cmd) {
         let attachedBallLandingMore = false;
         let attachedBallTrapResult = null;
         if (attachedBallThrow && landing.object) {
-            const attachedDrop = heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
+            const attachedDrop = await heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
             landing.messages.push(...attachedDrop.messages);
             attachedBallLandingMore = !!attachedDrop.more;
             attachedBallTrapResult = attachedDrop.trapResult;

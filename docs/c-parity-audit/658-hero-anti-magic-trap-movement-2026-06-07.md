@@ -30,5 +30,5 @@
 ## Remaining Follow-Ups
 
 - Hero anti-magic HP damage still needs narrower canaries for half physical/spell damage, Magicbane, carried magic-defending artifacts, pass-wall quartering, and fatal/life-saving ordering.
-- Attached-ball fallback relocation still needs a source-backed slice for statue traps; same-level teleport and magic traps are covered by audit 659.
+- Same-level teleport and magic attached-ball fallback traps are covered by audit 659; statue traps are covered by audit 660.
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
