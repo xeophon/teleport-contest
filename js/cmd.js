@@ -20513,6 +20513,14 @@ function heroHorizontalThrowRecoilTrapPassOverMessageAt(x, y) {
     return `You pass right over ${sitTrapArticleName(trap)}.`;
 }
 
+function heroHorizontalThrowRecoilTrapEffectMessageAt(x, y) {
+    const trap = heroHorizontalThrowRecoilTrapAt(x, y);
+    if (trap?.ttyp !== VIBRATING_SQUARE) return '';
+    trap.tseen = true;
+    newsym(x, y);
+    return 'The ground vibrates as you pass it.';
+}
+
 function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, dx, dy) {
     if (!loc) return { blocked: false };
     const diagonal = dx !== 0 && dy !== 0;
@@ -20610,6 +20618,8 @@ function heroHorizontalThrowRecoil(dir, range) {
         newsym(nx, ny);
         if (game.level?.at(nx, ny) === loc) vision_recalc(0);
         else game.vision_full_recalc = 1;
+        const trapEffectMessage = heroHorizontalThrowRecoilTrapEffectMessageAt(nx, ny);
+        if (trapEffectMessage) messages.push(trapEffectMessage);
         const trapMessage = heroHorizontalThrowRecoilTrapPassOverMessageAt(nx, ny);
         if (trapMessage) messages.push(trapMessage);
     }

@@ -21,5 +21,5 @@
 
 ## Remaining Follow-Ups
 
-- Actual recoil trap effects for magic portals, vibrating squares, fire traps, and Sokoban pit/hole stops remain separate slices.
+- Actual recoil trap effects for magic portals, fire traps, and Sokoban pit/hole stops remain separate slices.
 - Full normal-movement trap dispatch is still deliberately avoided for recoil because C does not trigger most floor traps from `hurtle_step()`.
