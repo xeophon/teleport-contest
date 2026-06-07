@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BROAD_SWORD, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -20800,6 +20800,23 @@ function heroWeaponDamageSkillBonus(skill, skillName) {
     return 0;
 }
 
+function heroWeaponHitSkillBonus(skill, skillName) {
+    const level = heroExplicitWeaponSkillLevel(skill, skillName);
+    if (level == null) return 0;
+    if (level <= P_UNSKILLED) return -4;
+    if (level === P_BASIC) return 0;
+    if (level === P_SKILLED) return 2;
+    if (level >= P_EXPERT) return 3;
+    return 0;
+}
+
+function heroLauncherSkillMeta(launcher) {
+    const skill = heroThrowLauncherSkill(launcher);
+    if (skill === 'bow') return { skill: P_BOW, skillName: 'bow' };
+    if (skill === 'crossbow') return { skill: P_CROSSBOW, skillName: 'crossbow' };
+    return null;
+}
+
 function heroProjectileTargetHatesBlessings(mon) {
     const data = mon?.data || {};
     const rawMlet = String(mon?.mlet || data.mlet || data.glyph || '');
@@ -20898,6 +20915,82 @@ function heroProjectileWeaponDamage(obj, mon) {
     damage += heroWeaponDamageSkillBonus(data.skill, data.skillName);
     if (damage < 1) damage = 1;
     return { damage, silverMessage: special.silverMessage };
+}
+
+const HERO_LAUNCHER_AMMO_MONSTER_DATA = new Map([
+    ['arrow', { smallDie: 6, largeDie: 6, skill: P_BOW, skillName: 'bow' }],
+    ['elven arrow', { smallDie: 7, largeDie: 6, skill: P_BOW, skillName: 'bow' }],
+    ['orcish arrow', { smallDie: 5, largeDie: 6, skill: P_BOW, skillName: 'bow' }],
+    ['silver arrow', { smallDie: 6, largeDie: 6, skill: P_BOW, skillName: 'bow' }],
+    ['ya', { smallDie: 7, largeDie: 7, skill: P_BOW, skillName: 'bow' }],
+    ['crossbow bolt', { smallDie: 4, largeDie: 6, skill: P_CROSSBOW, skillName: 'crossbow' }],
+]);
+
+function heroLauncherAmmoData(obj) {
+    const key = objectKindKey(obj);
+    if (HERO_LAUNCHER_AMMO_MONSTER_DATA.has(key)) return HERO_LAUNCHER_AMMO_MONSTER_DATA.get(key);
+    const name = pickupObjectName({ ...obj, quan: 1 }).toLowerCase().replace(/^(?:an?|the)\s+/, '');
+    return HERO_LAUNCHER_AMMO_MONSTER_DATA.get(name) || null;
+}
+
+function heroFiredLauncherAmmoHitValue(obj, mon, launcher) {
+    let hitValue = heroProjectileBaseHitValue(obj, mon);
+    if (!heroThrowAmmoAndLauncher(obj, launcher)) return hitValue - 4;
+    const meta = heroLauncherSkillMeta(launcher);
+    hitValue += Math.trunc(Number(launcher?.spe || 0)) - objectGreatestErosion(launcher);
+    if (Number.isFinite(Number(launcher?.hitbon ?? launcher?.oc_hitbon)))
+        hitValue += Math.trunc(Number(launcher.hitbon ?? launcher.oc_hitbon));
+    if (meta) hitValue += heroWeaponHitSkillBonus(meta.skill, meta.skillName);
+    return hitValue;
+}
+
+function heroFiredLauncherAmmoDamage(obj, mon, launcher) {
+    const data = heroLauncherAmmoData(obj);
+    if (!data) return { damage: 0, silverMessage: '' };
+    const largeTarget = heroProjectileMonsterSizeValue(mon) >= 3;
+    let damage = rnd(largeTarget ? data.largeDie : data.smallDie);
+    damage += Math.trunc(Number(obj?.spe || 0));
+    if (damage < 0) damage = 0;
+    const special = heroProjectileSpecialWeaponDamage(obj, mon);
+    damage += special.damage;
+    if (damage > 0) {
+        damage -= objectGreatestErosion(obj);
+        if (damage < 1) damage = 1;
+    }
+    damage += heroDamageIncreaseBonus();
+    const meta = heroLauncherSkillMeta(launcher) || data;
+    damage += heroWeaponDamageSkillBonus(meta.skill, meta.skillName);
+    if (damage < 1) damage = 1;
+    return { damage, silverMessage: special.silverMessage };
+}
+
+function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
+    const data = heroLauncherAmmoData(obj);
+    if (!data) return { handled: false, messages: [] };
+    const hitValue = heroFiredLauncherAmmoHitValue(obj, mon, launcher);
+    const dieroll = rnd(20);
+    const targetName = heroThrownVenomTargetName(mon);
+    if (hitValue >= dieroll) {
+        const { damage, silverMessage } = heroFiredLauncherAmmoDamage(obj, mon, launcher);
+        mon.mhp = (mon.mhp || 1) - damage;
+        const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
+        if (silverMessage) messages.push(silverMessage);
+        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
+        const mulched = shouldMulchHeroProjectileMissile(obj);
+        if (mulched) rn2(100);
+        return {
+            handled: true,
+            hit: true,
+            damage,
+            mulched,
+            messages,
+        };
+    }
+    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    return { handled: true, hit: false, messages };
 }
 
 function heroProjectileHitPunctuation(damage) {
@@ -67245,6 +67338,7 @@ export async function rhack(_cmd) {
         }
         let ox = startX;
         let oy = startY;
+        let targetMon = null;
         for (let step = 0; step < fireRange; step++) {
             const nx = ox + dir.dx;
             const ny = oy + dir.dy;
@@ -67252,6 +67346,8 @@ export async function rhack(_cmd) {
             if (!loc || IS_OBSTRUCTED(loc.typ)) break;
             ox = nx;
             oy = ny;
+            targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
+            if (targetMon) break;
         }
         const oldQuan = item.quan || 1;
         const firedFromLauncher = !!launcher;
@@ -67260,11 +67356,10 @@ export async function rhack(_cmd) {
         let projectileId = null;
         let projectileBreakRoll = null;
         const hardLanding = !projectileLandingIsSoft(ox, oy);
-        for (let shot = 0; shot < shotCount; shot++) {
-            if (oldQuan - shot > 1) projectileId = next_ident();
-            if (hardLanding) {
-                const roll = rn2(100);
-                if (projectileBreakRoll == null) projectileBreakRoll = roll;
+        const splitBeforeImpact = !!(targetMon && firedFromLauncher);
+        if (splitBeforeImpact) {
+            for (let shot = 0; shot < shotCount; shot++) {
+                if (oldQuan - shot > 1) projectileId = next_ident();
             }
         }
         const projectileObject = {
@@ -67281,7 +67376,36 @@ export async function rhack(_cmd) {
             color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         };
         if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
-        const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, { breakRoll: projectileBreakRoll });
+        let impactMessage = '';
+        let impactConsumedProjectile = false;
+        let impactObjectHit = false;
+        let impactPassiveTarget = null;
+        if (targetMon && firedFromLauncher) {
+            const impact = heroFiredLauncherAmmoImpact(projectileObject, targetMon, launcher);
+            if (impact.handled) {
+                impactMessage = (impact.messages || []).join('  ');
+                impactConsumedProjectile = !!impact.mulched;
+                impactObjectHit = !!impact.hit;
+                impactPassiveTarget = impact.hit ? targetMon : null;
+            }
+        }
+        if (!impactConsumedProjectile && !impactObjectHit && hardLanding) {
+            projectileBreakRoll = null;
+            for (let shot = 0; shot < shotCount; shot++) {
+                if (!splitBeforeImpact && oldQuan - shot > 1) projectileId = next_ident();
+                const roll = rn2(100);
+                if (projectileBreakRoll == null) projectileBreakRoll = roll;
+            }
+        }
+        if (!splitBeforeImpact && projectileId != null) projectileObject.id = projectileId;
+        const landing = impactConsumedProjectile
+            ? { object: null, messages: [] }
+            : landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
+                breakRoll: projectileBreakRoll,
+                ohit: impactObjectHit,
+                passiveTarget: impactPassiveTarget,
+                skipTopBreak: impactObjectHit,
+            });
         const landingMessage = landing.messages.join('  ');
         if (firedFromLauncher) {
             game._stale_projectile_marks ??= [];
@@ -67304,20 +67428,26 @@ export async function rhack(_cmd) {
         const name = inventoryItemName(item)
             .replace(/^\d+ /, '')
             .replace(/^(?:uncursed|blessed|cursed) /, '');
-        const fireMessage = shotCount > 1
+        const fireMessage = !fireNoLauncherMessage && shotCount === 1
+            ? ''
+            : shotCount > 1
             ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
             : `${firedFromLauncher ? 'You shoot' : 'You throw'} ${name}.`;
         const message = fireNoLauncherMessage
             ? (fireRecoilResult?.message || '')
-            : [fireMessage, fireRecoilResult?.message || ''].filter(Boolean).join('  ');
+            : [fireMessage, fireRecoilResult?.message || '', impactMessage].filter(Boolean).join('  ');
         const followUpMessage = [message, landingMessage].filter(Boolean).join('  ');
         if (fireNoLauncherMessage) {
             if (followUpMessage) game._queued_message_after_more = followUpMessage;
             await setMessage(fireNoLauncherMessage, !!followUpMessage || !!fireRecoilResult?.more);
-        } else {
+        } else if (message || landingMessage) {
             if (landingMessage) game._queued_message_after_more = landingMessage;
             await setMessage(message, !!landingMessage || !!fireRecoilResult?.more);
+        } else {
+            game._pending_message = '';
+            game._message_more = 0;
         }
+        if (targetMon) newsym(targetMon.mx, targetMon.my);
         game._command_mode = null;
         game._fire_item_letter = null;
         game._fire_launcher_letter = null;

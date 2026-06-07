@@ -35,5 +35,5 @@
 ## Remaining Follow-Ups
 
 - Full `dofire()` fireassist parity still needs alternate-weapon swaps, known-cursed launcher filtering, autoquiver ranking, and polearm/whip fallbacks.
-- Full fired-projectile combat parity still needs `f` command monster hits, multishot, launcher strength suppression details, and adjacent/intervening hit handling routed through the shared hero projectile combat path.
-- C's quieter single-shot message behavior remains outside this slice; the JS `f` command still prints its local action message for matched single shots.
+- Audit 681 covers the first single-shot fired launcher-ammo monster hit/miss path, including quiet single-shot messages and fired-ammo strength suppression.
+- Full fired-projectile combat parity still needs C multishot, fireassist count handling, by-hand unmatched ammo monster hits, slung ammo variants, and broader adjacent/intervening hit handling routed through the shared hero projectile combat path.
