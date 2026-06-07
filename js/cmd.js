@@ -20303,6 +20303,62 @@ function heroWieldedPolearm() {
     return (game.inventory || []).find(item => itemIsPrimaryWielded(item) && isPolearmItem(item));
 }
 
+function itemIsAlternateWeapon(item) {
+    if (!item) return false;
+    const line = String(item.line || '');
+    return !!(item.alternate || /\b(?:alternate weapon|wielded in left hand|weapon in left hand)\b/.test(line));
+}
+
+function heroFireAlternatePolearm() {
+    if (game.flags?.fireassist === false) return null;
+    return (game.inventory || []).find(item =>
+        itemIsAlternateWeapon(item) && isPolearmItem(item)
+        && !(item.cursed && heroFireassistBlessCurseKnown(item))) || null;
+}
+
+function heroWieldedLineForItem(item) {
+    const hand = isTwoHandedWieldItem(item) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
+    return `${item.letter || '?'} - ${inventoryItemName(item)} (weapon in ${hand})`;
+}
+
+function heroAlternateLineForItem(item) {
+    return `${item.letter || '?'} - ${inventoryItemName(item)} (alternate weapon${(item.quan || 1) > 1 ? 's' : ''}; not wielded)`;
+}
+
+function swapHeroAlternatePolearmForFire(item) {
+    const previous = (game.inventory || []).find(invItem => invItem !== item && itemIsPrimaryWielded(invItem));
+    for (const invItem of game.inventory || []) {
+        if (invItem === item || invItem === previous) continue;
+        if (itemIsPrimaryWielded(invItem)) {
+            invItem.wielded = false;
+            invItem.line = `${invItem.letter || '?'} - ${inventoryItemName(invItem)}`;
+        }
+    }
+    if (previous) {
+        previous.wielded = false;
+        previous.alternate = true;
+        previous.line = heroAlternateLineForItem(previous);
+    }
+    item.wielded = true;
+    item.alternate = false;
+    item.line = heroWieldedLineForItem(item);
+    game._twoweapon = false;
+    game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item));
+    return previous ? `${previous.line}.` : 'You have no secondary weapon readied.';
+}
+
+async function beginHeroFireAlternatePolearmFallback(item) {
+    if (!item || !isPolearmItem(item)) return false;
+    const secondaryLine = swapHeroAlternatePolearmForFire(item);
+    game._fire_count = null;
+    game._fire_item_letter = null;
+    game._fire_launcher_letter = null;
+    game._fire_alternate_polearm_letter = item.letter || null;
+    game._fire_alternate_polearm_more_line = secondaryLine;
+    await setMessage(`${item.line}.`, true);
+    return true;
+}
+
 function isBullwhipItem(item) {
     if (!item) return false;
     if (item.otyp === BULLWHIP) return true;
@@ -55329,6 +55385,21 @@ export async function rhack(_cmd) {
                 }
                 return;
             }
+            if (game._fire_alternate_polearm_more_line) {
+                const next = game._fire_alternate_polearm_more_line;
+                game._fire_alternate_polearm_more_line = '';
+                game._pending_message = next;
+                game._message_more = 1;
+                game._keep_pending_message = 1;
+                return;
+            }
+            if (game._fire_alternate_polearm_letter) {
+                const letter = game._fire_alternate_polearm_letter;
+                game._fire_alternate_polearm_letter = null;
+                const item = (game.inventory || []).find(invItem => invItem.letter === letter);
+                await beginHeroFirePolearmFallback(item);
+                return;
+            }
             if (game._fire_ready_launcher_line) {
                 const next = game._fire_ready_launcher_line;
                 game._fire_ready_launcher_line = '';
@@ -69927,6 +69998,11 @@ export async function rhack(_cmd) {
             if (bullwhip) {
                 game._fire_count = null;
                 await beginHeroBullwhipApply(bullwhip);
+                return;
+            }
+            const alternatePolearm = !game.flags?.autoquiver && heroFireAlternatePolearm();
+            if (alternatePolearm) {
+                await beginHeroFireAlternatePolearmFallback(alternatePolearm);
                 return;
             }
             const letters = inventoryLetters(isReadySuggestItem);
