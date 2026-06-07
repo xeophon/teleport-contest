@@ -32,4 +32,4 @@
 - Mounted bear-trap pull-out should keep the C wounded-leg timer while skipping unmounted HP loss and wording.
 - Blind ball/chain glyph ordering and `spoteffects(TRUE)` after hero relocation remain open.
 - Pit/hole landing with a monster on the ball square, levitating pool/pit/hole landing, and dedicated hole/trapdoor landing canaries remain open.
-- Vertical attached-ball throws and buried-ball conversion remain open.
+- Vertical hard-floor attached-ball throws are covered by audit 650; vertical soft/liquid/down-gate effects and buried-ball conversion remain open.

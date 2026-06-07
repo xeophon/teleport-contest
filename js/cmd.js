@@ -20214,6 +20214,50 @@ function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
     return messages;
 }
 
+function prepareHeroThrownAttachedBallVerticalObject(obj, x, y) {
+    Object.assign(obj, {
+        letter: undefined,
+        line: undefined,
+        wielded: false,
+        worn: false,
+        quivered: false,
+        ox: x,
+        oy: y,
+        quan: 1,
+        glyph: obj.glyph || '0',
+        color: obj.color || CLR_CYAN,
+    });
+    return obj;
+}
+
+function ensureHeroThrownAttachedBallFloorState(obj) {
+    if (!heroThrownAttachedBallObject(obj)) return;
+    game.u.uball = obj;
+    game.level.objects ??= [];
+    if (!game.level.objects.includes(obj)) game.level.objects.push(obj);
+    if (game.u?.uchain && !game.level.objects.includes(game.u.uchain))
+        game.level.objects.push(game.u.uchain);
+}
+
+function heroThrownAttachedBallDownwardMessages(obj) {
+    const x = game.u?.ux ?? obj.ox ?? 0;
+    const y = game.u?.uy ?? obj.oy ?? 0;
+    const messages = [];
+    const floorMessage = heroThrownGenericObjectFloorMessage(obj, x, y);
+    if (floorMessage) messages.push(floorMessage);
+    const breakRoll = !projectileLandingIsSoft(x, y) ? rn2(100) : null;
+    const landing = landProjectileObjectWithShopHandling(obj, x, y, { breakRoll });
+    messages.push(...landing.messages);
+    if (landing.object) ensureHeroThrownAttachedBallFloorState(landing.object);
+    return messages;
+}
+
+function heroThrownAttachedBallUpwardMessages(obj) {
+    const messages = heroThrownGenericObjectUpwardMessages(obj);
+    ensureHeroThrownAttachedBallFloorState(obj);
+    return messages;
+}
+
 function heroThrowAmmoWeaponDescription(ammoSkill) {
     if (ammoSkill === 'crossbow') return 'bolt';
     if (ammoSkill === 'bow') return 'arrow';
@@ -66524,6 +66568,38 @@ export async function rhack(_cmd) {
             return;
         }
         const item = (game.inventory || []).find(invItem => invItem.letter === game._throw_item_letter);
+        if ((ch === '<' || ch === '>') && item && heroThrownAttachedBallObject(item)) {
+            const x = game.u?.ux || item.ox || 0;
+            const y = game.u?.uy || item.oy || 0;
+            const thrownObject = prepareHeroThrownAttachedBallVerticalObject(item, x, y);
+            const messages = ch === '<'
+                ? heroThrownAttachedBallUpwardMessages(thrownObject)
+                : heroThrownAttachedBallDownwardMessages(thrownObject);
+            removeInventoryItem(item);
+            ensureHeroThrownAttachedBallFloorState(thrownObject);
+            newsym(x, y);
+            await setMessage(messages.join('  '), !!messages.more);
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            game._command_mode = null;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            return;
+        }
         if (ch === '<' && item && supportsHeroThrownPotionUpwardHit(item)) {
             let thrownId = null;
             if ((item.quan || 1) > 1) thrownId = next_ident();

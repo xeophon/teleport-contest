@@ -61782,6 +61782,92 @@ test('floor-stuck attached hero-thrown heavy iron ball uses C range one', async 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('downward attached hero-thrown heavy iron ball stays attached and hits floor at hero', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+        uhp: 30,
+        uhpmax: 30,
+    });
+    const ball = carriedAttachedIronBall(876197, 'b');
+    const chain = attachedIronChain(876198);
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('>');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, null);
+    assert.equal(game.u.uball, ball);
+    assert.equal(game.u.uchain, chain);
+    assert.equal(game.u.upunished, true);
+    assert.equal(game.inventory.includes(ball), false);
+    assert.equal(game.level.objects.filter(obj => obj === ball).length, 1);
+    assert.equal(game.level.objects.filter(obj => obj === chain).length, 1);
+    assert.equal(ball.ox, 5);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 5);
+    assert.equal(chain.oy, 5);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 30);
+    assert.match(message, /A heavy iron ball hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|almost hits|ceiling|top of your head|hurtle|float/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)']);
+});
+
+test('upward attached hero-thrown heavy iron ball stays attached after falling back', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        upunished: true,
+        uhp: 30,
+        uhpmax: 30,
+    });
+    const ball = carriedAttachedIronBall(876199, 'b');
+    const chain = attachedIronChain(876200);
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    const log = getRngLog();
+    assert.equal(game._command_mode, null);
+    assert.equal(game.u.uball, ball);
+    assert.equal(game.u.uchain, chain);
+    assert.equal(game.u.upunished, true);
+    assert.equal(game.inventory.includes(ball), false);
+    assert.equal(game.level.objects.filter(obj => obj === ball).length, 1);
+    assert.equal(game.level.objects.filter(obj => obj === chain).length, 1);
+    assert.equal(ball.ox, 5);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 5);
+    assert.equal(chain.oy, 5);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.match(message, /A heavy iron ball almost hits the ceiling, then falls back on top of your head\./);
+    assert.match(message, /A heavy iron ball hits the floor\./);
+    assert.doesNotMatch(message, /cmdassist|In what direction|It doesn't hurt|shatters|Splat|hurtle|float/);
+    assert.equal(30 - game.u.uhp, rngValuesForCall(log, 'rnd(5)')[0]);
+    assert.deepEqual(log.map(rngCallName), ['rn2(5)', 'rn2(100)', 'rnd(5)', 'rn2(100)']);
+});
+
 test('attached ball throw pulls hero out of web and destroys web', async () => {
     installNonShopFloorState();
     initRng(2);
