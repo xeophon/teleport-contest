@@ -20523,6 +20523,15 @@ function heroHorizontalThrowRecoilResultFromMessages(messages, options = {}) {
 
 function heroHorizontalThrowRecoilTrapEffectAt(x, y) {
     const trap = heroHorizontalThrowRecoilTrapAt(x, y);
+    if (trap?.ttyp === MAGIC_PORTAL) {
+        const result = movementTransportTrapResult(trap);
+        return {
+            messages: result?.message ? [result.message] : [],
+            more: !!result?.more,
+            trapResult: result?.fatal || result?.lifeSaving ? result : null,
+            stop: true,
+        };
+    }
     if (trap?.ttyp === FIRE_TRAP) {
         const result = movementFireTrapResult(trap, { allowLifeSaving: true });
         return {
@@ -20650,7 +20659,8 @@ function heroHorizontalThrowRecoilResult(dir, range) {
         if (trapEffect.messages?.length) messages.push(...trapEffect.messages);
         more = more || !!trapEffect.more;
         trapResult ||= trapEffect.trapResult || null;
-        if (trapResult) return heroHorizontalThrowRecoilResultFromMessages(messages, { more, trapResult });
+        if (trapResult || trapEffect.stop)
+            return heroHorizontalThrowRecoilResultFromMessages(messages, { more, trapResult });
         const trapMessage = heroHorizontalThrowRecoilTrapPassOverMessageAt(nx, ny);
         if (trapMessage) messages.push(trapMessage);
     }

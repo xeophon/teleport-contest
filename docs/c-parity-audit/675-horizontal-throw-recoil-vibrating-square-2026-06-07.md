@@ -21,5 +21,5 @@
 
 ## Remaining Follow-Ups
 
-- Recoil effects for magic portals and Sokoban pit/hole stops remain separate slices.
+- Recoil effects for Sokoban pit/hole stops remain a separate slice.
 - Full normal-movement trap dispatch is still deliberately avoided for recoil because C only triggers a narrow trap subset from `hurtle_step()`.

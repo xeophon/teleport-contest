@@ -24,5 +24,5 @@
 
 ## Remaining Follow-Ups
 
-- Recoil effects for magic portals and Sokoban pit/hole stops remain separate slices.
+- Recoil effects for Sokoban pit/hole stops remain a separate slice.
 - The direct fire-trap branch reuses the current JS fire-trap helper; finer C gaps inside that helper, if any, remain outside this recoil-specific slice.

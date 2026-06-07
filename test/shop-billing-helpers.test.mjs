@@ -63615,6 +63615,72 @@ test('air-level hero-thrown ordinary weapon recoil triggers hidden fire trap', a
     assert.equal(landed.oy, 5);
 });
 
+test('levitating hero-thrown loose heavy iron ball recoil activates hidden magic portal and stops', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    Object.assign(game.u, {
+        ux: 12,
+        uy: 5,
+        levitating: true,
+        stunned: false,
+        _stunTimeout: 0,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    const ball = {
+        id: 876185,
+        letter: 'b',
+        line: 'b - a heavy iron ball',
+        cls: 'ball',
+        glyph: '0',
+        kind: 'heavy iron ball',
+        actualKind: 'heavy iron ball',
+        quan: 1,
+        owt: 480,
+    };
+    const portal = {
+        ttyp: MAGIC_PORTAL,
+        tx: 11,
+        ty: 5,
+        tseen: false,
+        madeby_u: false,
+        dst: { dnum: 0, dlevel: 2 },
+    };
+    const goblin = ordinaryThrowTarget('goblin', 15, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [ball];
+    game.level.traps = [portal];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hurtle in the opposite direction\.  You activated a magic portal!/);
+    assert.doesNotMatch(game._pending_message, /pass right over a magic portal|shudder/);
+    assert.equal(game._message_more, 1);
+    assert.equal(portal.tseen, true);
+    assert.equal(game.u.stunned, true);
+    assert.equal(game.u._stunTimeout >= 3, true);
+    assert.deepEqual(game._deferred_level_goto?.targetLevel, { dnum: 0, dlevel: 2 });
+    assert.equal(game._deferred_level_goto?.options?.portalArrival, true);
+    assert.equal(game._deferred_level_goto?.options?.preMessage, 'You feel slightly dizzy.');
+    assert.equal(game.u.ux, 11);
+    assert.equal(game.u.uy, 5);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(ball), false);
+    const landed = game.level.objects.find(obj => obj.id === ball.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 13);
+    assert.equal(landed.oy, 5);
+});
+
 test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', async () => {
     installNonShopFloorState();
     initRng(2);
