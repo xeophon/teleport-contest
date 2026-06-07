@@ -62076,6 +62076,54 @@ test('hero-thrown dart harms ordinary monster and survives landing', async () =>
     ]);
 });
 
+test('hero-thrown stacked darts hit monster as separate throws', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const darts = dartStack(876139, 'd', 2);
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [darts];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The dart hits the goblin\./g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(3)');
+    assert.equal(rngCallValue(rngLog[0]), 2);
+    assert.match(game._pending_message, /You throw 2 darts\./);
+    assert.equal(hitMessages.length, 2);
+    assert.equal(damageRolls.length, 2);
+    assert.equal(goblin.mhp, 40 - damageRolls.reduce((sum, roll) => sum + roll + 1, 0));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(darts), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'dart' && obj.ox === 7 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 2);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 12), [
+        'rnd(2)', 'rnd(2)',
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('hero-thrown poisoned dart applies C poison after weapon damage', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66328,6 +66376,63 @@ test('f command no-launcher dart hits monster through thrown weapon path', async
     assert.equal(landed.oy, 5);
     assert.equal(landed.quan, 1);
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command no-launcher stacked darts hit monster as separate throws', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const darts = dartStack(87617416, 'd', 2, {
+        quivered: true,
+        line: 'd - 2 darts (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [darts];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The dart hits the goblin\./g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(3)');
+    assert.equal(rngCallValue(rngLog[0]), 2);
+    assert.match(game._pending_message, /You throw 2 darts\./);
+    assert.equal(hitMessages.length, 2);
+    assert.equal(damageRolls.length, 2);
+    assert.equal(goblin.mhp, 40 - damageRolls.reduce((sum, roll) => sum + roll + 1, 0));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(darts), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'dart' && obj.ox === 7 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 2);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 12), [
+        'rnd(2)', 'rnd(2)',
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
         'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
 });

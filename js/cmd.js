@@ -21004,6 +21004,45 @@ function heroFireProjectileTargetUsesImpact(obj, targetMon, launcher, firedFromL
                 || heroProjectileSupportedWeaponObject(obj)))));
 }
 
+function heroThrownMissileMultishotMeta(obj) {
+    const key = tossUpWeaponObjectKey(obj);
+    if (key === 'dart') return HERO_THROWN_WEAPON_MONSTER_DATA.get('dart');
+    if (key === 'shuriken' || key === 'throwing star')
+        return HERO_THROWN_WEAPON_MONSTER_DATA.get('shuriken');
+    return null;
+}
+
+function heroThrownMissileMultishotObject(obj) {
+    return !!heroThrownMissileMultishotMeta(obj)
+        && (itemClassKey(obj) === 'weapon' || obj?.glyph === ')');
+}
+
+function heroThrownMissileMultishotClassBonus(obj, meta) {
+    const role = heroRoleName();
+    const skill = meta?.skill;
+    if (role === 'Monk' && skill === P_SHURIKEN) return 1;
+    if (role === 'Ranger' && skill !== P_DAGGER) return 1;
+    return 0;
+}
+
+function heroThrownMissileMultishotCount(obj) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    const meta = heroThrownMissileMultishotMeta(obj);
+    if (quantity <= 1 || !meta || heroIsConfused() || heroIsStunned()) return 1;
+    const role = heroRoleName();
+    const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const weak = role === 'Wizard' || role === 'Cleric'
+        || (role === 'Healer' && meta.skill !== P_KNIFE)
+        || (role === 'Tourist' && meta.skill !== P_DART)
+        || heroIsFumbling() || dex <= 6;
+    const skillLevel = heroExplicitWeaponSkillLevel(meta.skill, meta.skillName) ?? P_BASIC;
+    let multishot = 1;
+    if (skillLevel >= P_EXPERT) multishot++;
+    if (skillLevel >= P_SKILLED && !weak) multishot++;
+    multishot += heroThrownMissileMultishotClassBonus(obj, meta);
+    return Math.min(quantity, rnd(Math.max(1, multishot)));
+}
+
 function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     const data = heroLauncherAmmoData(obj);
     if (!data) return { handled: false, messages: [] };
@@ -67584,7 +67623,9 @@ export async function rhack(_cmd) {
         const oldQuan = item.quan || 1;
         const firedFromLauncher = !!launcher;
         const volleyLimit = firedFromLauncher && oldQuan > 1 ? 2 : 1;
-        const shotCount = volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1;
+        const shotCount = firedFromLauncher
+            ? (volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1)
+            : heroThrownMissileMultishotCount(item);
         let impactMessage = '';
         let landingMessage = '';
         const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
@@ -68631,6 +68672,9 @@ export async function rhack(_cmd) {
         const directLauncherShotCount = directLauncherVolleyLimit > 1
             ? Math.min(itemQuantity, rnd(directLauncherVolleyLimit))
             : 1;
+        const directThrownMissile = !directLauncherAmmo && heroThrownMissileMultishotObject(item);
+        const directThrownMissileShotCount = directThrownMissile ? heroThrownMissileMultishotCount(item) : 1;
+        const directMultishotCount = directLauncherAmmo ? directLauncherShotCount : directThrownMissileShotCount;
         const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
             ? attachedBallThrow
                 ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
@@ -68643,11 +68687,11 @@ export async function rhack(_cmd) {
             if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
             return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
         };
-        if (directLauncherAmmo && directLauncherShotCount > 1 && !boomerangFlight.handled && !ironBarsImpact) {
+        if ((directLauncherAmmo || directThrownMissile) && directMultishotCount > 1 && !boomerangFlight.handled && !ironBarsImpact) {
             const impactMessages = [];
             const landingMessages = [];
             const newsymTargets = [];
-            for (let shot = 0; shot < directLauncherShotCount; shot++) {
+            for (let shot = 0; shot < directMultishotCount; shot++) {
                 const flight = heroFireProjectileFlightResult(ux, uy, dir, throwRange);
                 ox = flight.ox;
                 oy = flight.oy;
@@ -68672,7 +68716,7 @@ export async function rhack(_cmd) {
                 };
                 if (itemQuantity - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
                 const impact = targetMon
-                    ? heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, true)
+                    ? heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, directLauncherAmmo)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
                 if (targetMon) newsymTargets.push(targetMon);
@@ -68688,7 +68732,7 @@ export async function rhack(_cmd) {
             }
             for (const mon of newsymTargets) newsym(mon.mx, mon.my);
             const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
-            removeInventoryItem(item, directLauncherShotCount);
+            removeInventoryItem(item, directMultishotCount);
             if (wasBurdened) {
                 let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
                 for (const invItem of game.inventory || []) {
@@ -68713,7 +68757,7 @@ export async function rhack(_cmd) {
                 .replace(/^(?:uncursed|blessed|cursed) /, '');
             const impactMessage = impactMessages.join('  ');
             const landingMessage = landingMessages.join('  ');
-            const message = [`You shoot ${directLauncherShotCount} ${volleyName}.`, ordinaryAirRecoilMessage, impactMessage]
+            const message = [`You ${directLauncherAmmo ? 'shoot' : 'throw'} ${directMultishotCount} ${volleyName}.`, ordinaryAirRecoilMessage, impactMessage]
                 .filter(Boolean).join('  ');
             if (landingMessage) game._queued_message_after_more = landingMessage;
             await setMessage(message, !!landingMessage || ordinaryAirRecoilMore);
@@ -68728,7 +68772,6 @@ export async function rhack(_cmd) {
         }
         let thrownId = null;
         if (itemQuantity > 1) {
-            if (!directLauncherAmmo && (item.otyp === DART || /\bdarts?\b/.test(lowerName))) rnd(1); // C throw_obj: multishot count.
             thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
         }
         const thrownObject = attachedBallThrow ? item : {

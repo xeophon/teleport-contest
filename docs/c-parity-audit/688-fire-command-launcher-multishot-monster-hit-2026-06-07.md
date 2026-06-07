@@ -28,5 +28,5 @@ Before this slice, the `f` command selected a multishot count but built one `pro
 ## Remaining
 
 - The multishot count calculation is still narrower than C: this slice preserves the existing two-shot cap rather than implementing role/race/skill multishot bonuses.
-- Direct `t` matching-launcher multishot still needs its own per-shot loop.
+- Direct `t` matching-launcher multishot is covered by audit 689.
 - No dedicated unpaid fired-multishot-into-monster regression yet; the split path now clears stale bill identity fields, but shop-specific coverage should be added when the broader billing slice is tackled.
