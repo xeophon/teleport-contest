@@ -47793,6 +47793,16 @@ function splitLandmineScatterStackObject(obj) {
     return splitObj;
 }
 
+function landmineScatterDestroyBreakableObject(obj, x, y, messages) {
+    const breakKind = impactDropBreakKind(obj);
+    if (!breakKind) return false;
+    if (floorObjectVisible(x, y)) magicBagScatterBreakMessage(obj, breakKind, messages);
+    markObjectTreeShopBillsUsedUp(obj);
+    removeFloorObject(obj);
+    newsym(x, y);
+    return true;
+}
+
 function landmineFractureBoulderObject(obj, x, y, messages) {
     if (floorObjectVisible(x, y)) messages.push('The boulder breaks apart.');
     else if (!heroIsDeaf()) messages.push('You hear stone breaking.');
@@ -47840,7 +47850,7 @@ function landmineScatterFloorObjectsAt(x, y, messages = []) {
         }
         if (landmineFractureStoneObject(obj, x, y, messages)) continue;
         if (landmineScatterDeferredBreakageObject(obj)) continue;
-        rn2(10);
+        if (!rn2(10) && landmineScatterDestroyBreakableObject(obj, x, y, messages)) continue;
         scatter.push({ obj, ...landmineScatterLandingSpot(obj, x, y) });
     }
     for (const entry of scatter) {

@@ -31213,6 +31213,59 @@ test('deferred hero land mine scatter splits dagger stack before boulder pit fil
     assert.equal(blades.some(obj => game.level.buriedobjlist.includes(obj)), false);
 });
 
+test('deferred hero land mine scatter destroys looking glass before pit fallout', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM, lit: true });
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const lookingGlass = {
+        id: 40114,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'looking glass',
+        actualKind: 'looking glass',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+    };
+    game.level.traps = [trap];
+    game.level.objects = [lookingGlass];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 0, 0, 1, 1, 2, 0, 1]);
+
+    await rhack(' ');
+
+    const rngCalls = getRngLog().map(rngCallName);
+    assert.deepEqual(rngCalls, [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)',
+        'rn2(5)', 'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
+    ]);
+    assert.equal(rngCalls.includes('rn2(8)'), false);
+    assert.match(game._pending_message, /A looking glass shatters into a thousand pieces!/);
+    assert.match(game._pending_message, /You fall into a pit!/);
+    assert.equal(game.level.objects.includes(lookingGlass), false);
+    assert.equal(game.level.buriedobjlist.includes(lookingGlass), false);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+});
+
 test('hero land mine life saving continues into recursive pit fallout', async () => {
     installStableNonShopFloorState();
     vision_reset();
