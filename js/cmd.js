@@ -20353,6 +20353,17 @@ function itemIsAlreadyReadied(item) {
         || item.line?.includes('in quiver'));
 }
 
+function prepareReadySplitItem(item) {
+    if (!item) return item;
+    item.wielded = false;
+    item.alternate = false;
+    item.worn = false;
+    item.quivered = false;
+    item.owornmask = 0;
+    refreshInventoryObjectLine(item);
+    return item;
+}
+
 async function applyReadySelectionCount(item, verb) {
     const count = readySelectionCountValue();
     clearReadySelectionCount();
@@ -20373,13 +20384,179 @@ async function applyReadySelectionCount(item, verb) {
     if (count >= quantity) return { handled: false, item };
 
     const split = splitCarriedInventoryItemCount(item, count);
-    split.wielded = false;
-    split.alternate = false;
-    split.worn = false;
-    split.quivered = false;
-    split.owornmask = 0;
-    refreshInventoryObjectLine(split);
-    return { handled: false, item: split };
+    return { handled: false, item: prepareReadySplitItem(split) };
+}
+
+function readyObjectQuantity(item) {
+    return Math.max(1, Math.trunc(Number(item?.quan || 1)));
+}
+
+function readyObjectSimpleName(item) {
+    return inventoryItemName(item)
+        .replace(/^(?:an?|the) /i, '')
+        .replace(/^\d+ /, '');
+}
+
+function readyObjectPlural(item) {
+    return readyObjectQuantity(item) > 1 || /\b(?:gloves|lenses|boots|shoes|pair of)\b/i.test(inventoryItemName(item));
+}
+
+function readyWieldedWeaponSlot(item) {
+    if (itemIsPrimaryWielded(item)) return 'primary';
+    if (itemIsAlternateWeapon(item)) return 'alternate';
+    return '';
+}
+
+function readyWieldedWeaponPrompt(item, slot, stage = 'initial') {
+    const quantity = readyObjectQuantity(item);
+    if (stage === 'all') return 'Ready all of them instead? [ynq] (q)';
+    if (quantity > 1) {
+        const itemName = inventoryItemName(item);
+        const splitCount = quantity - 1;
+        if (slot === 'primary')
+            return `You are wielding ${itemName}.  Ready ${splitCount} of them? [ynq] (q)`;
+        const prefix = game._twoweapon ? 'You are dual wielding' : 'Your alternate weapon is';
+        return `${prefix} ${itemName}.  Ready ${splitCount} of them? [ynq] (q)`;
+    }
+    const plural = readyObjectPlural(item);
+    if (slot === 'primary')
+        return `You are wielding ${plural ? 'those' : 'that'}.  Ready ${plural ? 'them' : 'it'} instead? [ynq] (q)`;
+    const subject = plural ? 'Those are' : 'That is';
+    const weaponSlot = game._twoweapon ? 'second' : 'alternate';
+    return `${subject} your ${weaponSlot} weapon.  Ready ${plural ? 'them' : 'it'} instead? [ynq] (q)`;
+}
+
+function readyWieldedWeaponRemainMessage(item, slot, wasTwoweap = game._twoweapon) {
+    const name = readyObjectSimpleName(item);
+    const verb = readyObjectPlural(item) ? 'remain' : 'remains';
+    if (slot === 'alternate' && !wasTwoweap)
+        return `Your ${name} ${verb} as secondary weapon.`;
+    return `Your ${name} ${verb} wielded.`;
+}
+
+function readyWieldedWeaponTimeMessage(slot) {
+    if (slot === 'primary') return 'You are now empty handed.';
+    return 'You are no longer using two weapons at once.';
+}
+
+function refreshReadyWieldedParentLine(item, slot, wasTwoweap = game._twoweapon) {
+    if (!item) return;
+    if (slot === 'primary') {
+        item.wielded = true;
+        item.alternate = false;
+        item.line = heroWieldedLineForItem(item);
+    } else if (wasTwoweap) {
+        item.wielded = false;
+        item.alternate = true;
+        item.line = `${item.letter || '?'} - ${inventoryItemName(item)} (wielded in left hand)`;
+    } else {
+        item.wielded = false;
+        item.alternate = true;
+        item.line = heroAlternateLineForItem(item);
+    }
+}
+
+function clearReadyWieldedConfirm() {
+    game._ready_wield_confirm_item = null;
+    game._ready_wield_confirm_verb = '';
+    game._ready_wield_confirm_slot = '';
+    game._ready_wield_confirm_stage = '';
+    game._ready_wield_confirm_twoweap = false;
+}
+
+async function stageReadyWieldedConfirm(item, verb, slot) {
+    game._ready_wield_confirm_item = item;
+    game._ready_wield_confirm_verb = verb;
+    game._ready_wield_confirm_slot = slot;
+    game._ready_wield_confirm_stage = readyObjectQuantity(item) > 1 ? 'split' : 'all';
+    game._ready_wield_confirm_twoweap = !!game._twoweapon;
+    await setMessage(readyWieldedWeaponPrompt(item, slot));
+    game._command_mode = verb === 'fire' ? 'fireQuiverWieldedConfirm' : 'quiverWieldedConfirm';
+}
+
+function clearReadyWieldedStateForQuiver(item, slot) {
+    const wasTwoweap = !!game._twoweapon;
+    if (slot === 'primary') {
+        item.wielded = false;
+        item.alternate = false;
+        if (item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item)))
+            game._wielded_mjollnir = false;
+        game._twoweapon = false;
+    } else {
+        item.wielded = false;
+        item.alternate = false;
+        if (wasTwoweap) game._twoweapon = false;
+    }
+    item.line = `${item.letter || '?'} - ${inventoryItemName(item)}`;
+    return wasTwoweap;
+}
+
+async function completeReadyObject(item, verb, { timeMessage = '', timeCost = false } = {}) {
+    if (verb === 'fire') {
+        const readyMessage = [`You ready: ${heroFireReadyLine(item)}.`, timeMessage].filter(Boolean).join('  ');
+        heroReadyObject(item);
+        await beginHeroFireProjectile(item, { readyMessage });
+        if (timeCost) game._fire_time_pending_after_more = 1;
+        return;
+    }
+    heroReadyObject(item);
+    await setMessage([`${item.line}.`, timeMessage].filter(Boolean).join('  '));
+    game._command_mode = null;
+    if (timeCost) game.context.move = 1;
+}
+
+async function completeReadyWieldedSplit(item, verb, slot, wasTwoweap = game._twoweapon) {
+    const quantity = readyObjectQuantity(item);
+    if (quantity <= 1) return false;
+    const split = prepareReadySplitItem(splitCarriedInventoryItemCount(item, quantity - 1));
+    refreshReadyWieldedParentLine(item, slot, wasTwoweap);
+    await completeReadyObject(split, verb);
+    return true;
+}
+
+async function completeReadyWieldedAll(item, verb, slot) {
+    const wasTwoweap = clearReadyWieldedStateForQuiver(item, slot);
+    const timeCost = slot === 'primary' || wasTwoweap;
+    const timeMessage = timeCost ? readyWieldedWeaponTimeMessage(slot) : '';
+    await completeReadyObject(item, verb, { timeMessage, timeCost });
+}
+
+async function handleReadyWieldedConfirm(ch) {
+    const item = game._ready_wield_confirm_item;
+    const verb = game._ready_wield_confirm_verb || (game._command_mode === 'fireQuiverWieldedConfirm' ? 'fire' : 'ready');
+    const slot = game._ready_wield_confirm_slot || readyWieldedWeaponSlot(item);
+    const stage = game._ready_wield_confirm_stage || 'all';
+    const wasTwoweap = !!game._ready_wield_confirm_twoweap;
+    clearReadyWieldedConfirm();
+    game._command_mode = null;
+    if (!item || !slot) {
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    if (ch === 'q' || ch === '\x1b' || ch === ' ') {
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    if (ch !== 'y') {
+        if (stage === 'split') {
+            game._ready_wield_confirm_item = item;
+            game._ready_wield_confirm_verb = verb;
+            game._ready_wield_confirm_slot = slot;
+            game._ready_wield_confirm_stage = 'all';
+            game._ready_wield_confirm_twoweap = wasTwoweap;
+            await setMessage(readyWieldedWeaponPrompt(item, slot, 'all'));
+            game._command_mode = verb === 'fire' ? 'fireQuiverWieldedConfirm' : 'quiverWieldedConfirm';
+            return;
+        }
+        await setMessage(readyWieldedWeaponRemainMessage(item, slot, wasTwoweap));
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    if (stage === 'split') {
+        await completeReadyWieldedSplit(item, verb, slot, wasTwoweap);
+        return;
+    }
+    await completeReadyWieldedAll(item, verb, slot);
 }
 
 function clearReadyInventoryOverlay() {
@@ -20437,16 +20614,9 @@ async function finishReadyObjectSelection(selectedItem, verb) {
         if (verb === 'fire') game._fire_count = null;
         return;
     }
-    if (item.line?.includes('alternate weapon')) {
-        if (verb === 'fire') {
-            game._fire_quiver_confirm_item = item;
-            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
-            game._command_mode = 'fireQuiverAlternateConfirm';
-        } else {
-            game._quiver_confirm_item = item;
-            await setMessage('That is your alternate weapon.  Ready it instead? [ynq] (q)');
-            game._command_mode = 'quiverAlternateConfirm';
-        }
+    const wieldedSlot = readyWieldedWeaponSlot(item);
+    if (wieldedSlot) {
+        await stageReadyWieldedConfirm(item, verb, wieldedSlot);
         return;
     }
     if (!isReadySelectableItem(item)) {
@@ -20457,14 +20627,10 @@ async function finishReadyObjectSelection(selectedItem, verb) {
         return;
     }
     if (verb === 'fire') {
-        const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
-        heroReadyObject(item);
-        await beginHeroFireProjectile(item, { readyMessage });
+        await completeReadyObject(item, verb);
         return;
     }
-    heroReadyObject(item);
-    await setMessage(`${item.line}.`);
-    game._command_mode = null;
+    await completeReadyObject(item, verb);
 }
 
 function heroWieldedPolearm() {
@@ -63164,17 +63330,16 @@ export async function rhack(_cmd) {
         return;
     }
 
-    if (game._command_mode === 'quiverAlternateConfirm') {
-        const item = game._quiver_confirm_item;
-        game._quiver_confirm_item = null;
-        game._command_mode = null;
-        if (ch !== 'y' || !item) return;
-        for (const invItem of game.inventory || []) {
-            invItem.quivered = invItem === item;
-            if (invItem !== item && invItem.line) invItem.line = invItem.line.replace(/ \((?:at the ready|in quiver(?: pouch)?)\).*$/, '');
+    if (game._command_mode === 'quiverWieldedConfirm' || game._command_mode === 'quiverAlternateConfirm') {
+        if (game._command_mode === 'quiverAlternateConfirm' && !game._ready_wield_confirm_item) {
+            game._ready_wield_confirm_item = game._quiver_confirm_item;
+            game._ready_wield_confirm_verb = 'ready';
+            game._ready_wield_confirm_slot = 'alternate';
+            game._ready_wield_confirm_stage = 'all';
+            game._ready_wield_confirm_twoweap = !!game._twoweapon;
+            game._quiver_confirm_item = null;
         }
-        item.line = `${item.letter || '?'} - ${inventoryItemName(item)}${quiverSuffix(item)}`;
-        await setMessage(`${item.line}.`);
+        await handleReadyWieldedConfirm(ch);
         return;
     }
 
@@ -63208,17 +63373,16 @@ export async function rhack(_cmd) {
         return;
     }
 
-    if (game._command_mode === 'fireQuiverAlternateConfirm') {
-        const item = game._fire_quiver_confirm_item;
-        game._fire_quiver_confirm_item = null;
-        game._command_mode = null;
-        if (ch !== 'y' || !item) {
-            game._fire_count = null;
-            return;
+    if (game._command_mode === 'fireQuiverWieldedConfirm' || game._command_mode === 'fireQuiverAlternateConfirm') {
+        if (game._command_mode === 'fireQuiverAlternateConfirm' && !game._ready_wield_confirm_item) {
+            game._ready_wield_confirm_item = game._fire_quiver_confirm_item;
+            game._ready_wield_confirm_verb = 'fire';
+            game._ready_wield_confirm_slot = 'alternate';
+            game._ready_wield_confirm_stage = 'all';
+            game._ready_wield_confirm_twoweap = !!game._twoweapon;
+            game._fire_quiver_confirm_item = null;
         }
-        const readyMessage = `You ready: ${heroFireReadyLine(item)}.`;
-        heroReadyObject(item);
-        await beginHeroFireProjectile(item, { readyMessage });
+        await handleReadyWieldedConfirm(ch);
         return;
     }
 
@@ -69560,6 +69724,14 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'fireDirection') {
+        if (ch === '\x1b') {
+            game._command_mode = null;
+            game._fire_item_letter = null;
+            game._fire_launcher_letter = null;
+            game._fire_count = null;
+            await setMessage('Never mind.');
+            return;
+        }
         const dir = movementDirection(ch);
         if (!dir) {
             game._fire_item_letter = null;

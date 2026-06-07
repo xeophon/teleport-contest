@@ -68180,6 +68180,137 @@ test('Q command overlarge count keeps ready prompt active', async () => {
     assert.equal(game._pending_message, 'd - 3 darts (at the ready).');
 });
 
+test('Q command declining primary wielded weapon keeps it wielded', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = wieldedWeapon(876174169, 'dagger', 'w', 0);
+    game.inventory = [weapon];
+
+    await rhack('Q');
+    await rhack('w');
+
+    assert.equal(game._command_mode, 'quiverWieldedConfirm');
+    assert.equal(game._pending_message, 'You are wielding that.  Ready it instead? [ynq] (q)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Your +0 dagger remains wielded.');
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.quivered || false, false);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('Q command confirming primary wielded weapon unwields and readies it with time', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = wieldedWeapon(876174170, 'dagger', 'w', 0);
+    game.inventory = [weapon];
+
+    await rhack('Q');
+    await rhack('w');
+    await rhack('y');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.quivered, true);
+    assert.equal(game._twoweapon || false, false);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'w - a +0 dagger (at the ready).  You are now empty handed.');
+});
+
+test('f command confirming primary wielded weapon preserves ready time before direction cancel', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const weapon = wieldedWeapon(876174171, 'dagger', 'w', 0);
+    game.inventory = [weapon];
+    game.level.monsters = [];
+
+    await rhack('f');
+    await rhack('w');
+    await rhack('y');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'You ready: w - a +0 dagger.  You are now empty handed.');
+    assert.equal(game._message_more, 1);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.quivered, true);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game.context.move, 1);
+
+    await rhack('\x1b');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'Never mind.');
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.quivered, true);
+});
+
+test('Q command confirming live left-hand weapon stops two-weapon combat with time', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const primary = wieldedWeapon(876174172, 'mace', 'm', 0);
+    primary.line = 'm - a +0 mace (weapon in right hand)';
+    const secondary = wieldedWeapon(876174173, 'dagger', 's', 0);
+    secondary.wielded = false;
+    secondary.alternate = true;
+    secondary.line = 's - a +0 dagger (wielded in left hand)';
+    game.inventory = [primary, secondary];
+    game._twoweapon = true;
+
+    await rhack('Q');
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'quiverWieldedConfirm');
+    assert.equal(game._pending_message, 'That is your second weapon.  Ready it instead? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(primary.wielded, true);
+    assert.equal(secondary.alternate || false, false);
+    assert.equal(secondary.quivered, true);
+    assert.equal(game._twoweapon || false, false);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 's - a +0 dagger (at the ready).  You are no longer using two weapons at once.');
+});
+
+test('Q command accepting wielded stack split leaves one wielded and readies the rest', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = wieldedWeapon(876174174, 'dagger', 'w', 0);
+    stack.quan = 3;
+    stack.line = 'w - 3 +0 daggers (weapon in right hand)';
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('w');
+
+    assert.equal(game._command_mode, 'quiverWieldedConfirm');
+    assert.equal(game._pending_message, 'You are wielding 3 +0 daggers.  Ready 2 of them? [ynq] (q)');
+
+    await rhack('y');
+
+    const split = game.inventory.find(item => item !== stack && item.quivered);
+    assert.ok(split);
+    assert.equal(stack.quan, 1);
+    assert.equal(stack.wielded, true);
+    assert.equal(stack.quivered || false, false);
+    assert.equal(stack.line, 'w - a +0 dagger (weapon in right hand)');
+    assert.equal(split.quan, 2);
+    assert.notEqual(split.letter, 'w');
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game._pending_message, `${split.letter} - 2 +0 daggers (at the ready).`);
+});
+
 test('f command empty quiver with wielded polearm autohits before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);
