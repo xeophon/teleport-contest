@@ -64016,6 +64016,30 @@ test('attached ball fallback relocation triggers land mine on new hero square', 
     assert.equal(chain.oy, 5);
 });
 
+test('attached ball fallback land mine blast fills resulting pit with same-square boulder', async () => {
+    const mine = { ttyp: LANDMINE, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    const boulder = floorBoulder(876304, { ox: 9, oy: 5 });
+    const blade = { ...dagger(876305), letter: undefined, line: undefined, ox: 9, oy: 5 };
+    const { ball, chain } = installAttachedBallFallbackTrapState(mine, {
+        hp: 40,
+        extraObjects: [boulder, blade],
+    });
+    game.level.buriedobjlist = [];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 4, 2, 3]);
+
+    await throwAttachedBallEast();
+
+    assert.match(game._pending_message, /KAABLAMM!!!  You triggered a land mine!  You hear a boulder settle\./);
+    assert.equal(game.level.traps.includes(mine), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assertAttachedBallFallbackPosition(ball, chain);
+});
+
 test('attached ball fallback relocation triggers arrow trap on new hero square', async () => {
     installNonShopFloorState();
     initRng(2);

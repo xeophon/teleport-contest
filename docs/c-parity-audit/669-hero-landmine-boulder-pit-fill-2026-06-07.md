@@ -16,10 +16,10 @@
 ## Tests
 
 - `deferred hero land mine blast fills resulting pit with same-square boulder`
+- `attached ball fallback land mine blast fills resulting pit with same-square boulder`
 - Focused verification: `node --test --test-reporter=dot --test-name-pattern "land mine|landmine" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
 - The post-recursive `fill_pit(u.ux,u.uy)` call at `nethack-c/upstream/src/trap.c:2597` still needs a dedicated scenario if recursive pit fallout can leave a fillable same-square boulder state not already consumed by `blow_up_landmine()`.
-- Attached-ball-specific landmine boulder fill canary coverage remains useful because the fallback relocation path reaches landmine through `movementLandmineResult()`.
 - Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, liquid fill, `maybe_dunk_boulders()`, `recalc_block_point()`, and `spot_checks()` are outside this slice.
