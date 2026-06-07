@@ -47806,10 +47806,14 @@ function landmineScatterStackQuantity(obj) {
 }
 
 function landmineScatterCanSplitStack(obj) {
+    const unpaid = !!obj?.unpaid;
+    const unpaidContents = globContents(obj).some(child => shopObjectOrContentsUnpaid(child));
+    const fragile = landmineScatterForcedBreakageObject(obj) || !!impactDropBreakKind(obj);
     return landmineScatterStackQuantity(obj) > 1
         && !landmineScatterStoneObject(obj)
         && !shopBillableGold(obj)
-        && !shopObjectOrContentsUnpaid(obj);
+        && !unpaidContents
+        && (!unpaid || !fragile);
 }
 
 function splitLandmineScatterStackObject(obj) {
@@ -47829,6 +47833,7 @@ function splitLandmineScatterStackObject(obj) {
     delete splitObj.o_id;
     delete splitObj._shopBillObjectId;
     delete splitObj.line;
+    if (obj.unpaid) splitCarriedObjectShopBill(obj, splitObj, splitCount);
     return splitObj;
 }
 

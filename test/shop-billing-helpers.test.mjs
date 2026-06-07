@@ -31213,6 +31213,73 @@ test('deferred hero land mine scatter splits dagger stack before boulder pit fil
     assert.equal(blades.some(obj => game.level.buriedobjlist.includes(obj)), false);
 });
 
+test('deferred hero land mine scatter splits unpaid shop dagger stack into bill rows', async () => {
+    const { shkp } = installShopState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    Object.assign(shkp, { mx: 20, my: 10, shk: { x: 20, y: 10 } });
+    const cells = new Map([
+        ['5,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['6,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,6', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,4', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const blade = { ...dagger(40121), letter: undefined, line: undefined, ox: 5, oy: 5, quan: 3 };
+    shop.addObjectToShopBill(shkp, blade, 15);
+    game.level.traps = [trap];
+    game.level.objects = [blade];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        4, 2, 3, 0,
+        0, 1, 1, 4, 0,
+        0, 1, 1, 6, 0,
+        1, 2, 0,
+        2, 0, 1, 1,
+    ]);
+
+    await rhack(' ');
+
+    const rngCalls = getRngLog().map(rngCallName);
+    assert.deepEqual(rngCalls.slice(0, 18), [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)',
+        'rnd(2)', 'rnd(2)', 'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rnd(1)', 'rnd(2)', 'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(5)',
+    ]);
+    const blades = game.level.objects.filter(obj => obj.actualKind === 'dagger');
+    assert.equal(blades.length, 3);
+    assert.equal(blades.reduce((sum, obj) => sum + Math.max(1, Math.trunc(Number(obj.quan || 1))), 0), 3);
+    assert.equal(blades.some(obj => obj.ox === 5 && obj.oy === 5), false);
+    assert.equal(shkp.billct, 3);
+    assert.equal(shkp.bill.length, 3);
+    assert.equal(shkp.bill.every(entry => !entry.useup), true);
+    assert.equal(shkp.bill.reduce((sum, entry) => sum + shop.shopBillEntryTotal(entry), 0), 15);
+    for (const obj of blades) {
+        const entry = shop.shopBillEntryForObject(shkp, obj);
+        assert.ok(entry);
+        assert.equal(entry.bquan, 1);
+        assert.equal(shop.shopBillEntryTotal(entry), 5);
+        assert.equal(obj.unpaid, true);
+        assert.equal(obj.unpaidPrice, 5);
+    }
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(trap.ttyp, PIT);
+});
+
 test('deferred hero land mine scatter reprocesses fractured boulder rocks before pit fallout', async () => {
     installStableNonShopFloorState();
     vision_reset();
