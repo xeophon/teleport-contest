@@ -26,6 +26,6 @@ Launcher ammo multishot was split into per-projectile impacts for both `f` and d
 
 ## Remaining
 
-- This slice intentionally covers only darts and shuriken; broader stackable weapon-class multishot for daggers, knives, spears, and javelins remains separate.
-- The full C bonus matrix is not complete yet: Ninja, Samurai ya/yumi, Rogue dagger, racial bonuses, quest artifact bonuses, crossbow strength limits, and explicit throw counts still need source-backed slices.
+- This slice intentionally covered only darts and shuriken; audit 691 expands the same split path to the currently supported dagger, knife, spear, and javelin thrown-weapon families.
+- Launcher-ammo-specific multishot bonuses such as Samurai ya/yumi, racial bow/crossbow bonuses, quest artifact launcher bonuses, crossbow strength limits, and explicit throw counts still need source-backed slices.
 - Shop-specific unpaid non-launcher multishot billing coverage remains to be added.

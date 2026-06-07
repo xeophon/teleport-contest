@@ -66437,6 +66437,67 @@ test('f command no-launcher stacked darts hit monster as separate throws', async
     ]);
 });
 
+test('f command no-launcher stacked spears hit monster as separate throws', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_SPEAR, P_EXPERT);
+    const spears = monsterSpear(87617417, {
+        letter: 's',
+        quan: 2,
+        quivered: true,
+        line: 's - 2 spears (in quiver)',
+        ox: 5,
+        oy: 5,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [spears];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The spear hits the goblin[.!]/g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(6)');
+    assert.equal(rngLog[0], 'rnd(3)=2');
+    assert.match(game._pending_message, /You throw 2 spears\./);
+    assert.equal(hitMessages.length, 2);
+    assert.equal(damageRolls.length, 2);
+    assert.equal(goblin.mhp, 40 - damageRolls.reduce((sum, roll) => sum + roll + 2, 0));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(spears), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'spear' && obj.ox === 7 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 2);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 10), [
+        'rnd(3)', 'rnd(2)',
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(100)',
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
 test('f command no-launcher poisoned dart respects monster poison resistance', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67370,6 +67431,59 @@ test('hero-thrown dagger harms ordinary monster and survives landing', async () 
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown stacked daggers hit monster as separate throws', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DAGGER, P_EXPERT);
+    const blades = {
+        ...dagger(876098, 'd'),
+        quan: 2,
+        plural: 'daggers',
+        line: 'd - 2 daggers',
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 40,
+        mhpmax: 40,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [blades];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The dagger hits the goblin[.!]/g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(4)');
+    assert.equal(rngLog[0], 'rnd(3)=2');
+    assert.match(game._pending_message, /You throw 2 daggers\./);
+    assert.equal(hitMessages.length, 2);
+    assert.equal(damageRolls.length, 2);
+    assert.equal(goblin.mhp, 40 - damageRolls.reduce((sum, roll) => sum + roll + 2, 0));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(blades), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'dagger' && obj.ox === 7 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 2);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 10), [
+        'rnd(3)', 'rnd(2)',
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
         'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
     ]);
 });

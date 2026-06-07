@@ -19926,6 +19926,20 @@ const HERO_THROWN_WEAPON_MONSTER_DATA = new Map([
     ['boomerang', { smallDie: 9, largeDie: 9, hitbon: 0, skill: P_BOOMERANG, skillName: 'boomerang' }],
 ]);
 
+const HERO_THROWN_STACKABLE_MULTISHOT_WEAPON_KEYS = new Set([
+    'dagger',
+    'knife',
+    'dart',
+    'shuriken',
+    'throwing star',
+    'spear',
+    'elven spear',
+    'orcish spear',
+    'dwarvish spear',
+    'silver spear',
+    'javelin',
+]);
+
 function heroProjectileMonsterSizeValue(mon) {
     const data = mon?.data || {};
     const value = mon?.msize ?? mon?.size ?? data.msize ?? data.size;
@@ -21004,30 +21018,32 @@ function heroFireProjectileTargetUsesImpact(obj, targetMon, launcher, firedFromL
                 || heroProjectileSupportedWeaponObject(obj)))));
 }
 
-function heroThrownMissileMultishotMeta(obj) {
+function heroThrownStackableWeaponMultishotMeta(obj) {
     const key = tossUpWeaponObjectKey(obj);
-    if (key === 'dart') return HERO_THROWN_WEAPON_MONSTER_DATA.get('dart');
-    if (key === 'shuriken' || key === 'throwing star')
-        return HERO_THROWN_WEAPON_MONSTER_DATA.get('shuriken');
-    return null;
+    if (key === 'throwing star') return HERO_THROWN_WEAPON_MONSTER_DATA.get('shuriken');
+    if (!HERO_THROWN_STACKABLE_MULTISHOT_WEAPON_KEYS.has(key)) return null;
+    return HERO_THROWN_WEAPON_MONSTER_DATA.get(key) || null;
 }
 
-function heroThrownMissileMultishotObject(obj) {
-    return !!heroThrownMissileMultishotMeta(obj)
+function heroThrownStackableWeaponMultishotObject(obj) {
+    return !!heroThrownStackableWeaponMultishotMeta(obj)
         && (itemClassKey(obj) === 'weapon' || obj?.glyph === ')');
 }
 
-function heroThrownMissileMultishotClassBonus(obj, meta) {
+function heroThrownStackableWeaponMultishotClassBonus(obj, meta) {
     const role = heroRoleName();
     const skill = meta?.skill;
+    if ((role === 'Caveman' || role === 'Cavewoman') && skill === P_SPEAR) return 1;
     if (role === 'Monk' && skill === P_SHURIKEN) return 1;
+    if (role === 'Ninja' && (skill === P_DART || skill === P_SHURIKEN)) return 1;
+    if (role === 'Rogue' && skill === P_DAGGER) return 1;
     if (role === 'Ranger' && skill !== P_DAGGER) return 1;
     return 0;
 }
 
-function heroThrownMissileMultishotCount(obj) {
+function heroThrownStackableWeaponMultishotCount(obj) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
-    const meta = heroThrownMissileMultishotMeta(obj);
+    const meta = heroThrownStackableWeaponMultishotMeta(obj);
     if (quantity <= 1 || !meta || heroIsConfused() || heroIsStunned()) return 1;
     const role = heroRoleName();
     const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
@@ -21039,7 +21055,7 @@ function heroThrownMissileMultishotCount(obj) {
     let multishot = 1;
     if (skillLevel >= P_EXPERT) multishot++;
     if (skillLevel >= P_SKILLED && !weak) multishot++;
-    multishot += heroThrownMissileMultishotClassBonus(obj, meta);
+    multishot += heroThrownStackableWeaponMultishotClassBonus(obj, meta);
     return Math.min(quantity, rnd(Math.max(1, multishot)));
 }
 
@@ -67625,7 +67641,7 @@ export async function rhack(_cmd) {
         const volleyLimit = firedFromLauncher && oldQuan > 1 ? 2 : 1;
         const shotCount = firedFromLauncher
             ? (volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1)
-            : heroThrownMissileMultishotCount(item);
+            : heroThrownStackableWeaponMultishotCount(item);
         let impactMessage = '';
         let landingMessage = '';
         const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
@@ -68672,9 +68688,13 @@ export async function rhack(_cmd) {
         const directLauncherShotCount = directLauncherVolleyLimit > 1
             ? Math.min(itemQuantity, rnd(directLauncherVolleyLimit))
             : 1;
-        const directThrownMissile = !directLauncherAmmo && heroThrownMissileMultishotObject(item);
-        const directThrownMissileShotCount = directThrownMissile ? heroThrownMissileMultishotCount(item) : 1;
-        const directMultishotCount = directLauncherAmmo ? directLauncherShotCount : directThrownMissileShotCount;
+        const directThrownStackableWeapon = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(item);
+        const directThrownStackableWeaponShotCount = directThrownStackableWeapon
+            ? heroThrownStackableWeaponMultishotCount(item)
+            : 1;
+        const directMultishotCount = directLauncherAmmo
+            ? directLauncherShotCount
+            : directThrownStackableWeaponShotCount;
         const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
             ? attachedBallThrow
                 ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
@@ -68687,7 +68707,7 @@ export async function rhack(_cmd) {
             if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
             return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
         };
-        if ((directLauncherAmmo || directThrownMissile) && directMultishotCount > 1 && !boomerangFlight.handled && !ironBarsImpact) {
+        if ((directLauncherAmmo || directThrownStackableWeapon) && directMultishotCount > 1 && !boomerangFlight.handled && !ironBarsImpact) {
             const impactMessages = [];
             const landingMessages = [];
             const newsymTargets = [];
