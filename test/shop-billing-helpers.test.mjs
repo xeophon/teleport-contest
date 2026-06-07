@@ -66859,6 +66859,16 @@ async function applyPolearmAtTarget(x, y) {
     await rhack('.');
 }
 
+function markRememberedInvisiblePolearmTarget(x, y, { inSight = false } = {}) {
+    const loc = game.level.at(x, y);
+    loc.map_invisible = true;
+    loc.remembered_glyph = { ch: 'I' };
+    game.viz_array ??= [];
+    game.viz_array[y] ??= [];
+    game.viz_array[y][x] = COULD_SEE | (inSight ? IN_SIGHT : 0);
+    return loc;
+}
+
 test('applying wielded polearm hits monster at range two', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67169,6 +67179,137 @@ test('f command quivered ammo reuses prior polearm hit target before launcher am
     assert.equal(orc.mhp, 20);
     assert.equal(launcher.wielded || false, false);
     assert.equal(missile.quivered, true);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('f command empty quiver auto-targets stale remembered invisible polearm marker', async () => {
+    const missile = arrow(876174133, 'b', { line: 'b - an arrow' });
+    setupWieldedPolearmCanary({ inventory: [missile] });
+    const loc = markRememberedInvisiblePolearmTarget(7, 5);
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.equal(game._pending_message, 'You miss; there is no one there to hit.');
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction/);
+    assert.equal(loc.map_invisible || false, false);
+    assert.equal(loc.remembered_glyph || null, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('f command empty quiver auto-targets remembered invisible monster marker', async () => {
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'soldier', mlevel: 1 },
+    });
+    const missile = arrow(876174134, 'b', { line: 'b - an arrow' });
+    setupWieldedPolearmCanary({
+        monsters: [soldier],
+        inventory: [missile],
+    });
+    game.u.seeInvisible = false;
+    const loc = markRememberedInvisiblePolearmTarget(7, 5);
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.match(game._pending_message, /You hit it[.!]/);
+    assert.doesNotMatch(game._pending_message, /Wait!|Don't know what to hit|What do you want to fire|In what direction|no one there/);
+    assert.ok(soldier.mhp < 20);
+    assert.equal(loc.map_invisible, true);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('applying polearm to unseen monster maps invisible and aborts attack', async () => {
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'soldier', mlevel: 1 },
+    });
+    setupWieldedPolearmCanary({
+        monsters: [soldier],
+        visible: [[7, 5]],
+    });
+    game.u.seeInvisible = false;
+    const loc = game.level.at(7, 5);
+    loc.map_invisible = false;
+    loc.remembered_glyph = null;
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, "Wait!  There's something there you can't see!");
+    assert.doesNotMatch(game._pending_message, /You hit|misses|no one there/);
+    assert.equal(soldier.mhp, 20);
+    assert.equal(soldier.msleeping, 0);
+    assert.equal(soldier.mpeaceful || false, false);
+    assert.equal(loc.map_invisible, true);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('applying polearm to remembered invisible marker over monster proceeds to hit', async () => {
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'soldier', mlevel: 1 },
+    });
+    setupWieldedPolearmCanary({ monsters: [soldier] });
+    game.u.seeInvisible = false;
+    const loc = markRememberedInvisiblePolearmTarget(7, 5);
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You hit it[.!]/);
+    assert.doesNotMatch(game._pending_message, /Wait!|can't see that spot|no one there/);
+    assert.ok(soldier.mhp < 20);
+    assert.equal(soldier.msleeping, 0);
+    assert.equal(loc.map_invisible, true);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('applying polearm to hidden hider under remembered invisible marker proceeds to hit', async () => {
+    const hider = ordinaryThrowTarget('lurker above', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 1,
+        mundetected: true,
+        data: { name: 'lurker above', mlevel: 10, mlet: 'trapper', hidesUnder: true },
+    });
+    setupWieldedPolearmCanary({ monsters: [hider] });
+    const loc = markRememberedInvisiblePolearmTarget(7, 5);
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You hit it[.!]/);
+    assert.doesNotMatch(game._pending_message, /Wait!|hidden monster|hiding under|no one there/);
+    assert.equal(hider.mundetected, false);
+    assert.equal(hider.msleeping, 0);
+    assert.ok(hider.mhp < 20);
+    assert.equal(loc.map_invisible, true);
+    assert.equal(game.context.move, 1);
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
 });
 
