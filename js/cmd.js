@@ -25735,6 +25735,11 @@ function heroPolearmTargetingImpaired() {
     return heroIsConfused() || heroIsStunned() || heroIsHallucinating();
 }
 
+function wipeHeroPolearmEngraving() {
+    if (!heroCanReachFloorForUntrap(false)) return;
+    wipe_engr_at(game.u?.ux || 0, game.u?.uy || 0, 2, false);
+}
+
 function heroPolearmDisplayGlyphIsPoleable(x, y) {
     const loc = game.level?.at(x, y);
     return !!(loc?.map_invisible || loc?.remembered_glyph?.ch === 'I' || floorStatueAt(x, y));
@@ -26056,6 +26061,7 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
         await setMessage((impact.messages || []).join('  '), (impact.messages || []).length > 1);
         newsym(x, y);
         game.context.move = 1;
+        wipeHeroPolearmEngraving();
         return true;
     }
 
@@ -26067,6 +26073,7 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
             : 'Thump!  Your blow bounces harmlessly off the statue.';
         await setMessage(message);
         game.context.move = 1;
+        wipeHeroPolearmEngraving();
         return true;
     }
 
@@ -26075,6 +26082,7 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
     if (boulder) {
         await setMessage('Thump!  Your blow bounces harmlessly off the boulder.');
         game.context.move = 1;
+        wipeHeroPolearmEngraving();
         return true;
     }
     const loc = game.level?.at(x, y);
@@ -26082,10 +26090,12 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
     if (!loc || !ACCESSIBLE(loc.typ)) {
         await setMessage(`You uselessly attack ${loc?.typ === STONE ? 'stone' : 'an unknown obstacle'}.`);
         game.context.move = 1;
+        wipeHeroPolearmEngraving();
         return true;
     }
     await setMessage('You miss; there is no one there to hit.');
     game.context.move = 1;
+    wipeHeroPolearmEngraving();
     return true;
 }
 

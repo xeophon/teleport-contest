@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -66869,6 +66869,16 @@ function markRememberedInvisiblePolearmTarget(x, y, { inSight = false } = {}) {
     return loc;
 }
 
+function installHeroDustEngraving(text = '-') {
+    const engraving = { x: game.u.ux, y: game.u.uy, text, type: DUST };
+    game.level.engravings = [engraving];
+    return engraving;
+}
+
+function heroEngravingAtFeet() {
+    return (game.level?.engravings || []).find(engr => engr.x === game.u.ux && engr.y === game.u.uy) || null;
+}
+
 test('applying wielded polearm hits monster at range two', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67024,6 +67034,53 @@ test('applying basic polearm reports too far at range five', async () => {
     assert.equal(game.context.move || 0, 0);
     assert.equal(game._pending_message, 'Too far!');
     assert.equal(goblin.mhp, 10);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('applying polearm wipes dust engraving under hero after impact', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        visible: [[7, 5]],
+    });
+    installHeroDustEngraving();
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.ok(goblin.mhp < 20);
+    assert.equal(heroEngravingAtFeet(), null);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('applying basic polearm too far preserves dust engraving under hero', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 8, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        visible: [[8, 5]],
+        skillLevel: P_BASIC,
+    });
+    installHeroDustEngraving();
+
+    await applyPolearmAtTarget(8, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game._pending_message, 'Too far!');
+    assert.equal(goblin.mhp, 10);
+    assert.equal(heroEngravingAtFeet()?.text, '-');
     assert.deepEqual(getRngLog(), []);
 });
 
@@ -67198,6 +67255,27 @@ test('f command empty quiver auto-targets stale remembered invisible polearm mar
     assert.equal(loc.remembered_glyph || null, null);
     assert.equal(game.context.move, 1);
     assert.deepEqual(getRngLog(), []);
+});
+
+test('f command empty quiver stale polearm marker wipes dust engraving under hero', async () => {
+    const missile = arrow(876174135, 'b', { line: 'b - an arrow' });
+    setupWieldedPolearmCanary({ inventory: [missile] });
+    const loc = markRememberedInvisiblePolearmTarget(7, 5);
+    installHeroDustEngraving();
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.equal(game._pending_message, 'You miss; there is no one there to hit.');
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction/);
+    assert.equal(loc.map_invisible || false, false);
+    assert.equal(loc.remembered_glyph || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(heroEngravingAtFeet(), null);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(2)').length, 0);
 });
 
 test('f command empty quiver auto-targets remembered invisible monster marker', async () => {
