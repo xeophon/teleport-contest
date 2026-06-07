@@ -4,6 +4,7 @@
 
 - `nethack-c/upstream/src/trap.c:2585-2597` converts a triggered hero landmine to a temporary pit, applies blast HP loss, calls `blow_up_landmine(trap)`, then recursively enters the pit only if `t_at(u.ux,u.uy)` still exists.
 - `nethack-c/upstream/src/trap.c:3179-3191` runs shared blast fallout before pit conversion: scatter objects, delete the blast engraving, wake nearby monsters, break doors, and destroy any lowered drawbridge or drawbridge wall at the blast square.
+- `nethack-c/upstream/src/explode.c:749-935` defines `scatter()`: source-square objects are extracted before movement, boulders/statues can fracture before destruction and movement, surviving objects receive direction/range, all movement resolves, then landing floor effects run.
 - `nethack-c/upstream/src/trap.c:3197-3215` applies the post-blast trap fallout order: air/water-level deletion first, then `fillholetyp(x,y,FALSE)`, `liquid_flow()` when nearby liquid fills the hole, otherwise visible non-owned pit conversion, followed by `fill_pit(x,y)`.
 - `nethack-c/upstream/src/dig.c:604-637` defines `fillholetyp()`: scan the 3x3 neighborhood, count moat/pool/lava, dampen ordinary pool count by `/= 3`, and return `LAVAPOOL`, `MOAT`, `POOL`, or `ROOM` through the same RNG gates.
 - `nethack-c/upstream/src/dig.c:833-879` defines `liquid_flow()`: terrain must already be liquid, the passed trap is deleted, frozen/buried objects are released, optional visible fill feedback is printed, floor objects take liquid damage, and hero/monster liquid effects run immediately.
@@ -23,6 +24,7 @@
 - Hero landmine blasts break a door on the blast square before the air/water-level deletion gate, matching C's pre-pit fallout order.
 - Hero landmine blasts wake nearby monsters with C's `wake_nearto(..., 400)` radius semantics before the pit/liquid decision.
 - Hero landmine blasts now destroy a lowered drawbridge or adjacent drawbridge wall before liquid/pit fallout. The covered slice updates bridge and wall terrain, removes traps and engravings from both squares, refreshes vision, wakes monsters near the destroyed bridge, and records stronghold bridge state.
+- Hero landmine blasts now run a first floor-object scatter pass before engraving, door, drawbridge, liquid, and pit fallout. This slice covers the ordering canary where a non-fractured boulder remains blocked at the blast square and fills the resulting pit while a same-square dagger scatters away and is not buried.
 
 ## Tests
 
@@ -36,8 +38,10 @@
 - `deferred hero land mine liquid fill dunks same-square boulder after water fallout`
 - `deferred land mine liquid fill refreshes consumed boulder glyph`
 - `deferred hero land mine liquid fill clears old ice melt timer`
+- `deferred hero land mine scatter moves dagger before boulder pit fill`
+- `attached ball fallback land mine scatter moves dagger before boulder pit fill`
 - Focused verification: `node --test --test-reporter=dot --test-name-pattern "land mine|landmine" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
-- Full `blow_up_landmine()` fallout remains partial: object scatter, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: full `scatter()` stack splitting, breakable-object destruction, hero/monster hit handling, shop accounting, complete fractured-fragment scattering, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.

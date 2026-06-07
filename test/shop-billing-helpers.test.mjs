@@ -30947,6 +30947,7 @@ test('deferred hero land mine liquid fill dunks same-square boulder after water 
     const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
     const cells = new Map([
         ['5,5', targetLoc],
+        ['4,5', { roomno: ROOMOFFSET, typ: STONE }],
         ['5,4', { roomno: ROOMOFFSET, typ: MOAT }],
     ]);
     game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
@@ -30962,12 +30963,12 @@ test('deferred hero land mine liquid fill dunks same-square boulder after water 
     game._pending_landmine_trap = trap;
     game.context = {};
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 3, 1, 1, 19, 9]);
+    installCoreRngValues([4, 2, 3, 0, 0, 1, 0, 0, 1, 19, 9]);
 
     await rhack(' ');
 
     assert.deepEqual(getRngLog().map(rngCallName),
-        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)', 'rn2(20)', 'rn2(10)']);
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(2)', 'rn2(20)', 'rn2(10)']);
     assert.equal(game._pending_message,
         'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  A potion explodes!  You fall into the moat!  You sink like a rock.  You find yourself on dry land again!');
     assert.equal(targetLoc.typ, ROOM);
@@ -30997,6 +30998,7 @@ test('deferred land mine liquid fill refreshes consumed boulder glyph', async ()
     const targetLoc = { roomno: ROOMOFFSET, typ: ROOM, lit: true };
     const cells = new Map([
         ['6,5', targetLoc],
+        ['7,5', { roomno: ROOMOFFSET, typ: STONE, lit: true }],
         ['6,4', { roomno: ROOMOFFSET, typ: MOAT, lit: true }],
     ]);
     game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
@@ -31014,12 +31016,12 @@ test('deferred land mine liquid fill refreshes consumed boulder glyph', async ()
     newsym(6, 5);
     assert.equal(targetLoc.disp_ch, '`');
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 3, 1, 1, 9]);
+    installCoreRngValues([4, 2, 3, 0, 0, 1, 4, 0, 1, 1, 9]);
 
     await rhack(' ');
 
     assert.deepEqual(getRngLog().map(rngCallName),
-        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)', 'rn2(10)']);
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(2)', 'rn2(10)']);
     assert.equal(game._pending_message,
         'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  There is a large splash as the boulder fills the moat.');
     assert.equal(targetLoc.typ, ROOM);
@@ -31105,7 +31107,7 @@ test('deferred hero land mine liquid fill clears old ice melt timer', async () =
     assert.equal(game.level.traps.includes(trap), false);
 });
 
-test('deferred hero land mine blast fills resulting pit with same-square boulder', async () => {
+test('deferred hero land mine scatter moves dagger before boulder pit fill', async () => {
     installStableNonShopFloorState();
     vision_reset();
     game.sokoban_dnum = 999;
@@ -31116,6 +31118,12 @@ test('deferred hero land mine blast fills resulting pit with same-square boulder
         uhpmax: 20,
     });
     game.inventory = [];
+    const cells = new Map([
+        ['4,5', { roomno: ROOMOFFSET, typ: STONE, lit: true }],
+        ['5,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['6,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
     const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
     const boulder = floorBoulder(40102, { ox: 5, oy: 5 });
     const blade = { ...dagger(40103), letter: undefined, line: undefined, ox: 5, oy: 5 };
@@ -31127,11 +31135,12 @@ test('deferred hero land mine blast fills resulting pit with same-square boulder
     game._pending_landmine_trap = trap;
     game.context = {};
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 3]);
+    installCoreRngValues([4, 2, 3, 0, 0, 1, 0, 0, 1, 4, 0, 0]);
 
     await rhack(' ');
 
-    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(100)']);
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(10)', 'rn2(8)', 'rnd(4)']);
     assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You hear a boulder settle.');
     assert.equal(game._pending_landmine_trap || null, null);
     assert.equal(game.u.uhp, 15);
@@ -31139,8 +31148,10 @@ test('deferred hero land mine blast fills resulting pit with same-square boulder
     assert.equal(game.u.utraptype || null, null);
     assert.equal(game.level.traps.includes(trap), false);
     assert.equal(game.level.objects.includes(boulder), false);
-    assert.equal(game.level.objects.includes(blade), false);
-    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 6);
+    assert.equal(blade.oy, 5);
+    assert.equal(game.level.buriedobjlist.includes(blade), false);
 });
 
 test('hero land mine life saving continues into recursive pit fallout', async () => {
@@ -64493,7 +64504,7 @@ test('attached ball fallback relocation triggers land mine on new hero square', 
     assert.equal(chain.oy, 5);
 });
 
-test('attached ball fallback land mine blast fills resulting pit with same-square boulder', async () => {
+test('attached ball fallback land mine scatter moves dagger before boulder pit fill', async () => {
     const mine = { ttyp: LANDMINE, tx: 9, ty: 5, tseen: false, madeby_u: false };
     const boulder = floorBoulder(876304, { ox: 9, oy: 5 });
     const blade = { ...dagger(876305), letter: undefined, line: undefined, ox: 9, oy: 5 };
@@ -64501,17 +64512,22 @@ test('attached ball fallback land mine blast fills resulting pit with same-squar
         hp: 40,
         extraObjects: [boulder, blade],
     });
+    game.level.at = (x, y) => (x === 9 && y === 4
+        ? { roomno: 0, typ: STONE, lit: true }
+        : { roomno: 0, typ: ROOM, lit: true });
     game.level.buriedobjlist = [];
     enableRngLog({ reset: true });
-    installCoreRngValues([0, 4, 2, 3]);
+    installCoreRngValues([0, 4, 2, 3, 0, 0, 1, 2, 0, 1, 6, 0]);
 
     await throwAttachedBallEast();
 
     assert.match(game._pending_message, /KAABLAMM!!!  You triggered a land mine!  You hear a boulder settle\./);
     assert.equal(game.level.traps.includes(mine), false);
     assert.equal(game.level.objects.includes(boulder), false);
-    assert.equal(game.level.objects.includes(blade), false);
-    assert.equal(game.level.buriedobjlist.includes(blade), true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 9);
+    assert.equal(blade.oy, 6);
+    assert.equal(game.level.buriedobjlist.includes(blade), false);
     assert.equal(game.u.utrap || 0, 0);
     assert.equal(game.u.utraptype || null, null);
     assertAttachedBallFallbackPosition(ball, chain);

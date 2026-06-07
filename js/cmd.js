@@ -47723,8 +47723,104 @@ function convertLandmineToPit(trap) {
     newsym(game.u?.ux || trap.tx || 0, game.u?.uy || trap.ty || 0);
 }
 
+function landmineScatterClosedDoor(x, y) {
+    const loc = game.level?.at?.(x, y);
+    return !!(loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+}
+
+function landmineScatterLandingSpot(obj, sx, sy) {
+    const dir = rn2(N_DIRS);
+    const dx = xdir[dir] || 0;
+    const dy = ydir[dir] || 0;
+    const force = Math.max(1, 4 - Math.trunc(magicBagScatterWeight(obj) / 40));
+    let range = rnd(force);
+    let x = sx;
+    let y = sy;
+    while (range-- > 0) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const loc = game.level?.at?.(nx, ny);
+        if (!isok(nx, ny) || !loc || !ZAP_POS(loc.typ) || landmineScatterClosedDoor(nx, ny))
+            break;
+        if (heroAtCoord(nx, ny) || magicBagScatterMonsterAt(nx, ny))
+            break;
+        x = nx;
+        y = ny;
+        if (loc.typ === SINK) break;
+    }
+    return { x, y };
+}
+
+function landmineScatterStoneObject(obj) {
+    return isBoulderObject(obj) || obj?.otyp === STATUE || objectKindKey(obj) === 'statue';
+}
+
+function landmineScatterDeferredBreakageObject(obj) {
+    const material = String(obj?.material || obj?.oc_material || '').toLowerCase();
+    return isPotionObject(obj) || obj?.otyp === EGG || objectKindKey(obj) === 'egg' || material === 'glass';
+}
+
+function landmineFractureBoulderObject(obj, x, y, messages) {
+    if (floorObjectVisible(x, y)) messages.push('The boulder breaks apart.');
+    else if (!heroIsDeaf()) messages.push('You hear stone breaking.');
+    obj.otyp = ROCK;
+    obj.cls = 'gem';
+    obj.kind = 'rock';
+    obj.actualKind = 'rock';
+    obj.singular = 'rock';
+    obj.plural = 'rocks';
+    obj.gemDescription = 'rock';
+    obj.glyph = '*';
+    obj.quan = rn1(60, 7);
+    obj.owt = 10 * obj.quan;
+    obj.spe = 0;
+    delete obj.contents;
+    Object.assign(obj, object_display({ otyp: ROCK }));
+    newsym(x, y);
+}
+
+function landmineFractureStoneObject(obj, x, y, messages) {
+    if (!landmineScatterStoneObject(obj)) return false;
+    if (!rn2(10)) return false;
+    if (isBoulderObject(obj)) {
+        landmineFractureBoulderObject(obj, x, y, messages);
+        return true;
+    }
+    game.level.traps = (game.level?.traps || []).filter(trap =>
+        !(trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP));
+    if (floorObjectVisible(x, y)) messages.push(`${upstartText(pickupObjectName(obj))} crumbles.`);
+    else if (!heroIsDeaf()) messages.push('You hear stone crumbling.');
+    breakStatueObject(obj, x, y);
+    return true;
+}
+
+function landmineScatterFloorObjectsAt(x, y, messages = []) {
+    const scatter = [];
+    for (const obj of liquidFlowFloorObjectsAt(x, y)) {
+        if (obj === game.u?.uball || obj === game.u?.uchain) continue;
+        if (landmineFractureStoneObject(obj, x, y, messages)) continue;
+        if (landmineScatterDeferredBreakageObject(obj)) continue;
+        rn2(10);
+        scatter.push({ obj, ...landmineScatterLandingSpot(obj, x, y) });
+    }
+    for (const entry of scatter) {
+        removeFloorObject(entry.obj);
+        if (entry.x === x && entry.y === y) {
+            placeLiquidFlowFloorObject(entry.obj, entry.x, entry.y);
+            newsym(entry.x, entry.y);
+        } else {
+            placeObjectOnFloorWithEffects(entry.obj, entry.x, entry.y, messages, 'land', {
+                stack: true,
+                usedUpShopBillOnDestroy: true,
+            });
+        }
+    }
+    if (scatter.length) newsym(x, y);
+}
+
 function landminePostBlastTrap(trap, messages = []) {
     if (!trap) return null;
+    landmineScatterFloorObjectsAt(trap.tx, trap.ty, messages);
     deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
     wakeNearbyMonstersAt(trap.tx, trap.ty, 400);
     landmineBreakDoorAt(trap.tx, trap.ty);
