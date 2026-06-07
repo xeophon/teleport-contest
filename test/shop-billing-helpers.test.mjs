@@ -30609,6 +30609,64 @@ test('hero land mine recursive pit can be escaped after blast', async () => {
     assert.equal(trap.madeby_u, false);
 });
 
+test('hero land mine on air level leaves no recursive pit', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    const airLevel = { dnum: 8, dlevel: 1 };
+    game.air_level = { ...airLevel };
+    game.u.uz = { ...airLevel };
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)']);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+});
+
+test('hero land mine on water level leaves no recursive pit', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    const waterLevel = { dnum: 8, dlevel: 2 };
+    game.water_level = { ...waterLevel };
+    game.u.uz = { ...waterLevel };
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)']);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+});
+
 test('hero land mine life saving continues into recursive pit fallout', async () => {
     installStableNonShopFloorState();
     vision_reset();

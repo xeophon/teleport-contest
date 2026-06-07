@@ -47618,6 +47618,15 @@ function convertLandmineToPit(trap) {
     newsym(game.u?.ux || trap.tx || 0, game.u?.uy || trap.ty || 0);
 }
 
+function landminePostBlastTrap(trap) {
+    if (!trap) return null;
+    if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
+        deleteTrap(trap);
+        return null;
+    }
+    return trap;
+}
+
 function woundHeroLandmineLegs() {
     if (!game.u) return;
     const left = rn1(35, 41);
@@ -47670,7 +47679,8 @@ function heroLandmineAirCurrentResult(trap, prefix, damage) {
         if (fatalResult.fatal) return { message: trapMessage(...messages), ...fatalResult };
         if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
     }
-    const pitResult = movementPitResult(trap, { recursive: true });
+    const pitTrap = landminePostBlastTrap(trap);
+    const pitResult = pitTrap ? movementPitResult(pitTrap, { recursive: true }) : {};
     const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
     if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
         game._life_saving_post_continue_hp = game.u.uhp;
@@ -47692,7 +47702,8 @@ function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
     if (fatalResult.fatal)
         return { message: trapMessage(...messages), ...fatalResult };
     if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
-    const pitResult = movementPitResult(trap, { recursive: true });
+    const pitTrap = landminePostBlastTrap(trap);
+    const pitResult = pitTrap ? movementPitResult(pitTrap, { recursive: true }) : {};
     const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
     if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
         game._life_saving_post_continue_hp = game.u.uhp;
