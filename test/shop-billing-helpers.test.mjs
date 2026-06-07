@@ -31154,6 +31154,65 @@ test('deferred hero land mine scatter moves dagger before boulder pit fill', asy
     assert.equal(game.level.buriedobjlist.includes(blade), false);
 });
 
+test('deferred hero land mine scatter splits dagger stack before boulder pit fill', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const cells = new Map([
+        ['4,5', { roomno: ROOMOFFSET, typ: STONE, lit: true }],
+        ['5,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['6,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,6', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,4', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const boulder = floorBoulder(40112, { ox: 5, oy: 5 });
+    const blade = { ...dagger(40113), letter: undefined, line: undefined, ox: 5, oy: 5, quan: 3 };
+    game.level.traps = [trap];
+    game.level.objects = [boulder, blade];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        4, 2, 3, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 4, 0,
+        0, 0, 1, 6, 0,
+        1, 2, 0,
+    ]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)',
+        'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)',
+        'rnd(2)', 'rnd(2)', 'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rnd(1)', 'rnd(2)', 'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+    ]);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You hear a boulder settle.');
+    assert.equal(game._pending_landmine_trap || null, null);
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.objects.includes(boulder), false);
+    const blades = game.level.objects.filter(obj => obj.actualKind === 'dagger');
+    assert.equal(blades.length, 3);
+    assert.deepEqual(blades.map(obj => `${obj.ox},${obj.oy}`).sort(), ['5,4', '5,6', '6,5']);
+    assert.deepEqual(blades.map(obj => obj.quan).sort(), [1, 1, 1]);
+    assert.equal(blades.some(obj => game.level.buriedobjlist.includes(obj)), false);
+});
+
 test('hero land mine life saving continues into recursive pit fallout', async () => {
     installStableNonShopFloorState();
     vision_reset();

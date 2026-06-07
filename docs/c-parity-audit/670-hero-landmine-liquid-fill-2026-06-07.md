@@ -39,9 +39,10 @@
 - `deferred land mine liquid fill refreshes consumed boulder glyph`
 - `deferred hero land mine liquid fill clears old ice melt timer`
 - `deferred hero land mine scatter moves dagger before boulder pit fill`
+- `deferred hero land mine scatter splits dagger stack before boulder pit fill`
 - `attached ball fallback land mine scatter moves dagger before boulder pit fill`
 - Focused verification: `node --test --test-reporter=dot --test-name-pattern "land mine|landmine" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
-- Full `blow_up_landmine()` fallout remains partial: full `scatter()` stack splitting, breakable-object destruction, hero/monster hit handling, shop accounting, complete fractured-fragment scattering, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: ordinary durable non-shop stack splitting is covered, but stone/fragile/shop stack splitting, breakable-object destruction, hero/monster hit handling, shop accounting, complete fractured-fragment scattering, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.

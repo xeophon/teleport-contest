@@ -47760,6 +47760,39 @@ function landmineScatterDeferredBreakageObject(obj) {
     return isPotionObject(obj) || obj?.otyp === EGG || objectKindKey(obj) === 'egg' || material === 'glass';
 }
 
+function landmineScatterStackQuantity(obj) {
+    return Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+}
+
+function landmineScatterCanSplitStack(obj) {
+    return landmineScatterStackQuantity(obj) > 1
+        && !landmineScatterStoneObject(obj)
+        && !landmineScatterDeferredBreakageObject(obj)
+        && !impactDropBreakKind(obj)
+        && !shopBillableGold(obj)
+        && !shopObjectOrContentsUnpaid(obj);
+}
+
+function splitLandmineScatterStackObject(obj) {
+    if (!landmineScatterCanSplitStack(obj)) return obj;
+    const quantity = landmineScatterStackQuantity(obj);
+    const splitCount = rnd(Math.min(quantity - 1, Number.MAX_SAFE_INTEGER));
+    obj.quan = quantity - splitCount;
+    delete obj.line;
+    Object.assign(obj, object_display(obj));
+    const splitObj = {
+        ...obj,
+        id: next_ident(),
+        quan: splitCount,
+        contents: Array.isArray(obj.contents) ? [...obj.contents] : obj.contents,
+        cobj: Array.isArray(obj.cobj) ? [...obj.cobj] : obj.cobj,
+    };
+    delete splitObj.o_id;
+    delete splitObj._shopBillObjectId;
+    delete splitObj.line;
+    return splitObj;
+}
+
 function landmineFractureBoulderObject(obj, x, y, messages) {
     if (floorObjectVisible(x, y)) messages.push('The boulder breaks apart.');
     else if (!heroIsDeaf()) messages.push('You hear stone breaking.');
@@ -47796,8 +47829,15 @@ function landmineFractureStoneObject(obj, x, y, messages) {
 
 function landmineScatterFloorObjectsAt(x, y, messages = []) {
     const scatter = [];
-    for (const obj of liquidFlowFloorObjectsAt(x, y)) {
+    const queue = liquidFlowFloorObjectsAt(x, y);
+    for (let i = 0; i < queue.length; i++) {
+        let obj = queue[i];
         if (obj === game.u?.uball || obj === game.u?.uchain) continue;
+        if (landmineScatterCanSplitStack(obj)) {
+            const source = obj;
+            obj = splitLandmineScatterStackObject(source);
+            queue.push(source);
+        }
         if (landmineFractureStoneObject(obj, x, y, messages)) continue;
         if (landmineScatterDeferredBreakageObject(obj)) continue;
         rn2(10);
