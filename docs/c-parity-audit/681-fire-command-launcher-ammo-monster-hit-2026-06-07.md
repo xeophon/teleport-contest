@@ -16,7 +16,7 @@
 - Single fired bow/crossbow ammo now has a narrow `thitmonst()`-style impact path with:
   - C d20 hit roll before damage or floor landing rolls.
   - Matching launcher enchantment, erosion, explicit hit bonus, and weapon skill to-hit adjustment.
-  - Ammo damage dice for arrows, elven/orcish/silver arrows, ya, and crossbow bolts.
+  - Ammo damage dice for arrows, elven/orcish/silver arrows, ya, and crossbow bolts, including the crossbow-bolt row `+1` damage.
   - Increase-damage and launcher weapon-skill damage, while suppressing strength damage for fired ammo.
   - Dexterity exercise and hit-only missile mulch on successful hits.
   - Miss wakeup and ordinary floor landing without hit-only mulch damage rolls.

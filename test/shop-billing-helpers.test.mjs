@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -535,6 +535,24 @@ function bow(id, letter = 'b', extra = {}) {
         oy: 5,
         letter,
         line: `${letter} - a bow`,
+        dknown: true,
+        known: true,
+        ...extra,
+    };
+}
+
+function crossbow(id, letter = 'c', extra = {}) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'crossbow',
+        actualKind: 'crossbow',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a crossbow`,
         dknown: true,
         known: true,
         ...extra,
@@ -65688,6 +65706,140 @@ test('levitating hero-thrown arrow with matching bow uses C ammo range increment
     assert.equal(landed.ox, 14);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('hero-thrown arrow with matching bow hits monster through C projectile path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 2,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_EXPERT);
+    const launcher = bow(8761737, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(8761747, 'b', { line: 'b - an arrow' });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(6)')[0];
+    assert.match(game._pending_message, /The arrow hits the goblin!/);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|You shoot an arrow/);
+    assert.equal(goblin.mhp, 30 - (damageRoll + 4));
+    assert.notEqual(goblin.mhp, 30 - (damageRoll + 10));
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown arrow with matching bow miss wakes monster without by-hand warning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 3;
+    const launcher = bow(8761738, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(8761748, 'b', { line: 'b - an arrow' });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mac: -10,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /The arrow misses the goblin\./);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|You shoot an arrow|hits the goblin/);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+    assert.equal(rngLog.some(entry => entry.startsWith('rnd(6)=')), false);
+});
+
+test('hero-thrown crossbow bolt with matching crossbow adds object-row damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_CROSSBOW, P_BASIC);
+    const launcher = crossbow(8761739, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' });
+    const missile = crossbowBolt(8761749, 'b', { line: 'b - a crossbow bolt' });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const damageRoll = rngValuesForCall(rngLog, 'rnd(4)')[0];
+    assert.match(game._pending_message, /The crossbow bolt hits the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|You shoot a crossbow bolt/);
+    assert.equal(goblin.mhp, 30 - (damageRoll + 1));
+    assert.notEqual(goblin.mhp, 30 - (damageRoll + 7));
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
 });
 
 test('f command arrow with matching bow uses C ammo range increment', async () => {

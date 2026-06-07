@@ -20923,7 +20923,7 @@ const HERO_LAUNCHER_AMMO_MONSTER_DATA = new Map([
     ['orcish arrow', { smallDie: 5, largeDie: 6, skill: P_BOW, skillName: 'bow' }],
     ['silver arrow', { smallDie: 6, largeDie: 6, skill: P_BOW, skillName: 'bow' }],
     ['ya', { smallDie: 7, largeDie: 7, skill: P_BOW, skillName: 'bow' }],
-    ['crossbow bolt', { smallDie: 4, largeDie: 6, skill: P_CROSSBOW, skillName: 'crossbow' }],
+    ['crossbow bolt', { smallDie: 4, smallAdd: 1, largeDie: 6, largeAdd: 1, skill: P_CROSSBOW, skillName: 'crossbow' }],
 ]);
 
 function heroLauncherAmmoData(obj) {
@@ -20949,6 +20949,7 @@ function heroFiredLauncherAmmoDamage(obj, mon, launcher) {
     if (!data) return { damage: 0, silverMessage: '' };
     const largeTarget = heroProjectileMonsterSizeValue(mon) >= 3;
     let damage = rnd(largeTarget ? data.largeDie : data.smallDie);
+    damage += Math.trunc(Number(largeTarget ? data.largeAdd || 0 : data.smallAdd || 0));
     damage += Math.trunc(Number(obj?.spe || 0));
     if (damage < 0) damage = 0;
     const special = heroProjectileSpecialWeaponDamage(obj, mon);
@@ -68328,7 +68329,8 @@ export async function rhack(_cmd) {
         let oy = uy;
         let targetMon = null;
         let ironBarsImpact = null;
-        const ammoRange = heroHorizontalThrowAmmoRange(item);
+        const throwLauncher = heroWieldedThrowLauncher();
+        const ammoRange = heroHorizontalThrowAmmoRange(item, throwLauncher);
         let throwNoLauncherMessage = ammoRange?.noLauncherMessage || '';
         let throwRange = heroHorizontalThrowFinalRange(
             item,
@@ -68337,7 +68339,7 @@ export async function rhack(_cmd) {
         );
         let ordinaryAirRecoilRange = 0;
         if (!boomerangFlight.handled && heroHorizontalThrowAirRecoilActive()) {
-            const airSplit = heroHorizontalThrowAirSplitRange(item);
+            const airSplit = heroHorizontalThrowAirSplitRange(item, throwLauncher);
             ordinaryAirRecoilRange = airSplit.recoilRange;
             throwRange = heroHorizontalThrowFinalRange(
                 item,
@@ -68591,8 +68593,14 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
-        } else if (targetMon && heroThrownByHandAmmoObject(item)) {
-            const ammoImpact = heroThrownByHandAmmoImpact(thrownObject, targetMon);
+        } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
+            const ammoImpact = heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
+            impactMessage = (ammoImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!ammoImpact.mulched;
+            impactObjectHit = !!ammoImpact.hit;
+            impactPassiveTarget = ammoImpact.hit ? targetMon : null;
+        } else if (targetMon && heroThrownByHandAmmoObject(item, throwLauncher)) {
+            const ammoImpact = heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
             impactMessage = (ammoImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!ammoImpact.mulched;
             impactObjectHit = !!ammoImpact.hit;
