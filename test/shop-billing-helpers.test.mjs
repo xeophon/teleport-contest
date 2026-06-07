@@ -66843,6 +66843,22 @@ function assertNoPolearmTurnOrRolls() {
     assert.deepEqual(getRngLog(), []);
 }
 
+async function applyPolearmAtTarget(x, y) {
+    await beginApplyPolearmCanary();
+    const dx = x - (game.u?.ux || 0);
+    const dy = y - (game.u?.uy || 0);
+    assert.ok(dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy));
+    const stepX = Math.sign(dx);
+    const stepY = Math.sign(dy);
+    const key = stepY < 0
+        ? (stepX < 0 ? 'y' : stepX > 0 ? 'u' : 'k')
+        : stepY > 0
+            ? (stepX < 0 ? 'b' : stepX > 0 ? 'n' : 'j')
+            : (stepX < 0 ? 'h' : 'l');
+    for (let i = 0; i < Math.max(Math.abs(dx), Math.abs(dy)); i++) await rhack(key);
+    await rhack('.');
+}
+
 test('applying wielded polearm hits monster at range two', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -67064,6 +67080,95 @@ test('applying polearm to peaceful monster attacks after confirmation', async ()
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.ok(goblin.mhp < 10);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('f command empty quiver reuses prior polearm hit target amid ambiguity', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const orc = ordinaryThrowTarget('orc', 3, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const missile = arrow(876174131, 'b', { line: 'b - an arrow' });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        inventory: [missile],
+        visible: [[7, 5]],
+    });
+
+    await applyPolearmAtTarget(7, 5);
+
+    const hpAfterFirstHit = goblin.mhp;
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.ok(hpAfterFirstHit < 20);
+
+    game.level.monsters.push(orc);
+    markSquareVisible(3, 5);
+    enableRngLog({ reset: true });
+    game.context.move = 0;
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /Don't know what to hit|What do you want to fire|In what direction/);
+    assert.ok(goblin.mhp < hpAfterFirstHit);
+    assert.equal(orc.mhp, 20);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('f command quivered ammo reuses prior polearm hit target before launcher amid ambiguity', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const orc = ordinaryThrowTarget('orc', 3, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 0,
+    });
+    const launcher = bow(876173240, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174132, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        inventory: [launcher, missile],
+        visible: [[7, 5]],
+    });
+
+    await applyPolearmAtTarget(7, 5);
+
+    const hpAfterFirstHit = goblin.mhp;
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.ok(hpAfterFirstHit < 20);
+
+    game.level.monsters.push(orc);
+    markSquareVisible(3, 5);
+    enableRngLog({ reset: true });
+    game.context.move = 0;
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction|arrow|bow/);
+    assert.ok(goblin.mhp < hpAfterFirstHit);
+    assert.equal(orc.mhp, 20);
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(missile.quivered, true);
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
 });
 
