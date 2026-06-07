@@ -25,6 +25,6 @@
 
 ## Remaining Follow-Ups
 
-- Welded monster weapons need the C `It is welded to <monster>'s hand!` feedback and `bknown` update before slipping free.
+- Audit 719 covers welded monster weapon feedback, `bknown` update, and slip-free preservation.
 - Full disarm side effects still need shop billing/no-charge, timers/light sources, artifact/object immunities, petrifying corpse snatch handling, and exact monster body-part naming beyond ordinary hands.
 - Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, fumbling/glib drops, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility.

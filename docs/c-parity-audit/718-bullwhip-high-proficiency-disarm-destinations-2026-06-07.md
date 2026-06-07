@@ -25,6 +25,6 @@
 
 ## Remaining Follow-Ups
 
-- Welded monster weapons still need the C `It is welded to <monster>'s hand!` feedback and `bknown` update before slipping free.
+- Audit 719 covers welded monster weapon feedback, `bknown` update, and slip-free preservation before any destination roll.
 - The roll `3` petrifying corpse branch remains deferred because the current JS `MON_WEP()` analogue only accepts weapon-class wielded objects.
 - Broader side effects still need exact shop billing/no-charge, timers/light-source shutdown, artifact/object immunities, exact body-part naming beyond ordinary hands, mimic reveal, invisible mapping, pit escape, fumbling/glib drops, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility.

@@ -20391,6 +20391,30 @@ function monsterWieldedWeapon(mon) {
     return (mon.minvent || []).includes(weapon) ? weapon : null;
 }
 
+function monsterBullwhipPossessivePronoun(mon) {
+    const gender = String(mon?.gender || mon?.sex || mon?.data?.gender || '').toLowerCase();
+    if (mon?.female || gender === 'female' || gender === 'f') return 'her';
+    if (mon?.male || gender === 'male' || gender === 'm') return 'his';
+    if (mon?.data?.neuter || mon?.data?.isNeuter) return 'its';
+    return mon?.data?.humanoid || mon?.data?.unique || mon?.properName || mon?.pname ? 'his' : 'its';
+}
+
+function bullwhipWeaponHandName(weapon) {
+    return isTwoHandedWieldItem(weapon) ? 'hands' : 'hand';
+}
+
+function monsterWeaponIsWelded(mon, weapon) {
+    return !!weapon && !!(weapon.welded || (weapon.cursed && (weapon.wielded || mon?.mw === weapon)));
+}
+
+function finishHeroBullwhipWeldedWeapon(mon, weapon, messages) {
+    const subject = (weapon.quan || 1) === 1 ? 'It is' : 'They are';
+    const punctuation = weapon.bknown ? '.' : '!';
+    messages.push(`${subject} welded to ${monsterBullwhipPossessivePronoun(mon)} ${bullwhipWeaponHandName(weapon)}${punctuation}`);
+    weapon.bknown = true;
+    messages.push('The bullwhip slips free.');
+}
+
 function prepareHeroBullwhipDisarmedWeapon(mon, weapon) {
     mon.minvent = (mon.minvent || []).filter(item => item !== weapon);
     if (mon.mw === weapon) mon.mw = null;
@@ -20543,8 +20567,12 @@ async function finishHeroBullwhipDirection(item, ch) {
             const messages = [`You wrap your bullwhip around ${targetWeaponName}.`];
             const gotit = proficient > 0 && (!game.u?.fumbling || !rn2(10));
             if (gotit) {
-                const roll = rn2(proficient + 1);
-                finishHeroBullwhipDisarm(mon, targetWeapon, messages, roll, targetWeaponName);
+                if (monsterWeaponIsWelded(mon, targetWeapon)) {
+                    finishHeroBullwhipWeldedWeapon(mon, targetWeapon, messages);
+                } else {
+                    const roll = rn2(proficient + 1);
+                    finishHeroBullwhipDisarm(mon, targetWeapon, messages, roll, targetWeaponName);
+                }
             } else {
                 messages.push('The bullwhip slips free.');
             }

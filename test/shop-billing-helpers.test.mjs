@@ -68549,6 +68549,102 @@ test('wielded bullwhip around visible armed monster slips free when unproficient
     assert.deepEqual(getRngLog(), []);
 });
 
+test('wielded bullwhip treats cursed mon mw as welded and learns curse', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173234, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173235, 'd');
+    Object.assign(weapon, {
+        cursed: true,
+        bknown: false,
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        data: { name: 'goblin', mlevel: 1, humanoid: true },
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a dagger.  It is welded to his hand!  The bullwhip slips free.');
+    assert.equal(goblin.minvent.includes(weapon), true);
+    assert.equal(goblin.mw, weapon);
+    assert.equal(goblin.weapon_check || null, null);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.ocarry, goblin);
+    assert.equal(weapon.bknown, true);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(weapon), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip reports known two-handed welded monster weapon with period', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173236, 'bullwhip', 'w', 0);
+    const weapon = upwardWeapon(876173237, 's', 'two-handed sword', 's - a two-handed sword', {
+        cursed: true,
+        bknown: true,
+    });
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        data: { name: 'goblin', mlevel: 1, humanoid: true },
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a cursed two-handed sword.  It is welded to his hands.  The bullwhip slips free.');
+    assert.equal(goblin.minvent.includes(weapon), true);
+    assert.equal(goblin.mw, weapon);
+    assert.equal(goblin.weapon_check || null, null);
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.ocarry, goblin);
+    assert.equal(weapon.bknown, true);
+    assert.equal(game.level.objects.includes(weapon), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('wielded bullwhip yanks visible armed monster weapon to monster square when proficient', async () => {
     installNonShopFloorState();
     initRng(2);

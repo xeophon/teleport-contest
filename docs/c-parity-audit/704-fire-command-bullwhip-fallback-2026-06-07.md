@@ -31,10 +31,11 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_whip()` parity still needs welded-weapon disarm feedback, proficient `force_attack()`, mimic reveal, pit escape, exact self/down behavior, steed mistakes, full underwater/swallowed handling, fumbling/glib drops, floor snaring, dead-horse feedback, exact wakeup visibility, and shop/timer side effects.
+- Full `use_whip()` parity still needs proficient `force_attack()`, mimic reveal, pit escape, exact self/down behavior, steed mistakes, full underwater/swallowed handling, fumbling/glib drops, floor snaring, dead-horse feedback, exact wakeup visibility, and shop/timer side effects.
 - Audit 716 covers the horizontal water/lava wall splash branch.
 - Audit 717 covers the visible armed-monster unproficient slip and proficiency-1 default disarm branch.
 - Audit 718 covers the higher-proficiency visible armed-monster hero-square and inventory-snatch disarm destinations.
+- Audit 719 covers visible armed-monster welded-weapon feedback, curse knowledge, and slip-free preservation.
 - Audit 705 covers the empty-quiver alternate-polearm queued swap/retry branch.
 - Audit 706 covers the reachable wielded-polearm priority with quivered/readied ammo.
 - Fireassist launcher swaps still mutate state inline instead of queuing C's `doswapweapon`/`dowield`/retry sequence.
