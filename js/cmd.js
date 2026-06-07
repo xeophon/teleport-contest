@@ -4016,7 +4016,7 @@ function collectSameLevelTeleportCoords(cx, cy) {
     return coords;
 }
 
-function teleportHeroSameLevel(x, y) {
+function teleportHeroSameLevel(x, y, { recalcVision = true } = {}) {
     if (isBuriedBallTrapActive()) buriedBallToPunishment();
     const oldX = game.u?.ux || 0;
     const oldY = game.u?.uy || 0;
@@ -4046,7 +4046,7 @@ function teleportHeroSameLevel(x, y) {
     if (oldBallX != null && oldBallY != null) newsym(oldBallX, oldBallY);
     if (oldChainX != null && oldChainY != null) newsym(oldChainX, oldChainY);
     newsym(x, y);
-    vision_recalc(0);
+    if (recalcVision) vision_recalc(0);
     return `You materialize in ${x === oldX && y === oldY ? 'the same' : 'a different'} location!`;
 }
 
@@ -4057,7 +4057,7 @@ function fixedTeleportTrapDestination(trap) {
     return dst;
 }
 
-function teleportHeroToFixedTrapDestination(trap) {
+function teleportHeroToFixedTrapDestination(trap, options = {}) {
     const dst = fixedTeleportTrapDestination(trap);
     if (!dst) return null;
     const loc = game.level?.at(dst.x, dst.y);
@@ -4073,7 +4073,7 @@ function teleportHeroToFixedTrapDestination(trap) {
         newsym(oldX, oldY);
         newsym(spot.x, spot.y);
     }
-    return teleportHeroSameLevel(dst.x, dst.y);
+    return teleportHeroSameLevel(dst.x, dst.y, options);
 }
 
 function applySameLevelTeleportNutritionPenalty() {
@@ -4149,22 +4149,22 @@ function applyAccessoryHunger(accessorytime) {
         game.u.uhunger = (game.u.uhunger ?? 900) - 1;
 }
 
-function safeTeleportHeroSameLevel() {
+function safeTeleportHeroSameLevel(options = {}) {
     for (let tcnt = 0; tcnt < 40; tcnt++) {
         const x = rnd(COLNO - 1);
         const y = rn2(ROWNO);
         if (sameLevelTeleportOk(x, y, false))
-            return teleportHeroSameLevel(x, y);
+            return teleportHeroSameLevel(x, y, options);
     }
 
     let backup = null;
     for (const pos of collectSameLevelTeleportCoords(game.u?.ux || 0, game.u?.uy || 0)) {
         if (sameLevelTeleportOk(pos.x, pos.y, false))
-            return teleportHeroSameLevel(pos.x, pos.y);
+            return teleportHeroSameLevel(pos.x, pos.y, options);
         if (!backup && sameLevelTeleportTrapAt(pos.x, pos.y) && sameLevelTeleportOk(pos.x, pos.y, true))
             backup = pos;
     }
-    return backup ? teleportHeroSameLevel(backup.x, backup.y) : '';
+    return backup ? teleportHeroSameLevel(backup.x, backup.y, options) : '';
 }
 
 function startControlledTeleportPrompt() {
@@ -20159,6 +20159,11 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
 
     let result = null;
     if ([HOLE, TRAPDOOR, LEVEL_TELEP, MAGIC_PORTAL].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
+    else if (trap.ttyp === TELEP_TRAP) result = movementTeleportTrapResult(trap, { recalcVision: false });
+    else if (trap.ttyp === MAGIC_TRAP) {
+        result = movementMagicTrapResult(trap);
+        if (result?.afterMore) game._topline_after_more = result.afterMore;
+    }
     else if (trap.ttyp === ANTI_MAGIC) result = movementAntiMagicTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
     else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
@@ -45553,7 +45558,7 @@ function trapMessage(...parts) {
 }
 
 function trapResultHasEffect(result) {
-    return !!(result?.message || result?.fatal || result?.lifeSaving || result?.more);
+    return !!(result?.message || result?.fatal || result?.lifeSaving || result?.more || result?.effect);
 }
 
 function sitTrapEscapeAllowed(trap) {
@@ -46144,6 +46149,40 @@ function movementTransportTrapResult(trap) {
     if (trap.ttyp === MAGIC_PORTAL)
         return sitMagicPortalResult(trap, '');
     return null;
+}
+
+function movementTeleportTrapResult(trap, options = {}) {
+    if (!trap) return null;
+    const forcedFixedDestination = !!fixedTeleportTrapDestination(trap);
+    if (!forcedFixedDestination && movementTrapAlreadySeen(trap)
+        && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+
+    trap.tseen = true;
+    if (heroHasAntimagic() || In_endgame(game.u?.uz) || heroNoTeleportLevel())
+        return { message: 'You feel a wrenching sensation.', more: false };
+
+    if (trap.once) deleteTrap(trap);
+    const fixedTeleport = teleportHeroToFixedTrapDestination(trap, options);
+    if (fixedTeleport === '')
+        return { message: 'You shudder for a moment.', more: true };
+    if (fixedTeleport)
+        return { message: fixedTeleport, more: true };
+
+    const materialize = safeTeleportHeroSameLevel(options);
+    return { message: materialize || 'You shudder for a moment.', more: true };
+}
+
+function movementMagicTrapResult(trap) {
+    if (!trap) return null;
+    if (movementTrapAlreadySeen(trap) && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    const result = magicTrapResult(trap);
+    return {
+        ...result,
+        effect: true,
+        more: !!(result?.more || result?.afterMore),
+    };
 }
 
 function placeSitTrapProjectile(projectile) {

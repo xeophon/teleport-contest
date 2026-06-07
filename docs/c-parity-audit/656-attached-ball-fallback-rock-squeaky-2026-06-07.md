@@ -32,5 +32,5 @@
 
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
 - Attached-ball fallback relocation still needs canaries for bear, polymorph, dart, and rolling-boulder launch-path details.
-- Magic trap, teleport, and statue-trap relocation effects need separate source-backed slices because their current JS helpers are async, string-only, or carry broader command-flow side effects.
+- Statue-trap relocation effects need a separate source-backed slice because their current JS helper is async and carries broader animation side effects.
 - Full rust trap parity still needs targeted water damage, lit item splashing, gremlin split, and iron-golem rust fallout beyond the current modeled movement branch.
