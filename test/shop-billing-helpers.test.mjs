@@ -541,6 +541,26 @@ function bow(id, letter = 'b', extra = {}) {
     };
 }
 
+function glaive(id, letter = 'g', extra = {}) {
+    return {
+        id,
+        otyp: GLAIVE,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'glaive',
+        actualKind: 'glaive',
+        plural: 'glaives',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a glaive`,
+        dknown: true,
+        known: true,
+        ...extra,
+    };
+}
+
 function crossbow(id, letter = 'c', extra = {}) {
     return {
         id,
@@ -66607,6 +66627,46 @@ test('f command arrow with matching bow uses C ammo range increment', async () =
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('applying wielded polearm hits monster at range two', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const weapon = glaive(876173201, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('g');
+
+    assert.equal(game._command_mode, 'applyPolearmTarget');
+    assert.equal(game._pending_message, 'Where do you want to hit?');
+
+    await rhack('l');
+    await rhack('l');
+    assert.match(game._pending_message, /goblin/);
+
+    await rhack('.');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /no one there/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+});
+
 test('f command fireassist skips known cursed inventory launcher', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66712,6 +66772,60 @@ test('f command empty quiver with autoquiver disabled prompts instead of auto-fi
     assert.equal(game._fire_item_letter || null, null);
     assert.equal(missile.quivered || false, false);
     assert.match(game._pending_message, /^What do you want to fire\? \[b or \?\*\]$/);
+});
+
+test('f command empty quiver with wielded polearm autohits before ammo prompt', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const weapon = glaive(876173202, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const missile = arrow(876174110, 'b', { line: 'b - an arrow' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /What do you want to fire/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+});
+
+test('f command empty quiver with wielded polearm and no target does not prompt for ammo', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const weapon = glaive(876173203, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const missile = arrow(876174111, 'b', { line: 'b - an arrow' });
+    game.inventory = [weapon, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.equal(game._pending_message, "Don't know what to hit.");
+    assert.deepEqual(getRngLog(), []);
 });
 
 test('f command failed autoquiver falls through to fire prompt', async () => {

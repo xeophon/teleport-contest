@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -20299,6 +20299,18 @@ function heroFireReadyLine(item) {
     return `${item?.letter || '?'} - ${inventoryItemName(item)}`;
 }
 
+function heroWieldedPolearm() {
+    return (game.inventory || []).find(item => itemIsPrimaryWielded(item) && isPolearmItem(item));
+}
+
+async function beginHeroFirePolearmFallback(item) {
+    game._fire_count = null;
+    const target = heroPolearmAutohitTarget();
+    if (target) await finishHeroPolearmTarget(item, target.mx, target.my, { autohit: true });
+    else await finishHeroPolearmTarget(item, game.u?.ux || 0, game.u?.uy || 0, { autohit: true });
+    game._command_mode = null;
+}
+
 function heroFireassistBlessCurseKnown(item) {
     return item?.bknown === true || (item?.bknown !== false
         && /\b(?:blessed|uncursed|cursed)\b/.test(String(item?.line || '')));
@@ -25485,6 +25497,104 @@ function polearmTargetDescription(x, y) {
     if (loc.typ === MOAT) return 'moat';
     if (loc.typ === STONE) return 'stone';
     return loc.typ && loc.typ < DOOR ? 'wall' : 'unexplored area';
+}
+
+function heroPolearmTargetDistance2(x, y) {
+    return (x - (game.u?.ux || 0)) ** 2 + (y - (game.u?.uy || 0)) ** 2;
+}
+
+function heroPolearmAutohitTarget() {
+    const candidates = (game.level?.monsters || []).filter(mon =>
+        mon && !mon.dead && (mon.mhp == null || mon.mhp > 0)
+        && !mon.mtame && !mon.pet && !mon.mpeaceful
+        && heroPolearmTargetDistance2(mon.mx, mon.my) === 4
+        && couldsee(mon.mx, mon.my));
+    return candidates.length === 1 ? candidates[0] : null;
+}
+
+function heroAppliedPolearmHitValue(item, mon) {
+    return heroProjectileBaseHitValue(item, mon)
+        + heroWeaponHitSkillBonus(P_POLEARMS, 'polearms');
+}
+
+function heroAppliedPolearmImpact(item, mon) {
+    const hitValue = heroAppliedPolearmHitValue(item, mon);
+    const dieroll = rnd(20);
+    const targetName = heroThrownVenomTargetName(mon);
+    if (hitValue >= dieroll) {
+        addConductCount('weaphit');
+        const damage = Math.max(0, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
+        if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
+        const messages = [`You hit ${targetName}${heroProjectileHitPunctuation(damage)}`];
+        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
+        return { hit: true, damage, messages };
+    }
+    mon.msleeping = 0;
+    mon.meating = 0;
+    setHeroObjectHitMonsterAngry(mon);
+    return {
+        hit: false,
+        messages: [`The ${pickupObjectName(item)} misses ${targetName}.`],
+    };
+}
+
+async function finishHeroPolearmTarget(item, x, y, { autohit = false } = {}) {
+    if (!item || !isPolearmItem(item)) return false;
+    const dist2 = heroPolearmTargetDistance2(x, y);
+    if (dist2 > 4) {
+        await setMessage('Too far!');
+        return true;
+    }
+    if (dist2 < 4) {
+        await setMessage(autohit && x === (game.u?.ux || 0) && y === (game.u?.uy || 0)
+            ? "Don't know what to hit."
+            : 'Too close!');
+        return true;
+    }
+    if (!couldsee(x, y)) {
+        await setMessage("You can't reach that spot from here.");
+        return true;
+    }
+
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate.mx === x && candidate.my === y && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
+    if (mon) {
+        const impact = heroAppliedPolearmImpact(item, mon);
+        await setMessage((impact.messages || []).join('  '), (impact.messages || []).length > 1);
+        newsym(x, y);
+        game.context.move = 1;
+        return true;
+    }
+
+    const statueObj = floorStatueAt(x, y);
+    if (statueObj) {
+        const statueTrap = statueTrapAt(x, y);
+        const message = statueTrap
+            ? await activateStatueTrap(statueTrap, x, y, { normal: true }) || ''
+            : 'Thump!  Your blow bounces harmlessly off the statue.';
+        await setMessage(message);
+        game.context.move = 1;
+        return true;
+    }
+
+    const boulder = (game.level?.objects || []).some(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
+    if (boulder) {
+        await setMessage('Thump!  Your blow bounces harmlessly off the boulder.');
+        game.context.move = 1;
+        return true;
+    }
+    const loc = game.level?.at(x, y);
+    if (!loc || !ACCESSIBLE(loc.typ)) {
+        await setMessage(`You uselessly attack ${loc?.typ === STONE ? 'stone' : 'an unknown obstacle'}.`);
+        game.context.move = 1;
+        return true;
+    }
+    await setMessage('You miss; there is no one there to hit.');
+    game.context.move = 1;
+    return true;
 }
 
 function statueStrikeTargetAlongLine(dir) {
@@ -62451,47 +62561,7 @@ export async function rhack(_cmd) {
             game._apply_polearm_letter = null;
             game._cursor_override = null;
             game._command_mode = null;
-            if (!item || !isPolearmItem(item)) return;
-            const dist2 = (x - (game.u?.ux || 0)) ** 2 + (y - (game.u?.uy || 0)) ** 2;
-            if (dist2 > 4) {
-                await setMessage('Too far!');
-                return;
-            }
-            if (dist2 < 4) {
-                await setMessage('Too close!');
-                return;
-            }
-            if (!couldsee(x, y)) {
-                await setMessage("You can't reach that spot from here.");
-                return;
-            }
-
-            const statueObj = floorStatueAt(x, y);
-            if (statueObj) {
-                const statueTrap = statueTrapAt(x, y);
-                const message = statueTrap
-                    ? await activateStatueTrap(statueTrap, x, y, { normal: true }) || ''
-                    : 'Thump!  Your blow bounces harmlessly off the statue.';
-                await setMessage(message);
-                game.context.move = 1;
-                return;
-            }
-
-            const boulder = (game.level?.objects || []).some(obj =>
-                !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y && obj.otyp === BOULDER);
-            if (boulder) {
-                await setMessage('Thump!  Your blow bounces harmlessly off the boulder.');
-                game.context.move = 1;
-                return;
-            }
-            const loc = game.level?.at(x, y);
-            if (!loc || !ACCESSIBLE(loc.typ)) {
-                await setMessage(`You uselessly attack ${loc?.typ === STONE ? 'stone' : 'an unknown obstacle'}.`);
-                game.context.move = 1;
-                return;
-            }
-            await setMessage('You miss; there is no one there to hit.');
-            game.context.move = 1;
+            await finishHeroPolearmTarget(item, x, y);
             return;
         }
         game._keep_pending_message = 1;
@@ -69717,6 +69787,11 @@ export async function rhack(_cmd) {
             }
         }
         if (!projectile) {
+            const polearm = !game.flags?.autoquiver && heroWieldedPolearm();
+            if (polearm) {
+                await beginHeroFirePolearmFallback(polearm);
+                return;
+            }
             const letters = inventoryLetters(isReadySuggestItem);
             if (!letters) {
                 game._fire_count = null;
