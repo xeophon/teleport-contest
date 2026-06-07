@@ -12,16 +12,16 @@
 ## Port Notes
 
 - `heroFiredLauncherAmmoImpact()` now adds the hero poison branch for matching launcher ammo only, covering fired/thrown arrows, ya, and crossbow bolts that use their launcher.
+- `heroThrownByHandAmmoImpact()` keeps the weak C ranged damage for unmatched bow/crossbow ammo but still applies poisoned-hit side effects, matching the C ordering where `ispoisoned` is set before the weak ranged branch.
 - `heroThrownWeaponImpact()` now enables poison for thrown darts and shuriken while keeping generic kicked weapon impacts on the non-poisoned path.
 - The poison helper preserves C ordering: alignment message first, `rn2(nopoison)` wear-off, resistance check without the deadly roll, then either `rn2(10)`/`rnd(6)` nonfatal damage or deadly poison cleanup without the ordinary `You kill ...!` message.
-- By-hand unmatched bow/crossbow ammo remains on the weak by-hand path in this slice and does not trigger the new poison branch.
 
 ## Tests
 
 - `hero-thrown poisoned dart applies C poison after weapon damage`
 - `f command no-launcher poisoned dart respects monster poison resistance`
 - `f command poisoned arrow with matching bow respects monster poison resistance`
-- `hero-thrown poisoned unmatched crossbow bolt hits by hand without poison branch`
+- `hero-thrown poisoned unmatched crossbow bolt by hand respects monster poison resistance`
 
 ## Remaining Follow-Ups
 

@@ -21053,11 +21053,18 @@ function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLaunche
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
     if (hitValue >= dieroll) {
-        const { damage, silverMessage } = heroThrownByHandAmmoDamage(obj, mon);
+        const ammoDamage = heroThrownByHandAmmoDamage(obj, mon);
+        const poison = heroProjectilePoisonResult(obj, mon, heroThrownByHandAmmoPoisonApplies(obj, launcher));
+        const damage = ammoDamage.damage + poison.damage;
         mon.mhp = (mon.mhp || 1) - damage;
-        const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
-        if (silverMessage) messages.push(silverMessage);
-        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        const messages = [
+            ...poison.messagesBeforeHit,
+            `${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`,
+        ];
+        if (ammoDamage.silverMessage) messages.push(ammoDamage.silverMessage);
+        messages.push(...poison.messagesAfterHit);
+        if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
+        else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -21213,6 +21220,10 @@ function heroThrownWeaponPoisonApplies(obj) {
 
 function heroLauncherAmmoPoisonApplies(obj, launcher) {
     return isPoisonableWeaponObject(obj) && heroThrowAmmoAndLauncher(obj, launcher);
+}
+
+function heroThrownByHandAmmoPoisonApplies(obj, launcher) {
+    return isPoisonableWeaponObject(obj) && heroThrownByHandAmmoObject(obj, launcher);
 }
 
 function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false } = {}) {

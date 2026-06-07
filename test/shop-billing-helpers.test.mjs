@@ -66817,7 +66817,7 @@ test('hero-thrown unmatched crossbow bolt can hit monster by hand after warning'
     ]);
 });
 
-test('hero-thrown poisoned unmatched crossbow bolt hits by hand without poison branch', async () => {
+test('hero-thrown poisoned unmatched crossbow bolt by hand respects monster poison resistance', async () => {
     installNonShopFloorState();
     initRng(2);
     Object.assign(game.u, {
@@ -66856,13 +66856,13 @@ test('hero-thrown poisoned unmatched crossbow bolt hits by hand without poison b
 
     const rngLog = getRngLog();
     const damageRoll = rngValuesForCall(rngLog, 'rnd(2)')[0];
-    assert.match(game._pending_message, /The poisoned crossbow bolt hits the goblin!/);
-    assert.doesNotMatch(game._pending_message, /The poison doesn't seem to affect|The poison was deadly|evil coward/);
+    assert.match(game._pending_message, /The (?:poisoned )?crossbow bolt hits the goblin!/);
+    assert.match(game._pending_message, /The poison doesn't seem to affect the goblin\./);
+    assert.doesNotMatch(game._pending_message, /The poison was deadly|evil coward/);
     assert.equal(goblin.mhp, 40 - (damageRoll + 8));
-    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
-        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 6), [
+        'rnd(20)', 'rnd(2)', 'rn2(10)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
-    assert.equal(rngLog.some(entry => entry.startsWith('rn2(10)=')), false);
 });
 
 test('weak hero-thrown unmatched crossbow bolt uses C zero range and warning', async () => {
