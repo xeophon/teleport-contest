@@ -67433,7 +67433,8 @@ export async function rhack(_cmd) {
         const hardLanding = !projectileLandingIsSoft(ox, oy);
         const targetUsesImpact = !!(targetMon
             && (firedFromLauncher || heroThrownByHandAmmoObject(item, launcher)
-                || (!launcher && heroThrownGemClassObject(item))));
+                || (!launcher && (heroThrownGemClassObject(item)
+                    || heroProjectileSupportedWeaponObject(item)))));
         const splitBeforeImpact = targetUsesImpact;
         if (splitBeforeImpact) {
             for (let shot = 0; shot < shotCount; shot++) {
@@ -67500,6 +67501,12 @@ export async function rhack(_cmd) {
                 impactConsumedProjectile = !!gemImpact.mulched;
                 impactObjectHit = !!gemImpact.hit;
                 impactPassiveTarget = gemImpact.hit ? targetMon : null;
+            } else if (!impact.handled && heroProjectileSupportedWeaponObject(projectileObject)) {
+                const weaponImpact = heroThrownWeaponImpact(projectileObject, targetMon);
+                impactMessage = (weaponImpact.messages || []).join('  ');
+                impactConsumedProjectile = !!weaponImpact.mulched;
+                impactObjectHit = !!weaponImpact.hit;
+                impactPassiveTarget = weaponImpact.hit ? targetMon : null;
             }
         }
         if (!impactConsumedProjectile && hardLanding) {

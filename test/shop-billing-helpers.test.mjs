@@ -66179,6 +66179,105 @@ test('f command no-sling known glass gem to unicorn is rejected as junk and land
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 1), ['rn2(100)']);
 });
 
+test('f command no-launcher dart hits monster through thrown weapon path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_DART, P_SKILLED);
+    const dart = dartStack(87617413, 'd', 1, {
+        quivered: true,
+        line: 'd - a dart (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [dart];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The dart hits the goblin\./);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|misses|shatters|Splat/);
+    assert.equal(goblin.mhp, 18);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(dart), false);
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command no-launcher dart miss wakes monster without damage roll', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 3;
+    const dart = dartStack(87617414, 'd', 1, {
+        quivered: true,
+        line: 'd - a dart (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mac: -10,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+    });
+    game.inventory = [dart];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /The dart misses the goblin\./);
+    assert.doesNotMatch(game._pending_message, /You aren't wielding|hits the goblin|shatters|Splat/);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(game.inventory.includes(dart), false);
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(rngValuesForCall(rngLog, 'rnd(3)').length, 0);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('levitating f command arrow with matching bow uses C air split recoil', async () => {
     installNonShopFloorState();
     initRng(2);
