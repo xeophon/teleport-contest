@@ -13,7 +13,8 @@
 ## Port Notes
 
 - Added a ready-selection count state shared by `Q`, manual `f`, and the ready inventory overlay.
-- `Q` now consumes the top-level numeric prefix as a `GETOBJ_ALLOWCNT` selection count.
+- `Q` ignores the top-level numeric prefix as a ready-object count, matching C's reset of command repeat state before `getobj()`.
+- Digits typed at the ready prompt or in the ready inventory menu are treated as `GETOBJ_ALLOWCNT` selection counts.
 - Manual `f` preserves the existing top-level shot limit and uses only digits entered at the manual `What do you want to fire?` prompt or menu as ready-selection counts.
 - Counted non-gold stack selection uses the existing carried stack split helper, clears worn/wielded/quivered state from the split child, refreshes both inventory lines, and readies the child.
 - Partial gold readiness is rejected with the C wording and leaves gold quantity and quiver state unchanged.
@@ -22,7 +23,8 @@
 
 ## Tests
 
-- `Q command count prefix readies a split non-gold stack`
+- `Q command count prefix does not become ready selection count`
+- `Q command prompt count readies a split non-gold stack`
 - `f command prompt count readies a split non-gold stack before firing`
 - `f command prompt count rejects partial gold readiness`
 - `f command shot limit stays separate from manual prompt ready count`
@@ -31,5 +33,4 @@
 ## Remaining Follow-Ups
 
 - Full primary and alternate wielded weapon confirmation, unwielding, and time behavior remains separate.
-- Ready-menu count editing is still a simplified digit accumulator; it does not yet mirror every `get_count()` editing key.
-- Full menu selection still does not enforce visible filtered-page membership for selected letters.
+- TTY and curses menu-count cancellation differ in C; JS currently follows the existing local throw-menu convention where Escape clears an active menu count first.

@@ -20334,16 +20334,51 @@ function heroFireReadyLine(item) {
 
 function clearReadySelectionCount() {
     game._ready_count_text = '';
+    game._ready_count_backspaced = false;
+    game._ready_menu_count_text = '';
+    game._ready_menu_count_backspaced = false;
 }
 
 function readySelectionCountValue() {
-    return Math.max(0, Math.trunc(Number(game._ready_count_text || 0)));
+    const text = game._ready_menu_count_text || game._ready_count_text;
+    return Math.max(0, Math.trunc(Number(text || 0)));
 }
 
-async function appendReadySelectionCountDigit(ch) {
+function clearReadyMenuSelectionCount() {
+    game._ready_menu_count_text = '';
+    game._ready_menu_count_backspaced = false;
+}
+
+function readySelectionCountState(menu = false) {
+    return menu
+        ? { textKey: '_ready_menu_count_text', backspacedKey: '_ready_menu_count_backspaced' }
+        : { textKey: '_ready_count_text', backspacedKey: '_ready_count_backspaced' };
+}
+
+function readySelectionCountValueForText(text) {
+    return Math.max(0, Math.trunc(Number(text || 0)));
+}
+
+async function eraseReadySelectionCountDigit(ch, menu = false) {
+    if (ch !== '\b' && ch !== '\x7f') return false;
+    const { textKey, backspacedKey } = readySelectionCountState(menu);
+    const count = readySelectionCountValueForText(game[textKey]);
+    if (count <= 0) return false;
+    const newCount = Math.trunc(count / 10);
+    game[textKey] = newCount > 0 ? String(newCount) : '';
+    game[backspacedKey] = true;
+    await setMessage(`Count: ${game[textKey]}`);
+    return true;
+}
+
+async function appendReadySelectionCountDigit(ch, menu = false) {
     if (!/^\d$/.test(ch)) return false;
-    game._ready_count_text = `${game._ready_count_text || ''}${ch}`;
-    await setMessage(`Count: ${game._ready_count_text}`);
+    const { textKey, backspacedKey } = readySelectionCountState(menu);
+    const backspaced = !!game[backspacedKey];
+    game[textKey] = `${game[textKey] || ''}${ch}`;
+    const typedCount = readySelectionCountValueForText(game[textKey]);
+    if (typedCount > 9 || backspaced) await setMessage(`Count: ${typedCount}`);
+    game[backspacedKey] = false;
     return true;
 }
 
@@ -20596,22 +20631,53 @@ function clearReadyInventoryOverlay() {
     game._ready_inventory_page = 0;
     game._ready_inventory_filter = null;
     game._ready_inventory_verb = '';
+    game._ready_inventory_visible_letters = '';
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
 }
 
+function captureReadyInventoryVisibleLetters() {
+    const letters = [];
+    for (const row of game._overlay_lines || []) {
+        const text = String(row?.[2] || '');
+        const match = text.match(/^([A-Za-z$]) - /);
+        if (match) letters.push(match[1]);
+    }
+    game._ready_inventory_visible_letters = letters.join('');
+}
+
 function showReadyInventoryOverlay(verb, filter = null, page = 0) {
+    clearReadyMenuSelectionCount();
     game._ready_inventory_verb = verb;
     game._ready_inventory_filter = filter;
     game._ready_inventory_page = page;
     showInventoryOverlay(page, false, readyInventoryFilterMatch());
+    captureReadyInventoryVisibleLetters();
     game._command_mode = 'readyInventory';
 }
 
 async function restoreReadyPrompt(verb) {
     clearReadyInventoryOverlay();
+    clearReadyMenuSelectionCount();
     await setMessage(readyPromptMessage(verb));
     game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
+}
+
+function readyInventoryVisibleLetters() {
+    const letters = new Set(String(game._ready_inventory_visible_letters || '').split('').filter(Boolean));
+    if (letters.size) return letters;
+    for (const row of game._overlay_lines || []) {
+        const text = String(row?.[2] || '');
+        const match = text.match(/^([A-Za-z$]) - /);
+        if (match) letters.add(match[1]);
+    }
+    return letters;
+}
+
+function readyInventoryItemByVisibleLetter(ch) {
+    const visible = readyInventoryVisibleLetters();
+    if (!visible.has(ch)) return null;
+    return (game.inventory || []).find(invItem => invItem.letter === ch) || null;
 }
 
 async function finishReadyObjectSelection(selectedItem, verb) {
@@ -63346,6 +63412,7 @@ export async function rhack(_cmd) {
             game._command_mode = null;
             return;
         }
+        if (await eraseReadySelectionCountDigit(ch)) return;
         if (await appendReadySelectionCountDigit(ch)) return;
         if (ch === '*') {
             showReadyInventoryOverlay('ready');
@@ -63358,7 +63425,11 @@ export async function rhack(_cmd) {
         }
         if (ch === '-') {
             clearReadySelectionCount();
-            for (const item of game.inventory || []) item.quivered = false;
+            for (const item of game.inventory || []) {
+                item.quivered = false;
+                if (item.line)
+                    item.line = item.line.replace(/ \((?:at the ready|in quiver(?: pouch)?)\).*$/, '');
+            }
             await setMessage('No ammunition readied.');
             game._command_mode = null;
             return;
@@ -63389,6 +63460,7 @@ export async function rhack(_cmd) {
             game._fire_count = null;
             return;
         }
+        if (await eraseReadySelectionCountDigit(ch)) return;
         if (await appendReadySelectionCountDigit(ch)) return;
         if (ch === '*') {
             showReadyInventoryOverlay('fire');
@@ -63432,9 +63504,16 @@ export async function rhack(_cmd) {
             if (page < (game._inventory_overlay_total_pages || 1)) {
                 game._ready_inventory_page = page;
                 showInventoryOverlay(page, false, readyInventoryFilterMatch());
+                captureReadyInventoryVisibleLetters();
                 return;
             }
             await restoreReadyPrompt(verb);
+            return;
+        }
+        if (ch === '\x1b' && game._ready_menu_count_text) {
+            clearReadyMenuSelectionCount();
+            game._pending_message = '';
+            game._message_more = 0;
             return;
         }
         if (ch === '\x1b') {
@@ -63445,8 +63524,9 @@ export async function rhack(_cmd) {
             if (verb === 'fire') game._fire_count = null;
             return;
         }
-        if (await appendReadySelectionCountDigit(ch)) return;
-        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        if (await eraseReadySelectionCountDigit(ch, true)) return;
+        if (await appendReadySelectionCountDigit(ch, true)) return;
+        const item = readyInventoryItemByVisibleLetter(ch);
         clearReadyInventoryOverlay();
         await finishReadyObjectSelection(item, verb);
         return;
@@ -67323,9 +67403,8 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'Q') {
-        const readyCount = throwCountTextValue(game._count_prefix);
         game._count_prefix = '';
-        game._ready_count_text = readyCount > 0 ? String(readyCount) : '';
+        clearReadySelectionCount();
         if (!(game.inventory || []).some(isReadySelectableItem)) {
             clearReadySelectionCount();
             await setMessage("You don't have anything to ready.");
