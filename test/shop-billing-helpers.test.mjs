@@ -66455,6 +66455,66 @@ test('f command arrow with matching bow hits monster through C projectile path',
     ]);
 });
 
+test('f command stacked arrows with matching bow hit monster as separate shots', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_BASIC);
+    const launcher = bow(87617332, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(87617432, 'b', {
+        quivered: true,
+        quan: 2,
+        line: 'b - 2 arrows (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 80,
+        mhpmax: 80,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    const hitMessages = game._pending_message.match(/The arrow hits the goblin[.!]/g) || [];
+    const damageRolls = rngValuesForCall(rngLog, 'rnd(6)');
+    assert.equal(rngCallValue(rngLog[0]), 2);
+    assert.match(game._pending_message, /You shoot 2 arrows\./);
+    assert.equal(hitMessages.length, 2);
+    assert.equal(damageRolls.length, 2);
+    assert.equal(goblin.mhp, 80 - damageRolls.reduce((sum, roll) => sum + roll, 0));
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'arrow' && obj.ox === 6 && obj.oy === 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 2);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 12), [
+        'rnd(2)', 'rnd(2)',
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+        'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
 test('f command poisoned arrow with matching bow respects monster poison resistance', async () => {
     installNonShopFloorState();
     initRng(2);

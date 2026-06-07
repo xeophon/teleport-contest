@@ -20978,6 +20978,32 @@ function heroFiredLauncherAmmoDamage(obj, mon, launcher) {
     return { damage, silverMessage: special.silverMessage };
 }
 
+function heroFireProjectileFlightResult(startX, startY, dir, range) {
+    let ox = startX;
+    let oy = startY;
+    let targetMon = null;
+    for (let step = 0; step < range; step++) {
+        const nx = ox + dir.dx;
+        const ny = oy + dir.dy;
+        const loc = game.level?.at(nx, ny);
+        if (!loc || IS_OBSTRUCTED(loc.typ)) break;
+        ox = nx;
+        oy = ny;
+        targetMon = (game.level?.monsters || []).find(mon =>
+            mon && !mon.dead && mon.mx === ox && mon.my === oy
+            && (mon.mhp == null || mon.mhp > 0)) || null;
+        if (targetMon) break;
+    }
+    return { ox, oy, targetMon };
+}
+
+function heroFireProjectileTargetUsesImpact(obj, targetMon, launcher, firedFromLauncher) {
+    return !!(targetMon
+        && (firedFromLauncher || heroThrownByHandAmmoObject(obj, launcher)
+            || (!launcher && (heroThrownGemClassObject(obj)
+                || heroProjectileSupportedWeaponObject(obj)))));
+}
+
 function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     const data = heroLauncherAmmoData(obj);
     if (!data) return { handled: false, messages: [] };
@@ -21025,6 +21051,56 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
+}
+
+function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLauncher) {
+    const result = impact => ({
+        handled: !!impact.handled,
+        messages: impact.messages || [],
+        consumed: !!(impact.mulched || impact.consumed),
+        hit: !!impact.hit,
+        passiveTarget: impact.hit ? targetMon : null,
+    });
+    if (!targetMon) return { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
+    if (firedFromLauncher) {
+        const impact = heroFiredLauncherAmmoImpact(obj, targetMon, launcher);
+        return result(impact);
+    }
+    const ammoImpact = heroThrownByHandAmmoImpact(obj, targetMon, launcher);
+    if (ammoImpact.handled) return result(ammoImpact);
+    if (heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(obj)) {
+        const unicornImpact = heroThrownUnicornGemImpact(obj, targetMon);
+        return result(unicornImpact);
+    }
+    if (heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)) {
+        const hitValue = heroThrownGemHitValue(obj, targetMon);
+        const dieroll = rnd(20);
+        const thrownName = floorObjectTheSubject(obj);
+        const targetName = heroThrownVenomTargetName(targetMon);
+        if (hitValue >= dieroll) {
+            wakeMonsterFromHeroThrownHit(targetMon);
+            exerciseHeroProjectileHitDexterity();
+            return {
+                handled: true,
+                messages: [`${thrownName} hits ${targetName} but does no harm.`],
+                consumed: false,
+                hit: true,
+                passiveTarget: targetMon,
+            };
+        }
+        const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
+        messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+        return { handled: true, messages, consumed: false, hit: false, passiveTarget: null };
+    }
+    if (heroThrownGemClassObject(obj)) {
+        const gemImpact = heroThrownGemImpact(obj, targetMon);
+        return result(gemImpact);
+    }
+    if (heroProjectileSupportedWeaponObject(obj)) {
+        const weaponImpact = heroThrownWeaponImpact(obj, targetMon);
+        return result(weaponImpact);
+    }
+    return { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
 }
 
 function heroThrownByHandAmmoObject(obj, launcher = heroWieldedThrowLauncher()) {
@@ -67501,121 +67577,119 @@ export async function rhack(_cmd) {
             fireRange = heroHorizontalThrowFinalRange(item, airSplit.throwRange);
             fireRecoilResult = heroHorizontalThrowRecoilResult(dir, airSplit.recoilRange);
         }
-        let ox = startX;
-        let oy = startY;
-        let targetMon = null;
-        for (let step = 0; step < fireRange; step++) {
-            const nx = ox + dir.dx;
-            const ny = oy + dir.dy;
-            const loc = game.level?.at(nx, ny);
-            if (!loc || IS_OBSTRUCTED(loc.typ)) break;
-            ox = nx;
-            oy = ny;
-            targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
-            if (targetMon) break;
-        }
+        const initialFlight = heroFireProjectileFlightResult(startX, startY, dir, fireRange);
+        let ox = initialFlight.ox;
+        let oy = initialFlight.oy;
+        let targetMon = initialFlight.targetMon;
         const oldQuan = item.quan || 1;
         const firedFromLauncher = !!launcher;
         const volleyLimit = firedFromLauncher && oldQuan > 1 ? 2 : 1;
         const shotCount = volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1;
-        let projectileId = null;
-        let projectileBreakRoll = null;
-        const hardLanding = !projectileLandingIsSoft(ox, oy);
-        const targetUsesImpact = !!(targetMon
-            && (firedFromLauncher || heroThrownByHandAmmoObject(item, launcher)
-                || (!launcher && (heroThrownGemClassObject(item)
-                    || heroProjectileSupportedWeaponObject(item)))));
-        const splitBeforeImpact = targetUsesImpact;
-        if (splitBeforeImpact) {
-            for (let shot = 0; shot < shotCount; shot++) {
-                if (oldQuan - shot > 1) projectileId = next_ident();
-            }
-        }
-        const projectileObject = {
-            ...item,
-            letter: undefined,
-            line: undefined,
-            wielded: false,
-            quivered: false,
-            id: projectileId ?? item.id,
-            quan: shotCount,
-            ox,
-            oy,
-            glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
-            color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-        };
-        if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
         let impactMessage = '';
-        let impactConsumedProjectile = false;
-        let impactObjectHit = false;
-        let impactPassiveTarget = null;
-        if (targetMon && firedFromLauncher) {
-            const impact = heroFiredLauncherAmmoImpact(projectileObject, targetMon, launcher);
-            if (impact.handled) {
-                impactMessage = (impact.messages || []).join('  ');
-                impactConsumedProjectile = !!impact.mulched;
-                impactObjectHit = !!impact.hit;
-                impactPassiveTarget = impact.hit ? targetMon : null;
-            }
-        } else if (targetMon) {
-            const impact = heroThrownByHandAmmoImpact(projectileObject, targetMon, launcher);
-            if (impact.handled) {
-                impactMessage = (impact.messages || []).join('  ');
-                impactConsumedProjectile = !!impact.mulched;
-                impactObjectHit = !!impact.hit;
-                impactPassiveTarget = impact.hit ? targetMon : null;
-            }
-            if (!impact.handled && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(projectileObject)) {
-                const unicornImpact = heroThrownUnicornGemImpact(projectileObject, targetMon);
-                impactMessage = (unicornImpact.messages || []).join('  ');
-                impactConsumedProjectile = !!unicornImpact.consumed;
-            } else if (!impact.handled && heroThrownStoneMissileHarmlessRockPasser(projectileObject, targetMon)) {
-                const hitValue = heroThrownGemHitValue(projectileObject, targetMon);
-                const dieroll = rnd(20);
-                const thrownName = floorObjectTheSubject(projectileObject);
-                const targetName = heroThrownVenomTargetName(targetMon);
-                if (hitValue >= dieroll) {
-                    wakeMonsterFromHeroThrownHit(targetMon);
-                    exerciseHeroProjectileHitDexterity();
-                    impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
-                    impactObjectHit = true;
-                    impactPassiveTarget = targetMon;
-                } else {
-                    const messages = [`The ${pickupObjectName({ ...item, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
-                    messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
-                    impactMessage = messages.join('  ');
-                }
-            } else if (!impact.handled && heroThrownGemClassObject(projectileObject)) {
-                const gemImpact = heroThrownGemImpact(projectileObject, targetMon);
-                impactMessage = (gemImpact.messages || []).join('  ');
-                impactConsumedProjectile = !!gemImpact.mulched;
-                impactObjectHit = !!gemImpact.hit;
-                impactPassiveTarget = gemImpact.hit ? targetMon : null;
-            } else if (!impact.handled && heroProjectileSupportedWeaponObject(projectileObject)) {
-                const weaponImpact = heroThrownWeaponImpact(projectileObject, targetMon);
-                impactMessage = (weaponImpact.messages || []).join('  ');
-                impactConsumedProjectile = !!weaponImpact.mulched;
-                impactObjectHit = !!weaponImpact.hit;
-                impactPassiveTarget = weaponImpact.hit ? targetMon : null;
-            }
-        }
-        if (!impactConsumedProjectile && hardLanding) {
-            projectileBreakRoll = null;
+        let landingMessage = '';
+        const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
+        const newsymTargets = [];
+        if (targetUsesImpact && shotCount > 1) {
+            const impactMessages = [];
+            const landingMessages = [];
             for (let shot = 0; shot < shotCount; shot++) {
-                if (!splitBeforeImpact && oldQuan - shot > 1) projectileId = next_ident();
-                const roll = rn2(100);
-                if (projectileBreakRoll == null) projectileBreakRoll = roll;
+                const flight = heroFireProjectileFlightResult(startX, startY, dir, fireRange);
+                ox = flight.ox;
+                oy = flight.oy;
+                targetMon = flight.targetMon;
+                const shotId = oldQuan - shot > 1 ? next_ident() : item.id;
+                const splitShot = shotId !== item.id;
+                const projectileObject = {
+                    ...item,
+                    letter: undefined,
+                    line: undefined,
+                    wielded: false,
+                    quivered: false,
+                    id: shotId,
+                    o_id: splitShot ? undefined : item.o_id,
+                    _shopBillObjectId: splitShot ? undefined : item._shopBillObjectId,
+                    quan: 1,
+                    ox,
+                    oy,
+                    glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
+                    color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
+                };
+                if (oldQuan - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
+                const shotUsesImpact = heroFireProjectileTargetUsesImpact(projectileObject, targetMon, launcher, firedFromLauncher);
+                const impact = shotUsesImpact
+                    ? heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher)
+                    : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
+                if (impact.handled) impactMessages.push(...impact.messages);
+                if (targetMon) newsymTargets.push(targetMon);
+                if (!impact.consumed) {
+                    const breakRoll = !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
+                    const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
+                        breakRoll,
+                        ohit: impact.hit,
+                        passiveTarget: impact.passiveTarget,
+                    });
+                    landingMessages.push(...landing.messages);
+                }
             }
+            impactMessage = impactMessages.join('  ');
+            landingMessage = landingMessages.join('  ');
+        } else {
+            let projectileId = null;
+            let projectileBreakRoll = null;
+            const hardLanding = !projectileLandingIsSoft(ox, oy);
+            const splitBeforeImpact = targetUsesImpact;
+            if (splitBeforeImpact) {
+                for (let shot = 0; shot < shotCount; shot++) {
+                    if (oldQuan - shot > 1) projectileId = next_ident();
+                }
+            }
+            const projectileObject = {
+                ...item,
+                letter: undefined,
+                line: undefined,
+                wielded: false,
+                quivered: false,
+                id: projectileId ?? item.id,
+                o_id: projectileId != null && projectileId !== item.id ? undefined : item.o_id,
+                _shopBillObjectId: projectileId != null && projectileId !== item.id ? undefined : item._shopBillObjectId,
+                quan: shotCount,
+                ox,
+                oy,
+                glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
+                color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
+            };
+            if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
+            let impactConsumedProjectile = false;
+            let impactObjectHit = false;
+            let impactPassiveTarget = null;
+            if (targetMon) {
+                const impact = heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher);
+                if (impact.handled) {
+                    impactMessage = (impact.messages || []).join('  ');
+                    impactConsumedProjectile = !!impact.consumed;
+                    impactObjectHit = !!impact.hit;
+                    impactPassiveTarget = impact.passiveTarget || null;
+                    newsymTargets.push(targetMon);
+                }
+            }
+            if (!impactConsumedProjectile && hardLanding) {
+                projectileBreakRoll = null;
+                for (let shot = 0; shot < shotCount; shot++) {
+                    if (!splitBeforeImpact && oldQuan - shot > 1) projectileId = next_ident();
+                    const roll = rn2(100);
+                    if (projectileBreakRoll == null) projectileBreakRoll = roll;
+                }
+            }
+            if (!splitBeforeImpact && projectileId != null) projectileObject.id = projectileId;
+            const landing = impactConsumedProjectile
+                ? { object: null, messages: [] }
+                : landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
+                    breakRoll: projectileBreakRoll,
+                    ohit: impactObjectHit,
+                    passiveTarget: impactPassiveTarget,
+                });
+            landingMessage = landing.messages.join('  ');
         }
-        if (!splitBeforeImpact && projectileId != null) projectileObject.id = projectileId;
-        const landing = impactConsumedProjectile
-            ? { object: null, messages: [] }
-            : landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
-                breakRoll: projectileBreakRoll,
-                ohit: impactObjectHit,
-                passiveTarget: impactPassiveTarget,
-            });
-        const landingMessage = landing.messages.join('  ');
         if (firedFromLauncher) {
             game._stale_projectile_marks ??= [];
             game._stale_projectile_marks.push({
@@ -67656,7 +67730,7 @@ export async function rhack(_cmd) {
             game._pending_message = '';
             game._message_more = 0;
         }
-        if (targetMon) newsym(targetMon.mx, targetMon.my);
+        for (const mon of newsymTargets) newsym(mon.mx, mon.my);
         game._command_mode = null;
         game._fire_item_letter = null;
         game._fire_launcher_letter = null;
