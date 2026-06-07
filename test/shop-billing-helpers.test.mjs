@@ -31213,6 +31213,145 @@ test('deferred hero land mine scatter splits dagger stack before boulder pit fil
     assert.equal(blades.some(obj => game.level.buriedobjlist.includes(obj)), false);
 });
 
+test('deferred hero land mine scatter reprocesses fractured boulder rocks before pit fallout', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const cells = new Map([
+        ['5,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['6,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,6', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const boulder = floorBoulder(40116, { ox: 5, oy: 5 });
+    game.level.traps = [trap];
+    game.level.objects = [boulder];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        4, 2, 3, 0,
+        1, 0, 5,
+        1,
+        1, 4, 0,
+        1, 6, 0,
+        1, 2, 0, 1, 1,
+    ]);
+
+    await rhack(' ');
+
+    const rngCalls = getRngLog().map(rngCallName);
+    assert.deepEqual(rngCalls, [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)',
+        'rn2(10)', 'rn2(60)', 'rnd(6)',
+        'rnd(2)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(5)', 'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
+    ]);
+    assert.match(game._pending_message, /The boulder breaks apart\./);
+    assert.match(game._pending_message, /You fall into a pit!/);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.otyp, ROCK);
+    assert.equal(game.level.objects.some(obj => obj.ox === 5 && obj.oy === 5), false);
+    const rocks = game.level.objects.filter(obj => obj.actualKind === 'rock');
+    assert.equal(rocks.length, 2);
+    assert.deepEqual(rocks.map(obj => `${obj.ox},${obj.oy}`).sort(), ['5,6', '6,5']);
+    assert.deepEqual(rocks.map(obj => obj.quan).sort((a, b) => a - b), [1, 6]);
+    assert.equal(rocks.some(obj => game.level.buriedobjlist.includes(obj)), false);
+    assert.equal(game.u.uhp, 14);
+    assert.equal(game.u.utrap, 4);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+});
+
+test('deferred hero land mine scatter reprocesses fractured statue contents before liquid fill', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    const cells = new Map([
+        ['5,5', targetLoc],
+        ['6,5', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,6', { roomno: ROOMOFFSET, typ: ROOM, lit: true }],
+        ['5,4', { roomno: ROOMOFFSET, typ: MOAT, lit: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    const statue = statueTrapStatue(40117, 5, 5, 'goblin');
+    const blade = putObjectInContainer(statue, dagger(40118));
+    game.level.traps = [trap];
+    game.level.objects = [statue];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        4, 2, 3,
+        0,
+        1, 0, 5,
+        1,
+        1, 4, 0,
+        1, 6, 0,
+        1, 4, 0,
+        1,
+    ]);
+
+    await rhack(' ');
+
+    const rngCalls = getRngLog().map(rngCallName);
+    assert.deepEqual(rngCalls, [
+        'rnd(16)', 'rn2(35)', 'rn2(35)',
+        'rn2(2)',
+        'rn2(10)', 'rn2(60)', 'rnd(6)',
+        'rnd(2)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(2)',
+    ]);
+    const message = game._pending_message || '';
+    assert.match(message, /crumbles\./);
+    assert.match(message, /The hole fills with water!/);
+    assert.equal(message.indexOf('crumbles.') < message.indexOf('The hole fills with water!'), true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(statue.otyp, ROCK);
+    assert.equal(game.level.objects.some(obj => obj.ox === 5 && obj.oy === 5), false);
+    assert.equal(blade.ox === 5 && blade.oy === 5, false);
+    const rocks = game.level.objects.filter(obj => obj.actualKind === 'rock');
+    assert.equal(rocks.length >= 1, true);
+    assert.equal(rocks.reduce((sum, obj) => sum + Math.max(1, Math.trunc(Number(obj.quan || 1))), 0), 7);
+    assert.equal(rocks.some(obj => game.level.buriedobjlist.includes(obj)), false);
+    assert.equal(targetLoc.typ, MOAT);
+    assert.equal(game.u.uinwater, 1);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+});
+
 test('deferred hero land mine scatter destroys looking glass before pit fallout', async () => {
     installStableNonShopFloorState();
     vision_reset();

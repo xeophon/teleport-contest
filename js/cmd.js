@@ -47837,14 +47837,34 @@ function landmineFractureStoneObject(obj, x, y, messages) {
     if (!rn2(10)) return false;
     if (isBoulderObject(obj)) {
         landmineFractureBoulderObject(obj, x, y, messages);
-        return true;
+        return { type: 'boulder', objects: [obj] };
     }
+    const floorBefore = new Set(game.level?.objects || []);
     game.level.traps = (game.level?.traps || []).filter(trap =>
         !(trap.tx === x && trap.ty === y && trap.ttyp === STATUE_TRAP));
     if (floorObjectVisible(x, y)) messages.push(`${upstartText(pickupObjectName(obj))} crumbles.`);
     else if (!heroIsDeaf()) messages.push('You hear stone crumbling.');
     breakStatueObject(obj, x, y);
-    return true;
+    const dropped = (game.level?.objects || []).filter(item =>
+        item !== obj && !floorBefore.has(item) && item?.ox === x && item?.oy === y
+        && !item.buried && !item.transientProjectile);
+    return { type: 'statue', objects: [obj, ...dropped] };
+}
+
+function landmineRequeueFracturedStoneObjects(fracture, queue, index, x, y) {
+    if (!fracture?.objects?.length) return;
+    if (fracture.type !== 'boulder') {
+        queue.splice(index + 1, 0, ...fracture.objects);
+        return;
+    }
+    const tail = queue.splice(index + 1);
+    const boulders = [];
+    const rest = [];
+    for (const item of tail) {
+        if (item?.ox === x && item?.oy === y && isBoulderObject(item)) boulders.push(item);
+        else rest.push(item);
+    }
+    queue.push(...boulders, ...fracture.objects, ...rest);
 }
 
 function landmineScatterFloorObjectsAt(x, y, messages = []) {
@@ -47858,7 +47878,11 @@ function landmineScatterFloorObjectsAt(x, y, messages = []) {
             obj = splitLandmineScatterStackObject(source);
             queue.push(source);
         }
-        if (landmineFractureStoneObject(obj, x, y, messages)) continue;
+        const fracture = landmineFractureStoneObject(obj, x, y, messages);
+        if (fracture) {
+            landmineRequeueFracturedStoneObjects(fracture, queue, i, x, y);
+            continue;
+        }
         if (landmineScatterDeferredBreakageObject(obj)) continue;
         const randomDestroy = !rn2(10);
         if ((randomDestroy || landmineScatterForcedBreakageObject(obj))
