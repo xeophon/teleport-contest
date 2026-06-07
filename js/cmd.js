@@ -22743,6 +22743,58 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { ki
     return true;
 }
 
+function monsterAllowsLifeSaving(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    const mlet = data.mlet || mon?.mlet;
+    const glyph = data.glyph || mon?.glyph;
+    const nonliving = data.nonliving || mon?.nonliving || mlet === 'Z' || glyph === 'Z'
+        || name.includes('zombie') || name.includes('mummy') || name.endsWith(' golem');
+    return !nonliving || mon?.vampshifter || data.vampshifter
+        || mon?.cham === 'vampire' || data.cham === 'vampire';
+}
+
+function monsterLifeSavingAmulet(mon) {
+    if (!mon || !monsterAllowsLifeSaving(mon)) return null;
+    return (mon.minvent || []).find(item => {
+        const kind = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+        return (item?.worn || item?.owornmask || item?.line?.includes('being worn'))
+            && (item?.amuletIndex === 1 || kind.includes('amulet of life saving'));
+    }) || null;
+}
+
+function applyHeroProjectileMonsterLifeSaving(mon, messages) {
+    const amulet = monsterLifeSavingAmulet(mon);
+    if (!amulet) return false;
+    const visibleSquare = cansee(mon.mx, mon.my);
+    if (visibleSquare) {
+        messages.push('But wait...');
+        messages.push(`${sSuffixText(fireScrollMonsterName(mon))} medallion begins to glow!`);
+        recordKnownAmuletDiscovery('amulet of life saving', amulet);
+        if (monsterCanBeSeenForPotionEffect(mon)) {
+            const explosive = (mon.data?.attacks || mon.data?.xpAttacks || [])
+                .some(attack => attack.aatyp === 'expl' || attack.aatyp === 'boom');
+            messages.push(`${fireScrollMonsterName(mon)} ${explosive ? 'reconstitutes' : 'looks much better'}!`);
+        }
+        messages.push('The medallion crumbles to dust!');
+    }
+    mon.minvent = (mon.minvent || []).filter(item => item !== amulet);
+    mon.hasInventory = !!(mon.minvent || []).length;
+    mon.mcanmove = true;
+    mon.mfrozen = 0;
+    mon.mhpmax = Math.max(mon.mhpmax || 0, (mon.m_lev || mon.mlevel || mon.data?.mlevel || 0) + 1, 10);
+    mon.mhp = mon.mhpmax;
+
+    if (isMonsterGenocidedName(mon.data?.name || mon.name || '')) {
+        if (visibleSquare) messages.push(`Unfortunately, ${heroThrownVenomTargetName(mon)} is still genocided...`);
+        mon.mhp = 0;
+        return false;
+    }
+    mon.dead = false;
+    if (!visibleSquare) messages.push('Maybe not...');
+    return true;
+}
+
 function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
     if (!killAccessible || !treasureDrop) return;
     if (corpseData.noCorpse || corpseData !== data) return;
@@ -22782,21 +22834,22 @@ async function applyHeroKillLiveExperience(mon, messages) {
 
 async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
     if (!mon || mon.dead) return;
-    recordHeroKillConduct();
-    if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage })) return;
+    const data = mon.data || {};
+    const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
+        || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
     mon.dead = true;
     mon.mhp = 0;
+    recordHeroKillConduct();
+    if (killMessage)
+        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${heroProjectileKillMessageTargetName(mon, targetName)}!`);
     if (mon.mtame && !mon.isminion) {
         mon.mextra ??= {};
         mon.mextra.edog ??= {};
         mon.mextra.edog.killed_by_u = 1;
         mon.killed_by_u = 1;
     }
-    const data = mon.data || {};
-    const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
-        || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
-    if (killMessage)
-        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${heroProjectileKillMessageTargetName(mon, targetName)}!`);
+    if (applyHeroProjectileMonsterLifeSaving(mon, messages)) return;
+    if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage: false })) return;
     recordVanquished(mon, true);
     dropMonsterInventory(mon, messages);
 

@@ -74165,6 +74165,157 @@ test('hero-thrown dagger lethal target grants live experience and can level befo
     assert.equal(calls.includes('rn2(100)'), true);
 });
 
+test('hero-thrown dagger lethal target uses monster life saving before cleanup', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uluck: 10, uhitinc: 30, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876224, 'd');
+    const amulet = metalAmulet(876225, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const carried = { id: 876226, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 0,
+        minvent: [amulet, carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3, 1, 1, 1, 1]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        "The dagger hits the goblin.  You kill the goblin!  But wait...  The goblin's medallion begins to glow!  The goblin looks much better!  The medallion crumbles to dust!");
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(goblin.dead, false);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mhpmax, 10);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mcanmove, true);
+    assert.equal(goblin.mfrozen, 0);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    assert.equal(goblin.minvent.includes(carried), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game.level.objects.some(obj => /goblin corpse/.test(String(obj.kind || obj.actualKind || ''))), false);
+    assert.equal(game._vanquished_counts?.goblin || 0, 0);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uexp, 0);
+    assert.equal(game.u.urexp, 0);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), true);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dagger unseen monster life saving says maybe not only', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uluck: 10, uhitinc: 30, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876227, 'd');
+    const amulet = metalAmulet(876228, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 0,
+        minvent: [amulet],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3, 1, 1, 1, 1]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the goblin.  You kill the goblin!  Maybe not...');
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(goblin.dead, false);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    assert.equal(game._vanquished_counts?.goblin || 0, 0);
+    assert.equal(game.u.uexp, 0);
+    assert.equal(game.u.urexp, 0);
+    assert.equal((game._discoveries || []).some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), false);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(19)', 'rn2(100)']);
+});
+
+test('hero-thrown dagger lethal target ignores unworn monster life saving amulet', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uluck: 10, uhitinc: 30, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876229, 'd');
+    const amulet = metalAmulet(876230, 'amulet of life saving', 1, 'a', {
+        line: 'a - a circular amulet',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 0,
+        minvent: [amulet],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3, 1, 1, 1, 1]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'The dagger hits the goblin.  You kill the goblin!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    const droppedAmulet = game.level.objects.find(obj => obj.id === amulet.id);
+    assert.ok(droppedAmulet);
+    assert.equal(droppedAmulet.ox, 7);
+    assert.equal(droppedAmulet.oy, 5);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uexp > 0, true);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal((game._discoveries || []).some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)',
+    ]);
+});
+
 test('hero-thrown dagger lethal target can drop random treasure before projectile lands', async () => {
     installNonShopFloorState();
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
