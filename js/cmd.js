@@ -11035,7 +11035,7 @@ function touchArtifactForWield(item) {
 function isProjectileItem(item) {
     const name = inventoryItemName(item).toLowerCase();
     return item.otyp === DART || item.otyp === FLINT_STONE || item.cls === 'gem'
-        || /arrow|ya|dart|dagger|knife|spear|shuriken|boomerang|rock|stone/.test(name);
+        || /arrow|bolt|ya|dart|dagger|knife|spear|shuriken|boomerang|rock|stone/.test(name);
 }
 
 function isReadySuggestItem(item) {
@@ -20155,6 +20155,7 @@ function heroThrowAmmoSkill(obj) {
 
 function heroThrowLauncherSkill(obj) {
     if (!obj) return '';
+    if (heroThrowAmmoSkill(obj)) return '';
     const kind = objectKindKey(obj);
     const name = inventoryItemName(obj).toLowerCase();
     if (kind === 'crossbow' || /\bcrossbow\b/.test(name)) return 'crossbow';
@@ -20162,6 +20163,11 @@ function heroThrowLauncherSkill(obj) {
     if (kind === 'yumi' || /\byumi\b/.test(name)) return 'bow';
     if (/\bbow\b/.test(kind) || /\bbow\b/.test(name)) return 'bow';
     return '';
+}
+
+function heroThrowAmmoAndLauncher(ammo, launcher) {
+    const ammoSkill = heroThrowAmmoSkill(ammo);
+    return !!ammoSkill && heroThrowLauncherSkill(launcher) === ammoSkill;
 }
 
 function heroWieldedThrowLauncher() {
@@ -20453,10 +20459,10 @@ function heroThrowAmmoWeaponDescription(ammoSkill) {
     return ammoSkill === 'sling' ? 'stone' : 'missile';
 }
 
-function heroHorizontalThrowAmmoRange(obj) {
+function heroHorizontalThrowAmmoRange(obj, launcher = heroWieldedThrowLauncher()) {
     const ammoSkill = heroThrowAmmoSkill(obj);
     if (!ammoSkill) return null;
-    const launcherSkill = heroThrowLauncherSkill(heroWieldedThrowLauncher());
+    const launcherSkill = heroThrowLauncherSkill(launcher);
     const matchedLauncher = launcherSkill === ammoSkill;
     if (ammoSkill === 'sling' && !matchedLauncher) return null;
     const crossbowing = matchedLauncher && launcherSkill === 'crossbow';
@@ -20472,8 +20478,8 @@ function heroHorizontalThrowAmmoRange(obj) {
     return { range, urangeBase, noLauncherMessage };
 }
 
-function heroHorizontalThrowAirSplitRange(obj) {
-    const ammoRange = heroHorizontalThrowAmmoRange(obj);
+function heroHorizontalThrowAirSplitRange(obj, launcher = heroWieldedThrowLauncher()) {
+    const ammoRange = heroHorizontalThrowAmmoRange(obj, launcher);
     const weightedRange = ammoRange ? null : heroHorizontalThrowWeightedRange(obj);
     const urangeBase = ammoRange?.urangeBase ?? weightedRange.urangeBase;
     let range = ammoRange?.range ?? weightedRange.range;
@@ -67221,15 +67227,35 @@ export async function rhack(_cmd) {
             game._fire_launcher_letter = null;
             return;
         }
-        let ox = (game.u?.ux || 0) + dir.dx * 3;
-        let oy = (game.u?.uy || 0) + dir.dy * 3;
-        const loc = game.level?.at(ox, oy);
-        if (!loc || IS_OBSTRUCTED(loc.typ)) {
-            ox = (game.u?.ux || 0) + dir.dx;
-            oy = (game.u?.uy || 0) + dir.dy;
+        const launcher = (game.inventory || [])
+            .find(invItem => invItem.letter === game._fire_launcher_letter) || null;
+        const ammoRange = heroHorizontalThrowAmmoRange(item, launcher);
+        const fireNoLauncherMessage = ammoRange?.noLauncherMessage || '';
+        let fireRange = heroHorizontalThrowFinalRange(
+            item,
+            ammoRange?.range ?? heroHorizontalThrowWeightedRange(item).range,
+        );
+        let fireRecoilResult = null;
+        const startX = game.u?.ux || 0;
+        const startY = game.u?.uy || 0;
+        if (heroHorizontalThrowAirRecoilActive()) {
+            const airSplit = heroHorizontalThrowAirSplitRange(item, launcher);
+            fireRange = heroHorizontalThrowFinalRange(item, airSplit.throwRange);
+            fireRecoilResult = heroHorizontalThrowRecoilResult(dir, airSplit.recoilRange);
+        }
+        let ox = startX;
+        let oy = startY;
+        for (let step = 0; step < fireRange; step++) {
+            const nx = ox + dir.dx;
+            const ny = oy + dir.dy;
+            const loc = game.level?.at(nx, ny);
+            if (!loc || IS_OBSTRUCTED(loc.typ)) break;
+            ox = nx;
+            oy = ny;
         }
         const oldQuan = item.quan || 1;
-        const volleyLimit = game._fire_launcher_letter && oldQuan > 1 ? 2 : 1;
+        const firedFromLauncher = !!launcher;
+        const volleyLimit = firedFromLauncher && oldQuan > 1 ? 2 : 1;
         const shotCount = volleyLimit > 1 ? Math.min(oldQuan, rnd(volleyLimit)) : 1;
         let projectileId = null;
         let projectileBreakRoll = null;
@@ -67257,11 +67283,11 @@ export async function rhack(_cmd) {
         if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
         const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, { breakRoll: projectileBreakRoll });
         const landingMessage = landing.messages.join('  ');
-        if (game._fire_launcher_letter) {
+        if (firedFromLauncher) {
             game._stale_projectile_marks ??= [];
             game._stale_projectile_marks.push({
-                x: (game.u?.ux || 0) + dir.dx * 2,
-                y: (game.u?.uy || 0) + dir.dy * 2,
+                x: startX + dir.dx * 2,
+                y: startY + dir.dy * 2,
                 ch: '%',
                 color: CLR_BROWN,
             });
@@ -67279,14 +67305,26 @@ export async function rhack(_cmd) {
             .replace(/^\d+ /, '')
             .replace(/^(?:uncursed|blessed|cursed) /, '');
         const fireMessage = shotCount > 1
-            ? `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
-            : `${game._fire_launcher_letter ? 'You shoot' : 'You throw'} ${name}.`;
-        if (landingMessage) game._queued_message_after_more = landingMessage;
-        await setMessage(fireMessage, !!landingMessage);
+            ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
+            : `${firedFromLauncher ? 'You shoot' : 'You throw'} ${name}.`;
+        const message = fireNoLauncherMessage
+            ? (fireRecoilResult?.message || '')
+            : [fireMessage, fireRecoilResult?.message || ''].filter(Boolean).join('  ');
+        const followUpMessage = [message, landingMessage].filter(Boolean).join('  ');
+        if (fireNoLauncherMessage) {
+            if (followUpMessage) game._queued_message_after_more = followUpMessage;
+            await setMessage(fireNoLauncherMessage, !!followUpMessage || !!fireRecoilResult?.more);
+        } else {
+            if (landingMessage) game._queued_message_after_more = landingMessage;
+            await setMessage(message, !!landingMessage || !!fireRecoilResult?.more);
+        }
         game._command_mode = null;
         game._fire_item_letter = null;
         game._fire_launcher_letter = null;
         game.context.move = 1;
+        if (fireRecoilResult?.lifeSaving || fireRecoilResult?.fatal) {
+            if (applyLifeSavingOrFatalCommandMode(fireRecoilResult)) return;
+        }
         return;
     }
 
@@ -68639,12 +68677,11 @@ export async function rhack(_cmd) {
             return;
         }
         let launcher = (game.inventory || []).find(item => {
-            const name = inventoryItemName(item).toLowerCase();
-            return (item.wielded || item.line?.includes('weapon in')) && /bow|sling|crossbow|yumi/.test(name);
+            return (item.wielded || item.line?.includes('weapon in'))
+                && heroThrowAmmoAndLauncher(projectile, item);
         });
         launcher ??= (game.inventory || []).find(item => {
-            const name = inventoryItemName(item).toLowerCase();
-            return item.cls === 'weapon' && /bow|sling|crossbow|yumi/.test(name);
+            return item.cls === 'weapon' && heroThrowAmmoAndLauncher(projectile, item);
         });
         let swapMoreLine = '';
         if (launcher && !(launcher.wielded || launcher.line?.includes('weapon in'))) {

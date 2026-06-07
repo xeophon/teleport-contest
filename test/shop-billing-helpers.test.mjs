@@ -523,6 +523,53 @@ function dagger(id, letter = 'd') {
     };
 }
 
+function bow(id, letter = 'b', extra = {}) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'bow',
+        actualKind: 'bow',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a bow`,
+        dknown: true,
+        known: true,
+        ...extra,
+    };
+}
+
+function arrow(id, letter = 'a', extra = {}) {
+    return {
+        id,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'arrow',
+        actualKind: 'arrow',
+        plural: 'arrows',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - an arrow`,
+        dknown: true,
+        known: true,
+        ...extra,
+    };
+}
+
+function crossbowBolt(id, letter = 'a', extra = {}) {
+    return {
+        ...arrow(id, letter, extra),
+        kind: 'crossbow bolt',
+        actualKind: 'crossbow bolt',
+        plural: 'crossbow bolts',
+        line: `${letter} - a crossbow bolt`,
+    };
+}
+
 function upwardWeapon(id, letter, kind, line, extra = {}) {
     return {
         id,
@@ -65639,6 +65686,122 @@ test('levitating hero-thrown arrow with matching bow uses C ammo range increment
     const landed = game.level.objects.find(obj => obj.id === arrow.id);
     assert.ok(landed);
     assert.equal(landed.ox, 14);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('f command arrow with matching bow uses C ammo range increment', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const launcher = bow(8761731, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(8761741, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You shoot an arrow\./);
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 11);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('levitating f command arrow with matching bow uses C air split recoil', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const launcher = bow(8761732, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(8761742, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack(' ');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You shoot an arrow\.  You float in the opposite direction\./);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 14);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('f command unmatched crossbow bolt uses C half range and warning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const bolt = crossbowBolt(8761751, 'b', { quivered: true, line: 'b - a crossbow bolt (in quiver pouch)' });
+    game.inventory = [bolt];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a crossbow, so you throw your bolt by hand.");
+    assert.equal(game.inventory.includes(bolt), false);
+    const landed = game.level.objects.find(obj => obj.id === bolt.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
+test('weak f command unmatched crossbow bolt uses C zero range and warning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 3;
+    const bolt = crossbowBolt(8761761, 'b', { quivered: true, line: 'b - a crossbow bolt (in quiver pouch)' });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [bolt];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a crossbow, so you throw your bolt by hand.");
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(bolt), false);
+    const landed = game.level.objects.find(obj => obj.id === bolt.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });

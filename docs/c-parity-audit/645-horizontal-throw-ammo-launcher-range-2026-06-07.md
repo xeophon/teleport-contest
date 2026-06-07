@@ -26,7 +26,7 @@
 
 ## Remaining Follow-Ups
 
-- The separate `f` command path still needs C `dofire()`/`throw_obj()` parity for launcher matching, flight, hits, and range.
+- Audit 680 covers the separate `f` command path for launcher matching, range, by-hand unmatched ammo warning, zero-range, and air/levitation recoil. Fired-projectile combat and broader fireassist details remain separate.
 - Multishot, explicit count caps, launcher auto-selection, and launcher-ammo mismatch handling remain outside this direct-throw range slice.
 - Unmatched gem-class sling ammo range is still left on the existing stone/gem projectile path until the broader direct stone/gem range can be moved with its current coverage.
 - Broader non-ammo normal-ground strength/weight range, Mjollnir, full `hurtle_step()`, and full ball-and-chain details remain separate follow-ups.

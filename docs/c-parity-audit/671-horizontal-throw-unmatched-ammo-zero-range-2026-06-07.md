@@ -21,5 +21,5 @@
 
 ## Remaining Follow-Ups
 
-- The separate `f` command path still needs C `dofire()`/`throw_obj()` parity for launcher matching, flight, hits, and range.
+- Audit 680 covers the separate `f` command path for launcher matching, range, by-hand unmatched ammo warning, zero-range, and air/levitation recoil.
 - Broader `bhit()` details such as skiprange for thrown rocks and special projectile display cleanup remain separate source-backed slices.
