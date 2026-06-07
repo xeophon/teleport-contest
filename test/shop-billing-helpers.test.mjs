@@ -13,7 +13,7 @@ import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, A
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
-import { vision_reset } from '../js/vision.js';
+import { vision_recalc, vision_reset } from '../js/vision.js';
 import { fireBreathDamageMonster } from '../js/fire_breath.js';
 import { createGasCloudSelection } from '../js/region.js';
 
@@ -30796,6 +30796,128 @@ test('deferred hero land mine liquid fill dunks same-square boulder after water 
     assert.equal(game.u.uinwater || 0, 0);
     assert.equal(game.u.underwater || false, false);
     assert.equal(game.u.uunderwater || false, false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+});
+
+test('deferred land mine liquid fill refreshes consumed boulder glyph', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    const cells = new Map([
+        ['6,5', targetLoc],
+        ['6,4', { roomno: ROOMOFFSET, typ: MOAT, lit: true }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    const boulder = floorBoulder(40106, { ox: 6, oy: 5 });
+    game.level.traps = [trap];
+    game.level.objects = [boulder];
+    game.level.buriedobjlist = [];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    vision_reset();
+    vision_recalc(0);
+    newsym(6, 5);
+    assert.equal(targetLoc.disp_ch, '`');
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 1, 9]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)', 'rn2(10)']);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  There is a large splash as the boulder fills the moat.');
+    assert.equal(targetLoc.typ, ROOM);
+    assert.equal(targetLoc.flags || 0, 0);
+    assert.equal(game.level.objects.includes(boulder), false);
+    assert.notEqual(targetLoc.disp_ch, '`');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.uinwater || 0, 0);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+});
+
+test('deferred hero land mine liquid fill clears old ice melt timer', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const targetLoc = {
+        roomno: ROOMOFFSET,
+        typ: ICE,
+        icedpool: ICED_POOL,
+        flags: 0,
+        meltIceTurn: 200,
+        meltIceTimeout: 200,
+        meltIceAwayTurn: 200,
+    };
+    const otherIceLoc = {
+        roomno: ROOMOFFSET,
+        typ: ICE,
+        icedpool: ICED_POOL,
+        flags: 0,
+        meltIceTurn: 300,
+        meltIceTimeout: 300,
+        meltIceAwayTurn: 300,
+    };
+    const cells = new Map([
+        ['5,5', targetLoc],
+        ['5,4', { roomno: ROOMOFFSET, typ: MOAT }],
+        ['2,2', otherIceLoc],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    game.level.meltIceTimers = [
+        { x: 5, y: 5, turn: 200, seq: 1 },
+        { x: 2, y: 2, turn: 300, seq: 2 },
+    ];
+    markSquareVisible(5, 5);
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 1]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)']);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  The hole fills with water!  You fall into the moat!  You sink like a rock.');
+    assert.equal(targetLoc.typ, MOAT);
+    assert.equal(targetLoc.meltIceTurn, undefined);
+    assert.equal(targetLoc.meltIceTimeout, undefined);
+    assert.equal(targetLoc.meltIceAwayTurn, undefined);
+    assert.deepEqual(game.level.meltIceTimers, [{ x: 2, y: 2, turn: 300, seq: 2 }]);
+    assert.equal(otherIceLoc.typ, ICE);
+    assert.equal(otherIceLoc.meltIceTurn, 300);
+    assert.equal(otherIceLoc.meltIceTimeout, 300);
+    assert.equal(otherIceLoc.meltIceAwayTurn, 300);
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.uinwater, 1);
+    assert.equal(game.u.underwater, true);
+    assert.equal(game.u.uunderwater, true);
     assert.equal(game.u.utrap || 0, 0);
     assert.equal(game.u.utraptype || null, null);
     assert.equal(game.level.traps.includes(trap), false);

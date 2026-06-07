@@ -23,7 +23,7 @@ import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
     clearCorpseTimeout, corpseName, freezeObjectInIcebox,
     buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
-    removedFromIcebox, riderRevivalDelay, startCorpseTimeout, startMeltIceTimeout, unearthObjectsAt, zombieFormNameForCorpse,
+    removedFromIcebox, riderRevivalDelay, startCorpseTimeout, startMeltIceTimeout, stopMeltIceTimersAt, unearthObjectsAt, zombieFormNameForCorpse,
 } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
@@ -6324,6 +6324,10 @@ function earthquakeIsPoolAt(x, y) {
     return loc.typ === POOL || loc.typ === MOAT || loc.typ === WATER || earthquakeIsMoatAt(x, y);
 }
 
+function earthquakeSpotChecksOldIce(loc) {
+    return loc?.typ === ICE || (loc?.typ === DRAWBRIDGE_UP && drawbridgeUnder(loc) === DB_ICE);
+}
+
 function earthquakeFillHoleType(x, y) {
     const loX = Math.max(1, x - 1);
     const hiX = Math.min(x + 1, COLNO - 1);
@@ -6350,11 +6354,13 @@ function earthquakeFillHoleType(x, y) {
 function setEarthquakeLiquidTerrain(x, y, typ) {
     const loc = game.level?.at(x, y);
     if (!loc) return false;
+    const oldIce = earthquakeSpotChecksOldIce(loc);
     loc.typ = typ;
     loc.flags = 0;
     loc.doormask = 0;
     loc.wall_info = 0;
     if (typ === LAVAPOOL) loc.lit = true;
+    if (oldIce && !earthquakeSpotChecksOldIce(loc)) stopMeltIceTimersAt(x, y);
     newsym(x, y);
     return true;
 }
@@ -6413,6 +6419,12 @@ function landmineMaybeDunkLiquidBoulders(x, y, messages) {
         if (!earthFloorEffects(boulder, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true })) break;
         removeFloorObject(boulder);
     }
+}
+
+function landmineRefreshPostBlastBlockPoint(x, y) {
+    vision_reset();
+    vision_recalc(0);
+    newsym(x, y);
 }
 
 function earthquakeMonsterName(mon, { capital = true, article = true } = {}) {
@@ -47651,6 +47663,7 @@ function landminePostBlastTrap(trap, messages = []) {
         if (earthquakeLiquidFlow(trap.tx, trap.ty, fillType, trap, messages, { fillMessage })) {
             if (game._command_mode !== 'lavaDeathMore' || game._death_cause !== 'burned by molten lava')
                 landmineMaybeDunkLiquidBoulders(trap.tx, trap.ty, messages);
+            landmineRefreshPostBlastBlockPoint(trap.tx, trap.ty);
             return null;
         }
     }
