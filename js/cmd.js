@@ -47627,6 +47627,24 @@ function landminePostBlastTrap(trap) {
     return trap;
 }
 
+function fillLandminePitWithBoulder(trap, messages) {
+    if (!trap || trap.ttyp !== PIT) return false;
+    const boulder = (game.level?.objects || []).find(obj =>
+        isBoulderObject(obj) && obj.ox === trap.tx && obj.oy === trap.ty);
+    if (!boulder) return false;
+    removeFloorObject(boulder);
+    return earthFloorEffects(boulder, trap.tx, trap.ty, messages, 'settle', {
+        usedUpShopBillOnDestroy: true,
+    });
+}
+
+function landmineRecursivePitTrap(trap, messages) {
+    const pitTrap = landminePostBlastTrap(trap);
+    if (!pitTrap) return null;
+    fillLandminePitWithBoulder(pitTrap, messages);
+    return (game.level?.traps || []).includes(pitTrap) ? pitTrap : null;
+}
+
 function woundHeroLandmineLegs() {
     if (!game.u) return;
     const left = rn1(35, 41);
@@ -47679,7 +47697,7 @@ function heroLandmineAirCurrentResult(trap, prefix, damage) {
         if (fatalResult.fatal) return { message: trapMessage(...messages), ...fatalResult };
         if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
     }
-    const pitTrap = landminePostBlastTrap(trap);
+    const pitTrap = landmineRecursivePitTrap(trap, messages);
     const pitResult = pitTrap ? movementPitResult(pitTrap, { recursive: true }) : {};
     const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
     if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
@@ -47702,7 +47720,7 @@ function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
     if (fatalResult.fatal)
         return { message: trapMessage(...messages), ...fatalResult };
     if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
-    const pitTrap = landminePostBlastTrap(trap);
+    const pitTrap = landmineRecursivePitTrap(trap, messages);
     const pitResult = pitTrap ? movementPitResult(pitTrap, { recursive: true }) : {};
     const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
     if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)

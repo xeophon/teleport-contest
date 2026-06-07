@@ -11,7 +11,7 @@
 
 - `landminePostBlastTrap()` now models the air/water-level deletion gate after landmine HP loss and DEX exercise but before recursive pit fallout.
 - Grounded hero landmine blasts on air/water levels still apply blast damage, leg wounds, and DEX exercise, but they remove the converted trap and skip recursive pit escape, pit trap state, and pit damage.
-- This is intentionally narrower than full `blow_up_landmine()`: scatter, engraving deletion, wakeups, doors/drawbridges, liquid fill, boulder fill, and object damage remain separate fallout slices.
+- This is intentionally narrower than full `blow_up_landmine()`: scatter, engraving deletion, wakeups, doors/drawbridges, liquid fill, and object damage remain separate fallout slices; same-square boulder fill is covered by `669-hero-landmine-boulder-pit-fill-2026-06-07.md`.
 
 ## Tests
 
@@ -22,5 +22,5 @@
 
 ## Remaining Follow-Ups
 
-- Same-square boulder fill after landmine pit conversion is the next smallest source-backed `blow_up_landmine()` fallout slice.
+- Same-square boulder fill after landmine pit conversion is covered by `669-hero-landmine-boulder-pit-fill-2026-06-07.md`.
 - Liquid-fill terrain and hero liquid consequences need a later reusable terrain/liquid helper rather than ad hoc landmine handling.
