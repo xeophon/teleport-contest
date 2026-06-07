@@ -3,9 +3,11 @@
 ## C Source
 
 - `nethack-c/upstream/src/trap.c:2585-2597` converts a triggered hero landmine to a temporary pit, applies blast HP loss, calls `blow_up_landmine(trap)`, then recursively enters the pit only if `t_at(u.ux,u.uy)` still exists.
+- `nethack-c/upstream/src/trap.c:3179-3191` runs shared blast fallout before pit conversion: scatter objects, delete the blast engraving, wake nearby monsters, break doors, and destroy any lowered drawbridge or drawbridge wall at the blast square.
 - `nethack-c/upstream/src/trap.c:3197-3215` applies the post-blast trap fallout order: air/water-level deletion first, then `fillholetyp(x,y,FALSE)`, `liquid_flow()` when nearby liquid fills the hole, otherwise visible non-owned pit conversion, followed by `fill_pit(x,y)`.
 - `nethack-c/upstream/src/dig.c:604-637` defines `fillholetyp()`: scan the 3x3 neighborhood, count moat/pool/lava, dampen ordinary pool count by `/= 3`, and return `LAVAPOOL`, `MOAT`, `POOL`, or `ROOM` through the same RNG gates.
 - `nethack-c/upstream/src/dig.c:833-879` defines `liquid_flow()`: terrain must already be liquid, the passed trap is deleted, frozen/buried objects are released, optional visible fill feedback is printed, floor objects take liquid damage, and hero/monster liquid effects run immediately.
+- `nethack-c/upstream/src/dbridge.c:888-968` defines drawbridge destruction: bridge terrain changes to its underlying moat/lava/ice/floor, the wall becomes a doorless doorway, traps and engravings are deleted on both bridge and wall squares, vision refreshes, and stronghold bridge state is marked.
 
 ## Port Notes
 
@@ -20,12 +22,15 @@
 - Hero and rolling-boulder landmine blasts share engraving deletion at the blast square, including air/water-level cases where no pit remains.
 - Hero landmine blasts break a door on the blast square before the air/water-level deletion gate, matching C's pre-pit fallout order.
 - Hero landmine blasts wake nearby monsters with C's `wake_nearto(..., 400)` radius semantics before the pit/liquid decision.
+- Hero landmine blasts now destroy a lowered drawbridge or adjacent drawbridge wall before liquid/pit fallout. The covered slice updates bridge and wall terrain, removes traps and engravings from both squares, refreshes vision, wakes monsters near the destroyed bridge, and records stronghold bridge state.
 
 ## Tests
 
 - `hero land mine adjacent moat fills pit before recursive fallout`
 - `hero land mine on water level leaves no recursive pit`
 - `deferred hero land mine water-level blast deletes engraving and breaks door`
+- `deferred hero land mine destroys lowered drawbridge span`
+- `deferred hero land mine destroys drawbridge from portcullis square`
 - `hero land mine adjacent lava fills pit and uses lava death prompt`
 - `flying hero sitting on hidden land mine can air-current fill pit with water`
 - `deferred hero land mine liquid fill dunks same-square boulder after water fallout`
@@ -35,4 +40,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `blow_up_landmine()` fallout remains partial: scatter, drawbridge-wall handling, and drawbridge destruction are outside this slice.
+- Full `blow_up_landmine()` fallout remains partial: object scatter, drawbridge debris scattering, drawbridge occupant damage, and bridge-object floor effects are outside this slice.

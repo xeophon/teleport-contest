@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -30727,6 +30727,125 @@ test('deferred hero land mine water-level blast deletes engraving and breaks doo
     assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
     assert.equal(farSleeper.msleeping, 1);
     assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
+    assert.deepEqual(game.level.engravings, [{ x: 2, y: 2, text: 'ad aerarium', type: 1 }]);
+});
+
+test('deferred hero land mine destroys lowered drawbridge span', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    const strongholdLevel = { dnum: 0, dlevel: 10 };
+    game.stronghold_level = { ...strongholdLevel };
+    game.u.uz = { ...strongholdLevel };
+    game.u.uevent = {};
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const bridgeLoc = { roomno: ROOMOFFSET, typ: DRAWBRIDGE_DOWN, flags: DB_EAST | DB_MOAT, lit: true };
+    const wallLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_NODOOR, flags: D_NODOOR, lit: true };
+    const cells = new Map([
+        ['6,5', bridgeLoc],
+        ['7,5', wallLoc],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    const wallTrap = { ttyp: BEAR_TRAP, tx: 7, ty: 5, tseen: true };
+    game.level.traps = [trap, wallTrap];
+    game.level.engravings = [
+        { x: 6, y: 5, text: 'on the bridge', type: 1 },
+        { x: 7, y: 5, text: 'under the portcullis', type: 1 },
+        { x: 2, y: 2, text: 'ad aerarium', type: 1 },
+    ];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)']);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  The drawbridge collapses into the moat!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(bridgeLoc.typ, MOAT);
+    assert.equal(bridgeLoc.flags, 0);
+    assert.equal(bridgeLoc.icedpool, undefined);
+    assert.equal(wallLoc.typ, DOOR);
+    assert.equal(wallLoc.doormask, D_NODOOR);
+    assert.equal(wallLoc.flags, D_NODOOR);
+    assert.equal(wallLoc.wall_info, 0);
+    assert.equal(game.level.traps.some(item => item.tx === 6 && item.ty === 5), false);
+    assert.equal(game.level.traps.some(item => item.tx === 7 && item.ty === 5), false);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.traps.includes(wallTrap), false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.u.uevent.uopened_dbridge, 1);
+    assert.equal(game.u.uevent.uheard_tune, 3);
+    assert.deepEqual(game.level.engravings, [{ x: 2, y: 2, text: 'ad aerarium', type: 1 }]);
+});
+
+test('deferred hero land mine destroys drawbridge from portcullis square', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    Object.assign(game.u, {
+        ux: 7,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const bridgeLoc = { roomno: ROOMOFFSET, typ: DRAWBRIDGE_DOWN, flags: DB_EAST | DB_ICE, lit: true };
+    const wallLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_ISOPEN, flags: D_ISOPEN, lit: true };
+    const cells = new Map([
+        ['6,5', bridgeLoc],
+        ['7,5', wallLoc],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM, lit: true };
+    markSquareVisible(6, 5);
+    markSquareVisible(7, 5);
+    const trap = { ttyp: LANDMINE, tx: 7, ty: 5, tseen: false };
+    const bridgeTrap = { ttyp: ARROW_TRAP, tx: 6, ty: 5, tseen: true };
+    game.level.traps = [trap, bridgeTrap];
+    game.level.engravings = [
+        { x: 6, y: 5, text: 'on the bridge', type: 1 },
+        { x: 7, y: 5, text: 'under the portcullis', type: 1 },
+        { x: 2, y: 2, text: 'ad aerarium', type: 1 },
+    ];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_landmine_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3]);
+
+    await rhack(' ');
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)']);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  The drawbridge disintegrates!');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(bridgeLoc.typ, ICE);
+    assert.equal(bridgeLoc.flags, 0);
+    assert.equal(bridgeLoc.icedpool, ICED_MOAT);
+    assert.equal(wallLoc.typ, DOOR);
+    assert.equal(wallLoc.doormask, D_NODOOR);
+    assert.equal(wallLoc.flags, D_NODOOR);
+    assert.equal(wallLoc.wall_info, 0);
+    assert.equal(game.level.traps.some(item => item.tx === 6 && item.ty === 5), false);
+    assert.equal(game.level.traps.some(item => item.tx === 7 && item.ty === 5), false);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.level.traps.includes(bridgeTrap), false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
     assert.deepEqual(game.level.engravings, [{ x: 2, y: 2, text: 'ad aerarium', type: 1 }]);
 });
 

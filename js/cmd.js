@@ -16327,10 +16327,81 @@ function clearDrawbridgeSquareState(x, y) {
     game.level.engravings = (game.level.engravings || []).filter(engr => engr.x !== x || engr.y !== y);
 }
 
+function clearLandmineDestroyedDrawbridgeStateAt(x, y) {
+    if (!game.level) return;
+    game.level.traps = (game.level.traps || []).filter(trap => trap.tx !== x || trap.ty !== y);
+    game.level.engravings = (game.level.engravings || []).filter(engr => engr.x !== x || engr.y !== y);
+}
+
 function drawbridgeVisible(x, y, wall) {
     if (game.u?.blind) return false;
     return !!(game.viz_array?.[y]?.[x] & IN_SIGHT)
         || !!(game.viz_array?.[wall.y]?.[wall.x] & IN_SIGHT);
+}
+
+function heroAtCoord(x, y) {
+    return game.u?.ux === x && game.u?.uy === y;
+}
+
+function landmineDestroyedDrawbridgeMessage(x, y, wall, bridgeLoc, under) {
+    if (under === DB_MOAT || under === DB_LAVA) {
+        const liquid = under === DB_LAVA ? 'molten lava' : 'moat';
+        if (bridgeLoc.typ === DRAWBRIDGE_UP) {
+            if (cansee(wall.x, wall.y) || heroAtCoord(wall.x, wall.y))
+                return `The portcullis of the drawbridge falls into the ${liquid}!`;
+        } else if (cansee(x, y) || heroAtCoord(x, y)) {
+            return `The drawbridge collapses into the ${liquid}!`;
+        }
+        return heroIsDeaf() ? '' : 'You hear a loud *SPLASH*!';
+    }
+    if (cansee(x, y) || heroAtCoord(x, y)) return 'The drawbridge disintegrates!';
+    return heroIsDeaf() ? '' : 'You hear a loud *CRASH*!';
+}
+
+function destroyDrawbridgeAtOrWallForLandmine(x, y, messages = []) {
+    const blastLoc = game.level?.at?.(x, y);
+    if (!blastLoc || (blastLoc.typ !== DRAWBRIDGE_DOWN && isDrawbridgeWallAt(x, y) < 0))
+        return false;
+    const bridge = findDrawbridgeAtOrWall(x, y);
+    const bridgeLoc = bridge ? game.level?.at?.(bridge.x, bridge.y) : null;
+    const wall = bridge ? wallCoordForDrawbridge(bridge.x, bridge.y) : null;
+    const wallLoc = wall ? game.level?.at?.(wall.x, wall.y) : null;
+    if (!bridge || !bridgeLoc || !wall || !wallLoc) return false;
+    const under = drawbridgeUnder(bridgeLoc);
+    const message = landmineDestroyedDrawbridgeMessage(bridge.x, bridge.y, wall, bridgeLoc, under);
+    if (message) messages.push(message);
+    if (under === DB_LAVA) {
+        bridgeLoc.typ = LAVAPOOL;
+        delete bridgeLoc.icedpool;
+    } else if (under === DB_MOAT) {
+        bridgeLoc.typ = MOAT;
+        delete bridgeLoc.icedpool;
+    } else if (under === DB_ICE) {
+        bridgeLoc.typ = ICE;
+        bridgeLoc.icedpool = ICED_MOAT;
+    } else {
+        bridgeLoc.typ = ROOM;
+        delete bridgeLoc.icedpool;
+    }
+    bridgeLoc.flags = 0;
+    wallLoc.typ = DOOR;
+    wallLoc.doormask = D_NODOOR;
+    wallLoc.flags = D_NODOOR;
+    wallLoc.wall_info = 0;
+    delete wallLoc.horizontal;
+    clearLandmineDestroyedDrawbridgeStateAt(bridge.x, bridge.y);
+    clearLandmineDestroyedDrawbridgeStateAt(wall.x, wall.y);
+    wakeNearbyMonstersAt(bridge.x, bridge.y, 500);
+    newsym(bridge.x, bridge.y);
+    newsym(wall.x, wall.y);
+    vision_reset();
+    vision_recalc(0);
+    if (Is_stronghold(game.u?.uz) && game.u) {
+        game.u.uevent ??= {};
+        game.u.uevent.uopened_dbridge = 1;
+        game.u.uevent.uheard_tune = 3;
+    }
+    return true;
 }
 
 function toggleDrawbridgeForTune(x, y) {
@@ -47657,6 +47728,8 @@ function landminePostBlastTrap(trap, messages = []) {
     deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
     wakeNearbyMonstersAt(trap.tx, trap.ty, 400);
     landmineBreakDoorAt(trap.tx, trap.ty);
+    if (destroyDrawbridgeAtOrWallForLandmine(trap.tx, trap.ty, messages))
+        return null;
     if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
         deleteTrap(trap);
         return null;
