@@ -30,4 +30,4 @@
 
 - By-hand slung rocks/gems, by-hand arrow/bolt poison details, object/furniture mimic reveal, and lethal special cleanup still need separate source-backed slices.
 - Audits 701, 702, and 703 cover empty-quiver autoquiver ranking, the first wielded-polearm fallback slice, and the throw-and-return shortcut.
-- Full `dofire()` fireassist parity still needs bullwhip fallback, alternate-polearm swap, reachable-polearm assist with quivered ammo, the exact queued swap/wield/retry command lifecycle, and broader explicit count handling.
+- Audits 704, 705, and 706 cover the bullwhip fallback, alternate-polearm swap, and reachable-polearm priority slices; the exact queued swap/wield/retry command lifecycle and broader explicit count handling remain separate work.

@@ -20482,6 +20482,40 @@ async function beginHeroFirePolearmFallback(item) {
     game._command_mode = null;
 }
 
+function heroFireassistPolearmPriorityTarget(projectile) {
+    if (game.flags?.fireassist === false) return null;
+    if (!heroThrowAmmoSkill(projectile)) return null;
+    const polearm = heroWieldedPolearm();
+    if (!polearm) return null;
+    const target = heroPolearmAutohitTarget();
+    return target ? { polearm, x: target.mx, y: target.my } : null;
+}
+
+async function beginHeroFirePolearmPriority(projectile, { readyMessage = '' } = {}) {
+    const target = heroFireassistPolearmPriorityTarget(projectile);
+    if (!target) return false;
+    game._fire_count = null;
+    game._fire_item_letter = null;
+    game._fire_launcher_letter = null;
+    game._fire_direction_pending_after_more = 0;
+    game._fire_direction_ready_after_more = 0;
+    game._fire_ready_launcher_line = '';
+    game._fire_ready_swap_more_line = '';
+    game._fire_swap_more_line = '';
+    game._fire_time_pending_after_more = 0;
+    if (readyMessage) {
+        game._fire_polearm_priority_letter = target.polearm.letter || null;
+        game._fire_polearm_priority_x = target.x;
+        game._fire_polearm_priority_y = target.y;
+        await setMessage(readyMessage, true);
+        game._command_mode = null;
+        return true;
+    }
+    await finishHeroPolearmTarget(target.polearm, target.x, target.y, { autohit: true });
+    game._command_mode = null;
+    return true;
+}
+
 function heroFireassistBlessCurseKnown(item) {
     return item?.bknown === true || (item?.bknown !== false
         && /\b(?:blessed|uncursed|cursed)\b/.test(String(item?.line || '')));
@@ -20510,6 +20544,7 @@ function heroFireassistMatchingLauncher(projectile) {
 }
 
 async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
+    if (await beginHeroFirePolearmPriority(projectile, { readyMessage })) return;
     const launcher = heroFireassistMatchingLauncher(projectile);
     let swapMoreLine = '';
     if (launcher && !(launcher.wielded || launcher.line?.includes('weapon in'))) {
@@ -55398,6 +55433,19 @@ export async function rhack(_cmd) {
                 game._fire_alternate_polearm_letter = null;
                 const item = (game.inventory || []).find(invItem => invItem.letter === letter);
                 await beginHeroFirePolearmFallback(item);
+                return;
+            }
+            if (game._fire_polearm_priority_letter) {
+                const letter = game._fire_polearm_priority_letter;
+                const x = game._fire_polearm_priority_x;
+                const y = game._fire_polearm_priority_y;
+                game._fire_polearm_priority_letter = null;
+                game._fire_polearm_priority_x = null;
+                game._fire_polearm_priority_y = null;
+                const item = (game.inventory || []).find(invItem => invItem.letter === letter);
+                if (item && x != null && y != null)
+                    await finishHeroPolearmTarget(item, x, y, { autohit: true });
+                game._command_mode = null;
                 return;
             }
             if (game._fire_ready_launcher_line) {

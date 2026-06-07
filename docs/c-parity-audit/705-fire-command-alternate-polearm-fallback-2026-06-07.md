@@ -31,5 +31,5 @@
 ## Remaining Follow-Ups
 
 - The JS command queue is still modeled with local message-continuation state here; full C FIFO command-queue parity for fireassist swap/wield/retry remains broader work.
-- Full `dofire()` parity still needs reachable wielded-polearm priority with quivered ammo.
+- Audit 706 covers the reachable wielded-polearm priority with quivered/readied ammo.
 - Full applied-polearm `use_pole()` parity remains broader than this fallback slice.

@@ -32,5 +32,5 @@
 - Audit 702 covers the first empty-quiver wielded-polearm fallback and ordinary monster hit slice; audit 704 covers the empty-quiver wielded-bullwhip fallback.
 - Audit 703 covers the throw-and-return shortcut that skips fireassist for empty quiver or ammo quiver.
 - Audit 705 covers the empty-quiver alternate-polearm fireassist swap/retry slice.
-- Fireassist's reachable wielded-polearm priority with quivered ammo remains separate.
+- Audit 706 covers fireassist's reachable wielded-polearm priority with quivered/readied ammo.
 - The JS fireassist swap/wield path still mutates state inline rather than queuing C's `doswapweapon`/`dowield`/retry sequence; current tests pin selected launcher behavior but not the full queued command lifecycle.

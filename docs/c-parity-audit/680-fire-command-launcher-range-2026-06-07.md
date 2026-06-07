@@ -36,6 +36,6 @@
 
 - Audit 701 covers the first empty-quiver prompt and `autoquiver()` ranking slice.
 - Audit 702 covers the first wielded-polearm empty-quiver fallback and ordinary monster hit slice.
-- Full `dofire()` fireassist parity still needs bullwhip fallback, alternate-polearm swap, reachable-polearm assist with quivered ammo, and the exact queued swap/wield/retry command lifecycle.
+- Audits 704, 705, and 706 cover the bullwhip fallback, alternate-polearm swap, and reachable-polearm priority slices; the exact queued swap/wield/retry command lifecycle remains broader work.
 - Audit 681 covers the first single-shot fired launcher-ammo monster hit/miss path, including quiet single-shot messages and fired-ammo strength suppression.
 - Full fired-projectile combat parity still needs C multishot, fireassist count handling, by-hand unmatched ammo monster hits, slung ammo variants, and broader adjacent/intervening hit handling routed through the shared hero projectile combat path.

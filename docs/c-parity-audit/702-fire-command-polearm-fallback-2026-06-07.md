@@ -36,4 +36,4 @@
 - Audit 704 covers the empty-quiver bullwhip fallback.
 - Audit 705 covers the empty-quiver alternate-polearm queued swap/retry branch.
 - Audit 703 covers the thrown-and-return weapon shortcut for empty quiver or ammo quiver before the polearm fallback.
-- Fireassist's reachable wielded-polearm priority with quivered ammo remains separate from this empty-quiver slice.
+- Audit 706 covers fireassist's reachable wielded-polearm priority with quivered/readied ammo, separate from this empty-quiver slice.

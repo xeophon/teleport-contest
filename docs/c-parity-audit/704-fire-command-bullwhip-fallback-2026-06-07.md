@@ -33,5 +33,5 @@
 
 - Full `use_whip()` parity still needs disarming, proficient `force_attack()`, mimic reveal, pit escape, exact self/down behavior, steed mistakes, water/lava wall splashes, full underwater/swallowed handling, fumbling/glib drops, floor snaring, dead-horse feedback, exact wakeup visibility, and shop/timer side effects.
 - Audit 705 covers the empty-quiver alternate-polearm queued swap/retry branch.
-- Full `dofire()` parity still needs reachable wielded-polearm priority with quivered ammo.
+- Audit 706 covers the reachable wielded-polearm priority with quivered/readied ammo.
 - Fireassist launcher swaps still mutate state inline instead of queuing C's `doswapweapon`/`dowield`/retry sequence.

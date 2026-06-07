@@ -67003,6 +67003,184 @@ test('f command empty quiver with wielded polearm and no target does not prompt 
     assert.deepEqual(getRngLog(), []);
 });
 
+test('f command quivered ammo with reachable wielded polearm uses polearm before launcher assist', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const weapon = glaive(876173224, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const launcher = bow(876173225, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174123, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, launcher, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction|arrow|bow/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+    assert.equal(weapon.wielded, true);
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quivered, true);
+});
+
+test('f command autoquivered ammo with reachable wielded polearm readies then uses polearm', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.autoquiver = true;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const weapon = glaive(876173226, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const launcher = bow(876173227, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174124, 'b', { line: 'b - an arrow' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, launcher, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(game._pending_message, 'You ready: b - an arrow.');
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(missile.quivered, true);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(launcher.wielded || false, false);
+
+    await rhack(' ');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction|arrow|bow/);
+    assert.equal(goblin.mhp, 10 - damageRoll);
+    assert.equal(weapon.wielded, true);
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game.inventory.includes(missile), true);
+    assert.equal(missile.quivered, true);
+});
+
+test('f command nofireassist quivered ammo with reachable wielded polearm keeps firing ammo', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.fireassist = false;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    const weapon = glaive(876173228, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const launcher = bow(876173229, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174125, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, launcher, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(weapon.wielded, true);
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game.inventory.includes(missile), true);
+});
+
+test('f command quivered missile with reachable wielded polearm does not use ammo priority', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+    });
+    const weapon = glaive(876173230, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const missile = dartStack(876174126, 'b', 1, {
+        quivered: true,
+        line: 'b - a dart (in quiver)',
+    });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: false,
+    });
+    game.inventory = [weapon, missile];
+    game.level.monsters = [goblin];
+    markSquareVisible(7, 5);
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._pending_message, 'In what direction?');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter || null, null);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(weapon.wielded, true);
+    assert.equal(game.inventory.includes(missile), true);
+});
+
+test('f command quivered ammo with wielded polearm but no target still uses launcher assist', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const weapon = glaive(876173231, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    const launcher = bow(876173232, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174127, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    game.inventory = [weapon, launcher, missile];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, 'b');
+    assert.equal(game._fire_launcher_letter, 'a');
+    assert.match(game._pending_message, /^a - a bow \(weapon in right hand\)\.$/);
+    assert.doesNotMatch(game._pending_message, /Don't know what to hit/);
+    assert.equal(launcher.wielded, true);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.alternate, true);
+    assert.equal(missile.quivered, true);
+});
+
 test('f command empty quiver swaps alternate polearm and retries before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);
