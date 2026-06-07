@@ -61900,6 +61900,70 @@ test('hero-thrown stacked darts each pass through iron bars to hit a monster', a
     ]);
 });
 
+test('hero-thrown sling whaps iron bars before landing', async () => {
+    installHeroThrowIronBarsState();
+    installCoreRngValues([1, 1, 1]);
+    const sling = {
+        id: 876094,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'sling',
+        actualKind: 'sling',
+        material: 'leather',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 's',
+        line: 's - a sling',
+    };
+    game.inventory = [sling];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Whap!/);
+    assert.doesNotMatch(game._pending_message, /Clonk|Clink|Flapp|hits the goblin|misses/);
+    assert.equal(game.inventory.includes(sling), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'sling');
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+});
+
+test('hero-thrown cloth armor flapps iron bars before landing', async () => {
+    installHeroThrowIronBarsState();
+    installCoreRngValues([1, 1, 1]);
+    const shirt = {
+        id: 876095,
+        cls: 'armor',
+        glyph: '[',
+        kind: 'T-shirt',
+        actualKind: 'T-shirt',
+        material: 'cloth',
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter: 't',
+        line: 't - a T-shirt',
+    };
+    game.inventory = [shirt];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('t');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Flapp!/);
+    assert.doesNotMatch(game._pending_message, /Clonk|Clink|Whap|hits the goblin|misses/);
+    assert.equal(game.inventory.includes(shirt), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'T-shirt');
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+});
+
 test('hero-thrown mirror shatters against iron bars and gives bad luck', async () => {
     installHeroThrowIronBarsState();
     initRng(1);

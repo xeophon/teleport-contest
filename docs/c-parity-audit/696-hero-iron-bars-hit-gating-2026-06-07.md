@@ -26,7 +26,7 @@ The horizontal hero throw scan stopped every projectile at iron bars before appl
 
 ## Remaining
 
-- Broader impact sound coverage for `Whang`, `Whap`, `Flapp`, and silver/gold `Clink`.
+- Broader impact sound coverage for `Whang` and silver/gold `Clink`.
 - Pointblank bars impacts.
 - Heavy projectile damage to bars and iron-bars dissolution cases.
 - Full armor, tool, rock/statue, corpse, and food class matrices.

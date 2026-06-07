@@ -23103,10 +23103,29 @@ function heroThrownIronBarsClassHitObject(obj) {
 function heroThrownIronBarsImpactSound(obj) {
     if (heroIsDeaf()) return '';
     const kind = objectKindKey(obj);
-    const material = String(obj?.material || obj?.oc_material || '').toLowerCase();
+    const material = String(obj?.material || obj?.oc_material || '').toLowerCase().replace(/^hi_/, '');
     if (kind === 'boulder' || kind === 'heavy iron ball') return 'Whang!';
+    if (heroThrownIronBarsHarmlessMissileObject(obj)) return 'Whap!';
+    if (heroThrownIronBarsFlimsyObject(obj, material)) return 'Flapp!';
     if (material === 'gold' || material === 'silver' || /\bsilver\b|\bgold(?:en)?\b/.test(kind)) return 'Clink!';
     return 'Clonk!';
+}
+
+function heroThrownIronBarsHarmlessMissileObject(obj) {
+    const kind = objectKindKey(obj);
+    if (['sling', 'eucalyptus leaf', 'kelp frond', 'sprig of wolfsbane',
+        'fortune cookie', 'pancake'].includes(kind)) return true;
+    if ((kind === 'rubber hose' || kind === 'bag of tricks')
+        && Math.trunc(Number(obj?.spe || 0)) < 1) return true;
+    return false;
+}
+
+function heroThrownIronBarsFlimsyObject(obj, material = '') {
+    const kind = objectKindKey(obj);
+    if (kind === 'rubber hose') return true;
+    if (['liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather'].includes(material))
+        return true;
+    return /\b(?:cream pie|candy bar|shirt|robe|cloak|leather)\b/.test(kind);
 }
 
 async function heroThrownIronBarsImpact(obj, impact) {
