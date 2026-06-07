@@ -68688,9 +68688,11 @@ test('f command empty quiver with wielded bullwhip applies it before ammo prompt
 test('f command wielded bullwhip flicks adjacent visible monster before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);
+    game._startup_role = 'Wizard';
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
     });
     const whip = wieldedWeapon(876173206, 'bullwhip', 'w', 0);
     const missile = arrow(876174113, 'b', { line: 'b - an arrow' });
@@ -68720,9 +68722,49 @@ test('f command wielded bullwhip flicks adjacent visible monster before ammo pro
     assert.deepEqual(getRngLog(), []);
 });
 
+test('proficient wielded bullwhip force-attacks visible unarmed monster without snap', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0, 0, 0, 1, 0]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhunger: 900,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173267, 'bullwhip', 'w', 0);
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mpeaceful: false,
+        data: { name: 'goblin', mlevel: 1, mac: 10 },
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You flick your bullwhip towards the goblin.  You hit the goblin.');
+    assert.doesNotMatch(game._pending_message, /Snap!/);
+    assert.equal(goblin.mhp, 9);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rn2(20)', 'rn2(19)', 'rnd(20)', 'rn2(19)', 'rnd(2)', 'rn2(25)', 'rn2(3)']);
+});
+
 test('wielded bullwhip reveals hidden armed monster without disarming it', async () => {
     installNonShopFloorState();
     initRng(2);
+    installCoreRngValues([0, 0, 0, 1, 0]);
     game._startup_role = 'Archeologist';
     Object.assign(game.u, {
         ux: 5,
@@ -68753,15 +68795,19 @@ test('wielded bullwhip reveals hidden armed monster without disarming it', async
 
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
-    assert.equal(game._pending_message, "A goblin is there that you couldn't see.  You flick your bullwhip towards the goblin.  Snap!");
+    assert.equal(game._pending_message,
+        "A goblin is there that you couldn't see.  You flick your bullwhip towards the goblin.  You hit the goblin.  The goblin wakes up!");
+    assert.doesNotMatch(game._pending_message, /Snap!/);
     assert.equal(goblin.mundetected || false, false);
+    assert.equal(goblin.mhp, 9);
     assert.equal(goblin.minvent.includes(weapon), true);
     assert.equal(goblin.mw, weapon);
     assert.equal(weapon.ocarry, goblin);
     assert.equal(goblin.msleeping, 0);
-    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.mpeaceful, true);
     assert.equal(game.level.objects.includes(weapon), false);
-    assert.deepEqual(getRngLog(), []);
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rn2(20)', 'rn2(19)', 'rnd(20)', 'rn2(19)', 'rnd(2)', 'rn2(25)', 'rn2(3)']);
 });
 
 test('wielded bullwhip maps invisible unseen monster before snapping at it', async () => {
@@ -68889,6 +68935,51 @@ test('wielded bullwhip reveals disguised mimic without snap', async () => {
     assert.equal(mimic.mpeaceful, 0);
     assert.doesNotMatch(game._pending_message, /Snap|flick your bullwhip/);
     assert.deepEqual(getRngLog(), []);
+});
+
+test('proficient wielded bullwhip force-attacks disguised mimic after reveal', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0, 0, 0, 1, 0]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173268, 'bullwhip', 'w', 0);
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        mhp: 18,
+        mhpmax: 18,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        mpeaceful: false,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 10, big: true },
+    });
+    game.inventory = [whip];
+    game.level.monsters = [mimic];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message,
+        "Wait!  That's a large mimic!  You hit the large mimic.  The large mimic wakes up!");
+    assert.doesNotMatch(game._pending_message, /Snap|flick your bullwhip/);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj || null, null);
+    assert.equal(mimic.appearGlyph || null, null);
+    assert.equal(mimic.mhp, 17);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.mpeaceful, false);
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rn2(20)', 'rn2(19)', 'rnd(20)', 'rn2(19)', 'rnd(1)', 'rn2(25)', 'rn2(3)']);
 });
 
 test('wielded bullwhip around visible armed monster slips free when unproficient', async () => {

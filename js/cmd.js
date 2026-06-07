@@ -20441,6 +20441,18 @@ function revealHeroBullwhipUnseenTarget(mon, x, y, messages) {
     return spotItNow;
 }
 
+async function forceHeroBullwhipMonsterAttack(mon, dx, dy, messages) {
+    game._hero_melee_prefix_messages = [...messages];
+    game._force_fight_target = mon;
+    try {
+        await moveHero(dx || 0, dy || 0);
+    } finally {
+        if (game._force_fight_target === mon) game._force_fight_target = null;
+        game._hero_melee_prefix_messages = null;
+    }
+    return true;
+}
+
 function heroCanSpotBullwhipPitMonster(mon) {
     return !!mon && ((!game.u?.blind && !mon.mundetected
         && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my))
@@ -20848,9 +20860,17 @@ async function finishHeroBullwhipDirection(item, ch) {
         }
         const mimicRevealed = bullwhipDisguisedMimic(mon) && !heroBullwhipSensesMonster(mon)
             && revealHeroBullwhipMimic(mon, messages);
-        if (!mimicRevealed) {
+        if (mimicRevealed) {
+            if (proficient && !mon.mtame && !mon.pet)
+                return forceHeroBullwhipMonsterAttack(mon, dir.dx || 0, dir.dy || 0, messages);
+        } else {
             const targetName = visibleAfterReveal ? fireScrollMonsterName(mon).replace(/^The /, 'the ') : 'it';
-            messages.push(`You flick your bullwhip towards ${targetName}.`, 'Snap!');
+            const flickMessage = `You flick your bullwhip towards ${targetName}.`;
+            if (proficient && !mon.mtame && !mon.pet) {
+                messages.push(flickMessage);
+                return forceHeroBullwhipMonsterAttack(mon, dir.dx || 0, dir.dy || 0, messages);
+            }
+            messages.push(flickMessage, 'Snap!');
         }
         mon.msleeping = 0;
         mon.meating = 0;
@@ -53139,7 +53159,10 @@ async function moveHero(dx, dy) {
         if (!swallowedMove) wipe_engr_at(oldx, oldy, 3, false);
         const strengthDamageBonus = str < 6 ? -1 : str < 16 ? 0 : str < 18 ? 1 : str === 18 ? 2
             : str <= 93 ? 3 : str <= 108 ? 4 : str < 118 ? 5 : 6;
-        const messages = [];
+        const messages = game._hero_melee_prefix_messages
+            ? [...game._hero_melee_prefix_messages]
+            : [];
+        game._hero_melee_prefix_messages = null;
         if (caitiffAttack) {
             messages.push('You caitiff!');
             if (game.u?.ualign) {
@@ -53283,6 +53306,7 @@ async function moveHero(dx, dy) {
                 'elven spear': [1, 7],
                 'orcish spear': [1, 5],
                 spear: [1, 6],
+                bullwhip: [1, data.big ? 1 : 2],
                 wakizashi: [1, 6],
             }[weaponBaseName] || [1, attackWeapon ? 6 : (role === 'Monk' || role === 'Samurai') ? 4 : 2];
             let baseDamage = attackWeapon
