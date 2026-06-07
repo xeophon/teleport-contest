@@ -21,6 +21,7 @@
 
 - `flying hero sitting on hidden land mine can land without discovery`
 - `flying hero sitting on hidden land mine can air-current detonate`
+- `flying hero land mine life saving continues over recursive pit`
 - `flying hero sitting on known land mine can escape before air currents`
 - Existing levitation reachability and ordinary movement canaries still cover non-sit in-air behavior.
 - Focused verification: `node --test --test-reporter=spec --test-name-pattern "land mine|landmine|sitting on seen bear trap" test/shop-billing-helpers.test.mjs`

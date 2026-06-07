@@ -30609,6 +30609,56 @@ test('hero land mine recursive pit can be escaped after blast', async () => {
     assert.equal(trap.madeby_u, false);
 });
 
+test('hero land mine life saving continues into recursive pit fallout', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 4,
+        uhpmax: 20,
+    });
+    const amulet = {
+        id: 40100,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    game.inventory = [amulet];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 0, 0, 1, 1, 2, 0, 1]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(19)', 'rn2(2)', 'rn2(5)',
+        'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
+    ]);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  You die...  But wait...  Your medallion begins to glow!  You fall into a pit!');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 17);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, 17);
+});
+
 test('mounted hero land mine damages steed and hero', async () => {
     installStableNonShopFloorState();
     vision_reset();
@@ -30788,6 +30838,54 @@ test('flying hero sitting on hidden land mine can air-current detonate', async (
     assert.equal(trap.tseen, true);
     assert.equal(trap.ttyp, PIT);
     assert.equal(trap.madeby_u, false);
+});
+
+test('flying hero land mine life saving continues over recursive pit', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 4,
+        uhpmax: 20,
+        flying: true,
+    });
+    const amulet = {
+        id: 40101,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    game.inventory = [amulet];
+    const trap = { ttyp: LANDMINE, tx: 5, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 0, 0]);
+
+    await enterSitCommand();
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(16)', 'rn2(3)', 'rn2(19)']);
+    assert.equal(game._pending_message,
+        'You land.  You discover a trigger in a pile of soil below you.  KAABLAMM!!!  The air currents set it off!  You die...  But wait...  Your medallion begins to glow!  You fly over a pit.');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.madeby_u, false);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, 20);
 });
 
 test('flying hero sitting on known land mine can escape before air currents', async () => {

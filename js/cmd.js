@@ -46457,6 +46457,20 @@ function heroDartTrapFatalResult(messages, deathCause) {
     return { lifeSaving: false, fatal: true, more: true };
 }
 
+function restoreLifeSavedHeroForContinuation() {
+    if (game.u) game.u.uhp = game.u.uhpmax || 1;
+}
+
+function finishLandminePitFalloutResult(messages, fatalResult, pitResult) {
+    if (pitResult?.message) messages.push(pitResult.message);
+    return {
+        ...pitResult,
+        lifeSaving: pitResult?.fatal ? !!pitResult.lifeSaving : !!fatalResult.lifeSaving || !!pitResult.lifeSaving,
+        more: pitResult?.fatal ? !!pitResult.more : !!fatalResult.more || !!pitResult.more,
+        message: trapMessage(...messages),
+    };
+}
+
 function applyHeroTrapDartPoison(dart, messages, { fatal = 10 } = {}) {
     if (!dart?.opoisoned) return {};
     messages.push('The dart was poisoned!');
@@ -47650,16 +47664,17 @@ function heroLandmineAirCurrentResult(trap, prefix, damage) {
     messages.push(`KAABLAMM!!!  The air currents set ${alreadySeen ? landmineArticleName(trap) : 'it'} off!`);
     convertLandmineToPit(trap);
     if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
+    let fatalResult = {};
     if ((game.u?.uhp || 0) <= 0) {
-        const fatalResult = heroDartTrapFatalResult(messages, 'killed by a land mine');
-        return { message: trapMessage(...messages), ...fatalResult };
+        fatalResult = heroDartTrapFatalResult(messages, 'killed by a land mine');
+        if (fatalResult.fatal) return { message: trapMessage(...messages), ...fatalResult };
+        if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
     }
     const pitResult = movementPitResult(trap, { recursive: true });
-    if (pitResult?.message) messages.push(pitResult.message);
-    return {
-        ...pitResult,
-        message: trapMessage(...messages),
-    };
+    const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
+    if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
+        game._life_saving_post_continue_hp = game.u.uhp;
+    return result;
 }
 
 function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
@@ -47674,14 +47689,14 @@ function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
     convertLandmineToPit(trap);
     const fatalResult = applyHeroLandmineDamage(damage, messages);
     exerciseAttribute(A_DEX, false);
-    if (fatalResult.fatal || fatalResult.lifeSaving)
+    if (fatalResult.fatal)
         return { message: trapMessage(...messages), ...fatalResult };
+    if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
     const pitResult = movementPitResult(trap, { recursive: true });
-    if (pitResult?.message) messages.push(pitResult.message);
-    return {
-        ...pitResult,
-        message: trapMessage(...messages),
-    };
+    const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
+    if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
+        game._life_saving_post_continue_hp = game.u.uhp;
+    return result;
 }
 
 function movementLandmineResult(trap) {
@@ -52363,16 +52378,19 @@ export async function rhack(_cmd) {
             const exploreLifeSaved = !!(game._pending_explore_lifesaving_message
                 || game._queued_explore_lifesaving_message);
             const skipRemainingMoreMessages = ch === '\x1b';
+            const postContinuationHp = game._life_saving_post_continue_hp;
             const lifeSavingMessage = exploreLifeSaved || skipRemainingMoreMessages
                 ? 'You feel much better!'
                 : 'You feel much better!  The medallion crumbles to dust!';
             game._pending_message = lifeSavingMessage;
             game._pending_explore_lifesaving_message = 0;
             game._queued_explore_lifesaving_message = 0;
+            game._life_saving_post_continue_hp = null;
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;
-            if (!stoningLifeSaved && game.u) game.u.uhp = game.u.uhpmax || 1;
+            if (!stoningLifeSaved && game.u)
+                game.u.uhp = postContinuationHp == null ? (game.u.uhpmax || 1) : postContinuationHp;
             if (stoningLifeSaved) {
                 game._life_saving_clear_stoning = 0;
                 if (game.u) {
