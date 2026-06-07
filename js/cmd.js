@@ -19684,6 +19684,12 @@ function heroThrownVenomTargetName(mon) {
     return fireScrollMonsterName(mon).replace(/^The /, 'the ');
 }
 
+function heroProjectileKillMessageTargetName(mon, fallbackName = '') {
+    if (!(mon?.mtame || mon?.pet)) return fallbackName || heroThrownVenomTargetName(mon);
+    const name = (fallbackName || heroThrownVenomTargetName(mon)).replace(/^the\s+/i, '');
+    return `the poor ${name}`;
+}
+
 function heroThrownCreamPieTargetName(mon) {
     return heroThrownVenomTargetName(mon);
 }
@@ -22739,11 +22745,17 @@ function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessa
     if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage })) return;
     mon.dead = true;
     mon.mhp = 0;
+    if (mon.mtame && !mon.isminion) {
+        mon.mextra ??= {};
+        mon.mextra.edog ??= {};
+        mon.mextra.edog.killed_by_u = 1;
+        mon.killed_by_u = 1;
+    }
     const data = mon.data || {};
     const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
         || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
     if (killMessage)
-        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${targetName || heroThrownVenomTargetName(mon)}!`);
+        messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${heroProjectileKillMessageTargetName(mon, targetName)}!`);
     recordVanquished(mon, true);
     dropMonsterInventory(mon, messages);
 
@@ -22756,8 +22768,25 @@ function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessa
         && monsterLeavesCorpseLikeDrop(corpseData)) {
         createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
     }
+    applyHeroProjectileKillLuckSideEffects(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
     newsym(mon.mx, mon.my);
+}
+
+function applyHeroProjectileKillLuckSideEffects(mon, messages) {
+    if (!mon) return;
+    if ((mon.mpeaceful && !rn2(2)) || mon.mtame) changeHeroLuck(-1);
+    const monSign = Math.sign(Number(mon?.data?.maligntyp ?? mon?.maligntyp ?? 0));
+    const heroSign = Math.sign(Number(game.u?.ualign?.type ?? A_NEUTRAL));
+    if (heroThrownMonsterIsUnicorn(mon) && heroSign === monSign) {
+        changeHeroLuck(-5);
+        messages.push('You feel guilty...');
+    }
+    if (mon.mtame) {
+        game._pet_kill_luck_message_after_more = (game.u?._statusSuffix || '').includes('Hallu')
+            ? 'You hear the studio audience applaud!'
+            : 'You hear the rumble of distant thunder...';
+    }
 }
 
 function adjustHeroAlignmentForPoisonedWeaponUse(messages) {
@@ -25393,6 +25422,7 @@ function addConductCount(field, amount = 1) {
 }
 
 function recordHeroKillConduct() {
+    addConductCount('killer');
     if (game._chronicle_first_kill) return;
     game._chronicle_entries ??= [];
     game._chronicle_entries.push({ turn: game.moves || 1, text: 'killed for the first time' });

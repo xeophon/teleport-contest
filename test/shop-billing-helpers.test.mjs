@@ -43916,7 +43916,7 @@ test('command kicked ruby lethal target removes monster before landing', async (
     assert.equal(ruby.ox, 7);
     assert.equal(ruby.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(19)', 'rn2(3)', 'rn2(2)',
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(3)',
     ]);
 });
 
@@ -62542,8 +62542,8 @@ test('hero-thrown ruby lethal target removes monster before projectile lands', a
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 7), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 8), [
+        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
     ]);
 });
 
@@ -74101,6 +74101,7 @@ test('hero-thrown dagger lethal target removes monster before projectile lands',
     assert.equal(game.level.monsters.includes(goblin), false);
     assert.equal(goblin.dead, true);
     assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.uconduct?.killer, 1);
     assert.equal(game.u.urexp > 0, true);
     assert.equal(game.inventory.includes(blade), false);
     const dropped = game.level.objects.find(obj => obj.id === carried.id);
@@ -74111,8 +74112,49 @@ test('hero-thrown dagger lethal target removes monster before projectile lands',
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
-        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(19)', 'rn2(100)',
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dagger lethal tame target uses poor wording and xkilled luck', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 10, udaminc: 0 });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876136, 'd');
+    const dog = ordinaryThrowTarget('little dog', 7, 5, {
+        mhp: 3,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        mtame: 5,
+        pet: true,
+        data: { name: 'little dog', mlevel: 2, mlet: 'd', mmove: 18, maligntyp: 0 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [dog];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the little dog.  You kill the poor little dog!');
+    assert.equal(game.level.monsters.includes(dog), false);
+    assert.equal(dog.dead, true);
+    assert.equal(dog.killed_by_u, 1);
+    assert.equal(dog.mextra?.edog?.killed_by_u, 1);
+    assert.equal(game.u.uluck, -1);
+    assert.equal(game.u.ualign.record, -15);
+    assert.equal(game.u.ualign.abuse, 15);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game._pet_kill_luck_message_after_more, 'You hear the rumble of distant thunder...');
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 
@@ -74151,6 +74193,38 @@ test('hero-thrown dagger lethal target still applies passive object erosion befo
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
     assert.equal(landed.oeroded, 1);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
+        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown dagger lethal same-aligned unicorn applies C guilt luck', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 10, udaminc: 0 });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876137, 'd');
+    const unicorn = unicornThrowTarget('white unicorn', 7, 5, {
+        mhp: 3,
+        mhpmax: 3,
+        mpeaceful: 0,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the white unicorn.  You kill the white unicorn!  You feel guilty...');
+    assert.equal(game.level.monsters.includes(unicorn), false);
+    assert.equal(unicorn.dead, true);
+    assert.equal(game.u.uluck, -5);
+    assert.equal(game.u.uconduct?.killer, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
         'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(19)', 'rn2(100)',
     ]);
