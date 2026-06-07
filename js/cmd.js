@@ -20166,6 +20166,7 @@ function heroKickedGemImpact(obj, mon) {
             damage,
             mulched,
             messages,
+            more: !!messages.more,
         };
     }
     const messages = [heroProjectileMissMessage(obj, mon)];
@@ -22573,6 +22574,7 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
             damage,
             mulched,
             messages,
+            more: !!messages.more,
         };
     }
     const messages = [heroProjectileMissMessage(obj, mon)];
@@ -22587,6 +22589,7 @@ function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLaun
         consumed: !!(impact.mulched || impact.consumed),
         hit: !!impact.hit,
         passiveTarget: impact.hit ? targetMon : null,
+        more: !!(impact.more || impact.messages?.more),
     });
     if (!targetMon) return { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
     if (firedFromLauncher) {
@@ -22679,6 +22682,7 @@ function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLaunche
             damage,
             mulched,
             messages,
+            more: !!messages.more,
         };
     }
     const messages = [heroProjectileMissMessage(obj, mon)];
@@ -22763,7 +22767,19 @@ function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessa
         || (data.name?.endsWith(' zombie') ? monsterByRndName(data.name.replace(/ zombie$/, '')) : null)
         || data;
     const loc = game.level?.at?.(mon.mx, mon.my);
-    if (loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ))
+    if (loc?.map_invisible) {
+        loc.map_invisible = false;
+        loc.remembered_glyph = null;
+    }
+    const killAccessible = loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ));
+    let gasSporeExplosion = null;
+    if (killAccessible && data.name === 'gas spore') {
+        rn2(6);
+        gasSporeExplosion = queueGasSporeDeathExplosion(mon, { messages });
+    }
+    if (gasSporeExplosion) {
+        messages.more = true;
+    } else if (killAccessible
         && !mon.mcloned && monsterCorpseDropSucceeds(mon, data)
         && monsterLeavesCorpseLikeDrop(corpseData)) {
         createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
@@ -22883,6 +22899,7 @@ function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false 
             damage,
             mulched,
             messages,
+            more: !!messages.more,
         };
     }
     const messages = [heroProjectileMissMessage(obj, mon)];
@@ -22920,6 +22937,7 @@ function heroThrownGemImpact(obj, mon) {
             damage,
             mulched,
             messages,
+            more: !!messages.more,
         };
     }
     const messages = [heroProjectileMissMessage(obj, mon)];
@@ -70001,6 +70019,7 @@ export async function rhack(_cmd) {
         let landingMessage = '';
         const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
         const newsymTargets = [];
+        let projectileImpactMore = false;
         if (splitProjectileFlight) {
             const impactMessages = [];
             const landingMessages = [];
@@ -70033,6 +70052,7 @@ export async function rhack(_cmd) {
                     ? heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
+                if (impact.more) projectileImpactMore = true;
                 if (targetMon) newsymTargets.push(targetMon);
                 if (!impact.consumed && !barsResult.broke) {
                     const breakRoll = !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
@@ -70085,6 +70105,7 @@ export async function rhack(_cmd) {
                     impactConsumedProjectile = !!impact.consumed;
                     impactObjectHit = !!impact.hit;
                     impactPassiveTarget = impact.passiveTarget || null;
+                    if (impact.more) projectileImpactMore = true;
                     newsymTargets.push(targetMon);
                 }
             }
@@ -70144,10 +70165,10 @@ export async function rhack(_cmd) {
         const followUpMessage = [message, landingMessage].filter(Boolean).join('  ');
         if (fireNoLauncherMessage) {
             if (followUpMessage) game._queued_message_after_more = followUpMessage;
-            await setMessage(fireNoLauncherMessage, !!followUpMessage || !!fireRecoilResult?.more);
+            await setMessage(fireNoLauncherMessage, !!followUpMessage || !!fireRecoilResult?.more || projectileImpactMore);
         } else if (message || landingMessage) {
             if (landingMessage) game._queued_message_after_more = landingMessage;
-            await setMessage(message, !!landingMessage || !!fireRecoilResult?.more);
+            await setMessage(message, !!landingMessage || !!fireRecoilResult?.more || projectileImpactMore);
         } else {
             game._pending_message = '';
             game._message_more = 0;
@@ -71089,6 +71110,7 @@ export async function rhack(_cmd) {
             const impactMessages = [];
             const landingMessages = [];
             const newsymTargets = [];
+            let projectileImpactMore = false;
             for (let shot = 0; shot < directMultishotCount; shot++) {
                 const shotId = itemQuantity - shot > 1 ? next_ident() : item.id;
                 const splitShot = shotId !== item.id;
@@ -71118,6 +71140,7 @@ export async function rhack(_cmd) {
                     ? heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, directLauncherAmmo)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
+                if (impact.more) projectileImpactMore = true;
                 if (targetMon) newsymTargets.push(targetMon);
                 if (!impact.consumed && !barsResult.broke) {
                     const breakRoll = !impact.hit && !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
@@ -71157,7 +71180,7 @@ export async function rhack(_cmd) {
             const message = [`You ${directLauncherAmmo ? 'shoot' : 'throw'} ${directMultishotCount} ${volleyName}.`, ordinaryAirRecoilMessage, impactMessage]
                 .filter(Boolean).join('  ');
             if (landingMessage) game._queued_message_after_more = landingMessage;
-            await setMessage(message, !!landingMessage || ordinaryAirRecoilMore);
+            await setMessage(message, !!landingMessage || ordinaryAirRecoilMore || projectileImpactMore);
             game._command_mode = null;
             game._throw_item_letter = null;
             clearThrowCountState();
@@ -71193,6 +71216,7 @@ export async function rhack(_cmd) {
         let impactObjectHit = false;
         let impactPassiveTarget = null;
         let boomerangSelfHitResult = null;
+        let projectileImpactMore = false;
         if (ironBarsImpact) {
             const barsImpact = await heroThrownIronBarsImpact(thrownObject, ironBarsImpact);
             if (barsImpact.broke) {
@@ -71329,10 +71353,12 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!ammoImpact.mulched;
             impactObjectHit = !!ammoImpact.hit;
             impactPassiveTarget = ammoImpact.hit ? targetMon : null;
+            if (ammoImpact.more) projectileImpactMore = true;
         } else if (targetMon && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(item)) {
             const unicornImpact = heroThrownUnicornGemImpact(thrownObject, targetMon);
             impactMessage = (unicornImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!unicornImpact.consumed;
+            if (unicornImpact.more) projectileImpactMore = true;
         } else if (targetMon && heroThrownStoneMissileHarmlessRockPasser(item, targetMon)) {
             const hitValue = heroThrownGemHitValue(thrownObject, targetMon);
             const dieroll = rnd(20);
@@ -71355,18 +71381,21 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
+            if (gemImpact.more) projectileImpactMore = true;
         } else if (targetMon && heroThrownByHandAmmoObject(item, throwLauncher)) {
             const ammoImpact = heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
             impactMessage = (ammoImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!ammoImpact.mulched;
             impactObjectHit = !!ammoImpact.hit;
             impactPassiveTarget = ammoImpact.hit ? targetMon : null;
+            if (ammoImpact.more) projectileImpactMore = true;
         } else if (targetMon && heroProjectileSupportedWeaponObject(item)) {
             const weaponImpact = heroThrownWeaponImpact(thrownObject, targetMon);
             impactMessage = (weaponImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!weaponImpact.mulched;
             impactObjectHit = !!weaponImpact.hit;
             impactPassiveTarget = weaponImpact.hit ? targetMon : null;
+            if (weaponImpact.more) projectileImpactMore = true;
         } else if (targetMon && !combatObject) {
             rnd(20);
             const thrownName = pickupObjectName({ ...item, quan: 1 });
@@ -71385,7 +71414,7 @@ export async function rhack(_cmd) {
             stopCarriedFigurineTimerOnLeave(thrownObject);
             removeInventoryItem(item, 1);
             newsym(targetMon.mx, targetMon.my);
-            await setMessage(impactMessage, ordinaryAirRecoilMore);
+            await setMessage(impactMessage, ordinaryAirRecoilMore || projectileImpactMore);
             game._command_mode = null;
             game._throw_item_letter = null;
             game._resume_time_after_more = 0;
@@ -71406,7 +71435,7 @@ export async function rhack(_cmd) {
                     if (!/\b(?:weapon|wielded) in (?:right hand|hands)\b/.test(String(item.line || '')))
                         item.line = normalInventoryLine({ ...item, line: '' });
                     newsym(ox, oy);
-                    await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '), ordinaryAirRecoilMore);
+                    await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '), ordinaryAirRecoilMore || projectileImpactMore);
                     game._command_mode = null;
                     game._throw_item_letter = null;
                     clearThrowCountState();
@@ -71432,7 +71461,7 @@ export async function rhack(_cmd) {
                 newsym(ux, uy);
                 removeInventoryItem(item);
                 await setMessage([impactMessage, badCatchMessage, landingMessage].filter(Boolean).join('  '),
-                    !!landingMessage || ordinaryAirRecoilMore);
+                    !!landingMessage || ordinaryAirRecoilMore || projectileImpactMore);
                 game._command_mode = null;
                 game._throw_item_letter = null;
                 clearThrowCountState();
@@ -71496,7 +71525,7 @@ export async function rhack(_cmd) {
             const followUpMessage = [impactMessage, landingMessage].filter(Boolean).join('  ');
             if (followUpMessage) game._queued_message_after_more = followUpMessage;
             if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
-            await setMessage(throwNoLauncherMessage, !!followUpMessage || ordinaryAirRecoilMore);
+            await setMessage(throwNoLauncherMessage, !!followUpMessage || ordinaryAirRecoilMore || projectileImpactMore);
         }
         else if (impactMessage) {
             if (landingMessage) game._queued_message_after_more = landingMessage;

@@ -74117,6 +74117,97 @@ test('hero-thrown dagger lethal target removes monster before projectile lands',
     ]);
 });
 
+test('hero-thrown dagger lethal gas spore explodes before projectile lands', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 0,
+        uhp: 50,
+        uhpmax: 50,
+        halfPhysicalDamage: true,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876220, 'd');
+    const spore = adjacentHostileGasSpore(31390);
+    const victim = adjacentGasSporeBlastVictim('goblin', 31391);
+    game.inventory = [blade];
+    game.level.monsters = [spore, victim];
+
+    markHeroNeighborhoodVisible();
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
+
+    const rngLog = getRngLog();
+    const d4x6 = rngValuesForCall(rngLog, 'd(4,6)');
+    assert.equal(d4x6.length, 2);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(4)', 'rn2(6)', 'd(4,6)', 'd(4,6)',
+    ]);
+    assert.match(messages, /The dagger hits the gas spore\./);
+    assert.match(messages, /You kill the gas spore!/);
+    assert.match(messages, /Boom!/);
+    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
+    assert.match(messages, /You are caught in the gas spore's explosion!/);
+    assert.equal(game.level.monsters.includes(spore), false);
+    assert.equal(game.level.objects.some(obj =>
+        obj.corpsenm?.name === 'gas spore'
+        || /gas spore corpse/.test(String(obj.kind || obj.actualKind || ''))), false);
+    assert.equal(victim.mhp, 30 - d4x6[1]);
+    assert.equal(game.u.uhp, 50 - Math.trunc((d4x6[1] + 1) / 2));
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+});
+
+test('hero-thrown dagger lethal remembered invisible target clears marker before landing', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876221, 'd');
+    const targetLoc = game.level.at(7, 5);
+    targetLoc.map_invisible = true;
+    targetLoc.remembered_glyph = { ch: 'I' };
+    const otherLoc = game.level.at(6, 6);
+    otherLoc.map_invisible = true;
+    otherLoc.remembered_glyph = { ch: 'I', stale: true };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 3,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The dagger hits the goblin\.  You kill the goblin!/);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(targetLoc.map_invisible, false);
+    assert.equal(targetLoc.remembered_glyph, null);
+    assert.equal(otherLoc.map_invisible, true);
+    assert.deepEqual(otherLoc.remembered_glyph, { ch: 'I', stale: true });
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+});
+
 test('hero-thrown dagger lethal tame target uses poor wording and xkilled luck', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -74231,13 +74322,16 @@ test('hero-thrown dagger lethal same-aligned unicorn applies C guilt luck', asyn
 });
 
 test('hero-thrown dagger revives shifted vampire lethal target before cleanup', async () => {
-    installNonShopFloorState();
+    installStableNonShopFloorState();
     initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
     game.u.acurr.a[A_STR] = 10;
     game.u.acurr.a[A_DEX] = 25;
     const blade = dagger(876131, 'd');
     const carried = { id: 876132, cls: 'food', kind: 'food ration', quan: 1 };
+    const targetLoc = game.level.at(7, 5);
+    targetLoc.map_invisible = true;
+    targetLoc.remembered_glyph = { ch: 'I' };
     const bat = ordinaryThrowTarget('vampire bat', 7, 5, {
         mhp: 3,
         mhpmax: 8,
@@ -74292,6 +74386,8 @@ test('hero-thrown dagger revives shifted vampire lethal target before cleanup', 
     assert.equal(bat.mhp >= 10, true);
     assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
     assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(targetLoc.map_invisible, true);
+    assert.notEqual(targetLoc.remembered_glyph, null);
     assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
     assert.equal(game._vanquished_counts?.vampire || 0, 0);
     assert.equal(game._vanquished_total || 0, 0);
