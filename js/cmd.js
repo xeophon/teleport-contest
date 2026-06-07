@@ -20501,6 +20501,18 @@ function heroHorizontalThrowRecoilMonsterAt(x, y) {
         mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0));
 }
 
+function heroHorizontalThrowRecoilTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+}
+
+function heroHorizontalThrowRecoilTrapPassOverMessageAt(x, y) {
+    const trap = heroHorizontalThrowRecoilTrapAt(x, y);
+    if (!trap?.tseen) return '';
+    if (trap.ttyp === MAGIC_PORTAL || trap.ttyp === VIBRATING_SQUARE || trap.ttyp === FIRE_TRAP) return '';
+    if ((is_pit(trap.ttyp) || is_hole(trap.ttyp)) && In_sokoban(game.u?.uz)) return '';
+    return `You pass right over ${sitTrapArticleName(trap)}.`;
+}
+
 function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, dx, dy) {
     if (!loc) return { blocked: false };
     const diagonal = dx !== 0 && dy !== 0;
@@ -20562,6 +20574,7 @@ function heroHorizontalThrowRecoil(dir, range) {
 
     const recoilRange = Math.max(1, Math.trunc(Number(range || 1)));
     const message = `You ${recoilRange > 1 ? 'hurtle' : 'float'} in the opposite direction.`;
+    const messages = [message];
     const dx = Math.sign(-dir.dx);
     const dy = Math.sign(-dir.dy);
     for (let step = 0; step < recoilRange; step++) {
@@ -20571,7 +20584,7 @@ function heroHorizontalThrowRecoil(dir, range) {
         const ny = oldy + dy;
         const loc = game.level?.at(nx, ny);
         if (!isok(nx, ny) || !loc)
-            return [message, 'You feel the spirits holding you back.'].join('  ');
+            return [...messages, 'You feel the spirits holding you back.'].join('  ');
         const monster = heroHorizontalThrowRecoilMonsterAt(nx, ny);
         const openDoorFrame = loc.typ === DOOR && (loc.doormask & D_ISOPEN) && dx !== 0 && dy !== 0;
         const blockedByObstacle = IS_OBSTRUCTED(loc.typ)
@@ -20581,12 +20594,12 @@ function heroHorizontalThrowRecoil(dir, range) {
             || heroHorizontalThrowRecoilBoulderAt(nx, ny);
         if (blockedByObstacle) {
             const collision = heroHorizontalThrowRecoilObstacleCollision(loc, nx, ny, recoilRange - step, dx, dy);
-            if (collision.blocked) return [message, ...(collision.messages || [])].join('  ');
+            if (collision.blocked) return [...messages, ...(collision.messages || [])].join('  ');
             break;
         }
         if (monster) {
             const collisionMessage = heroHorizontalThrowRecoilMonsterCollision(monster, nx, ny);
-            return [message, collisionMessage].filter(Boolean).join('  ');
+            return [...messages, collisionMessage].filter(Boolean).join('  ');
         }
         game.u.ux0 = oldx;
         game.u.uy0 = oldy;
@@ -20597,8 +20610,10 @@ function heroHorizontalThrowRecoil(dir, range) {
         newsym(nx, ny);
         if (game.level?.at(nx, ny) === loc) vision_recalc(0);
         else game.vision_full_recalc = 1;
+        const trapMessage = heroHorizontalThrowRecoilTrapPassOverMessageAt(nx, ny);
+        if (trapMessage) messages.push(trapMessage);
     }
-    return message;
+    return messages.join('  ');
 }
 
 function prependHeroHorizontalThrowRecoilMessage(messages, recoilMessage) {

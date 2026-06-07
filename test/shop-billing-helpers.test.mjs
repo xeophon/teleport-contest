@@ -63429,6 +63429,53 @@ test('levitating hero-thrown ordinary weapon recoil bumps monster without damage
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil passes over seen anti-magic field', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+        uen: 12,
+        uenmax: 12,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876171, 'd');
+    const trap = { ttyp: ANTI_MAGIC, tx: 4, ty: 5, tseen: true };
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [blade];
+    game.level.traps = [trap];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\.  You pass right over an anti-magic field\./);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.uen, 12);
+    assert.equal(trap.tseen, true);
+    assert.equal(goblin.msleeping, 1);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 9);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
 test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', async () => {
     installNonShopFloorState();
     initRng(2);
