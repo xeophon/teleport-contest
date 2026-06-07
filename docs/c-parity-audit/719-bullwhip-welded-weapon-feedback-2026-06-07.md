@@ -29,4 +29,4 @@
 - Exact `mbodypart()` naming beyond ordinary hands and bimanual `hands` is still deferred.
 - Full `will_weld()` material/type subtleties are represented by the current JS welded/cursed weapon model, not the complete C object-class matrix.
 - Non-welded disarm side effects still need exact shop billing/no-charge, timers/light-source shutdown, artifact/object immunities, and petrifying corpse snatch handling.
-- Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, fumbling/glib drops, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility.
+- Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility. Audit 720 covers Fumbling/Glib drops before this welded branch.

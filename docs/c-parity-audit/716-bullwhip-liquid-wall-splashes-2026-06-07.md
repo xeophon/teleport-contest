@@ -24,5 +24,6 @@
 - Audit 717 covers the first visible-monster disarm slice: unproficient slip and proficiency-1 default weapon yank to the monster square.
 - Audit 718 covers the higher-proficiency visible-monster disarm destinations: hero-square yank, inventory snatch, and inventory-letter overflow drop.
 - Audit 719 covers visible-monster welded-weapon feedback, curse knowledge, and no destination roll.
+- Audit 720 covers the Fumbling/Glib `rn2(5)` drop branch that runs after this terrain splash gate.
 - Lavawall fire damage still inherits the current JS object-fire helper coverage; full C `fire_damage()` parity for all wielded object classes, timers, shop billing, and artifact/object immunities remains broader than this splash branch.
-- Other `use_whip()` follow-ups remain proficient `force_attack()`, mimic reveal, pit escape, exact self/down/steed/floor behavior, fumbling/glib drops, underwater/swallowed edge cases, and exact wakeup visibility.
+- Other `use_whip()` follow-ups remain proficient `force_attack()`, mimic reveal, pit escape, exact self/down/steed/floor behavior, underwater/swallowed edge cases, and exact wakeup visibility.

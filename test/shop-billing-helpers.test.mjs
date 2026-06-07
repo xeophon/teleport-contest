@@ -68910,6 +68910,121 @@ test('wielded bullwhip into wall of lava splashes and checks fire damage before 
     assert.match(getRngLog()[0], /^rn2\(20\)=/);
 });
 
+test('fumbling wielded bullwhip can slip from hand before monster disarm', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        fumbling: true,
+        acurr: { a: [10, 10, 10, 16, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173238, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173239, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    const dropped = game.level.objects.find(obj => obj.id === whip.id);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'The bullwhip slips out of your hand.');
+    assert.equal(game.inventory.includes(whip), false);
+    assert.ok(dropped);
+    assert.equal(dropped.kind, 'bullwhip');
+    assert.equal(dropped.ox, 5);
+    assert.equal(dropped.oy, 5);
+    assert.equal(dropped.wielded || false, false);
+    assert.equal(dropped.invlet, 'w');
+    assert.equal(goblin.minvent.includes(weapon), true);
+    assert.equal(goblin.mw, weapon);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, true);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+});
+
+test('glib wielded bullwhip can slip from hand before empty-target snap', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        _glibTimeout: 3,
+    });
+    const whip = wieldedWeapon(876173240, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    const dropped = game.level.objects.find(obj => obj.id === whip.id);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'The bullwhip slips out of your hand.');
+    assert.equal(game.inventory.includes(whip), false);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 5);
+    assert.equal(dropped.oy, 5);
+    assert.equal(dropped.wielded || false, false);
+    assert.doesNotMatch(game._pending_message, /Snap/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+});
+
+test('fumbling wielded bullwhip can slip from hand before pit escape', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        utrap: 3,
+        utraptype: TT_PIT,
+        fumbling: true,
+    });
+    const whip = wieldedWeapon(876173241, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    const dropped = game.level.objects.find(obj => obj.id === whip.id);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'The bullwhip slips out of your hand.');
+    assert.equal(game.inventory.includes(whip), false);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 5);
+    assert.equal(dropped.oy, 5);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, TT_PIT);
+    assert.doesNotMatch(game._pending_message, /yank yourself out|Snap/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
+});
+
 test('f command autoquiver still beats wielded bullwhip fallback', async () => {
     installNonShopFloorState();
     initRng(2);

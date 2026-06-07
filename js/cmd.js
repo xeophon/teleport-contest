@@ -20374,7 +20374,7 @@ function heroBullwhipProficiency() {
     const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
     if (dex < 6) proficient--;
     else if (dex >= 14) proficient += dex - 14;
-    if (game.u?.fumbling) proficient--;
+    if (heroIsFumbling()) proficient--;
     return Math.max(0, Math.min(3, proficient));
 }
 
@@ -20557,6 +20557,14 @@ async function finishHeroBullwhipDirection(item, ch) {
         return true;
     }
 
+    if ((heroIsFumbling() || heroHasSlipperyFingers()) && rn2(5) === 0) {
+        const messages = ['The bullwhip slips out of your hand.'];
+        dropCarriedObjectAtHero(item, messages);
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
     const mon = (game.level?.monsters || []).find(candidate =>
         candidate.mx === rx && candidate.my === ry && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
     if (mon) {
@@ -20565,7 +20573,7 @@ async function finishHeroBullwhipDirection(item, ch) {
         if (targetWeapon) {
             const targetWeaponName = inventoryItemName(targetWeapon);
             const messages = [`You wrap your bullwhip around ${targetWeaponName}.`];
-            const gotit = proficient > 0 && (!game.u?.fumbling || !rn2(10));
+            const gotit = proficient > 0 && (!heroIsFumbling() || !rn2(10));
             if (gotit) {
                 if (monsterWeaponIsWelded(mon, targetWeapon)) {
                     finishHeroBullwhipWeldedWeapon(mon, targetWeapon, messages);

@@ -27,4 +27,4 @@
 
 - Audit 719 covers welded monster weapon feedback, `bknown` update, and slip-free preservation.
 - Full disarm side effects still need shop billing/no-charge, timers/light sources, artifact/object immunities, petrifying corpse snatch handling, and exact monster body-part naming beyond ordinary hands.
-- Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, fumbling/glib drops, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility.
+- Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility. Audit 720 covers Fumbling/Glib drops before this monster branch.
