@@ -28,6 +28,6 @@
 
 ## Remaining Follow-Ups
 
-- Landmine explosion currently needs a source-backed recursive pit fallout audit: C converts the mine to a pit, applies landmine damage, then runs pit fallout through the converted trap.
+- Recursive pit fallout after ordinary landmine explosions is covered by `665-hero-landmine-recursive-pit-2026-06-07.md`; broader `blow_up_landmine()` terrain/object fallout remains open there.
 - Sitting and force/plunge landmine entry need separate canaries. In C, flying `#sit` reaches `dotrap(..., VIASITTING)`, while force flags bypass the ordinary in-air floor-trigger precheck.
 - Object-list deferral has dismount coverage, but a direct multi-object landmine movement canary would make the deferred entry point more explicit.

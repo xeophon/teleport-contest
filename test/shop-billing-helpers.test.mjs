@@ -30546,6 +30546,7 @@ test('object list anti-magic field waits until more is dismissed', async () => {
 test('hero land mine movement explodes into pit and wounds hero', async () => {
     installStableNonShopFloorState();
     vision_reset();
+    game.sokoban_dnum = 999;
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -30556,15 +30557,16 @@ test('hero land mine movement explodes into pit and wounds hero', async () => {
     const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 3, 1, 0]);
+    installCoreRngValues([4, 2, 3, 0, 1, 1, 2, 0, 1]);
 
     await rhack('l');
 
     assert.deepEqual(getRngLog().map(rngCallName), [
-        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(5)', 'rn2(6)',
+        'rnd(6)', 'rn2(2)', 'rn2(2)',
     ]);
     assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You fall into a pit!');
-    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.uhp, 12);
     assert.equal(game.u.ux, 6);
     assert.equal(game.u.uy, 5);
     assert.equal(game.u.utrap, 3);
@@ -30576,9 +30578,41 @@ test('hero land mine movement explodes into pit and wounds hero', async () => {
     assert.equal(trap.madeby_u, false);
 });
 
+test('hero land mine recursive pit can be escaped after blast', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 0, 0]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(5)',
+    ]);
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You escape a pit.');
+    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.u._woundedLegTurns, 44);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.ttyp, PIT);
+    assert.equal(trap.madeby_u, false);
+});
+
 test('mounted hero land mine damages steed and hero', async () => {
     installStableNonShopFloorState();
     vision_reset();
+    game.sokoban_dnum = 999;
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -30590,16 +30624,17 @@ test('mounted hero land mine damages steed and hero', async () => {
     const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 6, 7, 1, 0]);
+    installCoreRngValues([4, 2, 6, 7, 0, 1, 1, 2]);
 
     await rhack('l');
 
     assert.deepEqual(getRngLog().map(rngCallName), [
-        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(5)',
+        'rn2(6)', 'rnd(6)',
     ]);
-    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You fall into a pit!');
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You and the pony fall into a pit!');
     assert.equal(game.u.uhp, 15);
-    assert.equal(pony.mhp, 7);
+    assert.equal(pony.mhp, 4);
     assert.equal(pony.mx, 6);
     assert.equal(pony.my, 5);
     assert.equal(game.u.usteed, pony);
@@ -30613,6 +30648,7 @@ test('mounted hero land mine damages steed and hero', async () => {
 test('mounted hero land mine killing steed dismounts and still hurts hero', async () => {
     installStableNonShopFloorState();
     vision_reset();
+    game.sokoban_dnum = 999;
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -30624,15 +30660,16 @@ test('mounted hero land mine killing steed dismounts and still hurts hero', asyn
     const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 6, 7, 1, 0]);
+    installCoreRngValues([4, 2, 6, 7, 0, 1, 1, 1, 0, 1]);
 
     await rhack('l');
 
     assert.deepEqual(getRngLog().map(rngCallName), [
-        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(5)',
+        'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
     ]);
     assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  The saddled pony is killed!  You fall into a pit!');
-    assert.equal(game.u.uhp, 15);
+    assert.equal(game.u.uhp, 13);
     assert.equal(game.u.usteed, null);
     assert.equal(game.u.utrap, 3);
     assert.equal(game.u.utraptype, 'pit');
@@ -30700,6 +30737,7 @@ test('flying hero crosses known land mine with over-floor message', async () => 
 test('dismount object list consumes pending land mine trap', async () => {
     installStableNonShopFloorState();
     vision_reset();
+    game.sokoban_dnum = 999;
     Object.assign(game.u, {
         ux: 6,
         uy: 5,
@@ -30716,20 +30754,21 @@ test('dismount object list consumes pending land mine trap', async () => {
     game._pending_time_passed = 0;
     game.context = {};
     enableRngLog({ reset: true });
-    installCoreRngValues([4, 2, 6, 7, 1, 0]);
+    installCoreRngValues([4, 2, 6, 7, 0, 1, 1, 2]);
 
     await rhack(' ');
 
     assert.deepEqual(getRngLog().map(rngCallName), [
-        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(6)', 'rn2(2)',
+        'rnd(16)', 'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(5)',
+        'rn2(6)', 'rnd(6)',
     ]);
     assert.equal(game._pending_landmine_trap || null, null);
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.equal(game._process_command_time_now, 1);
-    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You fall into a pit!');
+    assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You and the pony fall into a pit!');
     assert.equal(game.u.uhp, 15);
-    assert.equal(pony.mhp, 7);
+    assert.equal(pony.mhp, 4);
     assert.equal(game.u.usteed, pony);
     assert.equal(game.u.utrap, 3);
     assert.equal(game.u.utraptype, 'pit');

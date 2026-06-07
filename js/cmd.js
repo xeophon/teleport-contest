@@ -47600,6 +47600,7 @@ function convertLandmineToPit(trap) {
     if (!trap) return;
     trap.ttyp = PIT;
     trap.madeby_u = false;
+    trap.tseen = true;
     newsym(game.u?.ux || trap.tx || 0, game.u?.uy || trap.ty || 0);
 }
 
@@ -47630,8 +47631,6 @@ function applyHeroLandmineDamage(damage, messages) {
     let fatalResult = {};
     if (game.u) {
         game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
-        game.u.utrap = rn1(6, 2);
-        game.u.utraptype = 'pit';
         if ((game.u.uhp || 0) <= 0)
             fatalResult = heroDartTrapFatalResult(messages, 'killed by a land mine');
     }
@@ -47670,8 +47669,14 @@ function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
     convertLandmineToPit(trap);
     const fatalResult = applyHeroLandmineDamage(damage, messages);
     exerciseAttribute(A_DEX, false);
-    if (!fatalResult.fatal && !fatalResult.lifeSaving) messages.push('You fall into a pit!');
-    return { message: trapMessage(...messages), ...fatalResult };
+    if (fatalResult.fatal || fatalResult.lifeSaving)
+        return { message: trapMessage(...messages), ...fatalResult };
+    const pitResult = movementPitResult(trap, { recursive: true });
+    if (pitResult?.message) messages.push(pitResult.message);
+    return {
+        ...pitResult,
+        message: trapMessage(...messages),
+    };
 }
 
 function movementLandmineResult(trap) {
@@ -47695,6 +47700,11 @@ function steedPitName(steed, { poor = false, capital = false } = {}) {
         .replace(/^the /, '');
     if (poor) name = `poor ${name}`;
     return capital ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
+function recursiveSteedPitName(steed) {
+    const name = steedPitName(steed);
+    return steed?.givenName ? name : `the ${name}`;
 }
 
 function heroPitTrapState() {
@@ -47781,7 +47791,7 @@ function heroPitClingerResult(trap, prefix, alreadyKnown) {
     return { message: trapMessage(...messages) };
 }
 
-function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false } = {}) {
+function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false, recursive = false } = {}) {
     const alreadyKnown = !!trap?.tseen;
     const inSokoban = In_sokoban(game.u?.uz);
     if (!inSokoban && (game.u?.levitating || (game.u?.flying && !plunged && !viaSitting)))
@@ -47797,7 +47807,8 @@ function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false 
         const pitName = trap?.ttyp === SPIKED_PIT ? 'spiked pit' : 'pit';
         messages.push(`Air currents pull you down into ${pitOwnerArticle(trap)} ${pitName}!`);
     } else {
-        if (steed) messages.push(`You lead ${steedPitName(steed, { poor: true })} into ${pitOwnerArticle(trap)} pit!`);
+        if (steed && recursive) messages.push(`You and ${recursiveSteedPitName(steed)} fall into ${pitOwnerArticle(trap)} pit!`);
+        else if (steed) messages.push(`You lead ${steedPitName(steed, { poor: true })} into ${pitOwnerArticle(trap)} pit!`);
         else messages.push('You fall into a pit!');
     }
     if (relevantSpikes && heroWearingIronShoes()) {
@@ -47834,14 +47845,14 @@ function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false 
     };
 }
 
-function movementPitResult(trap) {
+function movementPitResult(trap, options = {}) {
     const alreadySeen = !!trap?.tseen;
     if (!In_sokoban(game.u?.uz) && (game.u?.levitating || game.u?.flying))
         return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
     if (alreadySeen && !In_sokoban(game.u?.uz)
         && sitTrapEscapeAllowed(trap) && !rn2(5))
         return { message: movementTrapEscapeMessage(trap), more: false };
-    return heroPitResult(trap, '');
+    return heroPitResult(trap, '', options);
 }
 
 function sitPitResult(trap, prefix) {
