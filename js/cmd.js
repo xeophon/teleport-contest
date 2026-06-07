@@ -20384,6 +20384,16 @@ function heroCanSpotBullwhipTarget(mon) {
         && couldsee(mon.mx, mon.my);
 }
 
+function heroCanSpotBullwhipPitMonster(mon) {
+    return !!mon && ((!game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my))
+        || sensesTelepathically(mon));
+}
+
+function bullwhipPitMonsterIsBigAnchor(mon) {
+    return !!mon && heroCanSpotBullwhipPitMonster(mon) && heroProjectileMonsterSizeValue(mon) >= 3;
+}
+
 function monsterWieldedWeapon(mon) {
     if (!mon) return null;
     const weapon = mon.mw || null;
@@ -20495,7 +20505,8 @@ function bullwhipPitBoulderAnchorAt(x, y) {
         isBoulderObject(obj) && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
 }
 
-function bullwhipPitAnchorName(x, y, loc) {
+function bullwhipPitAnchorName(x, y, loc, mon) {
+    if (bullwhipPitMonsterIsBigAnchor(mon)) return fireScrollMonsterName(mon).replace(/^The /, 'the ');
     if (bullwhipPitBoulderAnchorAt(x, y)) return 'a boulder';
     if (loc && IS_FURNITURE(loc.typ)) return 'something';
     return '';
@@ -20523,7 +20534,7 @@ function yankHeroOutOfPitTo(x, y) {
 
 async function finishHeroBullwhipPitDirection(rx, ry, targetLoc, mon) {
     if (!heroBullwhipPitTrapped()) return false;
-    const anchor = bullwhipPitAnchorName(rx, ry, targetLoc);
+    const anchor = bullwhipPitAnchorName(rx, ry, targetLoc, mon);
     if (!anchor) {
         if (mon) return false;
         await setMessage('Snap!');
@@ -20534,8 +20545,11 @@ async function finishHeroBullwhipPitDirection(rx, ry, targetLoc, mon) {
     const proficient = heroBullwhipProficiency();
     const messages = [`You wrap your bullwhip around ${anchor}.`];
     if (proficient && rn2(proficient + 2)) {
-        messages.push('You yank yourself out of the pit!');
-        if (!mon) yankHeroOutOfPitTo(rx, ry);
+        const spot = mon ? enextoMonsterSpot(rx, ry, heroFormData()) : { x: rx, y: ry };
+        if (spot) {
+            messages.push('You yank yourself out of the pit!');
+            yankHeroOutOfPitTo(spot.x, spot.y);
+        }
     } else {
         messages.push('The bullwhip slips free.');
     }

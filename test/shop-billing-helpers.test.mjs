@@ -69228,6 +69228,102 @@ test('proficient wielded bullwhip can yank hero out of pit via furniture', async
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(3)']);
 });
 
+test('proficient wielded bullwhip yanks hero near monster-occupied pit boulder anchor', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([1]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        utrap: 3,
+        utraptype: TT_PIT,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173251, 'bullwhip', 'w', 0);
+    const boulder = floorBoulder(876173252, { ox: 6, oy: 5 });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+    });
+    game.inventory = [whip];
+    game.level.objects = [boulder];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    const rngNames = getRngLog().map(rngCallName);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a boulder.  You yank yourself out of the pit!');
+    assert.equal(game.u.ux0, 5);
+    assert.equal(game.u.uy0, 5);
+    assert.notDeepEqual([game.u.ux, game.u.uy], [5, 5]);
+    assert.notDeepEqual([game.u.ux, game.u.uy], [6, 5]);
+    assert.ok(Math.max(Math.abs(game.u.ux - 6), Math.abs(game.u.uy - 5)) <= 3);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.u.umoved, true);
+    assert.equal(goblin.mx, 6);
+    assert.equal(goblin.my, 5);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(rngNames[0], 'rn2(3)');
+    assert.ok(rngNames.length > 1);
+});
+
+test('spotted big monster pit anchor overrides boulder and furniture', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Wizard';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        utrap: 3,
+        utraptype: TT_PIT,
+        seeInvisible: true,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173253, 'bullwhip', 'w', 0);
+    const boulder = floorBoulder(876173254, { ox: 6, oy: 5 });
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        mhp: 18,
+        mhpmax: 18,
+        msleeping: 1,
+        minvis: true,
+        mpeaceful: true,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', msize: 'large' },
+    });
+    game.inventory = [whip];
+    game.level.objects = [boulder];
+    game.level.monsters = [mimic];
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 6 && y === 5 ? SINK : ROOM });
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around the large mimic.  The bullwhip slips free.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 3);
+    assert.equal(game.u.utraptype, TT_PIT);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.mpeaceful, 0);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('f command autoquiver still beats wielded bullwhip fallback', async () => {
     installNonShopFloorState();
     initRng(2);
