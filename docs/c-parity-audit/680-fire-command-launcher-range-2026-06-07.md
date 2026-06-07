@@ -34,6 +34,6 @@
 
 ## Remaining Follow-Ups
 
-- Full `dofire()` fireassist parity still needs alternate-weapon swaps, known-cursed launcher filtering, autoquiver ranking, and polearm/whip fallbacks.
+- Full `dofire()` fireassist parity still needs empty-quiver autoquiver ranking, polearm/whip fallbacks, and the exact queued swap/wield/retry command lifecycle.
 - Audit 681 covers the first single-shot fired launcher-ammo monster hit/miss path, including quiet single-shot messages and fired-ammo strength suppression.
 - Full fired-projectile combat parity still needs C multishot, fireassist count handling, by-hand unmatched ammo monster hits, slung ammo variants, and broader adjacent/intervening hit handling routed through the shared hero projectile combat path.

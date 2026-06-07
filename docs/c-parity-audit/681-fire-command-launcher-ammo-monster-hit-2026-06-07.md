@@ -35,6 +35,6 @@
 
 ## Remaining Follow-Ups
 
-- Full `dofire()` fireassist parity still needs alternate-weapon swaps, known-cursed launcher filtering, autoquiver ranking, polearm/whip fallbacks, and explicit count handling.
+- Full `dofire()` fireassist parity still needs empty-quiver autoquiver ranking, polearm/whip fallbacks, the exact queued swap/wield/retry command lifecycle, and broader explicit count handling.
 - Full fired-projectile combat parity still needs C multishot calculation and per-shot looping, intervening monster handling beyond the first ordinary target, object mimic reveal, lethal cleanup/vampire-shifter revival, poisoned/silver/blessed launcher ammo variants, and broader passive-object fallout.
 - The current fired combat helper is intentionally limited to single hero-fired launcher ammo; by-hand unmatched ammo monster hits and slung gem/rock variants still need separate source-backed slices.

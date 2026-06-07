@@ -66607,6 +66607,94 @@ test('f command arrow with matching bow uses C ammo range increment', async () =
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('f command fireassist skips known cursed inventory launcher', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const cursedLauncher = bow(876173101, 'a', {
+        cursed: true,
+        bknown: true,
+        line: 'a - a cursed bow',
+    });
+    const missile = arrow(876174101, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const cleanLauncher = bow(876173102, 'c', {
+        bknown: true,
+        line: 'c - a bow',
+    });
+    game.inventory = [cursedLauncher, missile, cleanLauncher];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(cursedLauncher.wielded || false, false);
+    assert.equal(cleanLauncher.wielded, true);
+    assert.equal(game._fire_launcher_letter, 'c');
+    assert.match(game._pending_message, /^c - a bow \(weapon in right hand\)\.$/);
+});
+
+test('f command fireassist prefers known non-cursed launcher over unknown BUC match', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const unknownLauncher = bow(876173103, 'a', {
+        bknown: false,
+        line: 'a - a bow',
+    });
+    const missile = arrow(876174102, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    const knownLauncher = bow(876173104, 'c', {
+        bknown: true,
+        line: 'c - a bow',
+    });
+    game.inventory = [unknownLauncher, missile, knownLauncher];
+    game.level.monsters = [];
+
+    await rhack('f');
+
+    assert.equal(unknownLauncher.wielded || false, false);
+    assert.equal(knownLauncher.wielded, true);
+    assert.equal(game._fire_launcher_letter, 'c');
+    assert.match(game._pending_message, /^c - a bow \(weapon in right hand\)\.$/);
+});
+
+test('f command nofireassist carried bow leaves arrow on by-hand path', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.flags.fireassist = false;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    const launcher = bow(876173105, 'a', { line: 'a - a bow' });
+    const missile = arrow(876174103, 'b', { quivered: true, line: 'b - an arrow (in quiver)' });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game._fire_launcher_letter, null);
+    assert.equal(game._pending_message, 'In what direction?');
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a bow, so you throw your arrow by hand.");
+    assert.equal(launcher.wielded || false, false);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(100)']);
+});
+
 test('f command basic slung flint fires one stone', async () => {
     installNonShopFloorState();
     initRng(2);

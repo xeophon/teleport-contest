@@ -29,4 +29,4 @@
 ## Remaining Follow-Ups
 
 - By-hand slung rocks/gems, by-hand arrow/bolt poison details, object/furniture mimic reveal, and lethal special cleanup still need separate source-backed slices.
-- Full `dofire()` fireassist parity still needs alternate-weapon swaps, known-cursed launcher filtering, autoquiver ranking, polearm/whip fallbacks, and explicit count handling.
+- Full `dofire()` fireassist parity still needs empty-quiver autoquiver ranking, polearm/whip fallbacks, the exact queued swap/wield/retry command lifecycle, and broader explicit count handling.

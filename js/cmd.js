@@ -20215,6 +20215,33 @@ function heroThrowAmmoAndLauncher(ammo, launcher) {
     return !!ammoSkill && heroThrowLauncherSkill(launcher) === ammoSkill;
 }
 
+function heroFireassistBlessCurseKnown(item) {
+    return item?.bknown === true || (item?.bknown !== false
+        && /\b(?:blessed|uncursed|cursed)\b/.test(String(item?.line || '')));
+}
+
+function heroFireassistMatchingLauncher(projectile) {
+    const inventory = game.inventory || [];
+    const wielded = inventory.find(item =>
+        itemIsWielded(item) && heroThrowAmmoAndLauncher(projectile, item));
+    if (wielded) return wielded;
+    if (game.flags?.fireassist === false) return null;
+
+    const alternate = inventory.find(item =>
+        (item.alternate || item.line?.includes('alternate weapon'))
+        && heroThrowAmmoAndLauncher(projectile, item));
+    if (alternate) return alternate;
+
+    let unknownBucLauncher = null;
+    for (const item of inventory) {
+        if (!heroThrowAmmoAndLauncher(projectile, item)) continue;
+        if (item.cursed && heroFireassistBlessCurseKnown(item)) continue;
+        if (heroFireassistBlessCurseKnown(item)) return item;
+        unknownBucLauncher ??= item;
+    }
+    return unknownBucLauncher;
+}
+
 function heroWieldedThrowLauncher() {
     return (game.inventory || []).find(item =>
         (item.wielded || item.line?.includes('weapon in')) && heroThrowLauncherSkill(item));
@@ -69501,13 +69528,7 @@ export async function rhack(_cmd) {
             await setMessage("You have no ammunition readied.");
             return;
         }
-        let launcher = (game.inventory || []).find(item => {
-            return (item.wielded || item.line?.includes('weapon in'))
-                && heroThrowAmmoAndLauncher(projectile, item);
-        });
-        launcher ??= (game.inventory || []).find(item => {
-            return item.cls === 'weapon' && heroThrowAmmoAndLauncher(projectile, item);
-        });
+        const launcher = heroFireassistMatchingLauncher(projectile);
         let swapMoreLine = '';
         if (launcher && !(launcher.wielded || launcher.line?.includes('weapon in'))) {
             const launcherWasAlternate = launcher.alternate || launcher.line?.includes('alternate weapon');
