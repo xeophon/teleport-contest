@@ -6377,6 +6377,10 @@ function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
         d(6, 6);
         game.u.uhp = 0;
         game._death_cause = 'burned by molten lava';
+        game._command_mode = 'lavaDeathMore';
+        game.context ??= {};
+        game.context.move = 0;
+        game._pending_time_passed = 0;
         messages.push('You fall into the molten lava!  You burn to a crisp...');
         messages.push('You die...');
         return;
@@ -46464,10 +46468,11 @@ function restoreLifeSavedHeroForContinuation() {
 
 function finishLandminePitFalloutResult(messages, fatalResult, pitResult) {
     if (pitResult?.message) messages.push(pitResult.message);
+    const lavaDeath = game._command_mode === 'lavaDeathMore' && game._death_cause === 'burned by molten lava';
     return {
         ...pitResult,
         lifeSaving: pitResult?.fatal ? !!pitResult.lifeSaving : !!fatalResult.lifeSaving || !!pitResult.lifeSaving,
-        more: pitResult?.fatal ? !!pitResult.more : !!fatalResult.more || !!pitResult.more,
+        more: pitResult?.fatal ? !!pitResult.more : lavaDeath || !!fatalResult.more || !!pitResult.more,
         message: trapMessage(...messages),
     };
 }

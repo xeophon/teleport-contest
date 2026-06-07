@@ -12,14 +12,16 @@
 - `landminePostBlastTrap()` now runs the existing `earthquakeFillHoleType()` decision after the air/water-level deletion gate.
 - When the fill type is liquid, landmine fallout reuses `earthquakeLiquidFlow()` with a landmine-only optional fill message, then returns `null` so `movementPitResult(..., { recursive: true })` is skipped.
 - `earthquakeLiquidFlow()` keeps existing earthquake behavior by default; the new `fillMessage` option is only supplied by landmine fallout when the square is visible.
+- Lava-filled landmine pits set the existing `lavaDeathMore` continuation while the landmine trap result only requests a More prompt, so generic trap fatal handling does not replace the lava-specific death flow.
 
 ## Tests
 
 - `hero land mine adjacent moat fills pit before recursive fallout`
+- `hero land mine adjacent lava fills pit and uses lava death prompt`
 - Focused verification: `node --test --test-reporter=dot --test-name-pattern "land mine|landmine" test/shop-billing-helpers.test.mjs`
 
 ## Remaining Follow-Ups
 
-- Lava-dominant landmine liquid fill and flying `#sit` air-current liquid fill need separate canaries because hero consequences differ.
+- Flying `#sit` air-current liquid fill needs a separate canary because hero consequences differ from movement-triggered landmine fallout.
 - `maybe_dunk_boulders()`, `recalc_block_point()`, and `spot_checks()` after landmine blast liquid fill remain open.
 - Full `blow_up_landmine()` fallout remains partial: scatter, engraving deletion, wakeups, doors/drawbridges, and drawbridge destruction are outside this slice.

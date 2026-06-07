@@ -30705,6 +30705,52 @@ test('hero land mine adjacent moat fills pit before recursive fallout', async ()
     assert.equal(game.level.traps.includes(trap), false);
 });
 
+test('hero land mine adjacent lava fills pit and uses lava death prompt', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.inventory = [];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const cells = new Map([
+        ['6,5', targetLoc],
+        ['6,4', { roomno: ROOMOFFSET, typ: LAVAPOOL }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    markSquareVisible(6, 5);
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 1, 5, 5, 5, 5, 5, 5]);
+
+    await rhack('l');
+
+    assert.deepEqual(getRngLog().map(rngCallName),
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(2)', 'd(6,6)']);
+    assert.equal(game._pending_message,
+        'KAABLAMM!!!  You triggered a land mine!  The hole fills with lava!  You fall into the molten lava!  You burn to a crisp...  You die...');
+    assert.equal(game._message_more, 1);
+    assert.equal(targetLoc.typ, LAVAPOOL);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 0);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'deathAttributesPrompt');
+    assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
+});
+
 test('deferred hero land mine blast fills resulting pit with same-square boulder', async () => {
     installStableNonShopFloorState();
     vision_reset();
