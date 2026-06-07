@@ -22743,6 +22743,23 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { ki
     return true;
 }
 
+function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
+    if (!killAccessible || !treasureDrop) return;
+    if (corpseData.noCorpse || corpseData !== data) return;
+    if (mon.mx === game.u?.ux && mon.my === game.u?.uy) return;
+    if (data.mlet === 'Kop') return;
+    if (mon.mcloned) return;
+    const drop = mkobj_at(RANDOM_CLASS, mon.mx, mon.my, true);
+    const dropKind = String(drop?.kind || drop?.actualKind || '').replace(/^scroll labeled /, '').replace(/^potion of /, '');
+    const dropWeight = OBJECT_WEIGHTS[dropKind] ?? CLASS_WEIGHTS[drop?.cls] ?? drop?.owt ?? 0;
+    const humanSized = data.strong || data.armed || data.mlet === '@' || data.mlet === 'h' || data.mlet === 'G' || data.mlet === 'o';
+    const tooLarge = !humanSized && drop?.kind !== 'figurine' && dropWeight > 30;
+    if (drop?.foodRoll != null || tooLarge) {
+        rn2(100);
+        game.level.objects = (game.level?.objects || []).filter(obj => obj !== drop);
+    }
+}
+
 function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
     if (!mon || mon.dead) return;
     recordHeroKillConduct();
@@ -22772,11 +22789,12 @@ function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessa
         loc.remembered_glyph = null;
     }
     const killAccessible = loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ));
+    const treasureDrop = killAccessible ? !rn2(6) : false;
     let gasSporeExplosion = null;
     if (killAccessible && data.name === 'gas spore') {
-        rn2(6);
         gasSporeExplosion = queueGasSporeDeathExplosion(mon, { messages });
     }
+    maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop);
     if (gasSporeExplosion) {
         messages.more = true;
     } else if (killAccessible

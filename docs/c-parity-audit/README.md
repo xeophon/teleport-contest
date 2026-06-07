@@ -150,6 +150,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [144-metal-accessory-eataccessory-2026-05-29.md](144-metal-accessory-eataccessory-2026-05-29.md): metallivorous metal ring/amulet taste discovery, chance-gated accessory effects, and refreshed adjacent C-backed gaps.
 - [145-drawbridge-movement-terrain-2026-05-29.md](145-drawbridge-movement-terrain-2026-05-29.md): raised drawbridge movement under-terrain for floor, ice, lava, and moat prompts/fallout plus refreshed command, magic-bag, shop, and polymorph audit gaps.
 - [744-hero-projectile-gas-spore-invisible-cleanup-2026-06-08.md](744-hero-projectile-gas-spore-invisible-cleanup-2026-06-08.md): hero projectile gas spore death explosion, remembered invisible cleanup, and projectile More propagation.
+- [745-hero-projectile-random-treasure-2026-06-08.md](745-hero-projectile-random-treasure-2026-06-08.md): hero projectile `xkilled()` random treasure gate, drop filtering, and command-level forced treasure canary.
 
 ## Cross-Cutting Themes
 

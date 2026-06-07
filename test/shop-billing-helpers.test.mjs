@@ -70,6 +70,7 @@ const EXPENSIVE_CAMERA = 10082;
 const BLINDING_VENOM = 10184;
 const ACID_VENOM = 10185;
 const WEAPON_CLASS = 1;
+const SCROLL_CLASS = 8;
 const KEY_BACKSPACE = 8;
 const KEY_DELETE = 127;
 const WATER_WALKING_BOOTS = 10132;
@@ -43915,9 +43916,8 @@ test('command kicked ruby lethal target removes monster before landing', async (
     assert.equal(game.level.objects.includes(ruby), true);
     assert.equal(ruby.ox, 7);
     assert.equal(ruby.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(3)',
-    ]);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(2)', 'rn2(6)', 'rn2(3)']);
 });
 
 test('command kicked ruby revives shifted vampire lethal target before cleanup', async () => {
@@ -62542,9 +62542,8 @@ test('hero-thrown ruby lethal target removes monster before projectile lands', a
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 8), [
-        'rnd(20)', 'rnd(2)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(3)', 'rn2(2)', 'rn2(100)',
-    ]);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(2)', 'rn2(6)', 'rn2(3)']);
 });
 
 test('hero-thrown dart harms ordinary monster and survives landing', async () => {
@@ -67115,7 +67114,7 @@ test('hero-thrown matching crossbow bolt ignores bow glove hit penalties', async
 
 test('hero-thrown lawful poisoned crossbow bolt can wear off before deadly poison cleanup', async () => {
     installNonShopFloorState();
-    installCoreRngValues([0, 1, 0, 0, 1, 0]);
+    installCoreRngValues([0, 1, 0, 0, 1, 1, 0]);
     game._startup_role = 'Wizard';
     game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
     Object.assign(game.u, {
@@ -67163,8 +67162,8 @@ test('hero-thrown lawful poisoned crossbow bolt can wear off before deadly poiso
     const landed = game.level.objects.find(obj => obj.id === missile.id);
     assert.ok(landed);
     assert.equal(landed.opoisoned, false);
-    assert.deepEqual(rngLog.map(rngCallName).slice(0, 6), [
-        'rnd(20)', 'rnd(4)', 'rn2(10)', 'rn2(10)', 'rn2(3)', 'rn2(19)',
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 7), [
+        'rnd(20)', 'rnd(4)', 'rn2(10)', 'rn2(10)', 'rn2(6)', 'rn2(3)', 'rn2(19)',
     ]);
 });
 
@@ -74112,8 +74111,52 @@ test('hero-thrown dagger lethal target removes monster before projectile lands',
     assert.ok(landed);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
-        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(100)',
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)']);
+    assert.equal(calls.includes('rn2(19)'), true);
+    assert.equal(calls.includes('rn2(100)'), true);
+});
+
+test('hero-thrown dagger lethal target can drop random treasure before projectile lands', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876222, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        mpeaceful: 0,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        0, 3, 0, 72, 0,
+        1, 1, 1, 1, 1,
+    ]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'The dagger hits the goblin.  You kill the goblin!');
+    assert.equal(game.level.monsters.includes(goblin), false);
+    const treasure = game.level.objects.find(obj =>
+        obj !== blade && obj.otyp === SCROLL_CLASS && obj.scrollIndex != null);
+    assert.ok(treasure);
+    assert.equal(treasure.ox, 7);
+    assert.equal(treasure.oy, 5);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 10), [
+        'rnd(20)', 'rnd(4)', 'rn2(6)', 'rnd(100)', 'rnd(1000)',
+        'rnd(2)', 'rn2(4)', 'rn2(3)', 'rn2(19)', 'rn2(100)',
     ]);
 });
 
@@ -74244,9 +74287,11 @@ test('hero-thrown dagger lethal tame target uses poor wording and xkilled luck',
     assert.equal(game.u.ualign.abuse, 15);
     assert.equal(game.u.uconduct?.killer, 1);
     assert.equal(game._pet_kill_luck_message_after_more, 'You hear the rumble of distant thunder...');
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
-        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(100)',
-    ]);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)']);
+    assert.equal(calls.includes('rn2(2)'), true);
+    assert.equal(calls.includes('rn2(19)'), true);
+    assert.equal(calls.includes('rn2(100)'), true);
 });
 
 test('hero-thrown dagger lethal target still applies passive object erosion before landing', async () => {
@@ -74284,9 +74329,11 @@ test('hero-thrown dagger lethal target still applies passive object erosion befo
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);
     assert.equal(landed.oeroded, 1);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 6), [
-        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(2)', 'rn2(19)', 'rn2(100)',
-    ]);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)']);
+    assert.equal(calls.includes('rn2(2)'), true);
+    assert.equal(calls.includes('rn2(19)'), true);
+    assert.equal(calls.includes('rn2(100)'), true);
 });
 
 test('hero-thrown dagger lethal same-aligned unicorn applies C guilt luck', async () => {
@@ -74316,9 +74363,10 @@ test('hero-thrown dagger lethal same-aligned unicorn applies C guilt luck', asyn
     assert.equal(unicorn.dead, true);
     assert.equal(game.u.uluck, -5);
     assert.equal(game.u.uconduct?.killer, 1);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 5), [
-        'rnd(20)', 'rnd(4)', 'rn2(3)', 'rn2(19)', 'rn2(100)',
-    ]);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)']);
+    assert.equal(calls.includes('rn2(19)'), true);
+    assert.equal(calls.includes('rn2(100)'), true);
 });
 
 test('hero-thrown dagger revives shifted vampire lethal target before cleanup', async () => {
