@@ -20079,7 +20079,7 @@ function heroProjectileObjectHitAdjustment(obj, mon, { monNotices = true } = {})
     return adjustment;
 }
 
-function heroProjectileBaseHitValue(obj, mon) {
+function heroProjectileBaseHitValue(obj, mon, { bowGloveWeapon = heroWieldedThrowLauncher() } = {}) {
     const ux = game.u?.ux || 0;
     const uy = game.u?.uy || 0;
     const disttmp = Math.max(-4, 3 - distmin(ux, uy, mon?.mx ?? ux, mon?.my ?? uy));
@@ -20091,6 +20091,7 @@ function heroProjectileBaseHitValue(obj, mon) {
         + heroProjectileHitLevel()
         + heroProjectileDexHitBonus()
         + disttmp
+        + heroWieldedBowGloveHitPenalty(bowGloveWeapon)
         + heroProjectileObjectHitAdjustment(obj, mon);
 }
 
@@ -22320,10 +22321,9 @@ function heroLauncherAmmoData(obj) {
 }
 
 function heroFiredLauncherAmmoHitValue(obj, mon, launcher) {
-    let hitValue = heroProjectileBaseHitValue(obj, mon);
+    let hitValue = heroProjectileBaseHitValue(obj, mon, { bowGloveWeapon: launcher });
     if (!heroThrowAmmoAndLauncher(obj, launcher)) return hitValue - 4;
     const meta = heroLauncherSkillMeta(launcher);
-    hitValue += heroFiredLauncherBowGloveHitPenalty(launcher);
     hitValue += Math.trunc(Number(launcher?.spe || 0)) - objectGreatestErosion(launcher);
     if (Number.isFinite(Number(launcher?.hitbon ?? launcher?.oc_hitbon)))
         hitValue += Math.trunc(Number(launcher.hitbon ?? launcher.oc_hitbon));
@@ -22331,8 +22331,8 @@ function heroFiredLauncherAmmoHitValue(obj, mon, launcher) {
     return hitValue;
 }
 
-function heroFiredLauncherBowGloveHitPenalty(launcher) {
-    if (heroThrowLauncherSkill(launcher) !== 'bow') return 0;
+function heroWieldedBowGloveHitPenalty(weapon = heroWieldedThrowLauncher()) {
+    if (heroThrowLauncherSkill(weapon) !== 'bow') return 0;
     const gloves = wornGlovesItem();
     if (!gloves) return 0;
     const kind = armorKind(gloves);

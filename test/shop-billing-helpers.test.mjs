@@ -44177,6 +44177,55 @@ test('command kicked dagger harms ordinary monster and survives landing', async 
     ]);
 });
 
+test('command kicked dagger uses C wielded bow glove hit penalty', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([8, 1, 99]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 25;
+    game.u.acurr.a[A_DEX] = 10;
+    const launcher = bow(51203401, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const gloves = wornArmor(51203402, 'gauntlets of power', 'g');
+    const blade = {
+        ...dagger(51203403),
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mpeaceful: 1,
+    });
+    game.inventory = [launcher, gloves];
+    game.level.objects = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /The dagger misses the goblin\./);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 7);
+    assert.equal(blade.oy, 5);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 2), [
+        'rnd(20)', 'rn2(3)',
+    ]);
+    assert.equal(rngLog.some(call => rngCallName(call) === 'rnd(4)'), false);
+});
+
 test('command kicked knife harms ordinary monster and survives landing', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -62480,6 +62529,79 @@ test('hero-thrown dart harms ordinary monster and survives landing', async () =>
     ]);
 });
 
+test('hero-thrown dart uses C wielded bow glove hit penalty', async (t) => {
+    const cases = [
+        {
+            name: 'leather gloves keep the boundary hit',
+            weapon: bow(876136101, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' }),
+            gloves: wornArmor(876136102, 'leather gloves', 'g'),
+            expectHit: true,
+        },
+        {
+            name: 'gauntlets of power make the boundary miss',
+            weapon: bow(876136103, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' }),
+            gloves: wornArmor(876136104, 'gauntlets of power', 'g'),
+            expectHit: false,
+        },
+        {
+            name: 'gauntlets of power do not affect wielded crossbows',
+            weapon: crossbow(876136105, 'a', { wielded: true, line: 'a - a crossbow (weapon in right hand)' }),
+            gloves: wornArmor(876136106, 'gauntlets of power', 'g'),
+            expectHit: true,
+        },
+    ];
+
+    for (const [index, entry] of cases.entries()) {
+        await t.test(entry.name, async () => {
+            installNonShopFloorState();
+            installCoreRngValues(entry.expectHit ? [12, 1, 1, 99] : [12, 1, 99]);
+            Object.assign(game.u, {
+                ux: 5,
+                uy: 5,
+                ulevel: 1,
+                uluck: 0,
+                uhitinc: 0,
+                udaminc: 0,
+            });
+            game.u.acurr.a[A_STR] = 10;
+            game.u.acurr.a[A_DEX] = 10;
+            game.u.weapon_skills = [];
+            setHeroWeaponSkill(P_DART, P_BASIC);
+            const dart = dartStack(876136110 + index, 'd', 1);
+            const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+                mhp: 20,
+                mhpmax: 20,
+                msleeping: 0,
+                mpeaceful: 1,
+            });
+            game.inventory = [entry.weapon, dart, entry.gloves];
+            game.level.monsters = [goblin];
+            enableRngLog({ reset: true });
+
+            await rhack('t');
+            await rhack('d');
+            await rhack('l');
+
+            const rngLog = getRngLog();
+            if (entry.expectHit) {
+                const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
+                assert.match(game._pending_message, /The dart hits the goblin\./);
+                assert.equal(goblin.mhp, 20 - damageRoll);
+                assert.deepEqual(rngLog.map(rngCallName).slice(0, 4), [
+                    'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)',
+                ]);
+            } else {
+                assert.match(game._pending_message, /The dart misses the goblin\./);
+                assert.equal(goblin.mhp, 20);
+                assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+                    'rnd(20)', 'rn2(3)', 'rn2(100)',
+                ]);
+                assert.equal(rngLog.some(call => rngCallName(call) === 'rnd(3)'), false);
+            }
+        });
+    }
+});
+
 test('top-level throw count accepts single dart and forces one-shot volley', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -73266,6 +73388,54 @@ test('hero-thrown unmatched crossbow bolt can hit monster by hand after warning'
     assert.deepEqual(rngLog.map(rngCallName).slice(0, 5), [
         'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
     ]);
+});
+
+test('hero-thrown unmatched crossbow bolt uses wielded bow glove hit penalty by hand', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([6, 1, 99]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const launcher = bow(876175401, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const gloves = wornArmor(876175402, 'gauntlets of power', 'g');
+    const bolt = crossbowBolt(876175403, 'b', { line: 'b - a crossbow bolt' });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mpeaceful: 1,
+    });
+    game.inventory = [launcher, bolt, gloves];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a crossbow, so you throw your bolt by hand.");
+
+    await rhack(' ');
+
+    const rngLog = getRngLog();
+    assert.match(game._pending_message, /The crossbow bolt misses the goblin\./);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(game.inventory.includes(bolt), false);
+    const landed = game.level.objects.find(obj => obj.id === bolt.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(rngLog.map(rngCallName).slice(0, 3), [
+        'rnd(20)', 'rn2(3)', 'rn2(100)',
+    ]);
+    assert.equal(rngLog.some(call => rngCallName(call) === 'rnd(2)'), false);
 });
 
 test('hero-thrown poisoned unmatched crossbow bolt by hand respects monster poison resistance', async () => {
