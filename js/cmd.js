@@ -20146,7 +20146,7 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
     return { handled: true, hit: false, messages };
 }
 
-function heroKickedGemImpact(obj, mon) {
+async function heroKickedGemImpact(obj, mon) {
     if (!heroThrownGemClassObject(obj)) return { handled: false, messages: [] };
     const hitValue = heroKickedProjectileHitValue(obj, mon);
     const dieroll = rnd(20);
@@ -20155,7 +20155,7 @@ function heroKickedGemImpact(obj, mon) {
         const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`];
-        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -22531,7 +22531,7 @@ function heroThrownStackableWeaponMultishotCount(obj, shotLimit = 0) {
     return count;
 }
 
-function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
+async function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     const data = heroLauncherAmmoData(obj);
     if (!data) return { handled: false, messages: [] };
     const hitValue = heroFiredLauncherAmmoHitValue(obj, mon, launcher);
@@ -22561,8 +22561,8 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
         ];
         if (ammoDamage.silverMessage) messages.push(ammoDamage.silverMessage);
         messages.push(...poison.messagesAfterHit);
-        if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
-        else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (poison.deadly) await killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
+        else if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         messages.push(...poison.messagesAfterKill);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
@@ -22582,7 +22582,7 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     return { handled: true, hit: false, messages };
 }
 
-function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLauncher) {
+async function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLauncher) {
     const result = impact => ({
         handled: !!impact.handled,
         messages: impact.messages || [],
@@ -22593,10 +22593,10 @@ function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLaun
     });
     if (!targetMon) return { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
     if (firedFromLauncher) {
-        const impact = heroFiredLauncherAmmoImpact(obj, targetMon, launcher);
+        const impact = await heroFiredLauncherAmmoImpact(obj, targetMon, launcher);
         return result(impact);
     }
-    const ammoImpact = heroThrownByHandAmmoImpact(obj, targetMon, launcher);
+    const ammoImpact = await heroThrownByHandAmmoImpact(obj, targetMon, launcher);
     if (ammoImpact.handled) return result(ammoImpact);
     if (heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(obj)) {
         const unicornImpact = heroThrownUnicornGemImpact(obj, targetMon);
@@ -22623,11 +22623,11 @@ function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLaun
         return { handled: true, messages, consumed: false, hit: false, passiveTarget: null };
     }
     if (heroThrownGemClassObject(obj)) {
-        const gemImpact = heroThrownGemImpact(obj, targetMon);
+        const gemImpact = await heroThrownGemImpact(obj, targetMon);
         return result(gemImpact);
     }
     if (heroProjectileSupportedWeaponObject(obj)) {
-        const weaponImpact = heroThrownWeaponImpact(obj, targetMon);
+        const weaponImpact = await heroThrownWeaponImpact(obj, targetMon);
         return result(weaponImpact);
     }
     return { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
@@ -22653,7 +22653,7 @@ function heroThrownByHandAmmoDamage(obj, mon) {
     return { damage, silverMessage };
 }
 
-function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLauncher()) {
+async function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLauncher()) {
     if (!heroThrownByHandAmmoObject(obj, launcher)) return { handled: false, messages: [] };
     const hitValue = heroProjectileBaseHitValue(obj, mon) - 4;
     const dieroll = rnd(20);
@@ -22669,8 +22669,8 @@ function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLaunche
         ];
         if (ammoDamage.silverMessage) messages.push(ammoDamage.silverMessage);
         messages.push(...poison.messagesAfterHit);
-        if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
-        else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (poison.deadly) await killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
+        else if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         messages.push(...poison.messagesAfterKill);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
@@ -22760,7 +22760,27 @@ function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAc
     }
 }
 
-function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
+async function applyHeroKillLiveExperience(mon, messages) {
+    if (!game.u || !mon) return false;
+    const experience = monsterExperienceValue(mon);
+    game.u.uexp = (game.u.uexp || 0) + experience;
+    const oldLevel = game.u?.ulevel || 1;
+    const nextLevelExp = oldLevel < 10 ? 10 * (2 ** oldLevel)
+        : oldLevel < 20 ? 10000 * (2 ** (oldLevel - 10))
+            : 10000000 * (oldLevel - 19);
+    if (oldLevel >= 30 || (game.u?.uexp || 0) < nextLevelExp) return false;
+    game._level_change_target = oldLevel + 1;
+    await advanceExperienceLevel(true);
+    const abilityMessage = game._level_change_ability_prefix || '';
+    game._level_change_ability_prefix = '';
+    game._level_change_delayed_welcome = 0;
+    game._level_change_pending_message = '';
+    messages.push(`Welcome to experience level ${game.u?.ulevel || oldLevel + 1}.${abilityMessage ? `  ${abilityMessage}` : ''}`);
+    game._command_mode = null;
+    return true;
+}
+
+async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
     if (!mon || mon.dead) return;
     recordHeroKillConduct();
     if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage })) return;
@@ -22803,6 +22823,7 @@ function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessa
         createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
     }
     applyHeroProjectileKillLuckSideEffects(mon, messages);
+    await applyHeroKillLiveExperience(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
     newsym(mon.mx, mon.my);
 }
@@ -22889,7 +22910,7 @@ function heroThrownByHandAmmoPoisonApplies(obj, launcher) {
     return isPoisonableWeaponObject(obj) && heroThrownByHandAmmoObject(obj, launcher);
 }
 
-function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false } = {}) {
+async function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false } = {}) {
     if (!heroProjectileSupportedWeaponObject(obj)) return { handled: false, messages: [] };
     const dieroll = rnd(20);
     const targetName = heroThrownVenomTargetName(mon);
@@ -22904,8 +22925,8 @@ function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false 
         ];
         if (weaponDamage.silverMessage) messages.push(weaponDamage.silverMessage);
         messages.push(...poison.messagesAfterHit);
-        if (poison.deadly) killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
-        else if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (poison.deadly) await killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage: false });
+        else if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         messages.push(...poison.messagesAfterKill);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
@@ -22925,17 +22946,17 @@ function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false 
     return { handled: true, hit: false, messages };
 }
 
-function heroThrownWeaponImpact(obj, mon) {
+async function heroThrownWeaponImpact(obj, mon) {
     return heroProjectileWeaponImpact(obj, mon, heroThrownWeaponHitValue(obj, mon), {
         poisonApplies: heroThrownWeaponPoisonApplies(obj),
     });
 }
 
-function heroKickedWeaponImpact(obj, mon) {
+async function heroKickedWeaponImpact(obj, mon) {
     return heroProjectileWeaponImpact(obj, mon, heroKickedWeaponHitValue(obj, mon));
 }
 
-function heroThrownGemImpact(obj, mon) {
+async function heroThrownGemImpact(obj, mon) {
     if (!heroThrownGemClassObject(obj)) return { handled: false, messages: [] };
     const hitValue = heroThrownGemHitValue(obj, mon);
     const dieroll = rnd(20);
@@ -22944,7 +22965,7 @@ function heroThrownGemImpact(obj, mon) {
         const damage = rnd(2);
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}.`];
-        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
         exerciseHeroProjectileHitDexterity();
         const mulched = shouldMulchHeroProjectileMissile(obj);
@@ -22963,7 +22984,7 @@ function heroThrownGemImpact(obj, mon) {
     return { handled: true, hit: false, messages };
 }
 
-function heroThrownGlassGemImpact(obj, mon) {
+async function heroThrownGlassGemImpact(obj, mon) {
     if (!heroThrownGlassGemObject(obj)) return { handled: false, messages: [] };
     return heroThrownGemImpact(obj, mon);
 }
@@ -27244,7 +27265,7 @@ function heroAppliedPolearmCutWorm(mon, targetX, targetY, messages) {
     return { cut: true, tailLoss: true, removedSegments: oldTailSide.length };
 }
 
-function heroAppliedPolearmImpact(item, mon, { targetX = mon?.mx, targetY = mon?.my } = {}) {
+async function heroAppliedPolearmImpact(item, mon, { targetX = mon?.mx, targetY = mon?.my } = {}) {
     const hitValue = heroAppliedPolearmHitValue(item, mon);
     const dieroll = rnd(20);
     if (hitValue >= dieroll) {
@@ -27253,7 +27274,7 @@ function heroAppliedPolearmImpact(item, mon, { targetX = mon?.mx, targetY = mon?
         const damage = heroAppliedPolearmHitDamage(item, mon);
         if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`You hit ${targetName}${heroProjectileHitPunctuation(damage)}`];
-        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if ((mon.mhp || 0) <= 0) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         let cutWorm = null;
         if (!mon.dead) {
             wakeMonsterFromHeroThrownHit(mon);
@@ -27308,7 +27329,7 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
         }
         const messages = [];
         const freeSnickersneeHit = beginHeroSnickersneeDistanceAttack(item, messages);
-        const impact = heroAppliedPolearmImpact(item, mon, { targetX: x, targetY: y });
+        const impact = await heroAppliedPolearmImpact(item, mon, { targetX: x, targetY: y });
         messages.push(...(impact.messages || []));
         await setMessage(messages.join('  '), messages.length > 1);
         if (mon.mx !== x || mon.my !== y) newsym(mon.mx, mon.my);
@@ -33514,8 +33535,8 @@ async function kickFloorObjectToward(dir, x, y) {
     if (canHandleMonsterImpact) {
         monsterImpact = heroThrownUnicornGemImpact(obj, targetMon);
         if (!monsterImpact.handled) monsterImpact = heroKickedStoneMissileRockPasserImpact(obj, targetMon);
-        if (!monsterImpact.handled) monsterImpact = heroKickedGemImpact(obj, targetMon);
-        if (!monsterImpact.handled) monsterImpact = heroKickedWeaponImpact(obj, targetMon);
+        if (!monsterImpact.handled) monsterImpact = await heroKickedGemImpact(obj, targetMon);
+        if (!monsterImpact.handled) monsterImpact = await heroKickedWeaponImpact(obj, targetMon);
     }
     if (monsterImpact.handled) {
         removeFloorObject(obj);
@@ -46807,27 +46828,7 @@ function saveDeathBonesIfNeeded() {
     vfsWriteFile(bonesPath, encodeBonesLevel());
 }
 
-export function recordVanquished(mon, awardExperience = true) {
-    const name = mon?.data?.name || mon?.name || mon?.corpsenm?.name;
-    if (!name) return;
-    if (mon._vanquished_recorded) return;
-    mon._vanquished_recorded = 1;
-    game._vanquished_counts ??= {};
-    game._vanquished_counts[name] = (game._vanquished_counts[name] || 0) + 1;
-    game._vanquished_total = Object.values(game._vanquished_counts).reduce((sum, count) => sum + count, 0);
-    game._vanquished = Object.entries(game._vanquished_counts)
-        .sort(([nameA], [nameB]) => {
-            const monA = VANQUISHED_MONSTER_DATA.get(nameA) || { mlevel: 0, index: 9999 };
-            const monB = VANQUISHED_MONSTER_DATA.get(nameB) || { mlevel: 0, index: 9999 };
-            return (monB.mlevel - monA.mlevel) || (monA.index - monB.index) || nameA.localeCompare(nameB);
-        })
-        .map(([monName, count]) => {
-            if (count === 1) return `${/^[aeiou]/i.test(monName) ? 'an' : 'a'} ${monName}`;
-            const plural = monName.endsWith('s') ? `${monName}es`
-                : monName.endsWith('y') ? `${monName.slice(0, -1)}ies`
-                : `${monName}s`;
-            return `${count} ${plural}`;
-        });
+function monsterExperienceValue(mon) {
     const data = mon?.data || {};
     const level = Math.max(0, mon?.m_lev ?? mon?.mlevel ?? data.mlevel ?? 0);
     const speed = data.mmove ?? NORMAL_SPEED;
@@ -46851,6 +46852,31 @@ export function recordVanquished(mon, awardExperience = true) {
         else if (damageType !== 'phys') experience += level;
         if ((monsterAttack.dice ?? 0) * (monsterAttack.sides ?? 0) > 23) experience += level;
     }
+    return experience;
+}
+
+export function recordVanquished(mon, awardExperience = true) {
+    const name = mon?.data?.name || mon?.name || mon?.corpsenm?.name;
+    if (!name) return;
+    if (mon._vanquished_recorded) return;
+    mon._vanquished_recorded = 1;
+    game._vanquished_counts ??= {};
+    game._vanquished_counts[name] = (game._vanquished_counts[name] || 0) + 1;
+    game._vanquished_total = Object.values(game._vanquished_counts).reduce((sum, count) => sum + count, 0);
+    game._vanquished = Object.entries(game._vanquished_counts)
+        .sort(([nameA], [nameB]) => {
+            const monA = VANQUISHED_MONSTER_DATA.get(nameA) || { mlevel: 0, index: 9999 };
+            const monB = VANQUISHED_MONSTER_DATA.get(nameB) || { mlevel: 0, index: 9999 };
+            return (monB.mlevel - monA.mlevel) || (monA.index - monB.index) || nameA.localeCompare(nameB);
+        })
+        .map(([monName, count]) => {
+            if (count === 1) return `${/^[aeiou]/i.test(monName) ? 'an' : 'a'} ${monName}`;
+            const plural = monName.endsWith('s') ? `${monName}es`
+                : monName.endsWith('y') ? `${monName.slice(0, -1)}ies`
+                : `${monName}s`;
+            return `${count} ${plural}`;
+        });
+    const experience = monsterExperienceValue(mon);
     if (!awardExperience) return;
     game.u.urexp = (game.u.urexp || 0) + 4 * experience;
     if (!game.u?.ualign) return;
@@ -54107,46 +54133,8 @@ async function moveHero(dx, dy) {
                 ? 'You hear the studio audience applaud!'
                 : 'You hear the rumble of distant thunder...';
         }
-        {
-            const level = mon.m_lev ?? data.mlevel ?? 0;
-            const speed = data.mmove ?? NORMAL_SPEED;
-            const attacks = data.xpAttacks || data.attacks || (data.attack ? [data.attack] : []);
-            const hasWeaponAttack = attacks.some(monsterAttack =>
-                (monsterAttack.aatyp || (monsterAttack.weapon ? 'weap' : '')) === 'weap');
-            let experience = 1 + level * level
-                + (speed > NORMAL_SPEED ? speed > (3 * NORMAL_SPEED / 2) ? 5 : 3 : 0)
-                + ((data.armed || data.attack?.weapon) && !hasWeaponAttack ? 5 : 0)
-                + (data.xpAttackBonus || 0);
-            const monsterAc = data.mac ?? 10;
-            if (monsterAc < 3) experience += (7 - monsterAc) * (monsterAc < 0 ? 2 : 1);
-            for (const monsterAttack of attacks) {
-                const attackType = monsterAttack.aatyp || (monsterAttack.weapon ? 'weap' : '');
-                if (attackType === 'weap') experience += 5;
-                else if (attackType === 'magc') experience += 10;
-                else if (XP_SPECIAL_ATTACK_TYPES.has(attackType)) experience += 3;
-                const damageType = monsterAttack.adtyp || 'phys';
-                if (XP_DOUBLE_DAMAGE_TYPES.has(damageType)) experience += 2 * level;
-                else if (XP_FLAT_DAMAGE_TYPES.has(damageType)) experience += 50;
-                else if (damageType !== 'phys') experience += level;
-                if ((monsterAttack.dice ?? 0) * (monsterAttack.sides ?? 0) > 23) experience += level;
-            }
-            game.u.uexp = (game.u.uexp || 0) + experience;
-            const oldLevel = game.u?.ulevel || 1;
-            const nextLevelExp = oldLevel < 10 ? 10 * (2 ** oldLevel)
-                : oldLevel < 20 ? 10000 * (2 ** (oldLevel - 10))
-                    : 10000000 * (oldLevel - 19);
-            if (oldLevel < 30 && (game.u?.uexp || 0) >= nextLevelExp) {
-                game._level_change_target = oldLevel + 1;
-                await advanceExperienceLevel(true);
-                const abilityMessage = game._level_change_ability_prefix || '';
-                game._level_change_ability_prefix = '';
-                game._level_change_delayed_welcome = 0;
-                game._level_change_pending_message = '';
-                messages.push(`Welcome to experience level ${game.u?.ulevel || oldLevel + 1}.${abilityMessage ? `  ${abilityMessage}` : ''}`);
-                game._command_mode = null;
-                await setMessage(messages.join('  '));
-            }
-        }
+        if (await applyHeroKillLiveExperience(mon, messages))
+            await setMessage(messages.join('  '));
         game.level.monsters = (game.level?.monsters || []).filter(mtmp => mtmp !== mon);
         newsym(mon.mx, mon.my);
         game._run_stop_now = 1;
@@ -70067,7 +70055,7 @@ export async function rhack(_cmd) {
                 const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, flight, impactMessages);
                 const shotUsesImpact = heroFireProjectileTargetUsesImpact(projectileObject, targetMon, launcher, firedFromLauncher);
                 const impact = !barsResult.handled && shotUsesImpact
-                    ? heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher)
+                    ? await heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
                 if (impact.more) projectileImpactMore = true;
@@ -70117,7 +70105,7 @@ export async function rhack(_cmd) {
             const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, initialFlight, projectileImpactMessages);
             if (barsResult.handled) impactMessage = projectileImpactMessages.join('  ');
             if (!barsResult.handled && targetMon) {
-                const impact = heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher);
+                const impact = await heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher);
                 if (impact.handled) {
                     impactMessage = (impact.messages || []).join('  ');
                     impactConsumedProjectile = !!impact.consumed;
@@ -71155,7 +71143,7 @@ export async function rhack(_cmd) {
                 if (itemQuantity - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
                 const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, flight, impactMessages);
                 const impact = !barsResult.handled && targetMon
-                    ? heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, directLauncherAmmo)
+                    ? await heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, directLauncherAmmo)
                     : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
                 if (impact.handled) impactMessages.push(...impact.messages);
                 if (impact.more) projectileImpactMore = true;
@@ -71366,7 +71354,7 @@ export async function rhack(_cmd) {
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
         } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
-            const ammoImpact = heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
+            const ammoImpact = await heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
             impactMessage = (ammoImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!ammoImpact.mulched;
             impactObjectHit = !!ammoImpact.hit;
@@ -71394,21 +71382,21 @@ export async function rhack(_cmd) {
                 impactMessage = messages.join('  ');
             }
         } else if (targetMon && heroThrownGemClassObject(item)) {
-            const gemImpact = heroThrownGemImpact(thrownObject, targetMon);
+            const gemImpact = await heroThrownGemImpact(thrownObject, targetMon);
             impactMessage = (gemImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
             if (gemImpact.more) projectileImpactMore = true;
         } else if (targetMon && heroThrownByHandAmmoObject(item, throwLauncher)) {
-            const ammoImpact = heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
+            const ammoImpact = await heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
             impactMessage = (ammoImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!ammoImpact.mulched;
             impactObjectHit = !!ammoImpact.hit;
             impactPassiveTarget = ammoImpact.hit ? targetMon : null;
             if (ammoImpact.more) projectileImpactMore = true;
         } else if (targetMon && heroProjectileSupportedWeaponObject(item)) {
-            const weaponImpact = heroThrownWeaponImpact(thrownObject, targetMon);
+            const weaponImpact = await heroThrownWeaponImpact(thrownObject, targetMon);
             impactMessage = (weaponImpact.messages || []).join('  ');
             impactConsumedThrownObject = !!weaponImpact.mulched;
             impactObjectHit = !!weaponImpact.hit;

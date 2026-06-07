@@ -43879,6 +43879,7 @@ test('command kicked ruby lethal target removes monster before landing', async (
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
     game.u.urexp = 0;
+    game.u.uexp = 0;
     const ruby = floorGem(512229, 'ruby', {
         ox: 6,
         oy: 5,
@@ -43909,6 +43910,7 @@ test('command kicked ruby lethal target removes monster before landing', async (
     assert.equal(goblin.dead, true);
     assert.equal(game._vanquished_counts?.goblin, 1);
     assert.equal(game.u.urexp > 0, true);
+    assert.equal(game.u.uexp > 0, true);
     const dropped = game.level.objects.find(obj => obj.id === carried.id);
     assert.ok(dropped);
     assert.equal(dropped.ox, 7);
@@ -43923,7 +43925,9 @@ test('command kicked ruby lethal target removes monster before landing', async (
 test('command kicked ruby revives shifted vampire lethal target before cleanup', async () => {
     installNonShopFloorState();
     initRng(2);
-    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    Object.assign(game.u, { ulevel: 20, uexp: 12345, uluck: 10, uhitinc: 10 });
+    const oldLevel = game.u.ulevel;
+    const oldLiveExperience = game.u.uexp;
     game.u.acurr.a[A_STR] = 25;
     game.u.acurr.a[A_DEX] = 25;
     const ruby = floorGem(512231, 'ruby', {
@@ -43973,6 +43977,8 @@ test('command kicked ruby revives shifted vampire lethal target before cleanup',
     assert.equal(bat.mhp, bat.mhpmax);
     assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
     assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game.u.ulevel, oldLevel);
+    assert.equal(game.u.uexp, oldLiveExperience);
     assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
     assert.equal(game._chronicle_first_kill, 1);
     assert.equal(game.level.objects.includes(ruby), true);
@@ -74077,6 +74083,7 @@ test('hero-thrown dagger lethal target removes monster before projectile lands',
     game.u.acurr.a[A_STR] = 10;
     game.u.acurr.a[A_DEX] = 25;
     game.u.urexp = 0;
+    game.u.uexp = 0;
     const blade = dagger(876129, 'd');
     const carried = { id: 876134, cls: 'food', kind: 'food ration', quan: 1 };
     const goblin = ordinaryThrowTarget('goblin', 7, 5, {
@@ -74102,11 +74109,52 @@ test('hero-thrown dagger lethal target removes monster before projectile lands',
     assert.equal(game._vanquished_counts?.goblin, 1);
     assert.equal(game.u.uconduct?.killer, 1);
     assert.equal(game.u.urexp > 0, true);
+    assert.equal(game.u.uexp > 0, true);
     assert.equal(game.inventory.includes(blade), false);
     const dropped = game.level.objects.find(obj => obj.id === carried.id);
     assert.ok(dropped);
     assert.equal(dropped.ox, 7);
     assert.equal(dropped.oy, 5);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    const calls = getRngLog().map(rngCallName);
+    assert.deepEqual(calls.slice(0, 4), ['rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)']);
+    assert.equal(calls.includes('rn2(19)'), true);
+    assert.equal(calls.includes('rn2(100)'), true);
+});
+
+test('hero-thrown dagger lethal target grants live experience and can level before landing', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 1, uexp: 18, urexp: 0, uluck: 10, uhitinc: 30, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const oldHpMax = game.u.uhpmax;
+    const blade = dagger(876223, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+        mpeaceful: 0,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The dagger hits the goblin\.  You kill the goblin!/);
+    assert.match(game._pending_message, /Welcome to experience level 2\./);
+    assert.equal(game.u.ulevel, 2);
+    assert.equal(game.u.uexp >= 20, true);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal(game.u.uhpmax > oldHpMax, true);
+    assert.equal(game.level.monsters.includes(goblin), false);
     const landed = game.level.objects.find(obj => obj.id === blade.id);
     assert.ok(landed);
     assert.equal(landed.ox, 7);
@@ -74372,7 +74420,9 @@ test('hero-thrown dagger lethal same-aligned unicorn applies C guilt luck', asyn
 test('hero-thrown dagger revives shifted vampire lethal target before cleanup', async () => {
     installStableNonShopFloorState();
     initRng(2);
-    Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10, udaminc: 0 });
+    Object.assign(game.u, { ulevel: 20, uexp: 12345, uluck: 10, uhitinc: 10, udaminc: 0 });
+    const oldLevel = game.u.ulevel;
+    const oldLiveExperience = game.u.uexp;
     game.u.acurr.a[A_STR] = 10;
     game.u.acurr.a[A_DEX] = 25;
     const blade = dagger(876131, 'd');
@@ -74436,6 +74486,8 @@ test('hero-thrown dagger revives shifted vampire lethal target before cleanup', 
     assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
     assert.equal(targetLoc.map_invisible, true);
     assert.notEqual(targetLoc.remembered_glyph, null);
+    assert.equal(game.u.ulevel, oldLevel);
+    assert.equal(game.u.uexp, oldLiveExperience);
     assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
     assert.equal(game._vanquished_counts?.vampire || 0, 0);
     assert.equal(game._vanquished_total || 0, 0);
