@@ -62264,6 +62264,189 @@ test('attached ball throw onto occupied hole leaves hero behind without shaft ef
     assert.equal(game._deferred_level_goto || null, null);
 });
 
+test('attached ball fallback relocation triggers web on new hero square', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, { ux: 5, uy: 5, upunished: true });
+    game.u.acurr.a[A_STR] = 18;
+    const ball = carriedAttachedIronBall(876212, 'b');
+    const chain = attachedIronChain(876213);
+    const web = { ttyp: WEB, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [web];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You stumble into a spider web!');
+    assert.equal(web.tseen, true);
+    assert.equal(game.u.utrap, 1);
+    assert.equal(game.u.utraptype, 'web');
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation triggers sleep gas on new hero square', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, { ux: 5, uy: 5, upunished: true });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876220, 'b');
+    const chain = attachedIronChain(876221);
+    const gas = { ttyp: SLP_GAS_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [gas];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'A cloud of gas puts you to sleep!');
+    assert.equal(gas.tseen, true);
+    assert.equal((game._helpless_time || 0) > 0, true);
+    assert.equal((game._sleeping_time || 0) > 0, true);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation triggers land mine on new hero square', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876214, 'b');
+    const chain = attachedIronChain(876215);
+    const mine = { ttyp: LANDMINE, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [mine];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /KAABLAMM!!!  You triggered a land mine!/);
+    assert.equal(mine.ttyp, PIT);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+});
+
+test('attached ball fallback relocation triggers arrow trap on new hero square', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876216, 'b');
+    const chain = attachedIronChain(876217);
+    const arrowTrap = { ttyp: ARROW_TRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [arrowTrap];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /An arrow shoots out at you!/);
+    assert.equal(arrowTrap.tseen, true);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+});
+
+for (const { name, trap, cell } of [
+    { name: 'pool', cell: { roomno: 0, typ: POOL } },
+    { name: 'pit', trap: { ttyp: PIT, tx: 6, ty: 5, tseen: false, madeby_u: false } },
+    { name: 'hole', trap: { ttyp: HOLE, tx: 6, ty: 5, tseen: false, madeby_u: false } },
+]) {
+    test(`levitating attached ball landing on ${name} leaves hero behind without ball-square effects`, async () => {
+        installNonShopFloorState();
+        initRng(2);
+        game.sokoban_dnum = 999;
+        Object.assign(game.u, {
+            ux: 5,
+            uy: 5,
+            upunished: true,
+            levitating: true,
+        });
+        game.u.acurr.a[A_STR] = STR19(25);
+        const ball = carriedAttachedIronBall(876218, 'b');
+        const chain = attachedIronChain(876219);
+        if (cell) {
+            const cells = new Map([['6,5', cell]]);
+            game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+        }
+        if (trap) game.level.traps = [trap];
+        game.u.uball = ball;
+        game.u.uchain = chain;
+        game.inventory = [ball];
+        game.level.objects = [chain];
+
+        await rhack('t');
+        await rhack('b');
+        await rhack('l');
+
+        assert.doesNotMatch(game._pending_message || '', /pool of water|sink like a rock|crawl out|fall into a pit|gaping hole|trap door/);
+        assert.equal(game.u.utrap || 0, 0);
+        if (trap) assert.equal(trap.tseen, false);
+        assert.equal(game._relocate_after_more || null, null);
+        assert.equal(game._deferred_level_goto || null, null);
+        assert.equal(game.u.ux, 5);
+        assert.equal(game.u.uy, 5);
+        assert.equal(ball.ox, 6);
+        assert.equal(ball.oy, 5);
+        assert.equal(chain.ox, 5);
+        assert.equal(chain.oy, 5);
+    });
+}
+
 test('levitating hero-thrown arrow with matching bow uses C ammo range increment', async () => {
     installNonShopFloorState();
     initRng(2);

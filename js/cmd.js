@@ -20160,6 +20160,13 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
     let result = null;
     if ([HOLE, TRAPDOOR].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
+    else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
+    else if (trap.ttyp === WEB) result = movementWebTrapResult(trap);
+    else if (trap.ttyp === BEAR_TRAP) result = movementBearTrapResult(trap);
+    else if (trap.ttyp === LANDMINE) result = movementLandmineResult(trap);
+    else if (trap.ttyp === POLY_TRAP) result = movementPolyTrapResult(trap);
+    else if (trap.ttyp === ARROW_TRAP) result = heroArrowTrapResult(trap, '', !!trap.tseen);
+    else if (trap.ttyp === DART_TRAP) result = heroDartTrapResult(trap, '', !!trap.tseen);
     if (!trapResultHasEffect(result)) return { more: false, trapResult: null };
 
     if (result.message) messages.push(result.message);

@@ -25,5 +25,5 @@
 ## Remaining Follow-Ups
 
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
-- Levitating pool/pit/hole landing canaries remain open.
-- Broader extraction of ordinary movement `spoteffects(TRUE)` behavior for other trap types after attached-ball fallback relocation remains open.
+- Levitating pool/pit/hole landing canaries were added in `654-attached-ball-fallback-trap-effects-2026-06-07.md`.
+- Ordinary movement trap coverage after attached-ball fallback relocation was started in `654-attached-ball-fallback-trap-effects-2026-06-07.md`; full trap-class extraction remains open.
