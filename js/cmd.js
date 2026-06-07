@@ -20387,6 +20387,10 @@ async function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
 
     game.u.ux0 = oldUx;
     game.u.uy0 = oldUy;
+    if (game.u.blind) {
+        game.u._bcFelt = 0;
+        delete game.u._bcFeltGlyph;
+    }
     game.u.ux = newUx;
     game.u.uy = newUy;
     game.u.uchain.ox = newUx;
