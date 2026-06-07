@@ -19993,6 +19993,11 @@ function heroProjectileObjectHitval(obj) {
     return bonus;
 }
 
+function heroHeavyIronBallObject(obj) {
+    const kind = objectKindKey(obj);
+    return obj?.otyp === HEAVY_IRON_BALL || kind === 'heavy iron ball' || kind === 'iron ball';
+}
+
 function heroProjectileObjectHitAdjustment(obj, mon, { monNotices = true } = {}) {
     const data = mon?.data || {};
     let adjustment = heroProjectileMonsterSizeValue(mon) - 2;
@@ -20006,7 +20011,7 @@ function heroProjectileObjectHitAdjustment(obj, mon, { monNotices = true } = {})
             mon.mfrozen = 0;
         }
     }
-    if (obj?.otyp === HEAVY_IRON_BALL && obj !== game.u?.uball) adjustment += 2;
+    if (heroHeavyIronBallObject(obj) && obj !== game.u?.uball) adjustment += 2;
     else if (obj?.otyp === BOULDER || objectKindKey(obj) === 'boulder') adjustment += 6;
     else {
         adjustment += heroProjectileObjectHitval(obj);
@@ -20224,7 +20229,7 @@ function heroThrowCondensedStrength() {
 
 function heroHorizontalThrowWeightedRange(obj, urangeBase = null) {
     const baseRange = urangeBase ?? Math.max(0, Math.trunc(heroThrowCondensedStrength() / 2));
-    const heavyIronBall = obj?.otyp === HEAVY_IRON_BALL || objectKindKey(obj) === 'heavy iron ball';
+    const heavyIronBall = heroHeavyIronBallObject(obj);
     const weightDivisor = heavyIronBall ? 100 : 40;
     let range = baseRange - Math.trunc(globObjectWeight({ ...obj, quan: 1 }) / weightDivisor);
     if (heroThrownAttachedBallObject(obj)) {
@@ -23095,7 +23100,7 @@ function heroThrownIronBarsClassHitObject(obj) {
             'wax candle', 'lenses', 'tin whistle', 'magic whistle'].includes(kind);
     }
     if (cls === 'wand' || cls === 'spellbook' || cls === 'ball' || cls === 'chain') return true;
-    if (kind === 'boulder' || kind === 'heavy iron ball' || kind === 'iron ball') return true;
+    if (kind === 'boulder' || heroHeavyIronBallObject(obj)) return true;
     if (kind === 'meat stick' || kind === 'enormous meatball') return true;
     return heroThrownIronBarsBreakableClassHitObject(obj);
 }
@@ -23104,7 +23109,7 @@ function heroThrownIronBarsImpactSound(obj) {
     if (heroIsDeaf()) return '';
     const kind = objectKindKey(obj);
     const material = String(obj?.material || obj?.oc_material || '').toLowerCase().replace(/^hi_/, '');
-    if (kind === 'boulder' || kind === 'heavy iron ball') return 'Whang!';
+    if (kind === 'boulder' || heroHeavyIronBallObject(obj)) return 'Whang!';
     if (heroThrownIronBarsHarmlessMissileObject(obj)) return 'Whap!';
     if (heroThrownIronBarsFlimsyObject(obj, material)) return 'Flapp!';
     if (material === 'gold' || material === 'silver' || /\bsilver\b|\bgold(?:en)?\b/.test(kind)) return 'Clink!';
@@ -23128,11 +23133,42 @@ function heroThrownIronBarsFlimsyObject(obj, material = '') {
     return /\b(?:cream pie|candy bar|shirt|robe|cloak|leather)\b/.test(kind);
 }
 
+function dissolveHeroBrokenIronBars(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc || loc.typ !== IRONBARS) return false;
+    loc.typ = loc.edge ? DOOR : (loc.roomno ?? 0) >= ROOMOFFSET ? ROOM : CORR;
+    loc.flags = 0;
+    loc.doormask = D_NODOOR;
+    loc.wall_info = 0;
+    newsym(x, y);
+    return true;
+}
+
+function heroThrownIronBarsBreakApartChance(obj) {
+    const kind = objectKindKey(obj);
+    const isHeavyIronBall = heroHeavyIronBallObject(obj);
+    if (kind !== 'war hammer' && !isHeavyIronBall) return 0;
+    const ironBallWeight = Math.trunc(Number(obj?.owt || 0)) || WT_IRON_BALL_BASE;
+    const spe = isHeavyIronBall
+        ? Math.trunc(ironBallWeight / WT_IRON_BALL_INCR)
+        : Math.trunc(Number(obj?.spe || 0));
+    return Math.max(2, 60 - heroThrowCondensedStrength() - spe);
+}
+
+function appendHeroThrownIronBarsBreakApart(obj, impact, messages) {
+    const chance = heroThrownIronBarsBreakApartChance(obj);
+    if (!chance || rn2(chance) !== 0) return false;
+    messages.push('You break the bars apart!');
+    return dissolveHeroBrokenIronBars(impact?.barsX, impact?.barsY);
+}
+
 async function heroThrownIronBarsImpact(obj, impact) {
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) {
         const sound = heroThrownIronBarsImpactSound(obj);
-        return { broke: false, messages: sound ? [sound] : [] };
+        const messages = sound ? [sound] : [];
+        appendHeroThrownIronBarsBreakApart(obj, impact, messages);
+        return { broke: false, messages };
     }
     const messages = [];
     projectileTopLevelBreakMessage(obj, breakKind, messages);

@@ -24,6 +24,6 @@ Hero-thrown nonbreaking iron-bars impacts used `Whang`, `Clink`, or fallback `Cl
 
 ## Remaining
 
-- Hero-thrown `Whang!` for boulders/heavy iron balls.
+- Hero-thrown `Whang!` canary for boulders.
 - Silver/gold `Clink!` canaries for hero-thrown bars hits.
 - Forced bars-hit multishot mixes where later projectiles continue after an earlier `Whap`/`Flapp`.

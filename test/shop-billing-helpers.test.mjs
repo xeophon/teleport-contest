@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -61693,12 +61693,14 @@ test('hero-thrown pyrolisk egg direct hit explodes at monster square', async () 
     ]);
 });
 
-function installHeroThrowIronBarsState() {
+function installHeroThrowIronBarsState({ barsX = 7, barsY = 5, barsLoc = null } = {}) {
     installNonShopFloorState();
     const baseAt = game.level.at;
-    game.level.at = (x, y) => (x === 7 && y === 5 ? { typ: IRONBARS, roomno: ROOMOFFSET } : baseAt(x, y));
-    markSquareVisible(6, 5);
-    markSquareVisible(7, 5);
+    const ironBarsCell = barsLoc || { typ: IRONBARS, roomno: ROOMOFFSET };
+    game.level.at = (x, y) => (x === barsX && y === barsY ? ironBarsCell : baseAt(x, y));
+    markSquareVisible(barsX - 1, barsY);
+    markSquareVisible(barsX, barsY);
+    return ironBarsCell;
 }
 
 test('hero-thrown crystal ball shatters against iron bars before landing', async () => {
@@ -61765,6 +61767,102 @@ test('hero-thrown dagger clonks iron bars before landing', async () => {
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(5)', 'rn2(100)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown war hammer can break iron bars apart before landing', async () => {
+    const barsLoc = installHeroThrowIronBarsState();
+    installCoreRngValues([1, 0, 0, 0]);
+    Object.assign(game.u, { ulevel: 20 });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const hammer = monsterWarHammer(876096, {
+        letter: 'h',
+        line: 'h - a war hammer',
+        ox: 5,
+        oy: 5,
+    });
+    game.inventory = [hammer];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Clonk!/);
+    assert.match(game._pending_message, /You break the bars apart!/);
+    assert.equal(barsLoc.typ, ROOM);
+    assert.equal(barsLoc.doormask, D_NODOOR);
+    assert.equal(barsLoc.wall_info, 0);
+    assert.equal(game.inventory.includes(hammer), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'war hammer');
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(35)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown heavy iron ball whangs and breaks nondiggable iron bars', async () => {
+    const barsLoc = installHeroThrowIronBarsState({
+        barsLoc: { typ: IRONBARS, roomno: ROOMOFFSET, wall_info: W_NONDIGGABLE },
+    });
+    installCoreRngValues([1, 0, 0, 0]);
+    Object.assign(game.u, { ulevel: 20 });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ironBall = carriedAttachedIronBall(876099, 'b', {
+        line: 'b - a heavy iron ball',
+        ox: 5,
+        oy: 5,
+    });
+    game.inventory = [ironBall];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /Whang!/);
+    assert.match(game._pending_message, /You break the bars apart!/);
+    assert.equal(barsLoc.typ, ROOM);
+    assert.equal(barsLoc.doormask, D_NODOOR);
+    assert.equal(barsLoc.wall_info, 0);
+    assert.equal(game.inventory.includes(ironBall), false);
+    const landed = game.level.objects.find(obj => obj.kind === 'heavy iron ball');
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(32)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown war hammer breaks edge iron bars into a door', async () => {
+    const barsLoc = installHeroThrowIronBarsState({
+        barsLoc: { typ: IRONBARS, roomno: ROOMOFFSET, edge: true },
+    });
+    installCoreRngValues([1, 0, 0, 0]);
+    Object.assign(game.u, { ulevel: 20 });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const hammer = monsterWarHammer(876098, {
+        letter: 'h',
+        line: 'h - a war hammer',
+        ox: 5,
+        oy: 5,
+    });
+    game.inventory = [hammer];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('h');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You break the bars apart!/);
+    assert.equal(barsLoc.typ, DOOR);
+    assert.equal(barsLoc.doormask, D_NODOOR);
+    assert.equal(game.inventory.includes(hammer), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rn2(5)', 'rn2(100)', 'rn2(35)', 'rn2(100)',
     ]);
 });
 

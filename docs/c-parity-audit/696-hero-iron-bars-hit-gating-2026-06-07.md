@@ -28,5 +28,5 @@ The horizontal hero throw scan stopped every projectile at iron bars before appl
 
 - Broader impact sound coverage for `Whang` and silver/gold `Clink`.
 - Pointblank bars impacts.
-- Heavy projectile damage to bars and iron-bars dissolution cases.
+- Broader heavy projectile damage to bars, including boulder canaries and remaining terrain edge cases.
 - Full armor, tool, rock/statue, corpse, and food class matrices.
