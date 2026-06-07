@@ -20413,6 +20413,126 @@ function bullwhipWeaponHandName(weapon) {
     return isTwoHandedWieldItem(weapon) ? 'hands' : 'hand';
 }
 
+function bullwhipTerrainIsLiquidOrLava(loc) {
+    const typ = loc?.typ;
+    return typ != null && (IS_POOL(typ) || typ === WATER || typ === MOAT || IS_LAVA(typ) || typ === LAVAWALL);
+}
+
+function bullwhipTerrainIsLava(loc) {
+    const typ = loc?.typ;
+    return typ != null && (IS_LAVA(typ) || typ === LAVAWALL);
+}
+
+function bullwhipFloorObjectIsHorseCorpse(obj) {
+    if (!(obj?.otyp === CORPSE || obj?.otyp === 'corpse')) return false;
+    const corpse = obj.corpsenm || obj.corpse || {};
+    const name = String(corpse.name || corpse.mname || objectKindKey(obj).replace(/\s+corpse$/, '')).toLowerCase();
+    return name === 'horse' || name === 'warhorse' || name === 'pony';
+}
+
+function bullwhipFloorObjectWrapName(obj) {
+    return floorObjectArticleName({ ...obj, line: '', quan: 1 });
+}
+
+function putHeroBullwhipFloorObjectInInventory(obj, messages) {
+    if (!obj) return false;
+    const source = { ...obj, line: '', quan: 1 };
+    const mergeInfo = findPickedObjectInventoryMergeTarget(source);
+    const letter = mergeInfo ? null : simulatedNextInventoryLetters(1)?.[0];
+    if (!mergeInfo && !letter) return false;
+
+    const pickedItem = splitFloorPickupObjectForLift(obj, 1);
+    if (pickedItem === obj) removeFloorObject(obj);
+    delete pickedItem.letter;
+    delete pickedItem.line;
+    pickedItem.ocarry = null;
+    pickedItem.contained = false;
+    pickedItem.container = null;
+    pickedItem.hidden = false;
+    pickedItem.buried = false;
+    delete pickedItem.nobj;
+    delete pickedItem.nexthere;
+    delete pickedItem.ox;
+    delete pickedItem.oy;
+
+    if (mergeInfo) {
+        const mergeMessage = mergePickedObjectIntoInventory(pickedItem, mergeInfo.target);
+        if (mergeMessage) messages.push(mergeMessage);
+    } else {
+        pickedItem.letter = letter;
+        pickedItem.line = normalInventoryLine({ ...pickedItem, line: '' });
+        nextInventoryLetter();
+        game.inventory = [...(game.inventory || []), pickedItem];
+        messages.push(`${pickedItem.line}.`);
+    }
+    objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
+    maybeAttachCarriedFigurineTimeout(pickedItem);
+    game._pet_food_scan_inventory = game.inventory;
+    newsym(game.u?.ux || 0, game.u?.uy || 0);
+    return true;
+}
+
+function kickHeroBullwhipSteed(steed) {
+    if (!steed) return;
+    if (steed.msleeping || steed.meating) {
+        steed.msleeping = 0;
+        steed.meating = 0;
+    }
+    if (steed.mtame) steed.mtame = Math.max(0, Math.trunc(Number(steed.mtame)) - 1);
+    setHeroObjectHitMonsterAngry(steed);
+}
+
+async function finishHeroBullwhipSelfOrDown(item) {
+    const proficient = heroBullwhipProficiency();
+    const steed = game.u?.usteed || null;
+    if (steed && rn2(proficient + 2) === 0) {
+        kickHeroBullwhipSteed(steed);
+        const steedName = steedTrapProjectileName(steed).replace(/^The /, 'the ');
+        await setMessage(`You whip ${steedName}!`);
+        game.context.move = 1;
+        return true;
+    }
+
+    const ux = game.u?.ux || 0;
+    const uy = game.u?.uy || 0;
+    const heroLoc = game.level?.at?.(ux, uy);
+    if (bullwhipTerrainIsLiquidOrLava(heroLoc)) {
+        const messages = ['You cause a small splash.'];
+        if (bullwhipTerrainIsLava(heroLoc)
+            && ((game.u?.uluck || 0) + (game.u?.moreluck || 0) + 5) <= rn2(20)) {
+            erodeDirectMeleePassiveObject(item, 'fire', messages);
+        }
+        await setMessage(messages.join('  '), messages.length > 1);
+        game.context.move = 1;
+        return true;
+    }
+
+    if (game.u?.levitating || game.u?.Levitation || game.u?.flying || game.u?.Flying || steed) {
+        const floorObj = topFloorObjectAt(ux, uy);
+        if (bullwhipFloorObjectIsHorseCorpse(floorObj)) {
+            await setMessage('Why beat a dead horse?');
+            game.context.move = 1;
+            return true;
+        }
+        if (floorObj && proficient) {
+            const messages = [
+                `You wrap your bullwhip around ${bullwhipFloorObjectWrapName(floorObj)} on the ${polyselfFalloffSurfaceName(ux, uy)}.`,
+            ];
+            if (rnl(6) || !putHeroBullwhipFloorObjectInInventory(floorObj, messages))
+                messages.push('The bullwhip slips free.');
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
+            return true;
+        }
+    }
+
+    const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + Math.trunc(Number(item.spe || 0)));
+    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
+    await setMessage('You hit your foot with your bullwhip.');
+    game.context.move = 1;
+    return true;
+}
+
 function monsterWeaponIsWelded(mon, weapon) {
     return !!weapon && !!(weapon.welded || (weapon.cursed && (weapon.wielded || mon?.mw === weapon)));
 }
@@ -20588,7 +20708,7 @@ async function finishHeroBullwhipDirection(item, ch) {
         await setMessage('Never mind.');
         return true;
     }
-    const dir = movementDirection(ch);
+    const dir = commandDirection(ch);
     if (!dir) return true;
 
     if (game.u?.uswallow) {
@@ -20612,11 +20732,7 @@ async function finishHeroBullwhipDirection(item, ch) {
     const rx = ux + (dir.dx || 0);
     const ry = uy + (dir.dy || 0);
     if ((!dir.dx && !dir.dy) || dir.dz > 0) {
-        const damage = Math.max(1, rnd(2) + heroStrengthDamageBonus() + Math.trunc(Number(item.spe || 0)));
-        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
-        await setMessage('You hit your foot with your bullwhip.');
-        game.context.move = 1;
-        return true;
+        return finishHeroBullwhipSelfOrDown(item);
     }
     if (!isok(rx, ry)) {
         await setMessage('You miss.');

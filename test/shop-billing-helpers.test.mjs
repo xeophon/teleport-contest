@@ -68441,6 +68441,219 @@ test('applying wielded bullwhip off map misses without time', async () => {
     assert.deepEqual(getRngLog(), []);
 });
 
+test('wielded bullwhip upward flicks a ceiling bug', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const whip = wieldedWeapon(876173210, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('<');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You flick a bug off of the ceiling.');
+    assert.equal(game.inventory.includes(whip), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip at self hits foot', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0]);
+    game._startup_role = 'Wizard';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173220, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('.');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You hit your foot with your bullwhip.');
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game.inventory.includes(whip), true);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(2)']);
+});
+
+test('fumbling wielded bullwhip down hits foot before hand slip check', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0]);
+    game._startup_role = 'Wizard';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        fumbling: true,
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173211, 'bullwhip', 'w', 0);
+    game.inventory = [whip];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You hit your foot with your bullwhip.');
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game.inventory.includes(whip), true);
+    assert.equal(game.level.objects.some(obj => obj.id === whip.id), false);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(2)']);
+});
+
+test('wielded bullwhip down while flying over pool splashes before floor snare', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        flying: true,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173212, 'bullwhip', 'w', 0);
+    const ration = foodRation(876173213);
+    delete ration.letter;
+    delete ration.line;
+    game.inventory = [whip];
+    game.level.objects = [ration];
+    game.level.monsters = [];
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? POOL : ROOM });
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You cause a small splash.');
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(game.inventory.includes(ration), false);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('wielded bullwhip down at horse corpse asks why beat dead horse', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        flying: true,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173214, 'bullwhip', 'w', 0);
+    const horseCorpse = corpse(876173215, 'c', 'horse', 250);
+    delete horseCorpse.letter;
+    delete horseCorpse.line;
+    game.inventory = [whip];
+    game.level.objects = [horseCorpse];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'Why beat a dead horse?');
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.objects.includes(horseCorpse), true);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('proficient wielded bullwhip down can snare floor object while flying', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        flying: true,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173216, 'bullwhip', 'w', 0);
+    const ration = foodRation(876173217);
+    delete ration.letter;
+    delete ration.line;
+    game.inventory = [whip];
+    game.level.objects = [ration];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a food ration on the floor.  x - a food ration.');
+    assert.equal(game.inventory.includes(ration), true);
+    assert.equal(ration.letter, 'x');
+    assert.equal(ration.line, 'x - a food ration');
+    assert.equal(ration.ox || null, null);
+    assert.equal(ration.oy || null, null);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnl(6)']);
+});
+
+test('proficient wielded bullwhip floor snare can slip free', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([1]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        flying: true,
+        acurr: { a: [10, 10, 10, 14, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173218, 'bullwhip', 'w', 0);
+    const ration = foodRation(876173219);
+    delete ration.letter;
+    delete ration.line;
+    game.inventory = [whip];
+    game.level.objects = [ration];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('>');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a food ration on the floor.  The bullwhip slips free.');
+    assert.equal(game.level.objects.includes(ration), true);
+    assert.equal(game.inventory.includes(ration), false);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnl(6)']);
+});
+
 test('f command empty quiver with wielded bullwhip applies it before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);
