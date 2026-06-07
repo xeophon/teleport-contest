@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BROAD_SWORD, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, N_DIRS, NO_MINVENT, NORMAL_SPEED, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BROAD_SWORD, P_CLUB, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -20111,22 +20111,93 @@ function heroHorizontalThrowFinalRange(obj, range, { mjollnirThrow = false, retu
     return finalRange;
 }
 
+function heroDropBallTrapState(type) {
+    if (type === TT_BEARTRAP || type === 'beartrap') return 'beartrap';
+    if (type === TT_PIT || type === 'pit') return 'pit';
+    if (type === TT_WEB || type === 'web') return 'web';
+    if (type === TT_LAVA || type === 'lava') return 'lava';
+    if (type === TT_INFLOOR || type === 'infloor') return 'infloor';
+    if (type === TT_BURIEDBALL || type === 'buriedball') return 'buriedball';
+    return '';
+}
+
+function heroDropBallTrapAt(x, y) {
+    return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+}
+
+function heroDropBallMonsterAt(x, y) {
+    return (game.level?.monsters || []).some(mon =>
+        mon.mx === x && mon.my === y && !mon.dead && (mon.mhp == null || mon.mhp > 0));
+}
+
+function heroDropBallLevitating() {
+    return !!(game.u?.levitating || game.u?.levitation || game.u?.Levitation);
+}
+
+function heroDropBallLandingPullsHeroOntoBall(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (loc && IS_POOL(loc.typ)) return true;
+    const trap = heroDropBallTrapAt(x, y);
+    return !!trap && (is_pit(trap.ttyp) || is_hole(trap.ttyp));
+}
+
+function heroDropBallReleaseTrapMessages(x, y) {
+    if (!game.u?.utrap) return [];
+    const trapState = heroDropBallTrapState(game.u.utraptype);
+    if (trapState === 'infloor' || trapState === 'buriedball') return [];
+
+    const messages = [];
+    if (trapState === 'pit') {
+        messages.push('The ball pulls you out of the pit!');
+    } else if (trapState === 'web') {
+        messages.push('The ball pulls you out of the web!');
+        messages.push('The web is destroyed!');
+        const trap = heroDropBallTrapAt(x, y);
+        if (trap) deleteTrap(trap);
+    } else if (trapState === 'lava') {
+        messages.push('The ball pulls you out of the lava!');
+    } else if (trapState === 'beartrap') {
+        const side = rn2(3) ? 'left' : 'right';
+        const duration = rn1(1000, 500);
+        messages.push('The ball pulls you out of the bear trap!');
+        applyHeroBearTrapLegWound(side, duration);
+        if (!game.u?.usteed) {
+            messages.push(`Your ${side} leg is severely damaged.`);
+            if (game.u) {
+                game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(2));
+                if ((game.u.uhp || 0) <= 0)
+                    game._death_cause = 'leg damage from being pulled out of a bear trap';
+            }
+        }
+    }
+
+    if (messages.length && game.u) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+    }
+    return messages;
+}
+
 function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
-    if (!heroThrownAttachedBallObject(obj) || !game.u?.uchain) return;
+    const messages = [];
+    if (!heroThrownAttachedBallObject(obj) || !game.u?.uchain) return messages;
     game.u.uball = obj;
     game.level.objects ??= [];
     if (!game.level.objects.includes(obj)) game.level.objects.push(obj);
     if (!game.level.objects.includes(game.u.uchain)) game.level.objects.push(game.u.uchain);
-    if (x === game.u.ux && y === game.u.uy) return;
+    if (x === game.u.ux && y === game.u.uy) return messages;
 
     const dx = Math.sign(dir?.dx || 0);
     const dy = Math.sign(dir?.dy || 0);
-    const newUx = x - dx;
-    const newUy = y - dy;
-    if (!isok(newUx, newUy)) return;
-
     const oldUx = game.u.ux;
     const oldUy = game.u.uy;
+    messages.push(...heroDropBallReleaseTrapMessages(oldUx, oldUy));
+    const heroOnBall = !heroDropBallLevitating() && !heroDropBallMonsterAt(x, y) && !game.u?.utrap
+        && heroDropBallLandingPullsHeroOntoBall(x, y);
+    const newUx = heroOnBall ? x : x - dx;
+    const newUy = heroOnBall ? y : y - dy;
+    if (!isok(newUx, newUy)) return messages;
+
     game.u.ux0 = oldUx;
     game.u.uy0 = oldUy;
     game.u.ux = newUx;
@@ -20140,6 +20211,7 @@ function heroDropAttachedBallAfterThrow(obj, x, y, dir) {
     game.u.uchain.transientProjectile = false;
     newsym(oldUx, oldUy);
     newsym(newUx, newUy);
+    return messages;
 }
 
 function heroThrowAmmoWeaponDescription(ammoSkill) {
@@ -67364,9 +67436,9 @@ export async function rhack(_cmd) {
                 ohit: impactObjectHit,
                 passiveTarget: impactPassiveTarget,
             });
-        const landingMessage = landing.messages.join('  ');
         if (attachedBallThrow && landing.object)
-            heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
+            landing.messages.push(...heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir));
+        const landingMessage = landing.messages.join('  ');
         newsym(ox, oy);
         const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
         removeInventoryItem(item);
