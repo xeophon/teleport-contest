@@ -68581,7 +68581,7 @@ test('Q command dash clears quiver suffix before later fire', async () => {
     assert.match(game._pending_message, /^What do you want to fire\? \[d or \?\*\]$/);
 });
 
-test('f question ready menu rejects hidden downplayed letter', async () => {
+test('f question ready menu ignores hidden downplayed letter', async () => {
     installNonShopFloorState();
     initRng(2);
     const weapon = dagger(876174185, 'd');
@@ -68599,10 +68599,221 @@ test('f question ready menu rejects hidden downplayed letter', async () => {
 
     await rhack('f');
 
-    assert.equal(game._command_mode || null, null);
-    assert.equal(game._pending_message, "You don't have that object.");
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._pending_message, '');
+    assert.ok(game._overlay_lines);
     assert.equal(ration.quivered || false, false);
     assert.equal(weapon.quivered || false, false);
+
+    await rhack('d');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(weapon.quivered, true);
+});
+
+test('Q star ready menu ignores arbitrary invalid letter and accepts later selection', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174198, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('*');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._pending_message, '');
+    assert.ok(game._overlay_lines);
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quan, 3);
+    assert.equal(stack.quivered, true);
+});
+
+test('Q star ready menu invalid letter after count clears menu count and stays open', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174199, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('*');
+    await rhack('2');
+
+    assert.equal(game._ready_menu_count_text, '2');
+
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._ready_menu_count_text || '', '');
+    assert.equal(game._pending_message, '');
+    assert.ok(game._overlay_lines);
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quan, 3);
+    assert.equal(stack.quivered, true);
+});
+
+test('Q prompt count survives invalid ready menu letter before valid selection', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174203, 'd', 5);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('2');
+    await rhack('*');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._ready_count_text, '2');
+    assert.equal(game._ready_menu_count_text || '', '');
+    assert.equal(game._pending_message, '');
+    assert.ok(game._overlay_lines);
+
+    await rhack('d');
+
+    const split = game.inventory.find(item => item !== stack && item.quivered);
+    assert.ok(split);
+    assert.equal(stack.quan, 3);
+    assert.equal(split.quan, 2);
+});
+
+test('f star ready menu invalid letter preserves shot limit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174204, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+
+    await rhack('2');
+    await rhack('f');
+    await rhack('*');
+    await rhack('z');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._pending_message, '');
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quivered, true);
+});
+
+test('Q filtered ready menu star after count clears menu count and stays open', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const weapon = dagger(876174200, 'd');
+    const ration = foodRation(876174201, 'f');
+    game.inventory = [weapon, ration];
+
+    await rhack('Q');
+    await rhack('?');
+    await rhack('2');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._ready_menu_count_text, '2');
+
+    await rhack('*');
+
+    assert.equal(game._command_mode, 'readyInventory');
+    assert.equal(game._ready_menu_count_text || '', '');
+    assert.equal(game._pending_message, '');
+    assert.ok(game._overlay_lines);
+    assert.equal(weapon.quivered || false, false);
+    assert.equal(ration.quivered || false, false);
+});
+
+test('Q ready menu no-selection space restores prompt and clears prompt count', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174205, 'd', 5);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('2');
+    await rhack('*');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.match(game._pending_message, /^What do you want to ready\? \[- d or \?\*\]$/);
+    assert.equal(game._ready_count_text || '', '');
+    assert.equal(game._ready_menu_count_text || '', '');
+    assert.equal(game._overlay_lines || null, null);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quan, 5);
+    assert.equal(stack.quivered, true);
+});
+
+test('f ready menu no-selection space restores fire prompt and preserves shot limit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174206, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+
+    await rhack('2');
+    await rhack('f');
+    await rhack('*');
+    await rhack('3');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.match(game._pending_message, /^What do you want to fire\? \[d or \?\*\]$/);
+    assert.equal(game._ready_count_text || '', '');
+    assert.equal(game._ready_menu_count_text || '', '');
+    assert.equal(game._fire_count, 2);
+    assert.equal(game._overlay_lines || null, null);
+
+    await rhack('d');
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_count, 2);
+    assert.equal(stack.quan, 5);
+    assert.equal(stack.quivered, true);
+});
+
+test('Q ready menu return keys restore direct ready prompt', async () => {
+    for (const [label, key] of [['return', '\r'], ['newline', '\n']]) {
+        installNonShopFloorState();
+        initRng(2);
+        const stack = dartStack(876174202, 'd', 3);
+        game.inventory = [stack];
+
+        await rhack('Q');
+        await rhack('*');
+        await rhack('2');
+        await rhack(key);
+
+        assert.equal(game._command_mode, 'quiverObject', label);
+        assert.match(game._pending_message, /^What do you want to ready\? \[- d or \?\*\]$/, label);
+        assert.equal(game._ready_menu_count_text || '', '', label);
+        assert.equal(game._overlay_lines || null, null, label);
+        assert.equal(stack.quivered || false, false, label);
+    }
 });
 
 test('Q command declining primary wielded weapon keeps it wielded', async () => {

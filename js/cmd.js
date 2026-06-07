@@ -20658,7 +20658,7 @@ function showReadyInventoryOverlay(verb, filter = null, page = 0) {
 
 async function restoreReadyPrompt(verb) {
     clearReadyInventoryOverlay();
-    clearReadyMenuSelectionCount();
+    clearReadySelectionCount();
     await setMessage(readyPromptMessage(verb));
     game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
 }
@@ -63506,15 +63506,27 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'readyInventory') {
         const verb = game._ready_inventory_verb || 'ready';
-        if (ch === '*' && game._ready_inventory_filter) return;
+        if (ch === '*' && game._ready_inventory_filter) {
+            clearReadyMenuSelectionCount();
+            game._pending_message = '';
+            game._message_more = 0;
+            return;
+        }
         if (ch === ' ') {
             const page = (game._ready_inventory_page || 0) + 1;
             if (page < (game._inventory_overlay_total_pages || 1)) {
+                clearReadyMenuSelectionCount();
+                game._pending_message = '';
+                game._message_more = 0;
                 game._ready_inventory_page = page;
                 showInventoryOverlay(page, false, readyInventoryFilterMatch());
                 captureReadyInventoryVisibleLetters();
                 return;
             }
+            await restoreReadyPrompt(verb);
+            return;
+        }
+        if (ch === '\r' || ch === '\n') {
             await restoreReadyPrompt(verb);
             return;
         }
@@ -63535,6 +63547,12 @@ export async function rhack(_cmd) {
         if (await eraseReadySelectionCountDigit(ch, true)) return;
         if (await appendReadySelectionCountDigit(ch, true)) return;
         const item = readyInventoryItemByVisibleLetter(ch);
+        if (!item) {
+            clearReadyMenuSelectionCount();
+            game._pending_message = '';
+            game._message_more = 0;
+            return;
+        }
         clearReadyInventoryOverlay();
         await finishReadyObjectSelection(item, verb);
         return;

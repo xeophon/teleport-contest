@@ -15,7 +15,7 @@
 - Direct object prompt quit keys now cancel after a prompt count, clear the ready-selection count, and report `Never mind.`; manual `f` also clears its top-level shot limit.
 - Invalid direct prompt keys after a typed count clear the ready-selection count and keep the prompt active.
 - A second backspace/delete after erasing a count to `Count: ` is treated as an invalid object key and keeps the prompt active.
-- Ready inventory menu misses keep their existing cancel behavior; menu key handling remains a separate overlay approximation.
+- Ready inventory menu misses are covered separately in `736`.
 
 ## Tests
 
@@ -30,4 +30,4 @@
 
 ## Remaining Follow-Ups
 
-- Ready inventory menu invalid-key behavior still follows the JS overlay model rather than exact tty/curses menu behavior.
+- No direct prompt follow-up known from this slice.
