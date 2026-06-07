@@ -25729,13 +25729,58 @@ function heroPolearmTargetInRange(x, y, item = heroWieldedPolearm()) {
     return dist2 >= 4 && dist2 <= heroPolearmTargetMaxDistance2(item);
 }
 
+function heroPolearmTargetingImpaired() {
+    return heroIsConfused() || heroIsStunned() || heroIsHallucinating();
+}
+
+function heroPolearmDisplayGlyphIsPoleable(x, y) {
+    const loc = game.level?.at(x, y);
+    return !!(loc?.map_invisible || loc?.remembered_glyph?.ch === 'I' || floorStatueAt(x, y));
+}
+
+function heroPolearmCanSpotMonster(mon) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
+}
+
+function heroPolearmAutohitMonsterAllowed(mon) {
+    if (heroPolearmTargetingImpaired()) return true;
+    if (mon.mtame || mon.pet) return false;
+    if (mon.mpeaceful && game.flags?.confirm !== false) return false;
+    return true;
+}
+
 function heroPolearmAutohitTarget(item = heroWieldedPolearm()) {
     const candidates = (game.level?.monsters || []).filter(mon =>
         mon && !mon.dead && (mon.mhp == null || mon.mhp > 0)
-        && !mon.mtame && !mon.pet && !mon.mpeaceful
+        && heroPolearmAutohitMonsterAllowed(mon)
         && heroPolearmTargetInRange(mon.mx, mon.my, item)
-        && couldsee(mon.mx, mon.my));
+        && heroPolearmCanSpotMonster(mon));
+    if (heroPolearmTargetingImpaired()) {
+        for (const statue of game.level?.objects || []) {
+            if (statue.hidden || statue.transientProjectile || statue.otyp !== STATUE) continue;
+            if (!heroPolearmTargetInRange(statue.ox, statue.oy, item) || !cansee(statue.ox, statue.oy)) continue;
+            candidates.push({ mx: statue.ox, my: statue.oy, statue });
+        }
+    }
     return candidates.length === 1 ? candidates[0] : null;
+}
+
+function heroPolearmAttackPromptName(mon) {
+    return fireScrollMonsterName(mon).replace(/^The /, 'the ');
+}
+
+function heroPolearmAttackNeedsConfirmation(item, mon) {
+    if (!mon?.mpeaceful || heroPolearmTargetingImpaired() || game.flags?.confirm === false) return false;
+    const name = String(item?.artifact || item?.artifactName || item?.kind || item?.actualKind || '').toLowerCase();
+    if (name === 'stormbringer' || /\bstormbringer\b/.test(inventoryItemName(item).toLowerCase())) return false;
+    return heroPolearmCanSpotMonster(mon);
+}
+
+function clearPolearmAttackConfirmState() {
+    game._apply_polearm_confirm_letter = null;
+    game._apply_polearm_confirm_x = null;
+    game._apply_polearm_confirm_y = null;
 }
 
 function heroAppliedPolearmHitValue(item, mon) {
@@ -25767,7 +25812,7 @@ function heroAppliedPolearmImpact(item, mon) {
     };
 }
 
-async function finishHeroPolearmTarget(item, x, y, { autohit = false } = {}) {
+async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed = false } = {}) {
     if (!item || !isPolearmItem(item)) return false;
     const dist2 = heroPolearmTargetDistance2(x, y);
     if (dist2 > heroPolearmTargetMaxDistance2(item)) {
@@ -25780,6 +25825,10 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false } = {}) {
             : 'Too close!');
         return true;
     }
+    if (!cansee(x, y) && !heroPolearmDisplayGlyphIsPoleable(x, y)) {
+        await setMessage("You won't hit anything if you can't see that spot.");
+        return true;
+    }
     if (!couldsee(x, y)) {
         await setMessage("You can't reach that spot from here.");
         return true;
@@ -25788,6 +25837,14 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false } = {}) {
     const mon = (game.level?.monsters || []).find(candidate =>
         candidate.mx === x && candidate.my === y && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
     if (mon) {
+        if (!autohit && !confirmed && heroPolearmAttackNeedsConfirmation(item, mon)) {
+            game._apply_polearm_confirm_letter = item.letter || null;
+            game._apply_polearm_confirm_x = x;
+            game._apply_polearm_confirm_y = y;
+            await setMessage(`Really attack ${heroPolearmAttackPromptName(mon)}? [yn] (n)`);
+            game._command_mode = 'applyPolearmAttackConfirm';
+            return true;
+        }
         const impact = heroAppliedPolearmImpact(item, mon);
         await setMessage((impact.messages || []).join('  '), (impact.messages || []).length > 1);
         newsym(x, y);
@@ -25814,6 +25871,11 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false } = {}) {
         return true;
     }
     const loc = game.level?.at(x, y);
+    if (loc?.map_invisible) {
+        loc.map_invisible = false;
+        loc.remembered_glyph = null;
+        newsym(x, y);
+    }
     if (!loc || !ACCESSIBLE(loc.typ)) {
         await setMessage(`You uselessly attack ${loc?.typ === STONE ? 'stone' : 'an unknown obstacle'}.`);
         game.context.move = 1;
@@ -62821,6 +62883,28 @@ export async function rhack(_cmd) {
             game._cursor_override = null;
             game._command_mode = null;
             await finishHeroPolearmTarget(item, x, y);
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'applyPolearmAttackConfirm') {
+        const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_polearm_confirm_letter);
+        const x = game._apply_polearm_confirm_x;
+        const y = game._apply_polearm_confirm_y;
+        if (ch === 'y') {
+            clearPolearmAttackConfirmState();
+            game._command_mode = null;
+            await finishHeroPolearmTarget(item, x, y, { confirmed: true });
+            return;
+        }
+        if (ch === 'n' || ch === 'q' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            clearPolearmAttackConfirmState();
+            game._command_mode = null;
+            game._pending_message = '';
+            game._message_more = 0;
+            game.context.move = 0;
             return;
         }
         game._keep_pending_message = 1;

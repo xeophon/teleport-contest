@@ -27,5 +27,5 @@
 
 ## Remaining Follow-Ups
 
-- Full `find_poleable_mon()` parity still needs remembered targets, invisible/statue glyphs, tame and peaceful confirmation, and impaired targeting behavior.
+- Full `find_poleable_mon()` parity still needs prior-`hitmon` remembered target fallback and invisible-marker target selection. Audit 708 covers the first visibility failure split, peaceful confirmation prompt, and impaired tame/peaceful/statue auto-target subset.
 - Full `use_pole()` impact parity still needs artifact-specific behavior, Snickersnee's once-per-turn free distance attack, passive effects, worm cutting, exact miss/wakeup messaging, and engrave wiping.

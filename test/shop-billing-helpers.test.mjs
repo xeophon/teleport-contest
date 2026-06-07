@@ -66803,6 +66803,46 @@ test('f command missile quiver does not use wielded aklys return shortcut', asyn
     assert.equal(landed.oy, 5);
 });
 
+function setupWieldedPolearmCanary({
+    monsters = [],
+    objects = [],
+    inventory = [],
+    visible = [],
+    skillLevel = null,
+    statusSuffix = '',
+} = {}) {
+    installStableNonShopFloorState();
+    game.viz_array = [];
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhitinc: 30,
+        _statusSuffix: statusSuffix,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    if (skillLevel != null) setHeroWeaponSkill(P_POLEARMS, skillLevel);
+    const weapon = glaive(876173250, 'g', { wielded: true, line: 'g - a glaive (weapon in hands)' });
+    game.inventory = [weapon, ...inventory];
+    game.level.monsters = monsters;
+    game.level.objects = objects;
+    markHeroSquareVisible();
+    for (const [x, y] of visible) markSquareVisible(x, y);
+    enableRngLog({ reset: true });
+    return { weapon };
+}
+
+async function beginApplyPolearmCanary() {
+    await rhack('a');
+    await rhack('g');
+    assert.equal(game._command_mode, 'applyPolearmTarget');
+    assert.equal(game._pending_message, 'Where do you want to hit?');
+}
+
+function assertNoPolearmTurnOrRolls() {
+    assert.equal(game.context.move || 0, 0);
+    assert.deepEqual(getRngLog(), []);
+}
+
 test('applying wielded polearm hits monster at range two', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -66959,6 +66999,72 @@ test('applying basic polearm reports too far at range five', async () => {
     assert.equal(game._pending_message, 'Too far!');
     assert.equal(goblin.mhp, 10);
     assert.deepEqual(getRngLog(), []);
+});
+
+test('applying polearm to remembered unseen empty square says cannot see spot', async () => {
+    setupWieldedPolearmCanary();
+    game.viz_array[5][7] = COULD_SEE;
+
+    await beginApplyPolearmCanary();
+    await rhack('l');
+    await rhack('l');
+    await rhack('.');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, "You won't hit anything if you can't see that spot.");
+    assertNoPolearmTurnOrRolls();
+});
+
+test('applying polearm to peaceful monster asks before attacking and no aborts', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: true,
+        msleeping: 0,
+    });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        visible: [[7, 5]],
+    });
+
+    await beginApplyPolearmCanary();
+    await rhack('l');
+    await rhack('l');
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'applyPolearmAttackConfirm');
+    assert.equal(game._pending_message, 'Really attack the goblin? [yn] (n)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(goblin.mhp, 10);
+    assertNoPolearmTurnOrRolls();
+});
+
+test('applying polearm to peaceful monster attacks after confirmation', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: true,
+        msleeping: 0,
+    });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        visible: [[7, 5]],
+    });
+
+    await beginApplyPolearmCanary();
+    await rhack('l');
+    await rhack('l');
+    await rhack('.');
+    await rhack('y');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.ok(goblin.mhp < 10);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
 });
 
 test('f command fireassist skips known cursed inventory launcher', async () => {
@@ -67119,6 +67225,68 @@ test('f command empty quiver with wielded polearm and no target does not prompt 
     assert.equal(game._fire_item_letter || null, null);
     assert.equal(missile.quivered || false, false);
     assert.equal(game._pending_message, "Don't know what to hit.");
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('f command empty quiver with peaceful polearm target skips autohit while unimpaired', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: true,
+        msleeping: 0,
+    });
+    const missile = arrow(876174130, 'b', { line: 'b - an arrow' });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        inventory: [missile],
+        visible: [[7, 5]],
+    });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._fire_item_letter || null, null);
+    assert.equal(missile.quivered || false, false);
+    assert.equal(game._pending_message, "Don't know what to hit.");
+    assert.equal(goblin.mhp, 10);
+    assertNoPolearmTurnOrRolls();
+});
+
+test('f command confused hero autohits peaceful polearm target', async () => {
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        mpeaceful: true,
+        msleeping: 0,
+    });
+    setupWieldedPolearmCanary({
+        monsters: [goblin],
+        visible: [[7, 5]],
+        statusSuffix: ' Conf',
+    });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /You hit the goblin[.!]/);
+    assert.ok(goblin.mhp < 10);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('f command hallucinating hero can polearm-target a statue', async () => {
+    const statue = statueTrapStatue(876176250, 7, 5, 'goblin');
+    setupWieldedPolearmCanary({
+        objects: [statue],
+        visible: [[7, 5]],
+        statusSuffix: ' Hallu',
+    });
+
+    await rhack('f');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'Thump!  Your blow bounces harmlessly off the statue.');
     assert.deepEqual(getRngLog(), []);
 });
 
