@@ -19712,13 +19712,36 @@ function wakeMonsterFromHeroThrownMiss(mon) {
         messages.push(`${potionHitMonsterName(mon)} wakes up!`);
     mon.msleeping = 0;
     mon.meating = 0;
+    revealHeroProjectileHitMimicAppearance(mon);
     setHeroObjectHitMonsterAngry(mon);
     return messages;
+}
+
+function revealHeroProjectileHitMimicAppearance(mon) {
+    const appearance = M_AP_TYPE(mon);
+    if (appearance === M_AP_MONSTER) return false;
+    if (!appearance && mon?.appearObj == null && !mon?.appearGlyph) return false;
+    mon.m_ap_type = 0;
+    mon.appearObj = null;
+    mon.appearGlyph = null;
+    mon.appearColor = null;
+    newsym(mon.mx, mon.my);
+    return true;
+}
+
+function heroProjectileMissMessage(objOrName, mon) {
+    const missile = typeof objOrName === 'string'
+        ? objOrName
+        : pickupObjectName({ ...objOrName, quan: 1 });
+    const appearance = M_AP_TYPE(mon);
+    if (appearance && appearance !== M_AP_MONSTER) return `The ${missile} misses.`;
+    return `The ${missile} misses the ${mon?.data?.name || 'creature'}.`;
 }
 
 function wakeMonsterFromHeroThrownHit(mon) {
     mon.msleeping = 0;
     mon.meating = 0;
+    revealHeroProjectileHitMimicAppearance(mon);
     setHeroObjectHitMonsterAngry(mon);
 }
 
@@ -20109,7 +20132,7 @@ function heroKickedStoneMissileRockPasserImpact(obj, mon) {
             messages: [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${heroThrownVenomTargetName(mon)} but does no harm.`],
         };
     }
-    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    const messages = [heroProjectileMissMessage(obj, mon)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
 }
@@ -20136,7 +20159,7 @@ function heroKickedGemImpact(obj, mon) {
             messages,
         };
     }
-    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    const messages = [heroProjectileMissMessage(obj, mon)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
 }
@@ -22532,7 +22555,7 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
             messages,
         };
     }
-    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    const messages = [heroProjectileMissMessage(obj, mon)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
 }
@@ -22572,7 +22595,7 @@ function heroFireProjectileMonsterImpact(obj, targetMon, launcher, firedFromLaun
                 passiveTarget: targetMon,
             };
         }
-        const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
+        const messages = [heroProjectileMissMessage(obj, targetMon)];
         messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
         return { handled: true, messages, consumed: false, hit: false, passiveTarget: null };
     }
@@ -22637,7 +22660,7 @@ function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLaunche
             messages,
         };
     }
-    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    const messages = [heroProjectileMissMessage(obj, mon)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
 }
@@ -22815,7 +22838,7 @@ function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = false 
             messages,
         };
     }
-    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    const messages = [heroProjectileMissMessage(obj, mon)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
 }
@@ -22852,7 +22875,7 @@ function heroThrownGemImpact(obj, mon) {
             messages,
         };
     }
-    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    const messages = [heroProjectileMissMessage(obj, mon)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     return { handled: true, hit: false, messages };
 }
@@ -71164,7 +71187,7 @@ export async function rhack(_cmd) {
                 return;
             }
             const thrownName = pickupObjectName({ ...item, quan: 1 });
-            const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
+            const messages = [heroProjectileMissMessage(thrownName, targetMon)];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
         } else if (targetMon && isCreamPieObject(item)) {
@@ -71185,7 +71208,7 @@ export async function rhack(_cmd) {
                 if (applyOrdinaryAirRecoilTrapResult()) return;
                 return;
             }
-            const messages = [`The cream pie misses the ${targetMon.data?.name || 'creature'}.`];
+            const messages = [heroProjectileMissMessage('cream pie', targetMon)];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
         } else if (targetMon && isEggItem(item)) {
@@ -71208,7 +71231,7 @@ export async function rhack(_cmd) {
                 return;
             }
             const thrownName = pickupObjectName({ ...item, quan: 1 });
-            const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
+            const messages = [heroProjectileMissMessage(thrownName, targetMon)];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
         } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
@@ -71244,7 +71267,7 @@ export async function rhack(_cmd) {
                 return;
             }
             const thrownName = pickupObjectName({ ...item, quan: 1 });
-            const messages = [`The ${thrownName} misses the ${targetMon.data?.name || 'creature'}.`];
+            const messages = [heroProjectileMissMessage(thrownName, targetMon)];
             messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
             impactMessage = messages.join('  ');
         } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
@@ -71269,7 +71292,7 @@ export async function rhack(_cmd) {
                 impactObjectHit = true;
                 impactPassiveTarget = targetMon;
             } else {
-                const messages = [`The ${pickupObjectName({ ...item, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
+                const messages = [heroProjectileMissMessage(item, targetMon)];
                 messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
                 impactMessage = messages.join('  ');
             }

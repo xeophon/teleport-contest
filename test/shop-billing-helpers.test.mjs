@@ -66336,6 +66336,148 @@ test('hero-thrown arrow with matching bow hits monster through C projectile path
     ]);
 });
 
+test('hero-thrown matching bow arrow reveals object mimic on hit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 2,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_EXPERT);
+    const launcher = bow(876173701, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(876174701, 'b', { line: 'b - an arrow' });
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 15 },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [mimic];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
+    assert.match(game._pending_message, /The arrow hits the large mimic[.!]/);
+    assert.doesNotMatch(game._pending_message, /really|Wait!/);
+    assert.equal(mimic.mhp, 30 - (damageRoll + 4));
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.mpeaceful, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.equal(game.inventory.includes(launcher), true);
+    assert.equal(game.inventory.includes(missile), false);
+    const landed = game.level.objects.find(obj => obj.id === missile.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 6);
+    assert.equal(landed.oy, 5);
+});
+
+test('hero-thrown matching bow arrow preserves apparent-monster mimic on hit', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        udaminc: 2,
+    });
+    game.u.acurr.a[A_STR] = 118;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.weapon_skills = [];
+    setHeroWeaponSkill(P_BOW, P_EXPERT);
+    const launcher = bow(876173702, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(876174702, 'b', { line: 'b - an arrow' });
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        m_ap_type: M_AP_MONSTER,
+        mappearanceName: 'goblin',
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: 15 },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [mimic];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
+    assert.match(game._pending_message, /The arrow hits the large mimic[.!]/);
+    assert.equal(mimic.mhp, 30 - (damageRoll + 4));
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.m_ap_type, M_AP_MONSTER);
+    assert.equal(mimic.mappearanceName, 'goblin');
+});
+
+test('hero-thrown matching bow arrow miss wake roll reveals object mimic', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([19, 0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 1,
+        uluck: 0,
+        uhitinc: 0,
+        udaminc: 0,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 3;
+    game.u.weapon_skills = [];
+    const launcher = bow(876173703, 'a', { wielded: true, line: 'a - a bow (weapon in right hand)' });
+    const missile = arrow(876174703, 'b', { line: 'b - an arrow' });
+    const mimic = ordinaryThrowTarget('large mimic', 6, 5, {
+        mac: -10,
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 8, mlet: 'mimic', mac: -10 },
+    });
+    game.inventory = [launcher, missile];
+    game.level.monsters = [mimic];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /^The arrow misses\./);
+    assert.doesNotMatch(game._pending_message, /misses the large mimic/);
+    assert.equal(mimic.mhp, 30);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.mpeaceful, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj ?? null, null);
+    assert.equal(mimic.appearGlyph ?? null, null);
+    assert.equal(mimic.appearColor ?? null, null);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 3), ['rnd(20)', 'rn2(3)', 'rn2(100)']);
+});
+
 test('hero-thrown stacked arrows with matching bow hit monster as separate shots', async () => {
     installNonShopFloorState();
     initRng(5);
