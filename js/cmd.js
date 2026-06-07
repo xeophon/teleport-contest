@@ -20161,6 +20161,8 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
     if ([HOLE, TRAPDOOR].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
     else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
+    else if (trap.ttyp === ROCKTRAP) result = movementRockTrapResult(trap);
+    else if (trap.ttyp === SQKY_BOARD) result = movementSqueakyBoardTrapResult(trap);
     else if (trap.ttyp === RUST_TRAP) result = movementRustTrapResult(trap);
     else if (trap.ttyp === FIRE_TRAP) result = heroFireTrapResult(trap, '', { allowLifeSaving: true });
     else if (trap.ttyp === ROLLING_BOULDER_TRAP) result = heroRollingBoulderTrapResult(trap);
@@ -46590,26 +46592,28 @@ function sitProjectileTrapMessage(trap, prefix, alreadySeen, spec) {
     return `${prefix}  ${spec.shootsMessage}  ${hitText}`;
 }
 
-function sitRockTrapMessage(trap, prefix, alreadySeen) {
-    if (trap.once && alreadySeen && !rn2(15)) {
+function heroRockTrapResult(trap, prefix = '', alreadySeen = !!trap?.tseen, { applyFatal = true } = {}) {
+    if (trap?.once && alreadySeen && !rn2(15)) {
         deleteTrap(trap);
-        return `${prefix}  A trap door in the ceiling opens, but nothing falls out!`;
+        return { message: trapMessage(prefix, 'A trap door in the ceiling opens, but nothing falls out!') };
     }
-    trap.once = true;
-    trap.tseen = true;
-    let damage = d(2, 6);
+    if (trap) {
+        trap.once = true;
+        trap.tseen = true;
+    }
+    let damage = maybeHalfPhysicalDamage(d(2, 6));
     let harmless = false;
-    const messages = [`${prefix}  A trap door in the ceiling opens and a rock falls on your head!`];
+    const messages = [prefix, 'A trap door in the ceiling opens and a rock falls on your head!'];
     placeSitTrapProjectile({ otyp: ROCK, cls: 'gem', kind: 'rock', singular: 'rock', plural: 'rocks', glyph: '*' });
     const helmet = wornEarthHelmet();
     if (helmet) {
         if (heroPassesRocks()) {
             const simple = /\b(?:hat|fedora|cornuthaum|cap)\b/.test(armorKind(helmet)) ? 'hat' : 'helm';
             messages.push(`Unfortunately, you are wearing ${articleForName(simple)}.`);
-            damage = 2;
+            damage = maybeHalfPhysicalDamage(2);
         } else if (hardEarthHelmet(helmet)) {
             messages.push('Fortunately, you are wearing a hard helmet.');
-            damage = 2;
+            damage = maybeHalfPhysicalDamage(2);
         } else if (game.flags?.verbose !== false) {
             messages.push(`Your ${pickupObjectName(helmet)} does not protect you.`);
         }
@@ -46620,17 +46624,53 @@ function sitRockTrapMessage(trap, prefix, alreadySeen) {
     if (!harmless) {
         if (game.u) {
             game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-            if ((game.u.uhp || 0) <= 0) game._death_cause = 'falling rock';
+            if ((game.u.uhp || 0) <= 0) {
+                if (applyFatal) {
+                    const fatalResult = heroDartTrapFatalResult(messages, 'falling rock');
+                    exerciseAttribute(A_STR, false);
+                    return { message: trapMessage(...messages), ...fatalResult };
+                }
+                game._death_cause = 'falling rock';
+            }
         }
         exerciseAttribute(A_STR, false);
     }
-    return messages.join('  ');
+    return { message: trapMessage(...messages) };
+}
+
+function movementRockTrapResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (game.u?.levitating || game.u?.flying)
+        return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroRockTrapResult(trap, '', alreadySeen);
+}
+
+function sitRockTrapMessage(trap, prefix, alreadySeen) {
+    return heroRockTrapResult(trap, prefix, alreadySeen, { applyFatal: false }).message;
+}
+
+function heroSqueakyBoardTrapResult(trap, prefix = '') {
+    if (trap) trap.tseen = true;
+    const message = heroIsDeaf()
+        ? 'A board beneath you vibrates.'
+        : `A board beneath you squeaks ${sitTrapNote(trap)} loudly.`;
+    wakeNearbyMonstersFromHeroNoise();
+    return { message: trapMessage(prefix, message) };
+}
+
+function movementSqueakyBoardTrapResult(trap) {
+    const alreadySeen = !!trap?.tseen;
+    if (game.u?.levitating || game.u?.flying)
+        return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
+    if (alreadySeen && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
+    return heroSqueakyBoardTrapResult(trap, '');
 }
 
 function sitSqueakyBoardMessage(trap, prefix) {
-    trap.tseen = true;
-    if (heroIsDeaf()) return `${prefix}  A board beneath you vibrates.`;
-    return `${prefix}  A board beneath you squeaks ${sitTrapNote(trap)} loudly.`;
+    return heroSqueakyBoardTrapResult(trap, prefix).message;
 }
 
 function monsterBreathlessForTrapSleep(mon) {
@@ -51315,6 +51355,8 @@ async function moveHero(dx, dy) {
         game._dismount_object_list_spot = { x: newx, y: newy };
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
+        if (trapHere?.ttyp === ROCKTRAP) game._pending_rock_trap = trapHere;
+        if (trapHere?.ttyp === SQKY_BOARD) game._pending_squeaky_board_trap = trapHere;
         if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
@@ -51323,6 +51365,8 @@ async function moveHero(dx, dy) {
         return;
     }
     if (trapHere?.ttyp === SLP_GAS_TRAP && objectsHere.length > 1) game._pending_sleep_gas_trap = trapHere;
+    if (trapHere?.ttyp === ROCKTRAP && objectsHere.length > 1) game._pending_rock_trap = trapHere;
+    if (trapHere?.ttyp === SQKY_BOARD && objectsHere.length > 1) game._pending_squeaky_board_trap = trapHere;
     if (trapHere?.ttyp === ARROW_TRAP && objectsHere.length > 1) game._pending_arrow_trap = trapHere;
     if (trapHere?.ttyp === DART_TRAP && objectsHere.length > 1) game._pending_dart_trap = trapHere;
     if (trapHere?.ttyp === LANDMINE && objectsHere.length > 1) game._pending_landmine_trap = trapHere;
@@ -51447,6 +51491,8 @@ async function moveHero(dx, dy) {
         game.context.move = 0;
         if (trapHere?.ttyp === MAGIC_TRAP) game._pending_magic_trap = trapHere;
         if (trapHere?.ttyp === SLP_GAS_TRAP) game._pending_sleep_gas_trap = trapHere;
+        if (trapHere?.ttyp === ROCKTRAP) game._pending_rock_trap = trapHere;
+        if (trapHere?.ttyp === SQKY_BOARD) game._pending_squeaky_board_trap = trapHere;
         if (trapHere?.ttyp === LANDMINE) game._pending_landmine_trap = trapHere;
         if (trapHere?.ttyp === PIT || trapHere?.ttyp === SPIKED_PIT) game._pending_pit_trap = trapHere;
         if (trapHere?.ttyp === POLY_TRAP) game._pending_poly_trap = trapHere;
@@ -51471,6 +51517,20 @@ async function moveHero(dx, dy) {
         const result = movementSleepGasTrapResult(trapHere);
         result.message = [pileMessage, result.message].filter(Boolean).join('  ');
         if (result.message) await setMessage(result.message, !!result.more || !!(pileMessage && result.message));
+        return;
+    }
+    if (trapHere?.ttyp === ROCKTRAP) {
+        const result = movementRockTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (trapResultHasEffect(result))
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
+        return;
+    }
+    if (trapHere?.ttyp === SQKY_BOARD) {
+        const result = movementSqueakyBoardTrapResult(trapHere);
+        result.message = [pileMessage, result.message].filter(Boolean).join('  ');
+        if (trapResultHasEffect(result))
+            await finishHeroDartTrapResult(result, { more: !!(pileMessage && result.message) });
         return;
     }
     if (trapHere?.ttyp === WEB) {
@@ -51849,6 +51909,20 @@ export async function rhack(_cmd) {
                 if (result.message) await setMessage(result.message, !!result.more);
                 return;
             }
+            if (game._pending_rock_trap) {
+                const result = movementRockTrapResult(game._pending_rock_trap);
+                game._pending_rock_trap = null;
+                if (trapResultHasEffect(result))
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
+            if (game._pending_squeaky_board_trap) {
+                const result = movementSqueakyBoardTrapResult(game._pending_squeaky_board_trap);
+                game._pending_squeaky_board_trap = null;
+                if (trapResultHasEffect(result))
+                    await finishHeroDartTrapResult(result, { more: objectListRows > 4 || !!result.more });
+                return;
+            }
             if (game._pending_web_trap) {
                 const result = movementWebTrapResult(game._pending_web_trap);
                 game._pending_web_trap = null;
@@ -51923,6 +51997,22 @@ export async function rhack(_cmd) {
                 if (!game._pending_time_passed) game.context.move = 1;
                 game._process_command_time_now = 1;
                 if (result.message) await setMessage(result.message, !!result.more);
+                return;
+            }
+            if (game._pending_rock_trap) {
+                const result = movementRockTrapResult(game._pending_rock_trap);
+                game._pending_rock_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (trapResultHasEffect(result)) await finishHeroDartTrapResult(result);
+                return;
+            }
+            if (game._pending_squeaky_board_trap) {
+                const result = movementSqueakyBoardTrapResult(game._pending_squeaky_board_trap);
+                game._pending_squeaky_board_trap = null;
+                if (!game._pending_time_passed) game.context.move = 1;
+                game._process_command_time_now = 1;
+                if (trapResultHasEffect(result)) await finishHeroDartTrapResult(result);
                 return;
             }
             if (game._pending_web_trap) {

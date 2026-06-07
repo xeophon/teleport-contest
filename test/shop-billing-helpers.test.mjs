@@ -25683,6 +25683,183 @@ test('flying hero crosses hidden sleep gas trap without gas effects', async () =
     assert.equal(trap.tseen, false);
 });
 
+test('ordinary movement onto falling rock trap drops rock and damages hero', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+    });
+    game.inventory = [];
+    const trap = { ttyp: ROCKTRAP, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+    const rockDamage = rngValuesForCall(getRngLog(), 'd(2,6)');
+
+    assert.equal(game._pending_message, 'A trap door in the ceiling opens and a rock falls on your head!');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+    assert.equal(rockDamage.length, 1);
+    assert.equal(game.u.uhp, 40 - rockDamage[0]);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(game.context.move, 1);
+});
+
+test('ordinary movement lethal falling rock trap uses life saving command mode', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 1,
+        uhpmax: 40,
+    });
+    const amulet = {
+        id: 25759,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    game.inventory = [amulet];
+    const trap = { ttyp: ROCKTRAP, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /A trap door in the ceiling opens and a rock falls on your head!/);
+    assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+    assert.equal(game._death_cause, 'falling rock');
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('ordinary movement onto squeaky board squeaks and wakes nearby monster', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        ulevel: 1,
+    });
+    game.inventory = [];
+    const trap = { ttyp: SQKY_BOARD, tx: 6, ty: 5, tseen: false, tnote: 0, madeby_u: false };
+    const sleeper = ordinaryThrowTarget('goblin', 8, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.traps = [trap];
+    game.level.monsters = [sleeper];
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'A board beneath you squeaks a C note loudly.');
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(trap.tseen, true);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,6)').length, 0);
+    assert.equal(game.context.move, 1);
+});
+
+test('dismount object list consumes pending falling rock trap', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+    });
+    game.inventory = [];
+    const trap = { ttyp: ROCKTRAP, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    game.level.traps = [trap];
+    game._command_mode = 'dismountObjectList';
+    game._overlay_lines = [[0, 0, 'test overlay']];
+    game._pending_rock_trap = trap;
+    game._pending_time_passed = 0;
+    game.context = {};
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+    const rockDamage = rngValuesForCall(getRngLog(), 'd(2,6)');
+
+    assert.equal(game._pending_rock_trap || null, null);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._process_command_time_now, 1);
+    assert.equal(game._pending_message, 'A trap door in the ceiling opens and a rock falls on your head!');
+    assert.equal(rockDamage.length, 1);
+    assert.equal(game.u.uhp, 40 - rockDamage[0]);
+    assert.equal(trap.tseen, true);
+    assert.equal(trap.once, true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 6 && obj.oy === 5), true);
+});
+
+test('object list squeaky board trap waits until more is dismissed', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        ulevel: 1,
+    });
+    game.inventory = [];
+    const trap = { ttyp: SQKY_BOARD, tx: 6, ty: 5, tseen: false, tnote: 0, madeby_u: false };
+    const sleeper = ordinaryThrowTarget('goblin', 8, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.traps = [trap];
+    game.level.monsters = [sleeper];
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [
+        [0, 0, 'a'], [1, 0, 'b'], [2, 0, 'c'], [3, 0, 'd'], [4, 0, 'e'],
+    ];
+    game._pending_squeaky_board_trap = trap;
+    game.context = {};
+    enableRngLog({ reset: true });
+
+    await rhack(' ');
+
+    assert.equal(game._pending_squeaky_board_trap || null, null);
+    assert.equal(game._pending_message, 'A board beneath you squeaks a C note loudly.');
+    assert.equal(game._message_more, 1);
+    assert.equal(trap.tseen, true);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(2,6)').length, 0);
+});
+
 function mountBearTrapPony(hp = 10, extra = {}) {
     const { data: dataExtra = {}, ...monsterExtra } = extra;
     const pony = ordinaryThrowTarget('pony', 5, 5, {
@@ -62320,6 +62497,96 @@ test('attached ball fallback relocation triggers sleep gas on new hero square', 
     assert.equal(gas.tseen, true);
     assert.equal((game._helpless_time || 0) > 0, true);
     assert.equal((game._sleeping_time || 0) > 0, true);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation triggers falling rock trap on new hero square', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876228, 'b');
+    const chain = attachedIronChain(876229);
+    const rockTrap = { ttyp: ROCKTRAP, tx: 9, ty: 5, tseen: false, madeby_u: false };
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [rockTrap];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+    const rockDamage = rngValuesForCall(getRngLog(), 'd(2,6)');
+
+    assert.equal(game._pending_message, 'A trap door in the ceiling opens and a rock falls on your head!');
+    assert.equal(rockTrap.tseen, true);
+    assert.equal(rockTrap.once, true);
+    assert.equal(rockDamage.length, 1);
+    assert.equal(game.u.uhp, 40 - rockDamage[0]);
+    assert.equal(game.u.ux, 9);
+    assert.equal(game.u.uy, 5);
+    assert.equal(ball.ox, 10);
+    assert.equal(ball.oy, 5);
+    assert.equal(chain.ox, 9);
+    assert.equal(chain.oy, 5);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ROCK && obj.ox === 9 && obj.oy === 5), true);
+    assert.equal(game._relocate_after_more || null, null);
+    assert.equal(game._deferred_level_goto || null, null);
+});
+
+test('attached ball fallback relocation triggers squeaky board on new hero square', async () => {
+    installNonShopFloorState();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        ulevel: 1,
+        upunished: true,
+    });
+    game.u.acurr.a[A_STR] = STR19(25);
+    const ball = carriedAttachedIronBall(876230, 'b');
+    const chain = attachedIronChain(876231);
+    const board = { ttyp: SQKY_BOARD, tx: 9, ty: 5, tseen: false, tnote: 0, madeby_u: false };
+    const sleeper = ordinaryThrowTarget('goblin', 11, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.u.uball = ball;
+    game.u.uchain = chain;
+    game.inventory = [ball];
+    game.level.objects = [chain];
+    game.level.traps = [board];
+    game.level.monsters = [sleeper];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'A board beneath you squeaks a C note loudly.');
+    assert.equal(board.tseen, true);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.equal(game.u.uhp, 40);
     assert.equal(game.u.ux, 9);
     assert.equal(game.u.uy, 5);
     assert.equal(ball.ox, 10);
