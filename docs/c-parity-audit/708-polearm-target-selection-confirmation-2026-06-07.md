@@ -27,4 +27,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs worm cutting and exact miss/wakeup messages. Audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing.
+- Full `use_pole()` impact parity still needs worm cutting. Audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering.

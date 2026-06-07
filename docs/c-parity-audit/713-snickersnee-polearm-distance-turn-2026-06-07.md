@@ -22,4 +22,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs worm cutting and exact `tmiss()`/wakeup messaging.
+- Full `use_pole()` impact parity still needs worm cutting. Audit 714 covers `tmiss()` wakeup ordering.

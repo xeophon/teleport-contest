@@ -26032,11 +26032,18 @@ function heroAppliedPolearmTargetName(mon) {
     return heroPolearmCanSpotMonster(mon) ? heroThrownVenomTargetName(mon) : 'it';
 }
 
+function heroAppliedPolearmMissMessage(item, mon) {
+    const name = pickupObjectName(item);
+    if (!heroPolearmCanSpotMonster(mon) || heroPolearmDisguisedMimic(mon))
+        return `The ${name} misses.`;
+    return `The ${name} misses ${heroThrownVenomTargetName(mon)}.`;
+}
+
 function heroAppliedPolearmImpact(item, mon) {
     const hitValue = heroAppliedPolearmHitValue(item, mon);
     const dieroll = rnd(20);
-    const targetName = heroAppliedPolearmTargetName(mon);
     if (hitValue >= dieroll) {
+        const targetName = heroAppliedPolearmTargetName(mon);
         addConductCount('weaphit');
         const damage = Math.max(0, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
         if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
@@ -26047,12 +26054,12 @@ function heroAppliedPolearmImpact(item, mon) {
         const passiveObject = applyDirectMeleePassiveObject(mon, item, messages);
         return { hit: true, damage, messages, passiveObject };
     }
-    mon.msleeping = 0;
-    mon.meating = 0;
-    setHeroObjectHitMonsterAngry(mon);
+    const messages = [heroAppliedPolearmMissMessage(item, mon)];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    wakeMonsterFromHeroThrownHit(mon);
     return {
         hit: false,
-        messages: [`The ${pickupObjectName(item)} misses ${targetName}.`],
+        messages,
     };
 }
 

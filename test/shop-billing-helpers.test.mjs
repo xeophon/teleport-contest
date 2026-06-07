@@ -67155,7 +67155,7 @@ test('applying polearm miss skips rust monster passive object erosion', async ()
     assert.doesNotMatch(game._pending_message, /rusts|corrodes|smoulders|less effective/);
     assert.equal(weapon.oeroded || 0, 0);
     assert.equal(rustMonster.mhp, 50);
-    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(20)']);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(20)', 'rn2(3)']);
 });
 
 test('applying Snickersnee distance attack is free once per turn', async () => {
@@ -67480,6 +67480,33 @@ test('applying polearm to remembered invisible marker over monster proceeds to h
     assert.equal(loc.map_invisible, true);
     assert.equal(game.context.move, 1);
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+});
+
+test('applying polearm miss at remembered invisible marker uses generic miss wording', async () => {
+    const soldier = ordinaryThrowTarget('soldier', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        mpeaceful: false,
+        msleeping: 1,
+        minvis: 1,
+        perminvis: 1,
+        data: { name: 'soldier', mlevel: 1 },
+    });
+    setupWieldedPolearmCanary({ monsters: [soldier] });
+    game.u.seeInvisible = false;
+    game.u.uhitinc = -200;
+    const loc = markRememberedInvisiblePolearmTarget(7, 5);
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'The glaive misses.');
+    assert.doesNotMatch(game._pending_message, /soldier|it/);
+    assert.equal(soldier.mhp, 20);
+    assert.equal(soldier.msleeping, 0);
+    assert.equal(loc.map_invisible, true);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(20)', 'rn2(3)']);
 });
 
 test('applying polearm to hidden hider under remembered invisible marker proceeds to hit', async () => {
