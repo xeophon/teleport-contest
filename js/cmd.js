@@ -20540,6 +20540,17 @@ function heroHorizontalThrowRecoilTrapEffectAt(x, y) {
             trapResult: result.fatal || result.lifeSaving ? result : null,
         };
     }
+    if (trap && (is_pit(trap.ttyp) || is_hole(trap.ttyp)) && In_sokoban(game.u?.uz)) {
+        const result = is_pit(trap.ttyp)
+            ? movementPitResult(trap)
+            : movementTransportTrapResult(trap);
+        return {
+            messages: result?.message ? [result.message] : [],
+            more: !!result?.more,
+            trapResult: result?.fatal || result?.lifeSaving ? result : null,
+            stop: true,
+        };
+    }
     if (trap?.ttyp !== VIBRATING_SQUARE) return { messages: [] };
     trap.tseen = true;
     newsym(x, y);

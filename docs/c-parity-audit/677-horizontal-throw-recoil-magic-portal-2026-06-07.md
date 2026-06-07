@@ -21,4 +21,4 @@
 
 ## Remaining Follow-Ups
 
-- Recoil effects for Sokoban pit/hole stops remain a separate slice.
+- No remaining special `hurtle_step()` recoil trap effects are currently tracked in this micro-area.

@@ -63681,6 +63681,116 @@ test('levitating hero-thrown loose heavy iron ball recoil activates hidden magic
     assert.equal(landed.oy, 5);
 });
 
+test('levitating hero-thrown loose heavy iron ball recoil triggers Sokoban pit and stops', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 0;
+    Object.assign(game.u, {
+        ux: 12,
+        uy: 5,
+        levitating: true,
+        uhp: 40,
+        uhpmax: 40,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    const ball = {
+        id: 876186,
+        letter: 'b',
+        line: 'b - a heavy iron ball',
+        cls: 'ball',
+        glyph: '0',
+        kind: 'heavy iron ball',
+        actualKind: 'heavy iron ball',
+        quan: 1,
+        owt: 480,
+    };
+    const pit = { ttyp: PIT, tx: 11, ty: 5, tseen: false, madeby_u: false };
+    const goblin = ordinaryThrowTarget('goblin', 15, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [ball];
+    game.level.traps = [pit];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hurtle in the opposite direction\.  Air currents pull you down into a pit!/);
+    assert.doesNotMatch(game._pending_message, /pass right over a pit|You fall into a pit/);
+    assert.equal(pit.tseen, true);
+    assert.equal(game.u.ux, 11);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utraptype, 'pit');
+    assert.equal(game.u.utrap >= 2 && game.u.utrap <= 7, true);
+    assert.equal(game.u.uhp < 40, true);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(ball), false);
+    const landed = game.level.objects.find(obj => obj.id === ball.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 13);
+    assert.equal(landed.oy, 5);
+});
+
+test('levitating hero-thrown loose heavy iron ball recoil falls through Sokoban hole and stops', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.sokoban_dnum = 0;
+    game.dungeons = [{ name: 'The Dungeons of Doom', num_dunlevs: 3, depth_start: 1 }];
+    Object.assign(game.u, {
+        ux: 12,
+        uy: 5,
+        levitating: true,
+        uz: { dnum: 0, dlevel: 1 },
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    const ball = {
+        id: 876187,
+        letter: 'b',
+        line: 'b - a heavy iron ball',
+        cls: 'ball',
+        glyph: '0',
+        kind: 'heavy iron ball',
+        actualKind: 'heavy iron ball',
+        quan: 1,
+        owt: 480,
+    };
+    const hole = { ttyp: HOLE, tx: 11, ty: 5, tseen: false, madeby_u: false };
+    const goblin = ordinaryThrowTarget('goblin', 15, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [ball];
+    game.level.traps = [hole];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hurtle in the opposite direction\.  Air currents pull you down into a hole!/);
+    assert.doesNotMatch(game._pending_message, /pass right over a hole|float over a hole/);
+    assert.equal(game._message_more, 1);
+    assert.equal(hole.tseen, true);
+    assert.equal(game.u.ux, 11);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.deepEqual(game._deferred_level_goto?.targetLevel, { dnum: 0, dlevel: 2 });
+    assert.equal(game._deferred_level_goto?.options?.falling, true);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(ball), false);
+    const landed = game.level.objects.find(obj => obj.id === ball.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 13);
+    assert.equal(landed.oy, 5);
+});
+
 test('levitating hero-thrown loose heavy iron ball uses C ball range divisor', async () => {
     installNonShopFloorState();
     initRng(2);
