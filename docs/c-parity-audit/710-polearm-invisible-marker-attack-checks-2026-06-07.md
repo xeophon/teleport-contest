@@ -29,4 +29,4 @@
 ## Remaining Follow-Ups
 
 - Exact hidden mimic stumble wording, warning-glyph edge cases, and object-specific hidden-under messages can still be broadened.
-- Full `use_pole()` impact parity still needs worm cutting. Audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering.
+- Full `use_pole()` impact parity still needs other artifact-specific behavior. Audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering; audit 715 covers long-worm cutting.

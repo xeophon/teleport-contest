@@ -25687,8 +25687,9 @@ function wieldItemForApply(item) {
 }
 
 function polearmTargetDescription(x, y) {
-    const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y);
-    if (mon && heroPolearmCanSpotMonster(mon) && !heroPolearmDisguisedMimic(mon))
+    const target = heroPolearmMonsterAtTarget(x, y);
+    const mon = target?.mon || null;
+    if (mon && heroPolearmCanSpotMonsterAt(mon, x, y) && !heroPolearmDisguisedMimic(mon))
         return monsterIndefiniteName(mon.data?.name || 'monster');
     if (heroPolearmDisplayGlyphIsInvisible(x, y)) return 'unseen creature';
     const statue = floorStatueAt(x, y);
@@ -25782,6 +25783,11 @@ function heroPolearmCanSpotMonster(mon) {
         && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
 }
 
+function heroPolearmCanSpotMonsterAt(mon, x = mon?.mx, y = mon?.my) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(x, y);
+}
+
 function heroPolearmSensesMonster(mon) {
     return heroPolearmCanSpotMonster(mon) || sensesTelepathically(mon)
         || !!(mon?.detected || mon?.sensed || mon?.warned || mon?.mwarned);
@@ -25799,6 +25805,28 @@ function addUniquePolearmCandidate(candidates, seen, candidate) {
     if (seen.has(key)) return;
     seen.add(key);
     candidates.push(candidate);
+}
+
+function heroPolearmMonsterAtTarget(x, y) {
+    for (const mon of game.level?.monsters || []) {
+        if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        if (mon.mx === x && mon.my === y) return { mon, segmentIndex: -1, x, y };
+        const segmentIndex = Array.isArray(mon.wormSegments)
+            ? mon.wormSegments.findIndex(seg => seg.x === x && seg.y === y)
+            : -1;
+        if (segmentIndex >= 0) return { mon, segmentIndex, x, y };
+    }
+    return null;
+}
+
+function heroPolearmSegmentCandidate(mon, x, y, segmentIndex) {
+    return {
+        mx: x,
+        my: y,
+        mon,
+        segmentIndex,
+        polearmSegment: true,
+    };
 }
 
 function heroPolearmPositionValidForAutohit(x, y, item = heroWieldedPolearm()) {
@@ -25855,10 +25883,20 @@ function heroPolearmRememberedHitmon(item = heroWieldedPolearm()) {
         clearHeroPolearmHitmon();
         return null;
     }
-    if (!heroPolearmTargetInRange(mon.mx, mon.my, item) || !heroPolearmSensesMonster(mon)
+    const coords = [[mon.mx, mon.my]];
+    if (Array.isArray(mon.wormSegments))
+        coords.push(...mon.wormSegments.map(seg => [seg.x, seg.y]));
+    const targetCoord = coords.find(([x, y]) =>
+        heroPolearmTargetInRange(x, y, item) && heroPolearmCanSpotMonsterAt(mon, x, y));
+    if (!targetCoord || !heroPolearmSensesMonster(mon)
         || !heroPolearmAutohitMonsterAllowed(mon))
         return null;
-    return mon;
+    const segmentIndex = Array.isArray(mon.wormSegments)
+        ? mon.wormSegments.findIndex(seg => seg.x === targetCoord[0] && seg.y === targetCoord[1])
+        : -1;
+    return segmentIndex >= 0
+        ? heroPolearmSegmentCandidate(mon, targetCoord[0], targetCoord[1], segmentIndex)
+        : mon;
 }
 
 function heroPolearmAutohitTarget(item = heroWieldedPolearm()) {
@@ -25866,11 +25904,19 @@ function heroPolearmAutohitTarget(item = heroWieldedPolearm()) {
     const seen = new Set();
     for (const mon of game.level?.monsters || []) {
         if (!mon || mon.dead || (mon.mhp != null && mon.mhp <= 0)
-            || !heroPolearmAutohitMonsterAllowed(mon)
-            || !heroPolearmTargetInRange(mon.mx, mon.my, item)
-            || !heroPolearmCanSpotMonster(mon))
+            || !heroPolearmAutohitMonsterAllowed(mon))
             continue;
-        addUniquePolearmCandidate(candidates, seen, mon);
+        if (heroPolearmTargetInRange(mon.mx, mon.my, item) && heroPolearmCanSpotMonster(mon))
+            addUniquePolearmCandidate(candidates, seen, mon);
+        if (!Array.isArray(mon.wormSegments)) continue;
+        for (let segmentIndex = 0; segmentIndex < mon.wormSegments.length; segmentIndex++) {
+            const seg = mon.wormSegments[segmentIndex];
+            if (!heroPolearmTargetInRange(seg.x, seg.y, item)
+                || !heroPolearmCanSpotMonsterAt(mon, seg.x, seg.y))
+                continue;
+            addUniquePolearmCandidate(candidates, seen,
+                heroPolearmSegmentCandidate(mon, seg.x, seg.y, segmentIndex));
+        }
     }
     heroPolearmAddInvisibleMarkerCandidates(candidates, seen, item);
     if (heroPolearmTargetingImpaired()) {
@@ -25887,11 +25933,11 @@ function heroPolearmAttackPromptName(mon) {
     return fireScrollMonsterName(mon).replace(/^The /, 'the ');
 }
 
-function heroPolearmAttackNeedsConfirmation(item, mon) {
+function heroPolearmAttackNeedsConfirmation(item, mon, x = mon?.mx, y = mon?.my) {
     if (!mon?.mpeaceful || heroPolearmTargetingImpaired() || game.flags?.confirm === false) return false;
     const name = String(item?.artifact || item?.artifactName || item?.kind || item?.actualKind || '').toLowerCase();
     if (name === 'stormbringer' || /\bstormbringer\b/.test(inventoryItemName(item).toLowerCase())) return false;
-    return heroPolearmCanSpotMonster(mon);
+    return heroPolearmCanSpotMonsterAt(mon, x, y);
 }
 
 function clearPolearmAttackConfirmState() {
@@ -25965,7 +26011,7 @@ function heroPolearmHiddenMonsterMessage(mon) {
 async function heroPolearmAttackChecks(item, mon, x, y, { autohit = false, confirmed = false } = {}) {
     const invisibleMarker = heroPolearmDisplayGlyphIsInvisible(x, y);
     const warningGlyph = heroPolearmWarningGlyphForMonster(mon);
-    const spotted = heroPolearmCanSpotMonster(mon);
+    const spotted = heroPolearmCanSpotMonsterAt(mon, x, y);
     const hiddenHider = !!(mon?.mundetected && heroPolearmMonsterHidesUnder(mon));
 
     if (!spotted && !warningGlyph && !invisibleMarker
@@ -26011,7 +26057,7 @@ async function heroPolearmAttackChecks(item, mon, x, y, { autohit = false, confi
         revealHeroPolearmMimic(mon);
     }
 
-    if (!autohit && !confirmed && heroPolearmAttackNeedsConfirmation(item, mon)) {
+    if (!autohit && !confirmed && heroPolearmAttackNeedsConfirmation(item, mon, x, y)) {
         game._apply_polearm_confirm_letter = item.letter || null;
         game._apply_polearm_confirm_x = x;
         game._apply_polearm_confirm_y = y;
@@ -26028,33 +26074,148 @@ function heroAppliedPolearmHitValue(item, mon) {
         + heroWeaponHitSkillBonus(skill, skillName);
 }
 
-function heroAppliedPolearmTargetName(mon) {
-    return heroPolearmCanSpotMonster(mon) ? heroThrownVenomTargetName(mon) : 'it';
+function heroAppliedPolearmTargetName(mon, x = mon?.mx, y = mon?.my) {
+    return heroPolearmCanSpotMonsterAt(mon, x, y) ? heroThrownVenomTargetName(mon) : 'it';
 }
 
-function heroAppliedPolearmMissMessage(item, mon) {
+function heroAppliedPolearmMissMessage(item, mon, x = mon?.mx, y = mon?.my) {
     const name = pickupObjectName(item);
-    if (!heroPolearmCanSpotMonster(mon) || heroPolearmDisguisedMimic(mon))
+    if (!heroPolearmCanSpotMonsterAt(mon, x, y) || heroPolearmDisguisedMimic(mon))
         return `The ${name} misses.`;
     return `The ${name} misses ${heroThrownVenomTargetName(mon)}.`;
 }
 
-function heroAppliedPolearmImpact(item, mon) {
+const HERO_APPLIED_POLEARM_DAMAGE_DATA = new Map([
+    ['partisan', { smallDie: 6, largeDie: 6, largeAdd: 1 }],
+    ['ranseur', { smallDie: 4, smallAddDie: 4, largeDie: 4, largeAddDie: 4 }],
+    ['spetum', { smallDie: 6, smallAdd: 1, largeDie: 6, largeAddDie: 6 }],
+    ['glaive', { smallDie: 6, largeDie: 10 }],
+    ['halberd', { smallDie: 10, largeDie: 6, largeAddDie: 6 }],
+    ['bardiche', { smallDie: 4, smallAddDie: 4, largeDie: 4, largeAddDice: [2, 4] }],
+    ['voulge', { smallDie: 4, smallAddDie: 4, largeDie: 4, largeAddDie: 4 }],
+    ['fauchard', { smallDie: 6, largeDie: 8 }],
+    ['guisarme', { smallDie: 4, smallAddDie: 4, largeDie: 8 }],
+    ['bill-guisarme', { smallDie: 4, smallAddDie: 4, largeDie: 10 }],
+    ['lucern hammer', { smallDie: 4, smallAddDie: 4, largeDie: 6 }],
+    ['bec de corbin', { smallDie: 8, largeDie: 6 }],
+]);
+
+function heroAppliedPolearmDamageData(item) {
+    const keys = [
+        item?.actualKind,
+        item?.kind,
+        tossUpWeaponObjectKey(item),
+        inventoryItemName(item),
+    ].map(value => String(value || '').toLowerCase().replace(/^the\s+/, ''));
+    return keys.map(key => HERO_APPLIED_POLEARM_DAMAGE_DATA.get(key)).find(Boolean) || null;
+}
+
+function heroAppliedPolearmExtraDamage(data, prefix) {
+    let damage = Math.trunc(Number(data?.[`${prefix}Add`] || 0));
+    const addDie = Math.trunc(Number(data?.[`${prefix}AddDie`] || 0));
+    if (addDie > 0) damage += rnd(addDie);
+    const addDice = data?.[`${prefix}AddDice`];
+    if (Array.isArray(addDice) && addDice.length === 2) {
+        const dice = Math.trunc(Number(addDice[0] || 0));
+        const sides = Math.trunc(Number(addDice[1] || 0));
+        if (dice > 0 && sides > 0) damage += d(dice, sides);
+    }
+    return damage;
+}
+
+function heroAppliedPolearmHitDamage(item, mon) {
+    const data = heroAppliedPolearmDamageData(item);
+    if (!data) return Math.max(0, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
+    const largeTarget = heroProjectileMonsterSizeValue(mon) >= 3;
+    const prefix = largeTarget ? 'large' : 'small';
+    const die = largeTarget ? data.largeDie : data.smallDie;
+    let damage = die ? rnd(die) : 0;
+    damage += heroAppliedPolearmExtraDamage(data, prefix);
+    damage += Math.trunc(Number(item?.spe || 0));
+    if (damage < 0) damage = 0;
+    if (damage > 0) {
+        damage -= objectGreatestErosion(item);
+        if (damage < 1) damage = 1;
+    }
+    damage += heroStrengthDamageBonus() + heroDamageIncreaseBonus();
+    const { skill, skillName } = heroPolearmSkillMeta(item);
+    damage += heroWeaponDamageSkillBonus(skill, skillName);
+    if (damage < 1) damage = 1;
+    return damage;
+}
+
+function heroAppliedPolearmCutWormName(mon) {
+    return heroThrownVenomTargetName(mon);
+}
+
+function heroAppliedPolearmCutWorm(mon, targetX, targetY, messages) {
+    const segments = mon?.wormSegments;
+    if (!Array.isArray(segments) || (mon.mx === targetX && mon.my === targetY)) return null;
+    const segmentIndex = segments.findIndex(seg => seg.x === targetX && seg.y === targetY);
+    if (segmentIndex < 0) return null;
+    if (rnd(20) < 17) return { cut: false };
+
+    if (segmentIndex === segments.length - 1) {
+        mon.wormSegments = segments.slice(0, -1);
+        return { cut: true, tail: true };
+    }
+
+    const oldHeadSide = segments.slice(0, segmentIndex);
+    const oldTailSide = segments.slice(segmentIndex + 1);
+    const cutName = heroAppliedPolearmCutWormName(mon);
+
+    if ((mon.m_lev ?? mon.data?.mlevel ?? 0) >= 3 && !rn2(3)) {
+        mon.wormSegments = oldHeadSide;
+        const newLevel = Math.max(Math.trunc(Number(mon.m_lev ?? mon.data?.mlevel ?? 3)) - 2, 3);
+        mon.m_lev = newLevel;
+        mon.mlevel = newLevel;
+        const newWorm = {
+            ...mon,
+            mx: targetX,
+            my: targetY,
+            m_id: next_ident(),
+            m_lev: newLevel,
+            mlevel: newLevel,
+            mhpmax: d(newLevel, 8),
+            mhp: 0,
+            wormSegments: oldTailSide,
+            mcloned: 0,
+        };
+        newWorm.mhp = newWorm.mhpmax;
+        mon.mhpmax = d(newLevel, 8);
+        if ((mon.mhp || 0) > mon.mhpmax) mon.mhp = mon.mhpmax;
+        game.level.monsters ??= [];
+        game.level.monsters.push(newWorm);
+        messages.push(`You cut ${cutName} in half.`);
+        return { cut: true, split: true, newWorm };
+    }
+
+    mon.wormSegments = segments.slice(0, segmentIndex + 1);
+    if ((mon.mhp || 0) > 1) mon.mhp = Math.max(1, Math.trunc(mon.mhp / 2));
+    messages.push(`You cut part of the tail off of ${cutName}.`);
+    return { cut: true, tailLoss: true, removedSegments: oldTailSide.length };
+}
+
+function heroAppliedPolearmImpact(item, mon, { targetX = mon?.mx, targetY = mon?.my } = {}) {
     const hitValue = heroAppliedPolearmHitValue(item, mon);
     const dieroll = rnd(20);
     if (hitValue >= dieroll) {
-        const targetName = heroAppliedPolearmTargetName(mon);
+        const targetName = heroAppliedPolearmTargetName(mon, targetX, targetY);
         addConductCount('weaphit');
-        const damage = Math.max(0, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
+        const damage = heroAppliedPolearmHitDamage(item, mon);
         if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
         const messages = [`You hit ${targetName}${heroProjectileHitPunctuation(damage)}`];
         if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
-        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        let cutWorm = null;
+        if (!mon.dead) {
+            wakeMonsterFromHeroThrownHit(mon);
+            cutWorm = heroAppliedPolearmCutWorm(mon, targetX, targetY, messages);
+        }
         exerciseHeroProjectileHitDexterity();
         const passiveObject = applyDirectMeleePassiveObject(mon, item, messages);
-        return { hit: true, damage, messages, passiveObject };
+        return { hit: true, damage, messages, passiveObject, cutWorm };
     }
-    const messages = [heroAppliedPolearmMissMessage(item, mon)];
+    const messages = [heroAppliedPolearmMissMessage(item, mon, targetX, targetY)];
     messages.push(...wakeMonsterFromHeroThrownMiss(mon));
     wakeMonsterFromHeroThrownHit(mon);
     return {
@@ -26085,8 +26246,8 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
         return true;
     }
 
-    const mon = (game.level?.monsters || []).find(candidate =>
-        candidate.mx === x && candidate.my === y && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
+    const target = heroPolearmMonsterAtTarget(x, y);
+    const mon = target?.mon || null;
     clearHeroPolearmHitmon();
     if (mon) {
         if (await heroPolearmAttackChecks(item, mon, x, y, { autohit, confirmed }))
@@ -26099,10 +26260,12 @@ async function finishHeroPolearmTarget(item, x, y, { autohit = false, confirmed 
         }
         const messages = [];
         const freeSnickersneeHit = beginHeroSnickersneeDistanceAttack(item, messages);
-        const impact = heroAppliedPolearmImpact(item, mon);
+        const impact = heroAppliedPolearmImpact(item, mon, { targetX: x, targetY: y });
         messages.push(...(impact.messages || []));
         await setMessage(messages.join('  '), messages.length > 1);
+        if (mon.mx !== x || mon.my !== y) newsym(mon.mx, mon.my);
         newsym(x, y);
+        if (impact.cutWorm?.newWorm) newsym(impact.cutWorm.newWorm.mx, impact.cutWorm.newWorm.my);
         game.context.move = freeSnickersneeHit ? 0 : 1;
         wipeHeroPolearmEngraving();
         return true;

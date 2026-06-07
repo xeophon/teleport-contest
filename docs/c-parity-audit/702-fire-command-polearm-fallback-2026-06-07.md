@@ -15,7 +15,7 @@
 ## Port Notes
 
 - Applied polearm target resolution now checks for a live monster at the selected square before falling through to the existing statue, boulder, obstacle, and empty-square feedback.
-- Ordinary applied polearm monster hits now use a C-shaped `rnd(20)` hit roll, polearm weapon-skill hit bonus, `rnd(2)` ranged impact damage, strength and increase-damage bonuses, weapon-hit conduct, wake/anger handling, kill cleanup, and Dexterity exercise.
+- Ordinary applied polearm monster hits use a C-shaped `rnd(20)` hit roll, polearm weapon-skill hit bonus, weapon-hit conduct, wake/anger handling, kill cleanup, and Dexterity exercise. Audit 715 replaces this slice's initial placeholder damage with melee polearm damage dice and long-worm cutting.
 - Empty-quiver `f` with `autoquiver` off now applies a wielded polearm before the manual fire-object prompt.
 - The `f` polearm fallback autohits a single hostile visible monster exactly two squares away; if no such target is available, it gives the C no-target feedback instead of prompting for ammo.
 
@@ -32,7 +32,7 @@
 
 ## Remaining Follow-Ups
 
-- Full applied-polearm `thitmonst()` parity still needs other artifact-specific behavior, tame and peaceful confirmation, invisible and statue glyph autohit targeting, impaired targeting under hallucination/confusion/stun, and worm cutting. Audit 707 covers skill-dependent reach expansion; audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering.
+- Full applied-polearm `thitmonst()` parity still needs other artifact-specific behavior. Audit 707 covers skill-dependent reach expansion; audit 708 covers confirmation and impaired target selection; audit 710 covers invisible-marker attack checks; audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering; audit 715 covers long-worm cutting and concrete polearm damage dice.
 - Audit 704 covers the empty-quiver bullwhip fallback.
 - Audit 705 covers the empty-quiver alternate-polearm queued swap/retry branch.
 - Audit 703 covers the thrown-and-return weapon shortcut for empty quiver or ammo quiver before the polearm fallback.

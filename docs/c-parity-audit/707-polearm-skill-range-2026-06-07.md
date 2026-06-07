@@ -28,4 +28,4 @@
 ## Remaining Follow-Ups
 
 - Full `find_poleable_mon()` parity still needs prior-`hitmon` remembered target fallback and invisible-marker target selection. Audit 708 covers the first visibility failure split, peaceful confirmation prompt, and impaired tame/peaceful/statue auto-target subset.
-- Full `use_pole()` impact parity still needs other artifact-specific behavior and worm cutting. Audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering.
+- Full `use_pole()` impact parity still needs other artifact-specific behavior. Audit 711 covers engraving wiping; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers `tmiss()` wakeup ordering; audit 715 covers long-worm cutting.

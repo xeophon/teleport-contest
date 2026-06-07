@@ -22,4 +22,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs worm cutting. Audit 714 covers `tmiss()` wakeup ordering.
+- Full `use_pole()` impact parity still needs other artifact-specific behavior. Audit 714 covers `tmiss()` wakeup ordering; audit 715 covers long-worm cutting and concrete polearm damage dice.

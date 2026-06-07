@@ -21,4 +21,4 @@
 
 ## Remaining Follow-Ups
 
-- Full `use_pole()` impact parity still needs worm cutting.
+- Audit 715 covers long-worm cutting and concrete polearm damage dice.

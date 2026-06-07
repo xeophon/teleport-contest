@@ -29,5 +29,5 @@
 
 ## Remaining Follow-Ups
 
-- Full `could_pole_mon()`/`use_pole()` parity remains broader than the current ordinary visible hostile monster autohit subset: remembered targets, invisible/statue glyphs, peaceful/tame confirmation, impaired targeting, and message edge cases still need separate audits. Audit 707 covers skill-dependent reach expansion; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers applied-polearm `tmiss()` wakeup ordering.
+- Full `could_pole_mon()`/`use_pole()` parity remains broader than the current ordinary visible hostile monster autohit subset. Audit 707 covers skill-dependent reach expansion; audit 708 covers confirmation and impaired targeting; audit 709 covers remembered targets; audit 710 covers invisible markers; audit 712 covers passive object effects; audit 713 covers Snickersnee distance timing; audit 714 covers applied-polearm `tmiss()` wakeup ordering; audit 715 covers long-worm cutting.
 - The JS fireassist launcher/swap paths still mutate state inline instead of using C's queued `doswapweapon`/`dowield`/retry command lifecycle.

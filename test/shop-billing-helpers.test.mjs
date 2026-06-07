@@ -66855,6 +66855,25 @@ function markCanaryWeaponAsSnickersnee(weapon) {
     return weapon;
 }
 
+function longWormPolearmTarget({
+    x = 9,
+    y = 5,
+    segments = [{ x: 8, y: 5 }, { x: 7, y: 5 }, { x: 6, y: 5 }],
+    hp = 50,
+} = {}) {
+    return ordinaryThrowTarget('long worm', x, y, {
+        mhp: hp,
+        mhpmax: hp,
+        m_lev: 9,
+        mlevel: 9,
+        mpeaceful: false,
+        msleeping: 0,
+        msize: 'huge',
+        wormSegments: segments.map(seg => ({ ...seg })),
+        data: { name: 'long worm', mlevel: 9, msize: 'huge', mlet: 'w' },
+    });
+}
+
 async function beginApplyPolearmCanary() {
     await rhack('a');
     await rhack('g');
@@ -66935,7 +66954,7 @@ test('applying wielded polearm hits monster at range two', async () => {
 
     await rhack('.');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
@@ -66975,12 +66994,12 @@ test('applying skilled polearm hits monster at range five', async () => {
 
     await rhack('.');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.doesNotMatch(game._pending_message, /Too far/);
-    assert.equal(goblin.mhp, 10 - damageRoll);
+    assert.equal(goblin.mhp, 10 - damageRoll - 1);
 });
 
 test('applying expert polearm hits monster at diagonal range eight', async () => {
@@ -67016,12 +67035,42 @@ test('applying expert polearm hits monster at diagonal range eight', async () =>
 
     await rhack('.');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.doesNotMatch(game._pending_message, /Too far/);
-    assert.equal(goblin.mhp, 10 - damageRoll);
+    assert.equal(goblin.mhp, 10 - damageRoll - 2);
+});
+
+test('applying generated spetum uses large-target extra damage die', async () => {
+    const giant = ordinaryThrowTarget('giant', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        mpeaceful: false,
+        msleeping: 0,
+        msize: 'huge',
+        data: { name: 'giant', mlevel: 6, msize: 'huge' },
+    });
+    const { weapon } = setupWieldedPolearmCanary({
+        monsters: [giant],
+        visible: [[7, 5]],
+    });
+    Object.assign(weapon, {
+        kind: 'forked polearm',
+        actualKind: 'spetum',
+        known: true,
+        line: 'g - a spetum (weapon in hands)',
+    });
+
+    await applyPolearmAtTarget(7, 5);
+
+    const damageRolls = rngValuesForCall(getRngLog(), 'rnd(6)');
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You hit the giant[.!]/);
+    assert.equal(damageRolls.length, 2);
+    assert.equal(giant.mhp, 30 - damageRolls[0] - damageRolls[1]);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 3), ['rnd(20)', 'rnd(6)', 'rnd(6)']);
 });
 
 test('applying basic polearm reports too far at range five', async () => {
@@ -67081,7 +67130,7 @@ test('applying polearm wipes dust engraving under hero after impact', async () =
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.ok(goblin.mhp < 20);
     assert.equal(heroEngravingAtFeet(), null);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('applying basic polearm too far preserves dust engraving under hero', async () => {
@@ -67130,7 +67179,7 @@ test('applying polearm hit applies rust monster passive object erosion', async (
     assert.equal(weapon.oeroded, 1);
     assert.match(weapon.line, /rusty .*glaive/);
     assert.equal(rustMonster.mhp < 50, true);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('applying polearm miss skips rust monster passive object erosion', async () => {
@@ -67156,6 +67205,90 @@ test('applying polearm miss skips rust monster passive object erosion', async ()
     assert.equal(weapon.oeroded || 0, 0);
     assert.equal(rustMonster.mhp, 50);
     assert.deepEqual(getRngLog().map(rngCallName), ['rnd(20)', 'rn2(3)']);
+});
+
+test('applying polearm cursor describes visible long worm segment', async () => {
+    const worm = longWormPolearmTarget();
+    setupWieldedPolearmCanary({
+        monsters: [worm],
+        visible: [[7, 5]],
+    });
+
+    await beginApplyPolearmCanary();
+    await rhack('l');
+    await rhack('l');
+
+    assert.match(game._pending_message, /long worm/);
+    assert.doesNotMatch(game._pending_message, /floor of a room|no one there/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('applying polearm cut on long worm tail segment removes tail segment', async () => {
+    const worm = longWormPolearmTarget({
+        segments: [{ x: 8, y: 5 }, { x: 7, y: 5 }],
+    });
+    setupWieldedPolearmCanary({
+        monsters: [worm],
+        visible: [[7, 5]],
+    });
+    initRng(3);
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You hit the long worm[.!]/);
+    assert.doesNotMatch(game._pending_message, /no one there|cut .*tail|cut .*half/);
+    assert.deepEqual(worm.wormSegments, [{ x: 8, y: 5 }]);
+    assert.equal(game.level.monsters.length, 1);
+    assert.equal(worm.mhp, 45);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 3), ['rnd(20)', 'rnd(10)', 'rnd(20)']);
+});
+
+test('applying polearm cut on long worm body segment removes severed tail', async () => {
+    const worm = longWormPolearmTarget();
+    setupWieldedPolearmCanary({
+        monsters: [worm],
+        visible: [[7, 5]],
+    });
+    initRng(3);
+
+    await applyPolearmAtTarget(7, 5);
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You hit the long worm[.!]/);
+    assert.match(game._pending_message, /You cut part of the tail off of the long worm\./);
+    assert.deepEqual(worm.wormSegments, [{ x: 8, y: 5 }, { x: 7, y: 5 }]);
+    assert.equal(game.level.monsters.length, 1);
+    assert.equal(worm.mhp, 22);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), ['rnd(20)', 'rnd(10)', 'rnd(20)', 'rn2(3)']);
+});
+
+test('applying polearm cut on long worm body segment can split into new worm', async () => {
+    const worm = longWormPolearmTarget();
+    setupWieldedPolearmCanary({
+        monsters: [worm],
+        visible: [[7, 5]],
+    });
+    initRng(5);
+
+    await applyPolearmAtTarget(7, 5);
+
+    const newWorm = game.level.monsters.find(mon => mon !== worm);
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /You hit the long worm[.!]/);
+    assert.match(game._pending_message, /You cut the long worm in half\./);
+    assert.equal(game.level.monsters.length, 2);
+    assert.deepEqual(worm.wormSegments, [{ x: 8, y: 5 }]);
+    assert.ok(newWorm);
+    assert.equal(newWorm.mx, 7);
+    assert.equal(newWorm.my, 5);
+    assert.deepEqual(newWorm.wormSegments, [{ x: 6, y: 5 }]);
+    assert.equal(worm.m_lev, 7);
+    assert.equal(newWorm.m_lev, 7);
+    assert.equal(newWorm.mhp, newWorm.mhpmax);
+    assert.ok(worm.mhp > 0 && worm.mhp <= worm.mhpmax);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 7),
+        ['rnd(20)', 'rnd(10)', 'rnd(20)', 'rn2(3)', 'rnd(2)', 'd(7,8)', 'd(7,8)']);
 });
 
 test('applying Snickersnee distance attack is free once per turn', async () => {
@@ -67263,7 +67396,7 @@ test('applying polearm to peaceful monster attacks after confirmation', async ()
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.ok(goblin.mhp < 10);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('f command empty quiver reuses prior polearm hit target amid ambiguity', async () => {
@@ -67306,7 +67439,7 @@ test('f command empty quiver reuses prior polearm hit target amid ambiguity', as
     assert.doesNotMatch(game._pending_message, /Don't know what to hit|What do you want to fire|In what direction/);
     assert.ok(goblin.mhp < hpAfterFirstHit);
     assert.equal(orc.mhp, 20);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('f command quivered ammo reuses prior polearm hit target before launcher amid ambiguity', async () => {
@@ -67352,7 +67485,7 @@ test('f command quivered ammo reuses prior polearm hit target before launcher am
     assert.equal(orc.mhp, 20);
     assert.equal(launcher.wielded || false, false);
     assert.equal(missile.quivered, true);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('f command empty quiver auto-targets stale remembered invisible polearm marker', async () => {
@@ -67391,7 +67524,7 @@ test('f command empty quiver stale polearm marker wipes dust engraving under her
     assert.equal(game.context.move, 1);
     assert.equal(heroEngravingAtFeet(), null);
     assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 0);
-    assert.equal(rngValuesForCall(getRngLog(), 'rnd(2)').length, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(6)').length, 0);
 });
 
 test('f command empty quiver auto-targets remembered invisible monster marker', async () => {
@@ -67421,7 +67554,7 @@ test('f command empty quiver auto-targets remembered invisible monster marker', 
     assert.doesNotMatch(game._pending_message, /Wait!|Don't know what to hit|What do you want to fire|In what direction|no one there/);
     assert.ok(soldier.mhp < 20);
     assert.equal(loc.map_invisible, true);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('applying polearm to unseen monster maps invisible and aborts attack', async () => {
@@ -67479,7 +67612,7 @@ test('applying polearm to remembered invisible marker over monster proceeds to h
     assert.equal(soldier.msleeping, 0);
     assert.equal(loc.map_invisible, true);
     assert.equal(game.context.move, 1);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('applying polearm miss at remembered invisible marker uses generic miss wording', async () => {
@@ -67531,7 +67664,7 @@ test('applying polearm to hidden hider under remembered invisible marker proceed
     assert.ok(hider.mhp < 20);
     assert.equal(loc.map_invisible, true);
     assert.equal(game.context.move, 1);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('f command fireassist skips known cursed inventory launcher', async () => {
@@ -67664,7 +67797,7 @@ test('f command empty quiver with wielded polearm autohits before ammo prompt', 
 
     await rhack('f');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game._fire_item_letter || null, null);
     assert.equal(missile.quivered || false, false);
@@ -67738,7 +67871,7 @@ test('f command confused hero autohits peaceful polearm target', async () => {
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.ok(goblin.mhp < 10);
-    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
 
 test('f command hallucinating hero can polearm-target a statue', async () => {
@@ -67781,7 +67914,7 @@ test('f command quivered ammo with reachable wielded polearm uses polearm before
 
     await rhack('f');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.equal(game._fire_item_letter || null, null);
@@ -67820,14 +67953,14 @@ test('f command skilled quivered ammo with reachable wielded polearm autohits ra
 
     await rhack('f');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.equal(game._fire_item_letter || null, null);
     assert.equal(game._fire_launcher_letter || null, null);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
     assert.doesNotMatch(game._pending_message, /What do you want to fire|In what direction|arrow|bow/);
-    assert.equal(goblin.mhp, 10 - damageRoll);
+    assert.equal(goblin.mhp, 10 - damageRoll - 1);
     assert.equal(weapon.wielded, true);
     assert.equal(launcher.wielded || false, false);
     assert.equal(game.inventory.includes(missile), true);
@@ -67905,7 +68038,7 @@ test('f command autoquivered ammo with reachable wielded polearm readies then us
 
     await rhack(' ');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game.context.move, 1);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
@@ -68051,7 +68184,7 @@ test('f command empty quiver swaps alternate polearm and retries before ammo pro
 
     await rhack(' ');
 
-    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(2)')[0];
+    const damageRoll = rngValuesForCall(getRngLog(), 'rnd(6)')[0];
     assert.equal(game._command_mode || null, null);
     assert.equal(game._fire_item_letter || null, null);
     assert.match(game._pending_message, /You hit the goblin[.!]/);
