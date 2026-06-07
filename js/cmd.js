@@ -67406,7 +67406,8 @@ export async function rhack(_cmd) {
         let projectileBreakRoll = null;
         const hardLanding = !projectileLandingIsSoft(ox, oy);
         const targetUsesImpact = !!(targetMon
-            && (firedFromLauncher || heroThrownByHandAmmoObject(item, launcher)));
+            && (firedFromLauncher || heroThrownByHandAmmoObject(item, launcher)
+                || (!launcher && heroThrownGemClassObject(item))));
         const splitBeforeImpact = targetUsesImpact;
         if (splitBeforeImpact) {
             for (let shot = 0; shot < shotCount; shot++) {
@@ -67446,6 +67447,33 @@ export async function rhack(_cmd) {
                 impactConsumedProjectile = !!impact.mulched;
                 impactObjectHit = !!impact.hit;
                 impactPassiveTarget = impact.hit ? targetMon : null;
+            }
+            if (!impact.handled && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(projectileObject)) {
+                const unicornImpact = heroThrownUnicornGemImpact(projectileObject, targetMon);
+                impactMessage = (unicornImpact.messages || []).join('  ');
+                impactConsumedProjectile = !!unicornImpact.consumed;
+            } else if (!impact.handled && heroThrownStoneMissileHarmlessRockPasser(projectileObject, targetMon)) {
+                const hitValue = heroThrownGemHitValue(projectileObject, targetMon);
+                const dieroll = rnd(20);
+                const thrownName = floorObjectTheSubject(projectileObject);
+                const targetName = heroThrownVenomTargetName(targetMon);
+                if (hitValue >= dieroll) {
+                    wakeMonsterFromHeroThrownHit(targetMon);
+                    exerciseHeroProjectileHitDexterity();
+                    impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
+                    impactObjectHit = true;
+                    impactPassiveTarget = targetMon;
+                } else {
+                    const messages = [`The ${pickupObjectName({ ...item, quan: 1 })} misses the ${targetMon.data?.name || 'creature'}.`];
+                    messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+                    impactMessage = messages.join('  ');
+                }
+            } else if (!impact.handled && heroThrownGemClassObject(projectileObject)) {
+                const gemImpact = heroThrownGemImpact(projectileObject, targetMon);
+                impactMessage = (gemImpact.messages || []).join('  ');
+                impactConsumedProjectile = !!gemImpact.mulched;
+                impactObjectHit = !!gemImpact.hit;
+                impactPassiveTarget = gemImpact.hit ? targetMon : null;
             }
         }
         if (!impactConsumedProjectile && hardLanding) {

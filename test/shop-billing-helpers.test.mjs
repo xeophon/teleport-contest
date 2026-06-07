@@ -65918,6 +65918,98 @@ test('f command slung flint multishot interleaves split ids and break tests', as
     assert.equal(landed.oy, 5);
 });
 
+test('f command no-sling glass gem hits monster by hand', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    const glass = carriedGlassGem(8761771, 'g', {
+        quivered: true,
+        line: 'g - a worthless piece of red glass (in quiver)',
+    });
+    const elemental = ordinaryThrowTarget('earth elemental', 7, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        passWalls: true,
+        passesRocks: true,
+        neuter: true,
+        data: {
+            name: 'earth elemental',
+            mlevel: 8,
+            passWalls: true,
+            passesRocks: true,
+            neuter: true,
+        },
+    });
+    game.inventory = [glass];
+    game.level.monsters = [elemental];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The red gem hits the earth elemental\./);
+    assert.doesNotMatch(game._pending_message, /You throw|You aren't wielding|does no harm|misses|shatters/);
+    assert.equal(elemental.mhp, 19);
+    assert.equal(elemental.msleeping, 0);
+    assert.equal(elemental.meating, 0);
+    assert.equal(elemental.mstrategy, 0);
+    assert.equal(elemental.mpeaceful, 0);
+    assert.equal(game.inventory.includes(glass), false);
+    const landed = game.level.objects.find(obj => obj.id === glass.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 5), [
+        'rnd(20)', 'rnd(2)', 'rn2(19)', 'rn2(3)', 'rn2(100)',
+    ]);
+});
+
+test('f command no-sling known glass gem to unicorn is rejected as junk and lands', async () => {
+    installNonShopFloorState();
+    game.level.flags.noteleport = true;
+    initRng(1);
+    game.u.ualign = { type: A_LAWFUL, record: 0 };
+    game.u.uluck = 2;
+    const glass = carriedGlassGem(8761772, 'g', {
+        quivered: true,
+        line: 'g - a worthless piece of red glass (in quiver)',
+    });
+    const unicorn = unicornThrowTarget('white unicorn');
+    game.inventory = [glass];
+    game.level.monsters = [unicorn];
+    enableRngLog({ reset: true });
+
+    await rhack('f');
+    await rhack('l');
+
+    assert.match(game._pending_message, /The white unicorn catches the red gem\./);
+    assert.match(game._pending_message, /The white unicorn is not interested in your junk\./);
+    assert.doesNotMatch(game._pending_message, /You throw|You aren't wielding|hits|misses|accepts|shatters/);
+    assert.equal(unicorn.mhp, 24);
+    assert.equal(unicorn.mpeaceful, 1);
+    assert.equal(unicorn.mavenge, 0);
+    assert.equal(game.u.uluck, 2);
+    assert.equal((unicorn.minvent || []).some(obj => obj.id === glass.id), false);
+    assert.equal(game.inventory.includes(glass), false);
+    const landed = game.level.objects.find(obj => obj.id === glass.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 1), ['rn2(100)']);
+});
+
 test('levitating f command arrow with matching bow uses C air split recoil', async () => {
     installNonShopFloorState();
     initRng(2);
