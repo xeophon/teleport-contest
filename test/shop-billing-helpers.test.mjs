@@ -68596,6 +68596,150 @@ test('wielded bullwhip yanks visible armed monster weapon to monster square when
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(2)']);
 });
 
+test('wielded bullwhip can yank visible armed monster weapon to hero square', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([2]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 15, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173228, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173229, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a dagger.  You yank a dagger to the floor!');
+    assert.equal(goblin.minvent.includes(weapon), false);
+    assert.equal(goblin.mw || null, null);
+    assert.equal(goblin.weapon_check, 1);
+    assert.equal(game.level.objects.includes(weapon), true);
+    assert.equal(weapon.ox, 5);
+    assert.equal(weapon.oy, 5);
+    assert.equal(game.inventory.includes(weapon), false);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.letter || null, null);
+    assert.equal(weapon.ocarry || null, null);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(3)']);
+});
+
+test('wielded bullwhip can snatch visible armed monster weapon into inventory', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([3]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 16, 10, 10] },
+    });
+    const whip = wieldedWeapon(876173230, 'bullwhip', 'w', 0);
+    const weapon = dagger(876173231, 'd');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.inventory = [whip];
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a dagger.  You snatch a dagger!  x - a +0 dagger.');
+    assert.equal(goblin.minvent.includes(weapon), false);
+    assert.equal(goblin.mw || null, null);
+    assert.equal(goblin.weapon_check, 1);
+    assert.equal(game.inventory.includes(weapon), true);
+    assert.equal(weapon.letter, 'x');
+    assert.equal(weapon.line, 'x - a +0 dagger');
+    assert.equal(weapon.ox || null, null);
+    assert.equal(weapon.oy || null, null);
+    assert.equal(weapon.wielded || false, false);
+    assert.equal(weapon.ocarry || null, null);
+    assert.equal(game.level.objects.includes(weapon), false);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)']);
+});
+
+test('wielded bullwhip snatch drops monster weapon when inventory letters are full', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([3]);
+    game._startup_role = 'Archeologist';
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        acurr: { a: [10, 10, 10, 16, 10, 10] },
+    });
+    fillInventoryLetters(876173300);
+    const whip = wieldedWeapon(876173232, 'bullwhip', 'w', 0);
+    game.inventory[INVENTORY_LETTERS.indexOf('w')] = whip;
+    const weapon = upwardWeapon(876173233, 'b', 'boomerang', 'b - a boomerang');
+    weapon.wielded = true;
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [weapon],
+        mw: weapon,
+    });
+    game.level.monsters = [goblin];
+    weapon.ocarry = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('a');
+    await rhack('w');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You wrap your bullwhip around a boomerang.  You snatch a boomerang!  You drop a boomerang!');
+    assert.equal(game.inventory.length, INVENTORY_LETTERS.length);
+    assert.equal(game.inventory.includes(whip), true);
+    assert.equal(game.inventory.includes(weapon), false);
+    assert.equal(goblin.minvent.includes(weapon), false);
+    assert.equal(goblin.mw || null, null);
+    assert.equal(goblin.weapon_check, 1);
+    assert.equal(game.level.objects.includes(weapon), true);
+    assert.equal(weapon.ox, 5);
+    assert.equal(weapon.oy, 5);
+    assert.equal(weapon.letter || null, null);
+    assert.equal(weapon.ocarry || null, null);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(4)']);
+});
+
 test('wielded bullwhip into wall of water splashes before monster handling', async () => {
     installNonShopFloorState();
     initRng(2);

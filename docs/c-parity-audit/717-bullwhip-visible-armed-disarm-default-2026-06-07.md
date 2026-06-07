@@ -15,7 +15,7 @@
 - Visible armed monsters use `mon.mw` as the `MON_WEP()` equivalent; random inventory items are not inferred as wielded.
 - Unproficient hero bullwhip use against a visible armed monster wraps the weapon, prints `The bullwhip slips free.`, spends the turn, and wakes/angers the target without changing monster inventory.
 - Proficiency-1 bullwhip use consumes `rn2(2)`, moves the actual `mon.mw` object out of `minvent` to the monster square, clears stale wield/carrier fields, sets `weapon_check = NEED_WEAPON`, stacks the object, redraws the square, and wakes/angers the target.
-- Higher proficiency is intentionally not claimed here because C's `rn2(3)`/`rn2(4)` destination variants can yank to the hero square or snatch into inventory.
+- Higher-proficiency destinations are covered by audit 718.
 
 ## Tests
 
@@ -25,7 +25,6 @@
 
 ## Remaining Follow-Ups
 
-- Higher-proficiency disarm destinations: roll `2` yanks the weapon to the hero's floor square, roll `3` snatches it into inventory with full carried-object side effects.
 - Welded monster weapons need the C `It is welded to <monster>'s hand!` feedback and `bknown` update before slipping free.
-- Full disarm side effects still need shop billing/no-charge, timers/light sources, artifact/object immunities, petrifying corpse snatch handling, inventory overflow, and exact monster body-part naming beyond ordinary hands.
+- Full disarm side effects still need shop billing/no-charge, timers/light sources, artifact/object immunities, petrifying corpse snatch handling, and exact monster body-part naming beyond ordinary hands.
 - Broader `use_whip()` follow-ups remain mimic reveal, invisible mapping, pit escape, fumbling/glib drops, proficient `force_attack()`, floor snaring, dead-horse feedback, and exact wakeup visibility.

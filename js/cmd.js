@@ -20391,12 +20391,15 @@ function monsterWieldedWeapon(mon) {
     return (mon.minvent || []).includes(weapon) ? weapon : null;
 }
 
-function finishHeroBullwhipDisarm(mon, weapon, messages) {
+function prepareHeroBullwhipDisarmedWeapon(mon, weapon) {
     mon.minvent = (mon.minvent || []).filter(item => item !== weapon);
     if (mon.mw === weapon) mon.mw = null;
     mon.weapon_check = NEED_WEAPON;
     weapon.wielded = false;
     weapon.mw = false;
+    weapon.alternate = false;
+    weapon.quivered = false;
+    weapon.worn = false;
     weapon.invlet = weapon.invlet ?? weapon.letter;
     weapon.letter = undefined;
     weapon.line = undefined;
@@ -20407,14 +20410,56 @@ function finishHeroBullwhipDisarm(mon, weapon, messages) {
     weapon.buried = false;
     delete weapon.nobj;
     delete weapon.nexthere;
+}
+
+function placeHeroBullwhipDisarmedWeapon(weapon, x, y) {
     Object.assign(weapon, object_display(weapon));
-    weapon.ox = mon.mx;
-    weapon.oy = mon.my;
+    weapon.ox = x;
+    weapon.oy = y;
     game.level.objects ??= [];
     game.level.objects.push(weapon);
     stackDroppedFloorObject(weapon);
-    newsym(mon.mx, mon.my);
-    messages.push(`You yank the ${pickupObjectName({ ...weapon, line: undefined, quan: 1 })} from ${monsterPossessiveName(mon)} ${/two-handed|quarterstaff|battle-axe/.test(String(weapon.kind || weapon.actualKind || '')) ? 'hands' : 'hand'}!`);
+    newsym(x, y);
+}
+
+function putHeroBullwhipSnatchedWeaponInInventory(weapon, messages) {
+    const mergeInfo = findPickedObjectInventoryMergeTarget(weapon, 0);
+    if (mergeInfo) {
+        const mergeMessage = mergePickedObjectIntoInventory(weapon, mergeInfo.target);
+        if (mergeMessage) messages.push(mergeMessage);
+        game._pet_food_scan_inventory = game.inventory;
+        return mergeInfo.target;
+    }
+    const letter = simulatedNextInventoryLetters(1)?.[0];
+    if (!letter) {
+        placeHeroBullwhipDisarmedWeapon(weapon, game.u?.ux || 0, game.u?.uy || 0);
+        messages.push(`You drop ${pickupObjectPhrase({ ...weapon, line: '', quan: weapon.quan || 1 })}!`);
+        return null;
+    }
+    delete weapon.ox;
+    delete weapon.oy;
+    weapon.letter = letter;
+    weapon.line = normalInventoryLine({ ...weapon, line: '' });
+    nextInventoryLetter();
+    game.inventory = [...(game.inventory || []), weapon];
+    game._pet_food_scan_inventory = game.inventory;
+    messages.push(`${weapon.line}.`);
+    return weapon;
+}
+
+function finishHeroBullwhipDisarm(mon, weapon, messages, roll, weaponName) {
+    const baseName = pickupObjectName({ ...weapon, line: undefined, quan: 1 });
+    prepareHeroBullwhipDisarmedWeapon(mon, weapon);
+    if (roll === 2) {
+        placeHeroBullwhipDisarmedWeapon(weapon, game.u?.ux || 0, game.u?.uy || 0);
+        messages.push(`You yank ${weaponName} to the ${polyselfFalloffSurfaceName()}!`);
+    } else if (roll === 3) {
+        messages.push(`You snatch ${weaponName}!`);
+        putHeroBullwhipSnatchedWeaponInInventory(weapon, messages);
+    } else {
+        placeHeroBullwhipDisarmedWeapon(weapon, mon.mx, mon.my);
+        messages.push(`You yank the ${baseName} from ${monsterPossessiveName(mon)} ${/two-handed|quarterstaff|battle-axe/.test(String(weapon.kind || weapon.actualKind || '')) ? 'hands' : 'hand'}!`);
+    }
 }
 
 async function beginHeroBullwhipApply(item) {
@@ -20492,12 +20537,14 @@ async function finishHeroBullwhipDirection(item, ch) {
         candidate.mx === rx && candidate.my === ry && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0));
     if (mon) {
         const proficient = heroBullwhipProficiency();
-        const targetWeapon = proficient <= 1 && heroCanSpotBullwhipTarget(mon) ? monsterWieldedWeapon(mon) : null;
+        const targetWeapon = heroCanSpotBullwhipTarget(mon) ? monsterWieldedWeapon(mon) : null;
         if (targetWeapon) {
-            const messages = [`You wrap your bullwhip around ${inventoryItemName(targetWeapon)}.`];
-            if (proficient === 1) {
-                rn2(proficient + 1);
-                finishHeroBullwhipDisarm(mon, targetWeapon, messages);
+            const targetWeaponName = inventoryItemName(targetWeapon);
+            const messages = [`You wrap your bullwhip around ${targetWeaponName}.`];
+            const gotit = proficient > 0 && (!game.u?.fumbling || !rn2(10));
+            if (gotit) {
+                const roll = rn2(proficient + 1);
+                finishHeroBullwhipDisarm(mon, targetWeapon, messages, roll, targetWeaponName);
             } else {
                 messages.push('The bullwhip slips free.');
             }
