@@ -28,4 +28,4 @@
 
 - Blind ball/chain glyph ordering after attached-ball relocation remains open.
 - Attached-ball fallback relocation still needs canaries for bear, polymorph, and dart trap result details.
-- Broader extraction of every ordinary `spoteffects(TRUE)` trap class after attached-ball fallback relocation remains open.
+- Rust, fire, and rolling-boulder fallback traps were added in `655-attached-ball-fallback-floor-traps-2026-06-07.md`; broader extraction of every ordinary `spoteffects(TRUE)` trap class remains open.

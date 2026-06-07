@@ -20161,6 +20161,9 @@ function heroDropBallTrapRelocationEffect(x, y, messages) {
     if ([HOLE, TRAPDOOR].includes(trap.ttyp)) result = movementTransportTrapResult(trap);
     else if (trap.ttyp === PIT || trap.ttyp === SPIKED_PIT) result = movementPitResult(trap);
     else if (trap.ttyp === SLP_GAS_TRAP) result = movementSleepGasTrapResult(trap);
+    else if (trap.ttyp === RUST_TRAP) result = movementRustTrapResult(trap);
+    else if (trap.ttyp === FIRE_TRAP) result = heroFireTrapResult(trap, '', { allowLifeSaving: true });
+    else if (trap.ttyp === ROLLING_BOULDER_TRAP) result = heroRollingBoulderTrapResult(trap);
     else if (trap.ttyp === WEB) result = movementWebTrapResult(trap);
     else if (trap.ttyp === BEAR_TRAP) result = movementBearTrapResult(trap);
     else if (trap.ttyp === LANDMINE) result = movementLandmineResult(trap);
@@ -46930,6 +46933,12 @@ function sitRustTrapMessage(trap, prefix) {
     return messages.join('  ');
 }
 
+function movementRustTrapResult(trap) {
+    if (trap) trap.tseen = true;
+    rn2(5);
+    return { message: 'A gush of water hits you!' };
+}
+
 function heroFireTrapResult(trap, prefix = '', { allowLifeSaving = false } = {}) {
     trap.tseen = true;
     const origDamage = d(2, 4);
@@ -51149,9 +51158,8 @@ async function moveHero(dx, dy) {
         return;
     }
     if (steppedTrap?.ttyp === RUST_TRAP) {
-        steppedTrap.tseen = true;
-        rn2(5);
-        await setMessage('A gush of water hits you!');
+        const result = movementRustTrapResult(steppedTrap);
+        await setMessage(result.message, !!result.more);
         return;
     }
     if (steppedTrap?.ttyp === FIRE_TRAP) {
