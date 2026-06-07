@@ -20,7 +20,7 @@
   - Increase-damage and launcher weapon-skill damage, while suppressing strength damage for fired ammo.
   - Dexterity exercise and hit-only missile mulch on successful hits.
   - Miss wakeup and ordinary floor landing without hit-only mulch damage rolls.
-- Surviving fired ammo monster hits pass `ohit` and `passiveTarget` into the existing projectile landing helper and skip ordinary top-level hard-landing break checks.
+- Surviving fired ammo monster hits pass `ohit` and `passiveTarget` into the existing projectile landing helper, and surviving missiles still run the ordinary hard-landing resistance roll before floor placement.
 - Launcher multishot floor landings now interleave per-shot split ids and hard-landing resistance rolls in C order (`next_ident()` before that shot's `rn2(100)`), while the broader per-shot combat loop remains a follow-up.
 - C's quiet single-shot `f` behavior is now covered for ordinary single shots: the JS command no longer prints its local `You shoot an arrow.` line unless the local multishot branch fires or a by-hand warning is required.
 

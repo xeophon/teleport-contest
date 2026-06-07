@@ -20993,6 +20993,54 @@ function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
     return { handled: true, hit: false, messages };
 }
 
+function heroThrownByHandAmmoObject(obj, launcher = heroWieldedThrowLauncher()) {
+    const ammoSkill = heroThrowAmmoSkill(obj);
+    return (ammoSkill === 'bow' || ammoSkill === 'crossbow')
+        && !heroThrowAmmoAndLauncher(obj, launcher);
+}
+
+function heroThrownByHandAmmoDamage(obj, mon) {
+    let damage = rnd(2);
+    let silverMessage = '';
+    if (heroProjectileObjectIsSilver(obj) && heroProjectileTargetHatesSilver(mon)) {
+        damage += rnd(damage > 0 ? 20 : 10);
+        silverMessage = heroProjectileSilverSearingMessage(obj, mon);
+    }
+    if (damage > 0) {
+        damage += heroDamageIncreaseBonus() + heroStrengthDamageBonus();
+        if (damage < 1) damage = 1;
+    }
+    return { damage, silverMessage };
+}
+
+function heroThrownByHandAmmoImpact(obj, mon, launcher = heroWieldedThrowLauncher()) {
+    if (!heroThrownByHandAmmoObject(obj, launcher)) return { handled: false, messages: [] };
+    const hitValue = heroProjectileBaseHitValue(obj, mon) - 4;
+    const dieroll = rnd(20);
+    const targetName = heroThrownVenomTargetName(mon);
+    if (hitValue >= dieroll) {
+        const { damage, silverMessage } = heroThrownByHandAmmoDamage(obj, mon);
+        mon.mhp = (mon.mhp || 1) - damage;
+        const messages = [`${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`];
+        if (silverMessage) messages.push(silverMessage);
+        if ((mon.mhp || 0) <= 0) killMonsterFromHeroProjectileHit(mon, messages, targetName);
+        if (!mon.dead) wakeMonsterFromHeroThrownHit(mon);
+        exerciseHeroProjectileHitDexterity();
+        const mulched = shouldMulchHeroProjectileMissile(obj);
+        if (mulched) rn2(100);
+        return {
+            handled: true,
+            hit: true,
+            damage,
+            mulched,
+            messages,
+        };
+    }
+    const messages = [`The ${pickupObjectName({ ...obj, quan: 1 })} misses the ${mon?.data?.name || 'creature'}.`];
+    messages.push(...wakeMonsterFromHeroThrownMiss(mon));
+    return { handled: true, hit: false, messages };
+}
+
 function heroProjectileHitPunctuation(damage) {
     if (damage < 0) return '?';
     return damage <= 4 ? '.' : '!';
@@ -67356,7 +67404,9 @@ export async function rhack(_cmd) {
         let projectileId = null;
         let projectileBreakRoll = null;
         const hardLanding = !projectileLandingIsSoft(ox, oy);
-        const splitBeforeImpact = !!(targetMon && firedFromLauncher);
+        const targetUsesImpact = !!(targetMon
+            && (firedFromLauncher || heroThrownByHandAmmoObject(item, launcher)));
+        const splitBeforeImpact = targetUsesImpact;
         if (splitBeforeImpact) {
             for (let shot = 0; shot < shotCount; shot++) {
                 if (oldQuan - shot > 1) projectileId = next_ident();
@@ -67388,8 +67438,16 @@ export async function rhack(_cmd) {
                 impactObjectHit = !!impact.hit;
                 impactPassiveTarget = impact.hit ? targetMon : null;
             }
+        } else if (targetMon) {
+            const impact = heroThrownByHandAmmoImpact(projectileObject, targetMon, launcher);
+            if (impact.handled) {
+                impactMessage = (impact.messages || []).join('  ');
+                impactConsumedProjectile = !!impact.mulched;
+                impactObjectHit = !!impact.hit;
+                impactPassiveTarget = impact.hit ? targetMon : null;
+            }
         }
-        if (!impactConsumedProjectile && !impactObjectHit && hardLanding) {
+        if (!impactConsumedProjectile && hardLanding) {
             projectileBreakRoll = null;
             for (let shot = 0; shot < shotCount; shot++) {
                 if (!splitBeforeImpact && oldQuan - shot > 1) projectileId = next_ident();
@@ -67404,7 +67462,6 @@ export async function rhack(_cmd) {
                 breakRoll: projectileBreakRoll,
                 ohit: impactObjectHit,
                 passiveTarget: impactPassiveTarget,
-                skipTopBreak: impactObjectHit,
             });
         const landingMessage = landing.messages.join('  ');
         if (firedFromLauncher) {
@@ -67434,7 +67491,7 @@ export async function rhack(_cmd) {
             ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
             : `${firedFromLauncher ? 'You shoot' : 'You throw'} ${name}.`;
         const message = fireNoLauncherMessage
-            ? (fireRecoilResult?.message || '')
+            ? [fireRecoilResult?.message || '', impactMessage].filter(Boolean).join('  ')
             : [fireMessage, fireRecoilResult?.message || '', impactMessage].filter(Boolean).join('  ');
         const followUpMessage = [message, landingMessage].filter(Boolean).join('  ');
         if (fireNoLauncherMessage) {
@@ -68534,6 +68591,12 @@ export async function rhack(_cmd) {
             impactConsumedThrownObject = !!gemImpact.mulched;
             impactObjectHit = !!gemImpact.hit;
             impactPassiveTarget = gemImpact.hit ? targetMon : null;
+        } else if (targetMon && heroThrownByHandAmmoObject(item)) {
+            const ammoImpact = heroThrownByHandAmmoImpact(thrownObject, targetMon);
+            impactMessage = (ammoImpact.messages || []).join('  ');
+            impactConsumedThrownObject = !!ammoImpact.mulched;
+            impactObjectHit = !!ammoImpact.hit;
+            impactPassiveTarget = ammoImpact.hit ? targetMon : null;
         } else if (targetMon && heroProjectileSupportedWeaponObject(item)) {
             const weaponImpact = heroThrownWeaponImpact(thrownObject, targetMon);
             impactMessage = (weaponImpact.messages || []).join('  ');
