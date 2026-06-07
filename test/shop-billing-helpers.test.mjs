@@ -65176,6 +65176,49 @@ test('hero-thrown unmatched crossbow bolt uses C half range and warning', async 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
 });
 
+test('weak hero-thrown unmatched crossbow bolt uses C zero range and warning', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    game.u.acurr.a[A_STR] = 3;
+    const bolt = {
+        id: 876176,
+        letter: 'b',
+        line: 'b - a crossbow bolt',
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'crossbow bolt',
+        actualKind: 'crossbow bolt',
+        plural: 'crossbow bolts',
+        quan: 1,
+    };
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [bolt];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._pending_message, "You aren't wielding a crossbow, so you throw your bolt by hand.");
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(game.inventory.includes(bolt), false);
+    const landed = game.level.objects.find(obj => obj.id === bolt.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+});
+
 test('hero-thrown heavy ordinary weapon uses C weight range on normal ground', async () => {
     installNonShopFloorState();
     initRng(2);

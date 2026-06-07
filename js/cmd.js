@@ -20205,8 +20205,14 @@ function heroThrownMjollnirObject(obj) {
         || /mjollnir/i.test(inventoryItemName(obj));
 }
 
+function normalizeHeroHorizontalThrowRange(range, minimum = 0) {
+    const numeric = Number(range);
+    const normalized = Number.isFinite(numeric) ? Math.trunc(numeric) : 1;
+    return Math.max(minimum, normalized);
+}
+
 function heroHorizontalThrowMjollnirRangeCap(range) {
-    return Math.max(1, Math.trunc((Math.max(1, Math.trunc(Number(range || 1))) + 1) / 2));
+    return Math.trunc((normalizeHeroHorizontalThrowRange(range) + 1) / 2);
 }
 
 function heroThrownMjollnirThrowName(obj) {
@@ -20218,7 +20224,7 @@ function heroThrownMjollnirAutoReturn(obj) {
 }
 
 function heroHorizontalThrowFinalRange(obj, range, { mjollnirThrow = false, returningAklysThrow = false } = {}) {
-    let finalRange = Math.max(1, Math.trunc(Number(range || 1)));
+    let finalRange = normalizeHeroHorizontalThrowRange(range);
     if (isBoulderObject(obj)) finalRange = 20;
     else if (mjollnirThrow) finalRange = heroHorizontalThrowMjollnirRangeCap(finalRange);
     else if (returningAklysThrow) finalRange = Math.min(finalRange, 4);
