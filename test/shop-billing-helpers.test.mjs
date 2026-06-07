@@ -68053,6 +68053,133 @@ test('Q command shared ready prompt accepts suggested weapon', async () => {
     assert.equal(game._pending_message, 'd - a dagger (at the ready).');
 });
 
+test('Q command count prefix readies a split non-gold stack', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174164, 'd', 5);
+    game.inventory = [stack];
+
+    await rhack('2');
+    await rhack('Q');
+    await rhack('d');
+
+    const split = game.inventory.find(item => item !== stack && item.quivered);
+    assert.ok(split);
+    assert.equal(stack.quan, 3);
+    assert.equal(stack.quivered || false, false);
+    assert.equal(split.quan, 2);
+    assert.notEqual(split.letter, 'd');
+    assert.equal(game._pending_message, `${split.letter} - 2 +0 darts (at the ready).`);
+});
+
+test('f command prompt count readies a split non-gold stack before firing', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174165, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+
+    await rhack('f');
+    await rhack('2');
+
+    assert.equal(game._command_mode, 'fireQuiverObject');
+    assert.equal(game._pending_message, 'Count: 2');
+
+    await rhack('d');
+
+    const split = game.inventory.find(item => item !== stack && item.quivered);
+    assert.ok(split);
+    assert.equal(stack.quan, 3);
+    assert.equal(split.quan, 2);
+    assert.equal(game._fire_pending_item_letter, split.letter);
+    assert.equal(game._pending_message, `You ready: ${split.letter} - 2 +0 darts.`);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'fireDirection');
+    assert.equal(game._fire_item_letter, split.letter);
+    assert.equal(game._pending_message, 'In what direction?');
+});
+
+test('f command prompt count rejects partial gold readiness', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const gold = goldPieces(876174166, 5);
+    game.inventory = [gold];
+    game._goldCount = 5;
+    game.level.monsters = [];
+
+    await rhack('f');
+    await rhack('2');
+    await rhack('$');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, "You can't ready only part of your gold.");
+    assert.equal(gold.quan, 5);
+    assert.equal(game._goldCount, 5);
+    assert.equal(gold.quivered || false, false);
+});
+
+test('f command shot limit stays separate from manual prompt ready count', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+    });
+    const stack = dartStack(876174168, 'd', 5);
+    game.inventory = [stack];
+    game.level.monsters = [];
+    game.level.objects = [];
+
+    await rhack('1');
+    await rhack('f');
+    await rhack('2');
+    await rhack('d');
+
+    const split = game.inventory.find(item => item !== stack && item.quivered);
+    assert.ok(split);
+    assert.equal(split.quan, 2);
+    assert.equal(game._fire_pending_item_letter, split.letter);
+
+    await rhack(' ');
+    await rhack('l');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quan, 3);
+    assert.equal(split.quan, 1);
+    assert.equal(split.quivered, true);
+    const landed = game.level.objects.find(obj => obj.kind === 'dart');
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+});
+
+test('Q command overlarge count keeps ready prompt active', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    const stack = dartStack(876174167, 'd', 3);
+    game.inventory = [stack];
+
+    await rhack('Q');
+    await rhack('9');
+    await rhack('d');
+
+    assert.equal(game._command_mode, 'quiverObject');
+    assert.equal(game._pending_message, "You don't have that many!  You have only 3.");
+    assert.equal(stack.quan, 3);
+    assert.equal(stack.quivered || false, false);
+
+    await rhack('d');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(stack.quivered, true);
+    assert.equal(game._pending_message, 'd - 3 darts (at the ready).');
+});
+
 test('f command empty quiver with wielded polearm autohits before ammo prompt', async () => {
     installNonShopFloorState();
     initRng(2);

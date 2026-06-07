@@ -20332,6 +20332,56 @@ function heroFireReadyLine(item) {
     return `${item?.letter || '?'} - ${inventoryItemName(item)}`;
 }
 
+function clearReadySelectionCount() {
+    game._ready_count_text = '';
+}
+
+function readySelectionCountValue() {
+    return Math.max(0, Math.trunc(Number(game._ready_count_text || 0)));
+}
+
+async function appendReadySelectionCountDigit(ch) {
+    if (!/^\d$/.test(ch)) return false;
+    game._ready_count_text = `${game._ready_count_text || ''}${ch}`;
+    await setMessage(`Count: ${game._ready_count_text}`);
+    return true;
+}
+
+function itemIsAlreadyReadied(item) {
+    return !!item && !!(item.quivered
+        || item.line?.includes('at the ready')
+        || item.line?.includes('in quiver'));
+}
+
+async function applyReadySelectionCount(item, verb) {
+    const count = readySelectionCountValue();
+    clearReadySelectionCount();
+    if (count <= 0 || !item) return { handled: false, item };
+
+    const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
+    if (count > quantity) {
+        await setMessage(`You don't have that many!  You have only ${quantity}.`);
+        game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
+        return { handled: true, item: null };
+    }
+    if (count < quantity && isManualFireCoinItem(item)) {
+        await setMessage("You can't ready only part of your gold.");
+        game._command_mode = null;
+        if (verb === 'fire') game._fire_count = null;
+        return { handled: true, item: null };
+    }
+    if (count >= quantity) return { handled: false, item };
+
+    const split = splitCarriedInventoryItemCount(item, count);
+    split.wielded = false;
+    split.alternate = false;
+    split.worn = false;
+    split.quivered = false;
+    split.owornmask = 0;
+    refreshInventoryObjectLine(split);
+    return { handled: false, item: split };
+}
+
 function clearReadyInventoryOverlay() {
     game._ready_inventory_page = 0;
     game._ready_inventory_filter = null;
@@ -20354,13 +20404,33 @@ async function restoreReadyPrompt(verb) {
     game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
 }
 
-async function finishReadyObjectSelection(item, verb) {
+async function finishReadyObjectSelection(selectedItem, verb) {
+    let item = selectedItem;
     if (!item) {
+        clearReadySelectionCount();
         await setMessage("You don't have that object.");
         game._command_mode = null;
         if (verb === 'fire') game._fire_count = null;
         return;
     }
+    const count = readySelectionCountValue();
+    const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
+    if (count > quantity) {
+        clearReadySelectionCount();
+        await setMessage(`You don't have that many!  You have only ${quantity}.`);
+        game._command_mode = verb === 'fire' ? 'fireQuiverObject' : 'quiverObject';
+        return;
+    }
+    if (itemIsAlreadyReadied(item)) {
+        clearReadySelectionCount();
+        await setMessage('That ammunition is already readied!');
+        game._command_mode = null;
+        if (verb === 'fire') game._fire_count = null;
+        return;
+    }
+    const counted = await applyReadySelectionCount(item, verb);
+    if (counted.handled) return;
+    item = counted.item;
     if (isWornInventoryItem(item) && !itemIsWielded(item)) {
         await setMessage(`You cannot ${verb} that!`);
         game._command_mode = null;
@@ -20380,6 +20450,7 @@ async function finishReadyObjectSelection(item, verb) {
         return;
     }
     if (!isReadySelectableItem(item)) {
+        clearReadySelectionCount();
         await setMessage("You don't have that object.");
         game._command_mode = null;
         if (verb === 'fire') game._fire_count = null;
@@ -63066,10 +63137,12 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'quiverObject') {
         if (ch === '\x1b') {
+            clearReadySelectionCount();
             await setMessage('Never mind.');
             game._command_mode = null;
             return;
         }
+        if (await appendReadySelectionCountDigit(ch)) return;
         if (ch === '*') {
             showReadyInventoryOverlay('ready');
             return;
@@ -63080,6 +63153,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '-') {
+            clearReadySelectionCount();
             for (const item of game.inventory || []) item.quivered = false;
             await setMessage('No ammunition readied.');
             game._command_mode = null;
@@ -63106,11 +63180,13 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'fireQuiverObject') {
         if (ch === '\x1b' || ch === ' ') {
+            clearReadySelectionCount();
             await setMessage('Never mind.');
             game._command_mode = null;
             game._fire_count = null;
             return;
         }
+        if (await appendReadySelectionCountDigit(ch)) return;
         if (ch === '*') {
             showReadyInventoryOverlay('fire');
             return;
@@ -63121,6 +63197,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '-') {
+            clearReadySelectionCount();
             await setMessage('You already have no ammunition readied!');
             game._command_mode = null;
             game._fire_count = null;
@@ -63159,12 +63236,14 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === '\x1b') {
+            clearReadySelectionCount();
             clearReadyInventoryOverlay();
             await setMessage('Never mind.');
             game._command_mode = null;
             if (verb === 'fire') game._fire_count = null;
             return;
         }
+        if (await appendReadySelectionCountDigit(ch)) return;
         const item = (game.inventory || []).find(invItem => invItem.letter === ch);
         clearReadyInventoryOverlay();
         await finishReadyObjectSelection(item, verb);
@@ -67042,7 +67121,11 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'Q') {
+        const readyCount = throwCountTextValue(game._count_prefix);
+        game._count_prefix = '';
+        game._ready_count_text = readyCount > 0 ? String(readyCount) : '';
         if (!(game.inventory || []).some(isReadySelectableItem)) {
+            clearReadySelectionCount();
             await setMessage("You don't have anything to ready.");
             return;
         }
@@ -71149,6 +71232,7 @@ export async function rhack(_cmd) {
     if (ch === 'f') {
         const fireCount = throwCountTextValue(game._count_prefix);
         game._count_prefix = '';
+        clearReadySelectionCount();
         game._fire_count = fireCount > 0 ? fireCount : null;
         if (polyselfNoHands()) {
             game._fire_count = null;
