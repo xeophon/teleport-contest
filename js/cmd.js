@@ -22862,12 +22862,7 @@ async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { kil
     recordHeroKillConduct();
     if (killMessage)
         messages.push(`You ${nonliving ? 'destroy' : 'kill'} ${heroProjectileKillMessageTargetName(mon, targetName)}!`);
-    if (mon.mtame && !mon.isminion) {
-        mon.mextra ??= {};
-        mon.mextra.edog ??= {};
-        mon.mextra.edog.killed_by_u = 1;
-        mon.killed_by_u = 1;
-    }
+    markHeroKilledTameMonster(mon);
     if (applyHeroProjectileMonsterLifeSaving(mon, messages)) return;
     if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage: false })) return;
     recordVanquished(mon, true);
@@ -22895,13 +22890,21 @@ async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { kil
         && monsterLeavesCorpseLikeDrop(corpseData)) {
         createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
     }
-    applyHeroProjectileKillLuckSideEffects(mon, messages);
+    applyHeroKillLuckSideEffects(mon, messages);
     await applyHeroKillLiveExperience(mon, messages);
     game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
     newsym(mon.mx, mon.my);
 }
 
-function applyHeroProjectileKillLuckSideEffects(mon, messages) {
+function markHeroKilledTameMonster(mon) {
+    if (!mon?.mtame || mon.isminion) return;
+    mon.mextra ??= {};
+    mon.mextra.edog ??= {};
+    mon.mextra.edog.killed_by_u = 1;
+    mon.killed_by_u = 1;
+}
+
+function applyHeroKillLuckSideEffects(mon, messages) {
     if (!mon) return;
     if ((mon.mpeaceful && !rn2(2)) || mon.mtame) changeHeroLuck(-1);
     const monSign = Math.sign(Number(mon?.data?.maligntyp ?? mon?.maligntyp ?? 0));
@@ -53630,8 +53633,9 @@ async function moveHero(dx, dy) {
         game.context.move = 1;
         return;
     }
+    const forcedTargetAttack = targetMonster && game._force_fight_target === targetMonster;
     const targetBlocksDoorStep = targetMonster
-        && (!targetMonster.pet || !targetMonster.mpeaceful || game.flags?.safe_pet === false || !safeHeroStatus);
+        && (forcedTargetAttack || !targetMonster.pet || !targetMonster.mpeaceful || game.flags?.safe_pet === false || !safeHeroStatus);
 
     if (!swallowedMove && dx && dy
         && !targetBlocksDoorStep
@@ -53642,7 +53646,7 @@ async function moveHero(dx, dy) {
     }
 
     const pet = targetMonster?.pet ? targetMonster : null;
-    const safePet = pet && pet.mpeaceful && game.flags?.safe_pet !== false && safeHeroStatus;
+    const safePet = pet && !forcedTargetAttack && pet.mpeaceful && game.flags?.safe_pet !== false && safeHeroStatus;
     if (pet && game._running_continuation) {
         game._run_steps_remaining = 0;
         game.context.move = 0;
@@ -54166,6 +54170,7 @@ async function moveHero(dx, dy) {
         recordHeroKillConduct();
         mon.dead = true;
         mon.mhp = 0;
+        markHeroKilledTameMonster(mon);
         const survivedDeath = applyHeroProjectileMonsterLifeSaving(mon, messages)
             || reviveVampshifterFromHeroProjectileKill(mon, messages, targetPhrase, { killMessage: false });
         if (survivedDeath) {
@@ -54218,16 +54223,10 @@ async function moveHero(dx, dy) {
             if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
                 createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
         }
-        if (mon.mpeaceful) {
-            if (!rn2(2) || mon.mtame) game.u.uluck = (game.u?.uluck || 0) - 1;
-        } else if (mon.mtame) {
-            game.u.uluck = (game.u?.uluck || 0) - 1;
-        }
-        if (mon.mtame) {
-            game._pet_kill_luck_message_after_more = statusSuffix.includes('Hallu')
-                ? 'You hear the studio audience applaud!'
-                : 'You hear the rumble of distant thunder...';
-        }
+        const messageCountBeforeLuck = messages.length;
+        applyHeroKillLuckSideEffects(mon, messages);
+        if (messages.length !== messageCountBeforeLuck)
+            await setMessage(messages.join('  '), potionCallPrompt || (killedPet && messages.length > 1));
         if (await applyHeroKillLiveExperience(mon, messages))
             await setMessage(messages.join('  '));
         game.level.monsters = (game.level?.monsters || []).filter(mtmp => mtmp !== mon);

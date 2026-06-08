@@ -75686,6 +75686,80 @@ test('direct hero melee revives shifted vampire before cleanup', async () => {
     assert.equal(calls.includes('rn2(6)'), false);
 });
 
+test('direct hero melee lethal tame target records pet kill side effects', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876808, 'dagger', 'd', 0);
+    const dog = ordinaryThrowTarget('little dog', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        mtame: 5,
+        pet: true,
+        data: { name: 'little dog', mlevel: 2, mlet: 'd', mmove: 18, maligntyp: 0 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [dog];
+    game._force_fight_target = dog;
+    markSquareVisible(6, 5);
+    installCoreRngValues([0, 0, 3, 5, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'The little dog yelps!  You kill the poor little dog!');
+    assert.equal(game.level.monsters.includes(dog), false);
+    assert.equal(dog.dead, true);
+    assert.equal(dog.killed_by_u, 1);
+    assert.equal(dog.mextra?.edog?.killed_by_u, 1);
+    assert.equal(game.u.uluck, -1);
+    assert.equal(game.u.ualign.record, -15);
+    assert.equal(game.u.ualign.abuse, 15);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game._pet_kill_luck_message_after_more, 'You hear the rumble of distant thunder...');
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rnd(20)'), true);
+    assert.equal(calls.includes('rnd(4)'), true);
+    assert.equal(calls.includes('rn2(6)'), true);
+    assert.equal(calls.includes('rn2(2)'), true);
+});
+
+test('direct hero melee lethal same-aligned unicorn applies C guilt luck', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876809, 'dagger', 'd', 0);
+    const unicorn = unicornThrowTarget('white unicorn', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        mpeaceful: 0,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [unicorn];
+    markSquareVisible(6, 5);
+    installCoreRngValues([0, 0, 3, 5, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You kill the white unicorn!  You feel guilty...');
+    assert.equal(game.level.monsters.includes(unicorn), false);
+    assert.equal(unicorn.dead, true);
+    assert.equal(game.u.uluck, -5);
+    assert.equal(game.u.uconduct?.killer, 1);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rnd(20)'), true);
+    assert.equal(calls.includes('rnd(4)'), true);
+    assert.equal(calls.includes('rn2(6)'), true);
+    assert.equal(calls.includes('rn2(2)'), false);
+});
+
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
     const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
 
