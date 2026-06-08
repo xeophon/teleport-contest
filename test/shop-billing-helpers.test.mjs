@@ -76113,6 +76113,112 @@ test('direct hero melee hostile human-shaped target does not treat Elbereth as s
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
 });
 
+test('direct hero melee hostile blind target on Elbereth and scare scroll feels hypocritical', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876833,
+        monsterExtra: { mpeaceful: 0, hostile: true, mcansee: false },
+    });
+    const scroll = floorScareMonsterScroll(876836, { ox: game.u.ux, oy: game.u.uy });
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    game.level.objects = [scroll];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message,
+        'You hit the goblin.  You feel like a hypocrite.  The engraving beneath you fades.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
+test('direct hero melee scare scroll still requires exact Elbereth for hypocrisy', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876839,
+        monsterExtra: { mpeaceful: 0, hostile: true, mcansee: false },
+    });
+    const scroll = floorScareMonsterScroll(876840, { ox: game.u.ux, oy: game.u.uy });
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth!', type: BURN }];
+    game.level.objects = [scroll];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(game.level.engravings[0].text, 'Elbereth!');
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
+});
+
+test('direct hero melee hostile minotaur on Elbereth and scare scroll feels hypocritical', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876834,
+        name: 'minotaur',
+        monsterExtra: { mpeaceful: 0, hostile: true },
+        dataExtra: { mlevel: 15, mlet: 'H', humanoid: true },
+    });
+    const scroll = floorScareMonsterScroll(876837, { ox: game.u.ux, oy: game.u.uy });
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    game.level.objects = [scroll];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message,
+        'You hit the minotaur.  You feel like a hypocrite.  The engraving beneath you fades.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
+test('direct hero melee hostile human-shaped target with scare scroll still ignores Elbereth', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876835,
+        name: 'watchman',
+        monsterExtra: { mpeaceful: 0, hostile: true },
+        dataExtra: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    const scroll = floorScareMonsterScroll(876838, { ox: game.u.ux, oy: game.u.uy });
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    game.level.objects = [scroll];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the watchman.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.objects.includes(scroll), true);
+    assert.equal(game.level.engravings[0].text, 'Elbereth');
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
+});
+
 test('direct hero melee sleeping peaceful humanoid wakes screams then angers', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({
         weaponId: 876820,

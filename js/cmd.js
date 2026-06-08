@@ -22992,7 +22992,22 @@ function directMeleeDeleteEngravingAtHero() {
     game.level.engravings = game.level.engravings.filter(engr => engr.x !== ux || engr.y !== uy);
 }
 
-function directMeleeMonsterVulnerableToWrittenElbereth(mon) {
+function directMeleeScareMonsterScrollAtHero() {
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    return (game.level?.objects || []).some(obj =>
+        obj && !obj.buried && obj.ox === ux && obj.oy === uy
+        && (obj.otyp === SCR_SCARE_MONSTER || obj.scrollIndex === 3));
+}
+
+function directMeleePriestInOwnTemple(priest) {
+    const shrine = priest?.shrine;
+    return !!(priest?.ispriest && shrine
+        && game.level?.at?.(priest.mx, priest.my)?.roomno === shrine.room
+        && directMeleePriestHasShrine(priest));
+}
+
+function directMeleeOnscaryAtHero(mon) {
     const data = mon?.data || {};
     const name = String(data.name || mon?.name || '').toLowerCase();
     const mlet = String(data.mlet ?? mon?.mlet ?? '');
@@ -23000,6 +23015,8 @@ function directMeleeMonsterVulnerableToWrittenElbereth(mon) {
     if (mon?.lawfulMinion || data.lawfulMinion || data.lminion) return false;
     if (mlet === 'A' || name === 'angel' || mon?.rider || data.rider) return false;
     if (mlet === '@' || mon?.unique || data.unique || data.uniq || data.nemesis) return false;
+    if ((mon?.isshk && shopkeeperInHisShop(mon)) || directMeleePriestInOwnTemple(mon)) return false;
+    if (directMeleeScareMonsterScrollAtHero()) return true;
     if (mon?.isshk || mon?.isgd || mon?.guard) return false;
     if (mon?.mcansee === false || mon?.mcansee === 0) return false;
     if (name === 'minotaur') return false;
@@ -23009,7 +23026,7 @@ function directMeleeMonsterVulnerableToWrittenElbereth(mon) {
 
 function directMeleeSetmangryElberethHypocrisy(mon, messages) {
     if (!directMeleeStrictElberethAtHero()) return false;
-    if (!mon?.mpeaceful && !directMeleeMonsterVulnerableToWrittenElbereth(mon)) return false;
+    if (!mon?.mpeaceful && !directMeleeOnscaryAtHero(mon)) return false;
 
     messages.push('You feel like a hypocrite.');
     if (game.u?.ualign) {
