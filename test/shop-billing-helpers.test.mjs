@@ -75443,7 +75443,7 @@ test('wielded egg bash survivor still runs melee wakeup anger tail', async () =>
     assert.equal(game.level.objects.length, 0);
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
     assert.equal(game._chronicle_first_weapon_hit || 0, 0);
-    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [1]);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
 });
 
@@ -75505,6 +75505,95 @@ test('wielded egg bash sleeping peaceful survivor wakes growls then angers', asy
     assert.equal(game.level.objects.length, 0);
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
     assert.equal(game._chronicle_first_weapon_hit || 0, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
+});
+
+test('wielded ordinary egg bash low-HP survivor can flee after hmon', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    installCoreRngValues(Array(30).fill(0));
+    game.u.ulevel = 20;
+    game.u.uhitinc = 30;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    const eggItem = { ...egg(876085, 'e'), otyp: EGG, wielded: true };
+    eggItem.line = 'e - an egg (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 11,
+        mhpmax: 30,
+        msleeping: 0,
+        meating: 3,
+        mstrategy: 'waitforu',
+        mpeaceful: true,
+        mtrack: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+        data: { name: 'goblin', mlevel: 2, mlet: 'o', humanoid: true, maligntyp: -1, msound: 'MS_ORC' },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    game._force_fight_target = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin with an egg.  Splat!  The goblin gets angry!');
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mflee, 1);
+    assert.equal(goblin.mfleetim, 1);
+    assert.deepEqual(goblin.mtrack, [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+    ]);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.hostile, true);
+    assert.equal(goblin.angry, true);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(25)'), [0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0, 0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(100)'), [1]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
+});
+
+test('wielded ordinary egg bash consumed before passive object erosion', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    installCoreRngValues(Array(30).fill(0));
+    game.u.ulevel = 20;
+    game.u.uhitinc = 30;
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = { ...egg(876086, 'e'), otyp: EGG, wielded: true };
+    eggItem.line = 'e - an egg (wielded)';
+    const mold = passiveObjectTarget('green mold', 'acid', 6, 5, {
+        mhp: 11,
+        mhpmax: 30,
+        msleeping: 0,
+        mpeaceful: false,
+        data: { name: 'green mold', mlevel: 5, mac: 10 },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [mold];
+    game._force_fight_target = mold;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the green mold with an egg.  Splat!');
+    assert.equal(mold.mhp, 10);
+    assert.equal(mold.mflee, 1);
+    assert.equal(mold.mfleetim, 1);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.doesNotMatch(game._pending_message, /corrodes|rusts|smoulders|less effective/);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(25)'), [0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0, 0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(100)'), [1]);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
 });
 

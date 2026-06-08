@@ -23226,6 +23226,19 @@ function directMeleeMonflee(mon, fleeTime, { first = false, message = false, mes
     return emitted || (!wasFleeing && !!mon.mflee);
 }
 
+function directMeleeLowHpSurvivorFlee(mon) {
+    const fleeRoll = rn2(25);
+    if (!fleeRoll && mon && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
+        && !(game.u?.uswallow && game.u?.ustuck === mon)) {
+        const fleeTime = rn2(3) ? 0 : rnd(100);
+        mon.mflee = 1;
+        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
+        clearMonsterTrack(mon);
+        return true;
+    }
+    return false;
+}
+
 function directMeleeResponderIsQuestLeader(mon) {
     const data = mon?.data || {};
     if (mon?.questLeader || data.questLeader) return true;
@@ -54648,14 +54661,7 @@ async function moveHero(dx, dy) {
                 });
                 directMeleeNonlethalWakeupApplied = true;
                 if (attackIndex === 0 && !deferSleepingWakeTail) {
-                    const fleeRoll = rn2(25);
-                    if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
-                        && !(game.u?.uswallow && game.u?.ustuck === mon)) {
-                        const fleeTime = rn2(3) ? 0 : rnd(100);
-                        mon.mflee = 1;
-                        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
-                        clearMonsterTrack(mon);
-                    }
+                    directMeleeLowHpSurvivorFlee(mon);
                 }
                 continue;
             }
@@ -54687,6 +54693,11 @@ async function moveHero(dx, dy) {
                         });
                         if (attackPreHitState?.msleeping && eggOrdinaryMelee) wokeByHit = false;
                         directMeleeNonlethalWakeupApplied = true;
+                        if (attackIndex === 0) {
+                            directMeleeLowHpSurvivorFlee(mon);
+                            applyDirectMeleePassiveObject(mon, eggHit.consumed ? null : attackWeapon, messages);
+                            rn2(3);
+                        }
                     }
                 }
                 continue;
@@ -54792,14 +54803,7 @@ async function moveHero(dx, dy) {
                     directMeleeNonlethalWrapperApplied = true;
                 }
                 if (!deferAttackSleepingWakeTail) {
-                    const fleeRoll = rn2(25);
-                    if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
-                        && !(game.u?.uswallow && game.u?.ustuck === mon)) {
-                        const fleeTime = rn2(3) ? 0 : rnd(100);
-                        mon.mflee = 1;
-                        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
-                        clearMonsterTrack(mon);
-                    }
+                    directMeleeLowHpSurvivorFlee(mon);
                     applyDirectMeleePassiveObject(mon, attackWeapon, messages);
                     directPassiveObjectApplied = true;
                     rn2(3);
@@ -58806,14 +58810,7 @@ export async function rhack(_cmd) {
                 if (next.deferredMeleeWake) {
                     const action = next.deferredMeleeWake;
                     const target = action.target;
-                    const fleeRoll = rn2(25);
-                    if (!fleeRoll && target && (target.mhp || 0) < Math.trunc((target.mhpmax || 0) / 2)
-                        && !(game.u?.uswallow && game.u?.ustuck === target)) {
-                        const fleeTime = rn2(3) ? 0 : rnd(100);
-                        target.mflee = 1;
-                        target.mfleetim = fleeTime ? Math.min(fleeTime + (target.mfleetim || 0), 127) : 0;
-                        clearMonsterTrack(target);
-                    }
+                    directMeleeLowHpSurvivorFlee(target);
                     rn2(3);
                     const tailMessages = [];
                     directMeleeNonlethalWakeupTail(target, tailMessages, action.preHitState, {

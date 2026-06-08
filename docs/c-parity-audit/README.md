@@ -180,6 +180,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [772-direct-melee-potion-bash-survivor-wakeup-2026-06-08.md](772-direct-melee-potion-bash-survivor-wakeup-2026-06-08.md): direct hero melee wielded potion bash fixed one-point survivor damage plus post-`potionhit()` `wakeup(TRUE)` peaceful anger tail.
 - [773-direct-melee-egg-bash-survivor-wakeup-2026-06-08.md](773-direct-melee-egg-bash-survivor-wakeup-2026-06-08.md): direct hero melee wielded egg bash survivor `wakeup(TRUE)` anger tail while preserving thrown-egg wake behavior.
 - [774-direct-melee-egg-bash-sleeping-wakeup-message-2026-06-08.md](774-direct-melee-egg-bash-sleeping-wakeup-message-2026-06-08.md): direct hero melee wielded egg bash sleeping survivor visible wake message and deferred growl/nearby-wakeup/anger tail.
+- [775-direct-melee-egg-bash-low-hp-passive-tail-2026-06-08.md](775-direct-melee-egg-bash-low-hp-passive-tail-2026-06-08.md): direct hero melee wielded ordinary egg bash low-HP survivor flee and consumed-before-passive-object tail ordering.
 
 ## Cross-Cutting Themes
 

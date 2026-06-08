@@ -23,7 +23,8 @@ Added focused command-path coverage in `test/shop-billing-helpers.test.mjs`:
 ## Remaining Gaps
 
 - Special social targets such as priests, watchmen, and same-species bystanders remain narrow follow-ups.
-- Broader egg survivor handling for low-HP flee and passive object ordering is still outside this focused wake-message slice.
+- Ordinary consumed-egg survivor low-HP flee and passive-object no-weapon ordering is covered by audit 775.
+- Live egg-to-rock transform passive-object ordering is still outside this focused wake-message slice.
 
 ## Verification
 
