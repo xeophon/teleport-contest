@@ -53192,11 +53192,20 @@ async function runMonsterDartHitLanding({
     game.level.monsters = [thrower, ...extraMonsters];
     game._pending_time_passed = 1;
     const preNhgetchMessages = [];
+    const preNhgetchSnapshots = [];
     const priorPreNhgetchHook = game._preNhgetchHook;
     game._preNhgetchHook = async () => {
         const message = [game._pending_message, game._topline_after_more]
             .filter(Boolean).join('  ');
         if (message) preNhgetchMessages.push(message);
+        preNhgetchSnapshots.push({
+            message,
+            uhp: game.u?.uhp,
+            damageAfterMore: game._damage_after_topline_more || 0,
+            exerciseAfterMore: game._exercise_after_topline_more || 0,
+            monsterThrowQueued: !!game._monster_throw_after_more,
+            objectIds: (game.level?.objects || []).map(obj => obj.id),
+        });
         if (priorPreNhgetchHook) await priorPreNhgetchHook();
     };
     try {
@@ -53206,7 +53215,7 @@ async function runMonsterDartHitLanding({
     }
     resetInputState();
     const rawRng = getRngLog();
-    return { dart, thrower, rng: rawRng, rawRng, preNhgetchMessages };
+    return { dart, thrower, rng: rawRng, rawRng, preNhgetchMessages, preNhgetchSnapshots };
 }
 
 async function runMonsterKopCreamPieLanding({
@@ -55639,6 +55648,39 @@ test('production kobold dart hit lands surviving dart with ohit mulch', async ()
 
     assert.ok(rng.includes('rnd(20)=12'));
     assert.ok(rng.includes('rn2(3)=0'));
+});
+
+test('production visible kobold dart hit queues landing until after damage and exercise', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages, preNhgetchSnapshots } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+    const hitSnapshot = preNhgetchSnapshots.find(snapshot => /You are hit by a dart\./.test(snapshot.message));
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a dart\./);
+    assert.ok(hitSnapshot, preNhgetchMessages.join('\n'));
+    assert.equal(hitSnapshot.uhp, 20, rawRng.join(', '));
+    assert.equal(hitSnapshot.damageAfterMore, 2, rawRng.join(', '));
+    assert.equal(hitSnapshot.exerciseAfterMore, 1, rawRng.join(', '));
+    assert.equal(hitSnapshot.monsterThrowQueued, true, rawRng.join(', '));
+    assert.equal(hitSnapshot.objectIds.includes(dart.id), false, rawRng.join(', '));
+
+    assert.equal(game.u.uhp, 18);
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(game._exercise_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(game._monster_throw_after_more ?? null, null);
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dart');
+    assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
+    assert.ok(rawRng.includes('rn2(3)=0'), rawRng.join(', '));
 });
 
 test('production large kobold dart hit uses kobold-family ranged path', async () => {

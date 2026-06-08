@@ -199,6 +199,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [791-monster-thrown-passive-fire-material-2026-06-08.md](791-monster-thrown-passive-fire-material-2026-06-08.md): monster-thrown passive-object fire erosion now honors explicit projectile material and appearance naming for unidentified wooden projectiles.
 - [792-monster-thrown-passive-acid-corr-ench-2026-06-08.md](792-monster-thrown-passive-acid-corr-ench-2026-06-08.md): monster-thrown passive-object acid, corrosion, and disenchantment now have production canaries for gate behavior, mutation before stacking, and drain-before-stack merging.
 - [793-monster-thrown-passive-grease-proof-order-2026-06-08.md](793-monster-thrown-passive-grease-proof-order-2026-06-08.md): monster-thrown passive-object grease and corrosion-proof handling now matches C ordering, and visible hero-hit landings wait for deferred damage/exercise before drop-throw passive landing.
+- [794-monster-thrown-dart-visible-hero-drop-order-2026-06-08.md](794-monster-thrown-dart-visible-hero-drop-order-2026-06-08.md): visible monster-thrown dart hero hits now queue hero-square landing until after the throw message, deferred damage, and Strength exercise.
 
 ## Cross-Cutting Themes
 

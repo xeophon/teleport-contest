@@ -8533,6 +8533,14 @@ export async function processMonsterTurns() {
                             }
                         }
                         if (clearShot) {
+                            const throwerVisible = !game.u?.blind
+                                && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                                && !mon.minvis && !mon.mundetected;
+                            if (throwerVisible) {
+                                addToplineMessage(`${monsterDisplayName(mon)} throws a dart!`);
+                                game._message_more = 1;
+                                game._process_time_with_more = 0;
+                            }
                             const missile = mon.missile;
                             const missileSpe = Math.trunc(Number(missile.spe || 0));
                             const missileErosion = Math.max(0, Math.trunc(Number(missile.oeroded || 0)),
@@ -8581,7 +8589,7 @@ export async function processMonsterTurns() {
                                     color: CLR_CYAN,
                                     messages: floorMessages,
                                 });
-                                addMonsterThrownFloorMessages(floorMessages);
+                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                             } else if (interveningTarget) {
                                 let dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
                                 const targetVisible = !game.u?.blind
@@ -8618,33 +8626,49 @@ export async function processMonsterTurns() {
                                 const dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
                                 const hitRoll = rnd(20);
                                 if (hitRoll < 20) {
-                                    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
-                                    addToplineMessage('You are hit by a dart.');
-                                    exerciseAttribute(A_STR, false);
-                                    const floorMessages = [];
-                                    landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    const hitMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'You are hit.'
+                                        : 'You are hit by a dart.';
+                                    if (throwerVisible) game._topline_after_more = hitMessage;
+                                    else addToplineMessage(hitMessage);
+                                    if (throwerVisible) {
+                                        game._damage_after_topline_more = (game._damage_after_topline_more || 0) + dartDamage;
+                                        game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                                    } else {
+                                        game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
+                                        exerciseAttribute(A_STR, false);
+                                    }
+                                    finishMonsterThrownHeroLanding(thrownMissile, {
                                         glyph: ')',
                                         color: CLR_CYAN,
-                                        messages: floorMessages,
                                         ohit: true,
+                                        afterMore: throwerVisible,
                                     });
-                                    addMonsterThrownFloorMessages(floorMessages);
                                 } else {
-                                    addToplineMessage('A dart misses you.');
+                                    const missMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'It misses.'
+                                        : 'A dart misses you.';
+                                    if (throwerVisible) game._topline_after_more = missMessage;
+                                    else addToplineMessage(missMessage);
                                     rn2(5);
-                                    const floorMessages = [];
-                                    landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    finishMonsterThrownHeroLanding(thrownMissile, {
                                         glyph: ')',
                                         color: CLR_CYAN,
-                                        messages: floorMessages,
+                                        ohit: false,
+                                        afterMore: throwerVisible,
                                     });
-                                    addMonsterThrownFloorMessages(floorMessages);
                                 }
                             }
                             game._search_pending_count = 0;
                             game._run_steps_remaining = 0;
                             game._travel_keys = [];
                             if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                            if (game._message_more && !game._process_time_with_more) {
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                                return false;
+                            }
+                            continue;
                         }
                     }
                     if (game.u?.usteed
