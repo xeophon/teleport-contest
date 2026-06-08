@@ -13780,6 +13780,10 @@ test('fire trap command inventory fire that destroys blessed water uses lifesavi
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 function installWerewolfOldFormFireVaporLifeSavingInventory(amuletId, potionId) {
@@ -14004,6 +14008,10 @@ test('fire scroll tower explosion inventory vapor uses lifesaving for old-form d
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('pyrolisk egg fireball inventory vapor uses lifesaving for old-form death', () => {
@@ -17945,6 +17953,10 @@ test('self-zapped wand of fire inventory vapor rehumanize old form death uses li
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('directional wand of fire bounced ray hits hero and vapor lifesaves old-form death', async () => {
@@ -18012,6 +18024,10 @@ test('directional wand of fire bounced ray hits hero and vapor lifesaves old-for
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('monster fire breath hero-hit inventory vapor rehumanize old form death uses lifesaving', async () => {
@@ -26146,6 +26162,10 @@ test('ordinary movement lethal falling rock trap uses life saving command mode',
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('ordinary movement onto squeaky board squeaks and wakes nearby monster', async () => {
@@ -33304,6 +33324,10 @@ test('hero poisoned dart trap deadly poison uses life saving', async () => {
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
     assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('pet melee killed gas spore explodes outside hero melee', async () => {
@@ -39883,6 +39907,10 @@ test('satiated carried food ration choking life-saving resets hunger', async () 
     assert.equal(game._command_mode || null, null);
     assert.equal(game.u.uhp, game.u.uhpmax);
     assert.equal(game.u.uhunger, 900);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('satiated carried food ration choking recovers with magical breathing', async () => {
@@ -78004,6 +78032,10 @@ test('wielded blessed water potion bash vapor rehumanize old form death uses lif
     assert.equal(game._command_mode || null, null);
     assert.equal(game._message_more || 0, 0);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('wielded egg bash routes through egg hmon path', async () => {
@@ -81207,7 +81239,10 @@ test('upward hero-thrown blessed water vapor lycanthropy rehumanize old form dea
     assert.equal(game._command_mode || null, null);
     assert.equal(game._message_more || 0, 0);
     assert.equal(game.u.uhp, game.u.uhpmax);
-    assert.equal(game._death_cause, 'killed by reverting to unhealthy human form');
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), [
         'rn2(5)', 'rn2(7)', 'rnd(2)', 'rn2(19)',
     ]);
@@ -87166,6 +87201,10 @@ test('adjacent hero-thrown blessed water potion vapor rehumanize old form death 
     assert.equal(game._command_mode || null, null);
     assert.equal(game._message_more || 0, 0);
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
     const calls = getRngLog().map(rngCallName);
     assert.equal(calls.includes('rn2(13)'), true, calls.join(', '));
     assert.equal(calls.includes('rn2(19)'), true, calls.join(', '));

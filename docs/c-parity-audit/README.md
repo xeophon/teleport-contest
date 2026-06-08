@@ -209,6 +209,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [801-monster-thrown-dart-hero-lifesaving-landing-2026-06-08.md](801-monster-thrown-dart-hero-lifesaving-landing-2026-06-08.md): monster-thrown dart physical life-saving now resumes the returned `thitu()` tail with Strength exercise and normal hit landing/drop/mulch instead of death cleanup.
 - [802-monster-thrown-dart-hero-poisoned-lifesaving-2026-06-08.md](802-monster-thrown-dart-hero-poisoned-lifesaving-2026-06-08.md): poisoned monster-thrown dart physical life-saving now applies C's `u.umortality > oldumort` fatal-zero poison gate before normal landing.
 - [803-deferred-projectile-lifesaving-death-state-2026-06-08.md](803-deferred-projectile-lifesaving-death-state-2026-06-08.md): deferred lethal projectile life-saving now clears immediate death metadata after successful amulet survival for monster-fired arrows and monster-thrown darts.
+- [804-generic-lifesaving-survival-death-state-2026-06-08.md](804-generic-lifesaving-survival-death-state-2026-06-08.md): generic successful life-saving and wizard/explore survival now clear immediate death metadata after the survival prompt resolves.
 
 ## Cross-Cutting Themes
 

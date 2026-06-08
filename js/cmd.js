@@ -56573,9 +56573,9 @@ export async function rhack(_cmd) {
                     game.u._stonedKiller = '';
                 }
                 removeHeroStatusSuffix('Stone');
-                clearLifeSavedDeathState();
                 clearUnsafePetrifyingCorpseWieldAfterLifeSaving();
             }
+            clearLifeSavedDeathState();
             if (game._life_saving_refresh_con && game.u?.acurr?.a)
                 game.u.acurr.a[4] = Math.max(3, game.u.acurr.a[4] - 1);
             game._life_saving_refresh_con = 0;
@@ -56588,7 +56588,6 @@ export async function rhack(_cmd) {
                 const escapeMessage = game._life_saving_level_teleport_escape_message;
                 game._life_saving_level_teleport_escape_message = '';
                 game._keep_pending_message = 0;
-                game._death_cause = '';
                 await beginEscapedGame([lifeSavingMessage, escapeMessage]);
                 return;
             }
@@ -60343,8 +60342,7 @@ export async function rhack(_cmd) {
         }
         if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game.u.uhp = game.u.uhpmax || 1;
-            game._death_cause = '';
-            game._death_bones_body = '';
+            clearLifeSavedDeathState();
             game._wizard_survived_death = 1;
             game._survived_death_count = (game._survived_death_count || 0) + 1;
             if (game._death_negative_level_teleport_escape_message) {
