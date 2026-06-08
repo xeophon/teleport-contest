@@ -1679,6 +1679,9 @@ const CORPSE_EATER_MONSTERS = new Set(['purple worm', 'baby purple worm', 'ghoul
 const DART = 353;
 const CREAM_PIE = 10081;
 const BLINDING_VENOM = 10184;
+const ACID_VENOM = 10185;
+const MONSTER_ACID_VENOM_SPITTERS = new Set(['black naga', 'juiblex']);
+const MONSTER_BLINDING_VENOM_SPITTERS = new Set(['cobra', 'guardian naga']);
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const KNIFE = 10026;
@@ -6618,18 +6621,19 @@ export async function processMonsterTurns() {
                         && launcher && launcherAmmo && throwRange > 1
                         && throwDist2 <= BOLT_LIM * BOLT_LIM && !game.level?.flags?.rogue_level;
                     const activeLauncherKind = String(mon.mw?.kind || mon.mw?.actualKind || '');
-	                    const activeLauncher = /^(?:bow|elven bow|orcish bow|yumi|crossbow)$/.test(activeLauncherKind);
-	                    const launcherAmmoIndex = activeLauncher ? (mon.minvent || []).findIndex(item => {
-	                        const kind = monsterLauncherProjectileKind(item).toLowerCase();
-	                        if (activeLauncherKind === 'crossbow') return kind.includes('bolt');
-	                        return kind.includes('arrow') || kind === 'ya';
-	                    }) : -1;
-	                    const canShootLauncher = movedByMonster && !nearThrowTarget
-	                        && launcherAmmoIndex >= 0 && throwRange > 1 && throwRange < BOLT_LIM
-	                        && throwDist2 <= BOLT_LIM * BOLT_LIM && !game.level?.flags?.rogue_level;
+                    const activeLauncher = /^(?:bow|elven bow|orcish bow|yumi|crossbow)$/.test(activeLauncherKind);
+                    const launcherAmmoIndex = activeLauncher ? (mon.minvent || []).findIndex(item => {
+                        const kind = monsterLauncherProjectileKind(item).toLowerCase();
+                        if (activeLauncherKind === 'crossbow') return kind.includes('bolt');
+                        return kind.includes('arrow') || kind === 'ya';
+                    }) : -1;
+                    const canShootLauncher = movedByMonster && !nearThrowTarget
+                        && launcherAmmoIndex >= 0 && throwRange > 1 && throwRange < BOLT_LIM
+                        && throwDist2 <= BOLT_LIM * BOLT_LIM && !game.level?.flags?.rogue_level;
                     const canUseMovedRangedMagic = (mon.data?.spellcaster || mon.data?.name === 'gnomish wizard')
                         && !mon._moved_ranged_magic_used;
-                    const canSpitVenom = !mon.mpeaceful && mon.data?.name === 'cobra'
+                    const spitVenomKind = monsterSpitVenomKind(mon);
+                    const canSpitVenom = !mon.mpeaceful && spitVenomKind && !mon.mcan
                         && !mon._opened_door_this_move && !nearThrowTarget
                         && throwRange > 1 && throwRange < BOLT_LIM && straightThrow;
                     const canUseMovedWeaponAttack = movedByMonster && !nearThrowTarget && mon.data?.armed
@@ -6662,21 +6666,7 @@ export async function processMonsterTurns() {
                             boulderLinedUp = monsterLinedUp(mon, throwTargetX, throwTargetY);
                     }
                     if (canSpitVenom && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
-                        const thrownVenom = {
-                            id: next_ident(),
-                            otyp: BLINDING_VENOM,
-                            cls: 'venom',
-                            glyph: '.',
-                            color: CLR_BROWN,
-                            _display_color: CLR_BROWN,
-                            kind: 'splash of blinding venom',
-                            actualKind: 'splash of blinding venom',
-                            singular: 'splash of blinding venom',
-                            plural: 'splashes of blinding venom',
-                            quan: 1,
-                            spe: 1,
-                            owt: 1,
-                        };
+                        const thrownVenom = makeMonsterSpitVenom(spitVenomKind);
                         mon._spit_no_balk = 1;
                         const spitRoll = rn2(BOLT_LIM - throwRange);
                         if (!spitRoll) {
@@ -6704,17 +6694,36 @@ export async function processMonsterTurns() {
                                 revealProjectileHitMimicAppearance(interveningTarget);
                                 interveningTarget.msleeping = 0;
                                 const targetVisible = !game.u?.blind && cansee(interveningTarget.mx, interveningTarget.my);
+                                const acidDamageRoll = spitVenomKind === 'acid' ? monsterThrownAcidVenomDamage() : 0;
+                                const acidResisted = spitVenomKind === 'acid'
+                                    && monsterResistsMonsterThrownAcidVenom(interveningTarget);
+                                const acidDamage = acidResisted ? 0 : acidDamageRoll;
                                 const hitMessage = targetVisible
-                                    ? `The splash of venom hits the ${interveningTarget.data?.name || 'monster'}.`
-                                    : 'It is hit.';
+                                    ? `The splash of venom hits the ${interveningTarget.data?.name || 'monster'}${acidDamage > 4 ? '!' : '.'}`
+                                    : `It is hit${acidDamage > 4 ? '!' : '.'}`;
                                 addToplineMessage(hitMessage);
-                                const blindTarget = monsterCanBeBlindedByMonsterThrownBlindingVenom(interveningTarget);
-                                const showBlindMessage = blindTarget && targetVisible
-                                    && interveningTarget.mcansee !== false;
-                                if (blindTarget) {
-                                    if (showBlindMessage)
-                                        addToplineMessage(`${monsterDisplayName(interveningTarget)} is blinded by the venom.`);
-                                    applyMonsterThrownBlindingVenomBlindness(interveningTarget);
+                                if (spitVenomKind === 'acid') {
+                                    if (targetVisible) {
+                                        if (acidResisted) addToplineMessage(`${monsterDisplayName(interveningTarget)} is unaffected.`);
+                                        else {
+                                            const targetName = monsterDisplayName(interveningTarget).replace(/^The\b/, 'the');
+                                            addToplineMessage(`The acid burns ${targetName}!`);
+                                        }
+                                    }
+                                    if (acidDamage > 0) {
+                                        interveningTarget.mhp = Math.max(0, (interveningTarget.mhp || 1) - acidDamage);
+                                        if (interveningTarget.mhp < 1)
+                                            killMonsterFromThrownInterveningHit(interveningTarget, targetVisible);
+                                    }
+                                } else {
+                                    const blindTarget = monsterCanBeBlindedByMonsterThrownBlindingVenom(interveningTarget);
+                                    const showBlindMessage = blindTarget && targetVisible
+                                        && interveningTarget.mcansee !== false;
+                                    if (blindTarget) {
+                                        if (showBlindMessage)
+                                            addToplineMessage(`${monsterDisplayName(interveningTarget)} is blinded by the venom.`);
+                                        applyMonsterThrownBlindingVenomBlindness(interveningTarget);
+                                    }
                                 }
                                 const floorMessages = [];
                                 landMonsterThrownObject(thrownVenom, interveningTarget.mx, interveningTarget.my, {
@@ -6725,20 +6734,32 @@ export async function processMonsterTurns() {
                                 });
                                 addMonsterThrownFloorMessages(floorMessages, targetVisible || visibleSpitter);
                             } else {
+                                const acidDamage = spitVenomKind === 'acid' ? monsterThrownAcidVenomDamage() : 0;
                                 const attackRoll = rnd(20);
                                 const targetAc = game.u?.uac ?? 10;
-                                const missed = targetAc + 8 <= attackRoll;
+                                const hitValue = spitVenomKind === 'acid'
+                                    ? Math.max(-4, 3 - throwRange) + 8 + (thrownVenom.spe || 0)
+                                        + heroPolyselfMonsterThrownHitBonus()
+                                    : 8;
+                                const missed = targetAc + hitValue <= attackRoll;
                                 let resultMessage = game.u?.blind || game.flags?.verbose === false
                                     ? 'You are hit.'
-                                    : 'You are hit by a splash of venom.';
+                                    : `You are hit by a splash of venom${acidDamage > 4 ? '!' : '.'}`;
                                 if (missed) {
                                     resultMessage = game.u?.blind || game.flags?.verbose === false
                                         ? 'It misses.'
-                                        : targetAc + 8 <= attackRoll - 2
+                                        : targetAc + hitValue <= attackRoll - 2
                                             ? 'A splash of venom misses you.'
                                             : 'You are almost hit by a splash of venom.';
                                     rn2(5);
                                     rn2(100);
+                                } else if (spitVenomKind === 'acid') {
+                                    if (heroResistsMonsterThrownAcidVenom()) {
+                                        resultMessage = `${resultMessage}  It doesn't seem to hurt you.`;
+                                    } else {
+                                        resultMessage = `${resultMessage}  It burns!`;
+                                        game.u.uhp = Math.max(0, (game.u.uhp || 0) - acidDamage);
+                                    }
                                 } else {
                                     const wasBlind = !!game.u?.blind;
                                     const blindinc = applyMonsterBlindingVenomBlindness();
@@ -9811,6 +9832,64 @@ function applyMonsterBlindingVenomBlindness() {
     addHeroStatusSuffix('Blind');
     for (const other of game.level?.monsters || []) newsym(other.mx, other.my);
     return blindinc;
+}
+
+function monsterSpitVenomKind(mon) {
+    const data = mon?.data || {};
+    const attacks = [
+        ...(Array.isArray(data.attacks) ? data.attacks : []),
+        ...(data.attack ? [data.attack] : []),
+    ];
+    const spitAttack = attacks.find(attack => normalizedAttackCode(attack?.aatyp) === 'spit'
+        && ['acid', 'blnd', 'drst'].includes(normalizedAttackCode(attack?.adtyp)));
+    if (spitAttack)
+        return normalizedAttackCode(spitAttack.adtyp) === 'acid' ? 'acid' : 'blinding';
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    if (MONSTER_ACID_VENOM_SPITTERS.has(name)) return 'acid';
+    return MONSTER_BLINDING_VENOM_SPITTERS.has(name) ? 'blinding' : '';
+}
+
+function makeMonsterSpitVenom(kind) {
+    const acid = kind === 'acid';
+    const name = acid ? 'splash of acid venom' : 'splash of blinding venom';
+    return {
+        id: next_ident(),
+        otyp: acid ? ACID_VENOM : BLINDING_VENOM,
+        cls: 'venom',
+        glyph: '.',
+        color: CLR_BROWN,
+        _display_color: CLR_BROWN,
+        kind: name,
+        actualKind: name,
+        singular: name,
+        plural: name.replace(/^splash\b/, 'splashes'),
+        quan: 1,
+        spe: 0,
+        owt: 1,
+    };
+}
+
+function monsterResistsMonsterThrownAcidVenom(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return !!(mon?.acidResistance || mon?.resistsAcid || mon?.resists_acid
+        || data.acidResistance || data.resistsAcid || data.resists_acid
+        || data.acidic || name === 'acid blob' || name === 'gelatinous cube');
+}
+
+function heroWearsMonsterAcidSmock() {
+    return (game.inventory || []).some(item => wornMonsterVenomItemNames(item)
+        .some(name => name === 'alchemy smock'));
+}
+
+function heroResistsMonsterThrownAcidVenom() {
+    const form = game.u?._polyself_form || {};
+    return !!(game.u?.acidResistance || game.u?._acidResistanceTimeout
+        || form.acidResistance || form.resistsAcid || heroWearsMonsterAcidSmock());
+}
+
+function monsterThrownAcidVenomDamage() {
+    return rnd(6) + rnd(6);
 }
 
 function monsterCanBeBlindedByMonsterThrownObject(mon) {

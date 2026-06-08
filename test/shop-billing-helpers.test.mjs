@@ -7417,7 +7417,16 @@ test('automatic hostile MS_CUSS monster cusses and wakes nearby sleepers', async
         ['rn2(5)', 'rn2(5)', 'rn2(5)']);
 });
 
-async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHero = {}, extraMonsters = [] } = {}) {
+async function runMonsterCobraSpit({
+    seed = 7,
+    uac = 10,
+    inventory = [],
+    extraHero = {},
+    extraMonsters = [],
+    monsterName = 'cobra',
+    monsterData = {},
+    monsterOverrides = {},
+} = {}) {
     installStableNonShopFloorState();
     initRng(seed);
     enableRngLog({ reset: true });
@@ -7436,7 +7445,7 @@ async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHe
     });
     game.nhDisplay = { cols: 160 };
     game.inventory = inventory;
-    const cobra = ordinaryThrowTarget('cobra', 9, 5, {
+    const cobra = ordinaryThrowTarget(monsterName, 9, 5, {
         movement: NORMAL_SPEED,
         msleeping: 0,
         mcanmove: true,
@@ -7445,7 +7454,8 @@ async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHe
         mtame: 0,
         mux: game.u.ux,
         muy: game.u.uy,
-        data: { name: 'cobra', mlet: 'S', mlevel: 6, mmove: NORMAL_SPEED },
+        data: { name: monsterName, mlet: 'S', mlevel: 6, mmove: NORMAL_SPEED, ...monsterData },
+        ...monsterOverrides,
     });
     game.level.monsters = [cobra, ...extraMonsters];
 
@@ -7532,6 +7542,111 @@ test('automatic hostile cobra spit hit respects worn lenses eye protection', asy
     assert.equal(game.u._blindTimeout, 0);
     assert.deepEqual(result.rng.map(entry => entry.replace(/=.*/, '')),
         ['rn2(5)', 'rn2(5)', 'rnd(2)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('automatic hostile acid spit hits hero with acid venom damage', async () => {
+    const result = await runMonsterCobraSpit({
+        seed: 7,
+        uac: 20,
+        monsterName: 'black naga',
+        monsterData: { mlet: 'N' },
+    });
+    const rngNames = result.rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.match(result.message, /The black naga spits venom!/);
+    assert.match(result.message, /You are hit by a splash of venom[.!]/);
+    assert.match(result.message, /It burns!/);
+    assert.equal(game.u.blind, false);
+    assert.equal(game.u.ucreamed, 0);
+    assert.equal(game.u.uhp >= 8 && game.u.uhp <= 18, true);
+    assert.equal(game.level.objects.some(obj => obj.cls === 'venom'), false);
+    assert.deepEqual(rngNames,
+        ['rn2(5)', 'rn2(5)', 'rnd(2)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(6)', 'rnd(6)', 'rnd(20)']);
+});
+
+test('automatic hostile acid spit respects hero acid resistance after damage roll', async () => {
+    const result = await runMonsterCobraSpit({
+        seed: 7,
+        uac: 20,
+        extraHero: { acidResistance: true },
+        monsterName: 'black naga',
+        monsterData: { mlet: 'N' },
+    });
+    const rngNames = result.rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.match(result.message, /The black naga spits venom!/);
+    assert.match(result.message, /You are hit by a splash of venom[.!]/);
+    assert.match(result.message, /It doesn't seem to hurt you\./);
+    assert.doesNotMatch(result.message, /It burns!/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.objects.some(obj => obj.cls === 'venom'), false);
+    assert.equal(rngNames.filter(name => name === 'rnd(6)').length, 2, result.rng.join(', '));
+    assert.match(result.rng.join(', '), /rnd\(20\)/);
+});
+
+test('automatic hostile acid spit burns intervening monster before hero', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 30 },
+    });
+    const result = await runMonsterCobraSpit({
+        seed: 7,
+        uac: 20,
+        monsterName: 'black naga',
+        monsterData: {
+            mlet: 'N',
+            attacks: [{ aatyp: 'AT_SPIT', adtyp: 'AD_ACID' }],
+        },
+        extraMonsters: [blocker],
+    });
+    const rngNames = result.rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.match(result.message, /The black naga spits venom!/);
+    assert.match(result.message, /The splash of venom hits the goblin[.!]/);
+    assert.match(result.message, /The acid burns the goblin!/);
+    assert.doesNotMatch(result.message, /You are hit by a splash of venom|It burns!/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.blind, false);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.mhp >= 8 && blocker.mhp <= 18, true);
+    assert.equal(game.level.objects.some(obj => obj.cls === 'venom'), false);
+    assert.ok(rngNames.includes('rnd(20)'), result.rng.join(', '));
+    assert.equal(rngNames.filter(name => name === 'rnd(6)').length, 2, result.rng.join(', '));
+});
+
+test('automatic hostile acid spit is harmless against acid-resistant intervening monster', async () => {
+    const blocker = ordinaryThrowTarget('acid blob', 7, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'acid blob', mlevel: 1, mac: 30, acidResistance: true },
+    });
+    const result = await runMonsterCobraSpit({
+        seed: 7,
+        uac: 20,
+        monsterName: 'black naga',
+        monsterData: {
+            mlet: 'N',
+            attacks: [{ aatyp: 'AT_SPIT', adtyp: 'AD_ACID' }],
+        },
+        extraMonsters: [blocker],
+    });
+    const rngNames = result.rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.match(result.message, /The black naga spits venom!/);
+    assert.match(result.message, /The splash of venom hits the acid blob\./);
+    assert.match(result.message, /The acid blob is unaffected\./);
+    assert.doesNotMatch(result.message, /The acid burns|You are hit by a splash of venom/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(blocker.mhp, 20);
+    assert.equal(game.level.objects.some(obj => obj.cls === 'venom'), false);
+    assert.ok(rngNames.includes('rnd(20)'), result.rng.join(', '));
+    assert.equal(rngNames.filter(name => name === 'rnd(6)').length, 2, result.rng.join(', '));
 });
 
 async function runInvisibleAutomaticCussScenario(msound = 'MS_CUSS') {

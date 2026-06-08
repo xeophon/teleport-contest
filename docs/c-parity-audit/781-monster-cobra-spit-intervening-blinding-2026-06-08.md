@@ -38,5 +38,5 @@ Implemented the cobra blinding-venom `m_throw()` intervening-monster branch. No 
 
 ## Remaining Gaps
 
-- Acid venom and eggs remain separate `ohitmon()` special-object slices.
+- Eggs remain a separate `ohitmon()` special-object slice; monster acid-spit venom is covered in audit 782.
 - Broader generic monster object-hit factoring should wait until another concrete production special-object path needs it.
