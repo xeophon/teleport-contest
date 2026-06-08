@@ -156,6 +156,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [748-hero-projectile-lethal-lifesaving-followup-2026-06-08.md](748-hero-projectile-lethal-lifesaving-followup-2026-06-08.md): hero projectile lethal life-saving follow-up, deadly poison ordering, and genocided cleanup continuation.
 - [749-direct-melee-monster-lifesaving-2026-06-08.md](749-direct-melee-monster-lifesaving-2026-06-08.md): direct hero melee monster life saving, shifted-vampire revival, lethal hit-message suppression, and survivor cleanup bypass.
 - [750-direct-melee-xkilled-social-penalties-2026-06-08.md](750-direct-melee-xkilled-social-penalties-2026-06-08.md): direct hero melee tame-kill attribution, bounded luck, same-aligned unicorn guilt, and force-fight safe-pet bypass.
+- [751-direct-melee-lethal-peaceful-anger-2026-06-08.md](751-direct-melee-lethal-peaceful-anger-2026-06-08.md): direct hero melee lethal peaceful shopkeeper and watch anger fallout via C's `hmon()` guard snapshot.
 
 ## Cross-Cutting Themes
 

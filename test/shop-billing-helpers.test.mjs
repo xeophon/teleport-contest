@@ -75760,6 +75760,87 @@ test('direct hero melee lethal same-aligned unicorn applies C guilt luck', async
     assert.equal(calls.includes('rn2(2)'), false);
 });
 
+test('direct hero melee lethal peaceful watchman angers surviving watch', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876810, 'dagger', 'd', 0);
+    const target = ordinaryThrowTarget('watchman', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 0,
+        mcanmove: true,
+        mpeaceful: 1,
+        data: { name: 'watchman', mlevel: 6, mlet: '@', humanoid: true, maligntyp: -2 },
+    });
+    const guard = ordinaryThrowTarget('watchman', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mpeaceful: 1,
+        data: { name: 'watchman', mlevel: 6, mlet: '@', humanoid: true, maligntyp: -2 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [target, guard];
+    game._force_fight_target = target;
+    markSquareVisible(6, 5);
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 3, 5, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You kill the watchman!  The guard gets angry!');
+    assert.equal(game.level.monsters.includes(target), false);
+    assert.equal(target.dead, true);
+    assert.equal(guard.mpeaceful, 0);
+    assert.equal(guard.hostile, true);
+    assert.equal(guard.angry, true);
+});
+
+test('direct hero melee lethal peaceful shopkeeper angers town watch by snapshot', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876811, 'dagger', 'd', 0);
+    const shkp = ordinaryThrowTarget('shopkeeper', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 0,
+        mcanmove: true,
+        mpeaceful: 1,
+        isshk: true,
+        shknam: 'Izchak',
+        mcloned: true,
+        data: { name: 'shopkeeper', mlevel: 12, mlet: '@', humanoid: true, maligntyp: 0, noCorpse: true },
+    });
+    const guard = ordinaryThrowTarget('watch captain', 5, 6, {
+        mhp: 12,
+        mhpmax: 12,
+        msleeping: 0,
+        mcanmove: true,
+        mpeaceful: 1,
+        data: { name: 'watch captain', mlevel: 10, mlet: '@', humanoid: true, maligntyp: -4 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [shkp, guard];
+    game._force_fight_target = shkp;
+    markSquareVisible(6, 5);
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 3, 5, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You kill Izchak!  The guard gets angry!');
+    assert.equal(game.level.monsters.includes(shkp), false);
+    assert.equal(shkp.dead, true);
+    assert.equal(guard.mpeaceful, 0);
+    assert.equal(guard.hostile, true);
+    assert.equal(guard.angry, true);
+});
+
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
     const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
 

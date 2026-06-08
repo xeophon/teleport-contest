@@ -22815,6 +22815,53 @@ function restoreDirectMeleeLethalSurvivorState(mon, state) {
     clearDirectMeleeWaitStrategyMask(mon);
 }
 
+function isTownWatchMonster(mon) {
+    const name = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    return name === 'watchman' || name === 'watch captain';
+}
+
+function directMeleeShouldAngerTownWatch(mon) {
+    return !!mon?.mpeaceful && (mon.ispriest || mon.isshk || isTownWatchMonster(mon));
+}
+
+function heroCanSpotTownWatch(mon) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
+}
+
+function directMeleeAngerTownWatch(messages, { silent = false } = {}) {
+    let count = 0;
+    let adjacentCount = 0;
+    let seenCount = 0;
+    let sleepingCount = 0;
+    for (const guard of game.level?.monsters || []) {
+        if (!guard || guard.dead || (guard.mhp != null && guard.mhp <= 0)) continue;
+        if (!isTownWatchMonster(guard) || !guard.mpeaceful) continue;
+        count++;
+        if (heroCanSpotTownWatch(guard) && guard.mcanmove !== false && guard.mcanmove !== 0) {
+            const adjacent = Math.max(Math.abs((guard.mx || 0) - (game.u?.ux || 0)),
+                Math.abs((guard.my || 0) - (game.u?.uy || 0))) <= 1;
+            if (adjacent) adjacentCount++;
+            else seenCount++;
+        }
+        if (guard.msleeping || guard.mfrozen) {
+            sleepingCount++;
+            guard.msleeping = 0;
+            guard.mfrozen = 0;
+            guard.mcanmove = true;
+        }
+        guard.mpeaceful = 0;
+        guard.hostile = true;
+        guard.angry = true;
+    }
+    if (!count || silent) return false;
+    if (sleepingCount) messages.push(`The guard${sleepingCount === 1 ? '' : 's'} wake${sleepingCount === 1 ? 's' : ''} up.`);
+    if (adjacentCount) messages.push(`The guard${adjacentCount === 1 ? '' : 's'} get${adjacentCount === 1 ? 's' : ''} angry!`);
+    else if (seenCount) messages.push(`${seenCount === 1 ? 'An angry guard is' : 'Angry guards are'} approaching!`);
+    else messages.push(`You hear the shrill sound of ${count === 1 ? "a guard's whistle" : "guards' whistles"}.`);
+    return true;
+}
+
 function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
     if (!killAccessible || !treasureDrop) return;
     if (corpseData.noCorpse || corpseData !== data) return;
@@ -53896,6 +53943,7 @@ async function moveHero(dx, dy) {
         const peacefulShopkeeper = mon.isshk && mon.mpeaceful;
         const continuePeacefulShopkeeperTurn = peacefulShopkeeper && forcedPeacefulAttack
             && (mon.movement ?? NORMAL_SPEED) <= NORMAL_SPEED;
+        const angerTownWatchAfterHit = directMeleeShouldAngerTownWatch(mon);
         let shownName = name;
         if ((game.u?._statusSuffix || '').includes('Hallu') && !game.u?.blind) {
             let halluIndex;
@@ -53927,6 +53975,7 @@ async function moveHero(dx, dy) {
         let killed = false;
         let killingAttackWeapon = null;
         let killedByNormalMelee = false;
+        let directMeleeHit = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
             const attackWeapon = attackWeapons[attackIndex];
             const weaponName = attackWeapon?.kind || attackWeapon?.name || (typeof attackWeapon?.otyp === 'string' ? attackWeapon.otyp : '');
@@ -53952,6 +54001,7 @@ async function moveHero(dx, dy) {
             }
 
             if (attackIndex === 0) exerciseAttribute(A_DEX, true);
+            directMeleeHit = true;
             if (wokeFromSleep && mon.msleeping) {
                 mon.msleeping = 0;
                 wokeByHit = true;
@@ -54135,6 +54185,8 @@ async function moveHero(dx, dy) {
                     mon._distfleeck_done_after_anger = 1;
                 }
             }
+            if (directMeleeHit && angerTownWatchAfterHit)
+                directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() });
             const potionCallPrompt = game._command_mode === 'callPotionAfterMore';
             await setMessage(messages.join('  '), potionCallPrompt || peacefulShopkeeper || wokeByHit);
             if (continuePeacefulShopkeeperTurn) {
@@ -54176,6 +54228,8 @@ async function moveHero(dx, dy) {
         if (survivedDeath) {
             restoreDirectMeleeLethalSurvivorState(mon, directMeleePreHitState);
             wokeByHit = false;
+            if (directMeleeHit && angerTownWatchAfterHit)
+                directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() });
             const potionCallPrompt = game._command_mode === 'callPotionAfterMore';
             await setMessage(messages.join('  '), potionCallPrompt || (killedPet && messages.length > 1));
             game._run_stop_now = 1;
@@ -54228,6 +54282,8 @@ async function moveHero(dx, dy) {
         if (messages.length !== messageCountBeforeLuck)
             await setMessage(messages.join('  '), potionCallPrompt || (killedPet && messages.length > 1));
         if (await applyHeroKillLiveExperience(mon, messages))
+            await setMessage(messages.join('  '));
+        if (directMeleeHit && angerTownWatchAfterHit && directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() }))
             await setMessage(messages.join('  '));
         game.level.monsters = (game.level?.monsters || []).filter(mtmp => mtmp !== mon);
         newsym(mon.mx, mon.my);
