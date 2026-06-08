@@ -34610,7 +34610,7 @@ function trappedKickedFloorObjectRefusal(obj, x, y) {
     };
 }
 
-function kickFloorObjectSupported(obj, x, y, options = {}) {
+function kickFloorObjectSupported(obj) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj)) return false;
     const box = isBoxObject(obj);
@@ -34618,8 +34618,7 @@ function kickFloorObjectSupported(obj, x, y, options = {}) {
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
     if ((!box && isTipContainerObject(obj)) || (!box && globContents(obj).length)) return false;
-    const shopFloorGate = !!options.shopFloorGate;
-    if ((shopObjectOrContentsUnpaid(obj) || (shopkeeperForCostlySpot(x, y) && !shopFloorGate && !shopBillableGold(obj)))
+    if (shopObjectOrContentsUnpaid(obj)
         && !fragileBreakKind)
         return false;
     if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
@@ -34842,7 +34841,9 @@ function chargeKickedObjectNormalFlightFromShop(obj, sx, sy, x, y, messages) {
         if (charged.message) messages.push(charged.message);
         return charged;
     }
+    const wasNoCharge = !!obj.no_charge;
     const value = lostShopMerchandiseValueForObject({ ox: sx, oy: sy }, obj, shkp);
+    if (wasNoCharge) obj.no_charge = false;
     if (!(value > 0)) return { charged: false, value: 0, shkp };
     const creditBefore = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
     const peaceful = shopkeeperPeacefulForDebt(shkp);
@@ -35154,7 +35155,7 @@ async function kickFloorObjectToward(dir, x, y) {
     const landX = x + dir.dx;
     const landY = y + dir.dy;
     const gate = remoteProjectileDownGateAt(obj, landX, landY, { allowGold: shopBillableGold(obj) });
-    if (!kickFloorObjectSupported(obj, x, y, { shopFloorGate: !!gate })) return { handled: false };
+    if (!kickFloorObjectSupported(obj)) return { handled: false };
 
     const targetMon = (game.level?.monsters || []).find(mon =>
         mon && !mon.dead && mon.mx === landX && mon.my === landY

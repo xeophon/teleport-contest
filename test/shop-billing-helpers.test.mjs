@@ -44790,6 +44790,92 @@ test('command kick ordinary floor object flies across same-level open terrain', 
     assert.deepEqual(getRngLog(), []);
 });
 
+test('command kicked shop-floor ordinary object same-shop flight does not bill', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512125), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|goods lost|owe|Thief/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked shop-floor ordinary object leaving shop charges normal flight', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    game.level.at = (x, y) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512126), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    const expectedPrice = shop.shopItemPrice(blade, 6, 5);
+    assert.equal(expectedPrice > 0, true);
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct || 0, 0);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message,
+        new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for it!`));
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|goods lost|Thief/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked no-charge shop-floor ordinary object leaving shop clears no-charge without debt', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    game.level.at = (x, y) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512127), letter: undefined, line: undefined, ox: 6, oy: 5, no_charge: true };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(blade.no_charge, false);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|goods lost|owe|Thief/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('command kick single gold piece flies across same-level open terrain', async () => {
     installNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
