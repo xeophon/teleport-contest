@@ -50,7 +50,7 @@ The focused command keeps the adjacent direct-melee sleeping/wakeup/tame/priest 
 - Blind fade-message suppression is covered by audit 761.
 - Exact `adjalign()` threshold side effects such as Erinys adjustments remain outside this local direct-melee alignment model.
 - Bounded direct `peacefuls_respond()` bystanders are covered by audits 762-767, including ordinary/special humanoids, town-watch arrest, nonhumanoid same-species growl/flee, quest-leader guardian-target anger, and tame/low-level humanoid flee wording. Broader optional response behavior remains deferred.
-- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred wake queues, and other special helpers remain separate from this ordinary direct-melee hook.
+- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, and other special helpers remain separate from this ordinary direct-melee hook.
 - Full knockback movement, trap collisions, stun, and wording are still represented only by the existing RNG placeholder.
 
 ## Verification

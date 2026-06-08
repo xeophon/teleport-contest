@@ -15,7 +15,7 @@ Covered behavior:
 - hard pre-altar scare immunities still win because the branch remains below direct scare resistance, magical human/unique resistance, and own-shop/own-temple checks;
 - non-vampire monsters do not gain the altar bypass, so final written-Elbereth restrictions such as Gehennom and endgame still reject them without a scroll.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon deferred queues, swallowed/jousting/artifact melee, or broader monster movement/flee decisions.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, or broader monster movement/flee decisions.
 
 C anchors:
 
@@ -42,7 +42,7 @@ The focused command keeps adjacent written-Elbereth and scare-scroll canaries fr
 - Full vampire-shifter lifecycle fidelity remains broader than this check; this slice relies on existing local vampire/vampshifter metadata.
 - Full shopkeeper/priest room-boundary edge cases remain broader than the current direct helpers, especially C `inhishop()` boundary semantics and all `inhistemple()` level/room cases.
 - Broader altar semantics outside C's simple `IS_ALTAR()` scare check, including level generation, conversion, desecration, and shrine behavior, remain covered elsewhere.
-- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon deferred queues, swallowed/jousting/artifact melee, and other special helpers remain separate.
+- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, and other special helpers remain separate.
 
 ## Verification
 

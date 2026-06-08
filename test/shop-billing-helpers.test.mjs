@@ -76004,6 +76004,16 @@ function installDirectMeleePeacefulSurvivor({
     return { mon };
 }
 
+function enableDirectMeleeTwoWeapon({ id = 876870, letter = 's', kind = 'dagger', spe = 0 } = {}) {
+    const secondary = wieldedWeapon(id, kind, letter, spe);
+    secondary.wielded = false;
+    secondary.alternate = true;
+    secondary.line = `${letter} - a ${spe >= 0 ? '+' : ''}${spe} ${kind} (wielded in left hand)`;
+    game.inventory.push(secondary);
+    game._twoweapon = true;
+    return secondary;
+}
+
 test('direct hero melee surviving peaceful non-priest wakes angry', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor();
     installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
@@ -76082,9 +76092,10 @@ test('direct hero melee force-fought hidden sleeper reveals before growl', async
 
     await rhack('l');
 
-    assert.equal(game._pending_message,
-        'You hit it.  The trapper screams!  The jackal wakes up.');
-    assert.doesNotMatch(game._pending_message, /wakes up!/);
+    assert.equal(game._pending_message, 'You hit it.  The trapper wakes up!');
+    assert.equal(game._message_more, 1);
+    await rhack(' ');
+    assert.equal(game._pending_message, 'The trapper screams!  The jackal wakes up.');
     assert.equal(game.level.monsters.includes(mon), true);
     assert.equal(mon.dead, undefined);
     assert.equal(mon.msleeping, 0);
@@ -76120,9 +76131,10 @@ test('direct hero melee F prefix hidden peaceful sleeper growls then angers', as
     await rhack('F');
     await rhack('l');
 
-    assert.equal(game._pending_message,
-        'You hit it.  The goblin screams!  The goblin gets angry!');
-    assert.doesNotMatch(game._pending_message, /wakes up/);
+    assert.equal(game._pending_message, 'You hit it.  The goblin wakes up!');
+    assert.equal(game._message_more, 1);
+    await rhack(' ');
+    assert.equal(game._pending_message, 'The goblin screams!  The goblin gets angry!');
     assert.equal(game._force_fight || 0, 0);
     assert.equal(game._force_fight_target, null);
     assert.equal(game.level.monsters.includes(mon), true);
@@ -77236,6 +77248,70 @@ test('direct hero melee hostile human-shaped target with scare scroll still igno
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
 });
 
+test('direct hero melee two-weapon sleeping primary hit wakes and angers before offhand', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876871,
+        monsterExtra: { msleeping: 1 },
+        dataExtra: { msound: 'MS_ORC', mlevel: 2 },
+    });
+    enableDirectMeleeTwoWeapon({ id: 876872 });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 9, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    game.level.monsters = [mon, nearbySleeper];
+    markSquareVisible(9, 5);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The jackal wakes up.  The goblin gets angry!  You hit the goblin.');
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.equal(game._queued_messages_after_more?.length || 0, 0);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 2);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(4)').length, 2);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
+});
+
+test('direct hero melee two-weapon primary miss still lets offhand wake sleeper', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876873,
+        monsterExtra: { msleeping: 1, mhp: 100, mhpmax: 100 },
+        dataExtra: { msound: 'MS_ORC' },
+    });
+    enableDirectMeleeTwoWeapon({ id: 876874, spe: 17 });
+    game.inventory[0].spe = -50;
+    game.u.ulevel = 1;
+    game.u.uhitinc = 0;
+    game.u.acurr.a[A_DEX] = 3;
+    installCoreRngValues([0, 19, 0, 18, 0, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You miss the goblin.  You hit the goblin!  The goblin wakes up!  The goblin screams!  The goblin gets angry!');
+    assert.equal(mon.mhp > 0 && mon.mhp < 100, true);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(20)').length, 2);
+    assert.equal(rngValuesForCall(getRngLog(), 'rnd(4)').length, 1);
+});
+
 test('direct hero melee sleeping peaceful humanoid wakes screams then angers', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({
         weaponId: 876820,
@@ -77246,8 +77322,10 @@ test('direct hero melee sleeping peaceful humanoid wakes screams then angers', a
 
     await rhack('l');
 
-    assert.equal(game._pending_message,
-        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The goblin gets angry!');
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin wakes up!');
+    assert.equal(game._message_more, 1);
+    await rhack(' ');
+    assert.equal(game._pending_message, 'The goblin screams!  The goblin gets angry!');
     assert.equal(game.level.monsters.includes(mon), true);
     assert.equal(mon.dead, undefined);
     assert.equal(mon.msleeping, 0);
@@ -77296,8 +77374,11 @@ test('direct hero melee sleeping growl wakes nearby sleepers before anger', asyn
 
     await rhack('l');
 
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin wakes up!');
+    assert.equal(game._message_more, 1);
+    await rhack(' ');
     assert.equal(game._pending_message,
-        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The jackal wakes up.  The Oracle wakes up.  The goblin gets angry!  The Oracle gets angry!');
+        'The goblin screams!  The jackal wakes up.  The Oracle wakes up.  The goblin gets angry!  The Oracle gets angry!');
     assert.equal(mon.msleeping, 0);
     assert.equal(mon.mpeaceful, 0);
     assert.equal(nearbySleeper.msleeping, 0);
@@ -77373,7 +77454,10 @@ test('direct hero melee sleeping hostile survivor wakes and growls without anger
 
     await rhack('l');
 
-    assert.equal(game._pending_message, 'You hit the gecko.  The gecko wakes up!  The gecko squeals!  The jackal wakes up.');
+    assert.equal(game._pending_message, 'You hit the gecko.  The gecko wakes up!');
+    assert.equal(game._message_more, 1);
+    await rhack(' ');
+    assert.equal(game._pending_message, 'The gecko squeals!  The jackal wakes up.');
     assert.equal(game.level.monsters.includes(mon), true);
     assert.equal(mon.dead, undefined);
     assert.equal(mon.msleeping, 0);

@@ -14,7 +14,7 @@ Covered behavior:
 - the scroll branch bypasses the final written-Elbereth-only restrictions, including blind monsters, minotaurs, vault/shopkeeper final blocks, and branch predicates;
 - hostile survivor hits that qualify through the scroll still print hit text, hypocrisy text, fade text, delete the engraving, clear wait/eating state, and do not newly anger an already-hostile monster.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon deferred queues, swallowed/jousting/artifact melee, or broader monster movement/flee decisions.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, or broader monster movement/flee decisions.
 
 C anchors:
 

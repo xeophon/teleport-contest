@@ -15,7 +15,7 @@ Covered behavior:
 - a tame humanoid bystander can print `turns to flee.` or `gasps and then turns to flee.`, while preserving `mpeaceful`, `mtame`, wait strategy, and target-only alignment penalties;
 - an already-fleeing tame humanoid bystander still consumes the source flee-duration roll before `monflee(first=TRUE)`, keeps untimed flee state, and clears monster tracking without duplicate flee text.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or broader `m_canseeu()` sensing edge cases.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or broader `m_canseeu()` sensing edge cases.
 
 C anchors:
 

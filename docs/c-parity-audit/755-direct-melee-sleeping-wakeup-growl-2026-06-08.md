@@ -42,7 +42,7 @@ The focused run also keeps canaries for the awake survivor path, bullwhip apply 
 - Bounded `wakeup()` reveal behavior for apparent object mimics and force-fought `mundetected` survivors is covered by audit 768; force-fought sleeping hidden survivor post-reveal growl/anger ordering is covered by audit 769; full mimic light-blocking and exact discovery wording remain deferred.
 - `setmangry()` Elbereth hypocrisy and engraving fade/deletion are covered by audits 758-761; bounded `peacefuls_respond()` target/bystander branches are covered by audits 762-767, with broader peaceful-neighbor response behavior still deferred.
 - Sleeping priest/shopkeeper special follow-ups beyond existing priest canaries and non-shop non-priest fixtures remain deferred.
-- Two-weapon deferred sleeping-hit queues, knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
+- Two-weapon sleeping direct-melee wake/offhand ordering is covered by audit 770; knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
 
 ## Verification
 

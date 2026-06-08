@@ -14,7 +14,7 @@ Covered behavior:
 - optional `maybe_gasp()` wording is source-shaped for `"Gasp!"` and is only printed when the outer `!rn2(5)` gate succeeds;
 - cross-aligned priest bystanders consume the outer gasp gate when eligible but suppress `maybe_gasp()` text and therefore print no shrug message.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or tame bystander behavior. Town-watch arrest is covered by audit 764, and the nonhumanoid same-species response branch is covered by audit 765.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or tame bystander behavior. Town-watch arrest is covered by audit 764, and the nonhumanoid same-species response branch is covered by audit 765.
 
 C anchors:
 

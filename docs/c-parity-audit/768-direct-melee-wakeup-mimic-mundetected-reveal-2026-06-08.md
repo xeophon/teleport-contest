@@ -14,7 +14,7 @@ Covered behavior:
 - force-fought `mundetected` survivors reveal during the `wakeup()` tail, clear stale remembered invisible markers at the target square, and still finish eating and wait-state cleanup;
 - reveal itself consumes no RNG; non-force visible object mimic discovery consumes only the temporary fake-object `next_ident()` needed for C's `that_is_a_mimic()` naming path, not combat hit RNG.
 
-This remains local to direct movement melee. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, full mimic light-blocking, or exact furniture/object discovery wording for every map glyph. Post-reveal sleeping hidden target growl/anger ordering is covered by audit 769.
+This remains local to direct movement melee. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, full mimic light-blocking, or exact furniture/object discovery wording for every map glyph. Post-reveal sleeping hidden target growl/anger ordering is covered by audit 769.
 
 C anchors:
 

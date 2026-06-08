@@ -15,7 +15,7 @@ Covered behavior:
 - a Deaf hero still receives the arrest `verbalize()` text, but the `angry_guards()` feedback is silent while the guard-state mutation still happens;
 - the watch branch consumes no `peacefuls_respond()` gasp, flee, or timer RNG.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or tame bystander behavior. The nonhumanoid same-species response branch is covered by audit 765, and current quest-leader guardian-target anger is covered by audit 766.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or tame bystander behavior. The nonhumanoid same-species response branch is covered by audit 765, and current quest-leader guardian-target anger is covered by audit 766.
 
 C anchors:
 

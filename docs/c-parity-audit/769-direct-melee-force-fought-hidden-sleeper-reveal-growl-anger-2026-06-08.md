@@ -14,7 +14,7 @@ Covered behavior:
 - peaceful revealed sleepers run target anger after the post-reveal growl, including visible humanoid `gets angry!` wording and alignment penalty;
 - reveal, wake-message suppression, ordinary growl, and target anger add no new RNG in the non-hallucinating, no-Elbereth, no-bystander fixtures.
 
-This remains local to ordinary direct movement melee. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, hallucinated growl tables, full blind/deaf sensing wording, or broader monster-moving `setmangry()` callers.
+This remains local to ordinary direct movement melee. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond the ordinary sleeping direct-melee ordering covered by audit 770, swallowed/jousting/artifact melee, hallucinated growl tables, full blind/deaf sensing wording, or broader monster-moving `setmangry()` callers.
 
 C anchors:
 
@@ -33,7 +33,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 
 ## Deferred Gaps
 
-- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, two-weapon deferred queues, swallowed/jousting/artifact melee, and other special helpers remain separate.
+- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectiles, swallowed/jousting/artifact melee, and other special helpers remain separate; ordinary two-weapon sleeping direct-melee wake/offhand ordering is covered by audit 770.
 - Hallucinated growl sound RNG/table, run interruption via `nomul(0)`, and `iflags.last_msg` remain broader growl fidelity work.
 - Full blind/deaf naming and sensing parity for hidden post-reveal growl/anger remains broader display/senses work beyond this visible/audible direct-melee slice.
 - Monster-moving `setmangry()` callers and broader peaceful-neighbor fallout outside the bounded direct-melee target path remain separate.

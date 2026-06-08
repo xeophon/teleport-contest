@@ -14,7 +14,7 @@ Covered behavior:
 - the hero-square engraving is deleted even though no fade text is printed;
 - the adjacent visible-hero canaries continue to cover the high-record peaceful-target penalty and visible fade text.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred wake queues, swallowed/jousting/artifact melee, or broader monster movement/flee decisions.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, or broader monster movement/flee decisions.
 
 C anchors:
 
@@ -35,7 +35,7 @@ The focused command keeps adjacent visible-hero Elbereth, peaceful-target, and n
 
 - Bounded direct `peacefuls_respond()` bystanders are covered by audits 762-767, including ordinary/special humanoids, town-watch arrest, nonhumanoid same-species growl/flee, quest-leader guardian-target anger, and tame/low-level humanoid flee wording. Broader optional response behavior remains deferred.
 - Exact `adjalign()` threshold side effects such as Erinys adjustments remain outside this local direct-melee alignment model.
-- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred wake queues, swallowed/jousting/artifact melee, and other special helpers remain separate from this ordinary direct-melee hook.
+- Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, and other special helpers remain separate from this ordinary direct-melee hook.
 - Full knockback movement, trap collisions, stun, and wording are still represented only by the existing RNG placeholder.
 
 ## Verification

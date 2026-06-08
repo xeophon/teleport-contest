@@ -15,7 +15,7 @@ Covered behavior:
 - the leader bystander clears peaceful/wait state, becomes hostile/angry in local JS state, and adds the second `adjalign(-1)`-shaped social penalty;
 - the covered Wizard leader has level 20, so the ordinary low-level bystander flee branch cannot fire before anger.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, tame bystander behavior, or broader `m_canseeu()` sensing edge cases.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, tame bystander behavior, or broader `m_canseeu()` sensing edge cases.
 
 C anchors:
 

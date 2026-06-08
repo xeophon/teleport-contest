@@ -15,7 +15,7 @@ Covered behavior:
 - a silent same-species bystander can still reuse the attacked target's prior growl message classification and print `And then starts to flee.`, matching C's `iflags.last_msg == PLNMSG_GROWL` check after a silent `growl()` return;
 - bystanders stay peaceful and do not get hostile/angry fields or additional alignment penalties.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or broader tame/humanoid bystander edge cases. Current quest-leader guardian-target anger is covered by audit 766.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or broader tame/humanoid bystander edge cases. Current quest-leader guardian-target anger is covered by audit 766.
 
 C anchors:
 

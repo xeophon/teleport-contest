@@ -43,7 +43,7 @@ The focused command also keeps the awake survivor, tame survivor, bullwhip apply
 - `disturb_buried_zombies()` from this direct-melee growl path is covered by audit 757; other `wake_nearto()` callers remain separate.
 - Bounded `wakeup()` reveal behavior for apparent object mimics and force-fought `mundetected` survivors is covered by audit 768; force-fought sleeping hidden survivor post-reveal growl/anger ordering is covered by audit 769; full mimic light-blocking and exact discovery wording remain deferred.
 - `setmangry()` Elbereth hypocrisy is covered by audits 758-761; ordinary/special/tame humanoid bystander subsets, town-watch arrest, nonhumanoid same-species growl/flee, and quest-leader guardian-target anger are covered by audits 762-767, with remaining `peacefuls_respond()` behavior still deferred.
-- Two-weapon deferred sleeping-hit queues, knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
+- Two-weapon sleeping direct-melee wake/offhand ordering is covered by audit 770; knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
 
 ## Verification
 

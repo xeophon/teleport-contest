@@ -22924,6 +22924,9 @@ function directMeleePriestInTempleRoom(priest) {
 
 function directMeleeGrowlVerb(mon) {
     const sound = String(mon?.data?.msound || mon?.msound || '').toLowerCase();
+    const name = String(mon?.data?.name || mon?.name || '').toLowerCase();
+    const mlet = String(mon?.data?.mlet || mon?.mlet || '').toLowerCase();
+    if (sound.includes('seduce') || mlet === 'n' || name.includes('nymph')) return 'screams';
     if (!sound) return 'growls';
     if (sound.includes('hiss') || sound.includes('mew')) return 'hisses';
     if (sound.includes('roar')) return 'roars';
@@ -22999,6 +23002,33 @@ function directMeleeGrowlWakeNearby(mon, messages) {
             clearDirectMeleeWaitStrategyMask(sleeper);
     }
     disturbBuriedZombieCorpseTimersAt(mon?.mx || 0, mon?.my || 0);
+}
+
+function directMeleeGrowlWouldWakeVisibleNearby(mon) {
+    const level = Math.max(0, Math.trunc(Number(mon?.data?.mlevel ?? mon?.mlevel ?? 0) || 0));
+    const distance = level * 18;
+    for (const sleeper of game.level?.monsters || []) {
+        if (!sleeper || sleeper === mon || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0))
+            continue;
+        const dx = (sleeper.mx || 0) - (mon?.mx || 0);
+        const dy = (sleeper.my || 0) - (mon?.my || 0);
+        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
+        if (sleeper.msleeping && directMeleeMonsterCanBeSeen(sleeper)) return true;
+    }
+    return false;
+}
+
+function directMeleeSleeperWakeTailMayMessage(mon, preHitState, { visible = false } = {}) {
+    if (!preHitState?.msleeping) return false;
+    if (!directMeleeGrowlSuppressed(mon)) {
+        if (directMeleeGrowlCanMessage(mon) && directMeleeGrowlVerb(mon)) return true;
+        if (directMeleeGrowlWouldWakeVisibleNearby(mon)) return true;
+    }
+    if (preHitState?.mpeaceful && mon?.mpeaceful && visible) {
+        if (mon.data?.humanoid || mon.isshk || mon.isgd || mon.ispriest) return true;
+        return !directMeleeGrowlSuppressed(mon) && !!directMeleeGrowlVerb(mon);
+    }
+    return false;
 }
 
 function directMeleeStrictElberethAtHero() {
@@ -23374,12 +23404,13 @@ function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
     ordinaryMelee = false,
     forcefight = false,
     visible = false,
+    wakeMessage = true,
 } = {}) {
     if (!mon) return false;
     let angerFeedbackVisible = visible;
     if (ordinaryMelee) {
         if (preHitState?.msleeping) {
-            if (visible) messages.push(directMeleeWakeMessage(mon, true));
+            if (wakeMessage && visible) messages.push(directMeleeWakeMessage(mon, true));
             mon.msleeping = 0;
         }
         const revealed = directMeleeWakeupReveal(mon, { forcefight });
@@ -54451,7 +54482,7 @@ async function moveHero(dx, dy) {
                 || item.line?.includes('wielded in right'));
         const secondWeapon = game._twoweapon
             ? inventory.find(item => item !== weapon
-                && (item.alternate || /left hand|alternate weapon/.test(item.line || '')))
+                && /\b(?:wielded|weapon) in left hand\b/.test(item.line || ''))
             : null;
         const twoWeaponActive = game._twoweapon && !!secondWeapon
             && (secondWeapon.cls === 'weapon' || secondWeapon.glyph === ')');
@@ -54469,14 +54500,9 @@ async function moveHero(dx, dy) {
             ? Math.trunc(((Math.max(bareHandSkill, 1) - 1 + 1) * (martialArts ? 3 : 1)) / 2)
             : 0;
         const targetAc = data.mac ?? 10;
-        const targetStunnedBonus = mon.mstun ? 2 : 0;
-        const targetFleeingBonus = mon.mflee ? 2 : 0;
-        const targetSleepingBonus = mon.msleeping ? 2 : 0;
-        const targetImmobileBonus = mon.mcanmove === 0 ? 4 : 0;
         const trappedPenalty = game.u?.utrap ? -3 : 0;
-        const toHit = 1 + strengthHitBonus + dexHitBonus + targetAc + (game.u?.uhitinc || 0)
+        const baseToHit = 1 + strengthHitBonus + dexHitBonus + targetAc + (game.u?.uhitinc || 0)
             + luckHitBonus + (game.u?.ulevel || 1) + bareHandHitBonus
-            + targetStunnedBonus + targetFleeingBonus + targetSleepingBonus + targetImmobileBonus
             + trappedPenalty;
         let wokeByHit = false;
         const directMeleePreHitState = {
@@ -54536,9 +54562,9 @@ async function moveHero(dx, dy) {
             game.context.move = 1;
             return;
         }
-        const attackWeapons = twoWeaponActive && !wokeFromSleep ? [weapon, secondWeapon] : [weapon];
-        const deferSleepingTwoWeapon = wokeFromSleep && twoWeaponActive;
-        let deferredMeleeWeaponHit = false;
+        const attackWeapons = twoWeaponActive ? [weapon, secondWeapon] : [weapon];
+        let deferSleepingWakeTail = false;
+        let deferredSleepingWakePreHitState = null;
         let killed = false;
         let killingAttackWeapon = null;
         let killedByNormalMelee = false;
@@ -54548,6 +54574,11 @@ async function moveHero(dx, dy) {
         let directMeleeNonlethalWrapperApplied = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
             const attackWeapon = attackWeapons[attackIndex];
+            const attackPreHitState = {
+                msleeping: mon.msleeping,
+                meating: mon.meating,
+                mpeaceful: mon.mpeaceful,
+            };
             const weaponName = attackWeapon?.kind || attackWeapon?.name || (typeof attackWeapon?.otyp === 'string' ? attackWeapon.otyp : '');
             const weaponBaseName = attackWeapon?.actualKind || String(weaponName).replace(/ named .+$/, '');
             const grayswandirHit = attackWeapon?.artifact === 'Grayswandir';
@@ -54555,7 +54586,11 @@ async function moveHero(dx, dy) {
             const weaponHitBonus = {
                 scalpel: 2,
             }[weaponBaseName] || 0;
-            const attackToHit = toHit + artifactHitBonus + (attackWeapon?.spe || 0)
+            const attackTargetHitBonus = (mon.mstun ? 2 : 0)
+                + (mon.mflee ? 2 : 0)
+                + (mon.msleeping ? 2 : 0)
+                + (mon.mcanmove === 0 ? 4 : 0);
+            const attackToHit = baseToHit + attackTargetHitBonus + artifactHitBonus + (attackWeapon?.spe || 0)
                 + weaponHitBonus
                 + (twoWeaponActive && attackWeapon ? -9 : 0);
             const attackRoll = rnd(20);
@@ -54600,7 +54635,7 @@ async function moveHero(dx, dy) {
                 if (potionMessages.more) messages.more = true;
                 if (potionLifeSaving || potionFatal) break;
                 if (killed) break;
-                if (attackIndex === 0 && !deferSleepingTwoWeapon) {
+                if (attackIndex === 0 && !deferSleepingWakeTail) {
                     const fleeRoll = rn2(25);
                     if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
                         && !(game.u?.uswallow && game.u?.ustuck === mon)) {
@@ -54626,7 +54661,14 @@ async function moveHero(dx, dy) {
                 if (killed) break;
                 continue;
             }
-            if (!directMeleeFromSpecialApply && !deferSleepingTwoWeapon)
+            const deferAttackSleepingWakeTail = attackIndex === 0 && wokeFromSleep && !twoWeaponActive
+                && !directMeleeFromSpecialApply
+                && directMeleeSleeperWakeTailMayMessage(mon, attackPreHitState, { visible: targetSpotted });
+            if (deferAttackSleepingWakeTail) {
+                deferSleepingWakeTail = true;
+                deferredSleepingWakePreHitState = attackPreHitState;
+            }
+            if (!directMeleeFromSpecialApply && !deferAttackSleepingWakeTail)
                 directMeleeOrdinaryWakeupAllowed = true;
             if (attackWeapon && !game._chronicle_first_weapon_hit) {
                 game._chronicle_entries ??= [];
@@ -54661,7 +54703,6 @@ async function moveHero(dx, dy) {
             const weaponSkillDamageBonus = grayswandirHit ? -2 : 0;
             const damage = Math.max(0, baseDamage + strengthDamageBonus + bareHandDamageBonus
                 + weaponSkillDamageBonus + (game.u?.udaminc || 0));
-            if (attackWeapon && damage > 1) deferredMeleeWeaponHit = true;
             if (!attackWeapon && damage > 1) rnd(100);
             mon.mhp = (mon.mhp || 1) - damage;
             killed = mon.mhp <= 0;
@@ -54698,12 +54739,12 @@ async function moveHero(dx, dy) {
                     || ((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
                     && (mon.ispriest || directMeleeOrdinaryWakeupAllowed))
                     || mon.ispriest || angerTownWatchAfterHit)) {
-                directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
+                directMeleeNonlethalWakeupTail(mon, messages, attackPreHitState, {
                     ordinaryMelee: directMeleeOrdinaryWakeupAllowed,
                     forcefight: directMeleeForcefight,
                     visible: targetSpotted,
                 });
-                if (directMeleePreHitState?.msleeping && directMeleeOrdinaryWakeupAllowed)
+                if (attackPreHitState?.msleeping && directMeleeOrdinaryWakeupAllowed)
                     wokeByHit = false;
                 directMeleeNonlethalWakeupApplied = true;
             }
@@ -54720,19 +54761,19 @@ async function moveHero(dx, dy) {
                     });
                     directMeleeNonlethalWrapperApplied = true;
                 }
-	                if (!deferSleepingTwoWeapon) {
-	                    const fleeRoll = rn2(25);
-	                    if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
-	                        && !(game.u?.uswallow && game.u?.ustuck === mon)) {
-	                        const fleeTime = rn2(3) ? 0 : rnd(100);
-	                        mon.mflee = 1;
-	                        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
-	                        clearMonsterTrack(mon);
-	                    }
-	                    applyDirectMeleePassiveObject(mon, attackWeapon, messages);
-	                    directPassiveObjectApplied = true;
-	                    rn2(3);
-	                }
+                if (!deferAttackSleepingWakeTail) {
+                    const fleeRoll = rn2(25);
+                    if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)
+                        && !(game.u?.uswallow && game.u?.ustuck === mon)) {
+                        const fleeTime = rn2(3) ? 0 : rnd(100);
+                        mon.mflee = 1;
+                        mon.mfleetim = fleeTime ? Math.min(fleeTime + (mon.mfleetim || 0), 127) : 0;
+                        clearMonsterTrack(mon);
+                    }
+                    applyDirectMeleePassiveObject(mon, attackWeapon, messages);
+                    directPassiveObjectApplied = true;
+                    rn2(3);
+                }
             }
             if (!directPassiveObjectApplied)
                 applyDirectMeleePassiveObject(mon, attackWeapon, messages);
@@ -54758,15 +54799,17 @@ async function moveHero(dx, dy) {
 
         if (!killed) {
             if (wokeByHit) messages.push(`The ${name} wakes up!`);
-            if (deferSleepingTwoWeapon) {
+            if (deferSleepingWakeTail && directMeleeHit) {
                 game._queued_messages_after_more ??= [];
                 game._queued_messages_after_more.unshift({
-                    text: `The ${name} screams!`,
+                    text: '',
                     deferredMeleeWake: {
                         target: mon,
-                        weaponHit: deferredMeleeWeaponHit,
+                        preHitState: deferredSleepingWakePreHitState || directMeleePreHitState,
+                        ordinaryMelee: true,
+                        forcefight: directMeleeForcefight,
+                        visible: targetSpotted,
                     },
-                    wakeNearby: { source: mon, x: mon.mx, y: mon.my },
                     processTime: true,
                 });
             }
@@ -58732,10 +58775,6 @@ export async function rhack(_cmd) {
                 let nextText = next.text;
                 if (next.deferredMeleeWake) {
                     const action = next.deferredMeleeWake;
-                    if (action.weaponHit) {
-                        rn2(3);
-                        rn2(6);
-                    }
                     const target = action.target;
                     const fleeRoll = rn2(25);
                     if (!fleeRoll && target && (target.mhp || 0) < Math.trunc((target.mhpmax || 0) / 2)
@@ -58746,6 +58785,15 @@ export async function rhack(_cmd) {
                         clearMonsterTrack(target);
                     }
                     rn2(3);
+                    const tailMessages = [];
+                    directMeleeNonlethalWakeupTail(target, tailMessages, action.preHitState, {
+                        ordinaryMelee: !!action.ordinaryMelee,
+                        forcefight: !!action.forcefight,
+                        visible: !!action.visible,
+                        wakeMessage: false,
+                    });
+                    if (tailMessages.length)
+                        nextText = [nextText, ...tailMessages].filter(Boolean).join('  ');
                 }
                 if (next.gasSporeMonsterExplosion) {
                     const explosion = next.gasSporeMonsterExplosion;

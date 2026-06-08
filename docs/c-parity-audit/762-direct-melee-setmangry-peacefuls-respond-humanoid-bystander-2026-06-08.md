@@ -16,7 +16,7 @@ Covered behavior:
 - town watch remains outside this ordinary-humanoid response subset and is covered by audit 764, while shopkeeper, priest, and current quest-leader shrug/gasp exceptions are covered by audit 763;
 - the fixture uses a deaf hero and high-level bystander to avoid optional `maybe_gasp()` and `monflee()` wording while preserving the code path's C-shaped rolls.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, or monster-moving `setmangry()` calls. The nonhumanoid same-species response branch is covered by audit 765.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon paths beyond audit 770's ordinary sleeping direct-melee ordering, swallowed/jousting/artifact melee, or monster-moving `setmangry()` calls. The nonhumanoid same-species response branch is covered by audit 765.
 
 C anchors:
 

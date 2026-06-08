@@ -43,7 +43,7 @@ The existing priest survivor tests continue to cover the specialized priest wake
 
 - Elbereth hypocrisy handling in `setmangry()` is covered for ordinary direct melee by audit 758; full `onscary()` breadth and special attack helpers remain separate.
 - Remaining peaceful-neighbor responses from `peacefuls_respond()` remain deferred because they scan many monsters and have multiple RNG/message/flee branches; ordinary/special humanoid bystander subsets, town-watch arrest, and nonhumanoid same-species growl/flee are covered by audits 762-765.
-- Sleeping wake messages and sleeper growl ordering for ordinary direct melee are covered by audit 755; two-weapon deferred wake queues and special attack helpers remain broader wakeup work.
+- Sleeping wake messages and sleeper growl ordering for ordinary direct melee are covered by audit 755; two-weapon sleeping direct-melee wake/offhand ordering is covered by audit 770, while special attack helpers remain broader wakeup work.
 - Special attack helpers that borrow melee hit plumbing, including bullwhip apply force-attacks and wielded potion/egg bash, need source-specific follow-ups before broad non-priest anger is enabled there.
 - Full knockback movement, trap collisions, stun, and wording are still represented only by the existing RNG placeholder.
 - Full `growl()` side effects, including nearby wakeups and hallucinated sound tables, remain partial.
