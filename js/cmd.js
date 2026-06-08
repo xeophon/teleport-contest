@@ -34617,8 +34617,9 @@ function kickFloorObjectSupported(obj) {
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
-    if ((!box && isTipContainerObject(obj)) || (!box && globContents(obj).length)) return false;
-    if (shopObjectOrContentsUnpaid(obj)
+    const contents = globContents(obj);
+    if ((!box && isTipContainerObject(obj)) || (!box && contents.length)) return false;
+    if (shopObjectOrContentsUnpaid(obj) && (!obj.unpaid || contents.length)
         && !fragileBreakKind)
         return false;
     if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
@@ -34744,6 +34745,8 @@ function placeKickedFloorObject(obj, x, y, messages, options = {}) {
         applyMonsterThrownPassiveObject(obj, options.passiveTarget, true, messages);
     if (earthFloorEffects(obj, x, y, messages, 'fall', { usedUpShopBillOnDestroy: true }))
         return null;
+    if (typeof options.beforePlace === 'function')
+        options.beforePlace(obj);
     const placed = placeUnstackedFloorObject(obj);
     const stacked = stackDroppedFloorObject(placed);
     newsym(x, y);
@@ -34865,6 +34868,13 @@ function chargeKickedObjectNormalFlightFromShop(obj, sx, sy, x, y, messages) {
         }
     }
     return { charged: true, value, shkp, remaining };
+}
+
+function returnKickedUnpaidObjectNormalFlightToShop(obj, x, y) {
+    if (!obj?.unpaid || shopBillableGold(obj)) return null;
+    if (returnUnpaidObjectToShopBillOwnerAt(obj, x, y))
+        return { returned: true };
+    return null;
 }
 
 function chargeKickedGoldMigrationShopDebt(obj, gateX, gateY, messages) {
@@ -35088,7 +35098,9 @@ function finishKickedFlightLanding(obj, sx, sy, flight, messages) {
     obj.ox = flight.x;
     obj.oy = flight.y;
     chargeKickedObjectNormalFlightFromShop(obj, sx, sy, flight.x, flight.y, messages);
-    placeKickedFloorObject(obj, flight.x, flight.y, messages);
+    placeKickedFloorObject(obj, flight.x, flight.y, messages, {
+        beforePlace: () => returnKickedUnpaidObjectNormalFlightToShop(obj, flight.x, flight.y),
+    });
 }
 
 async function breakKickedFragileFloorObject(obj, x, y, messages) {
