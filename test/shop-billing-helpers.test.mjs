@@ -44796,6 +44796,72 @@ test('command kicked ordinary floor object can get stuck in unseen web silently'
     assert.deepEqual(getRngLog(), ['rn2(3)=0']);
 });
 
+test('command kicked dagger clonks later iron bars and lands before them', async () => {
+    installStableNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    Object.assign(game.level.at(8, 5), { typ: IRONBARS, lit: true });
+    const blade = { ...dagger(512094), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([42]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 7);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.  Clonk!');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses|web/);
+    assert.deepEqual(getRngLog(), ['rn2(100)=42']);
+});
+
+test('command kicked knife can pass later iron bars when force roll fails', async () => {
+    installStableNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    Object.assign(game.level.at(8, 5), { typ: IRONBARS, lit: true });
+    const knife = { ...monsterKnife(512095), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [knife];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(knife), true);
+    assert.equal(knife.ox, 14);
+    assert.equal(knife.oy, 5);
+    assert.equal(game._pending_message, 'You kick a knife.');
+    assert.doesNotMatch(game._pending_message, /Clonk|empty space|Thump|falls|hits|misses|web/);
+    assert.deepEqual(getRngLog(), ['rn2(5)=1']);
+});
+
+test('command kicked knife can be forced to hit later iron bars', async () => {
+    installStableNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    Object.assign(game.level.at(8, 5), { typ: IRONBARS, lit: true });
+    const knife = { ...monsterKnife(512096), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [knife];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 77]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(knife), true);
+    assert.equal(knife.ox, 7);
+    assert.equal(knife.oy, 5);
+    assert.equal(game._pending_message, 'You kick a knife.  Clonk!');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses|web/);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(100)=77']);
+});
+
 test('command kick ordinary floor object stops before blocked same-level terrain', async () => {
     installStableNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;

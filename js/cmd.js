@@ -34763,13 +34763,40 @@ function splitKickedFloorObjectForFlight(obj) {
     return kicked;
 }
 
+function kickedObjectIronBarsBreakChance(obj) {
+    if (objectKindKey(obj) !== 'war hammer') return 0;
+    const strength = Math.max(3, Math.trunc(Number(game.u?.acurr?.a?.[A_STR] || game.u?.ustr || 10)));
+    const spe = Math.trunc(Number(obj?.spe || 0));
+    return Math.max(2, 60 - strength - spe);
+}
+
+function kickedObjectHitsIronBars(obj, barsX, barsY, pointBlank, messages) {
+    if (!heroThrownIronBarsClassHitObject(obj)) {
+        if (pointBlank || rn2(5)) return false;
+    }
+    rn2(100); // C hit_bars() reaches breaktest()/obj_resists(); ordinary kicked objects survive here.
+    const sound = heroThrownIronBarsImpactSound(obj);
+    if (sound) messages.push(sound);
+    const breakChance = kickedObjectIronBarsBreakChance(obj);
+    if (breakChance && !rn2(breakChance)) {
+        messages.push('You break the bars apart!');
+        dissolveHeroBrokenIronBars(barsX, barsY);
+    }
+    return true;
+}
+
 function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
     let landX = x;
     let landY = y;
+    let pointBlank = true;
     for (let remaining = range - 1; remaining > 0; remaining--) {
         const nx = landX + dir.dx;
         const ny = landY + dir.dy;
         if (!isok(nx, ny)) break;
+        const loc = game.level?.at?.(nx, ny);
+        const typ = loc?.typ ?? STONE;
+        if (typ === IRONBARS && kickedObjectHitsIronBars(obj, nx, ny, pointBlank, messages))
+            break;
         const mon = (game.level?.monsters || []).find(candidate =>
             candidate && !candidate.dead && candidate.mx === nx && candidate.my === ny
             && (candidate.mhp == null || candidate.mhp > 0));
@@ -34785,8 +34812,6 @@ function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
             }
             return { x: landX, y: landY, gate: null, webStuck: true };
         }
-        const loc = game.level?.at?.(nx, ny);
-        const typ = loc?.typ ?? STONE;
         const closedDoor = typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
         const gate = remoteProjectileDownGateAt(obj, nx, ny);
         if (gate) return { x: nx, y: ny, gate };
@@ -34794,6 +34819,7 @@ function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
         landX = nx;
         landY = ny;
         if (IS_POOL(typ) || IS_LAVA(typ) || typ === SINK) break;
+        pointBlank = false;
     }
     return { x: landX, y: landY, gate: null };
 }
