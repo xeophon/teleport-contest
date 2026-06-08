@@ -31003,6 +31003,8 @@ const GENOCIDE_EXTRA_MONSTERS = [
     { name: 'watch captain', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 10, hpLevel: 11, difficulty: 12, mmove: 10, maligntyp: -4, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
     { name: 'aligned cleric', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 12, hpLevel: 12, difficulty: 15, mmove: 12, maligntyp: 0, genoFreq: 0, priest: true, armed: true, alwaysPeaceful: true },
     { name: 'high cleric', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 25, hpLevel: 29, difficulty: 30, mmove: 15, maligntyp: 0, genoFreq: 0, priest: true, armed: true, alwaysPeaceful: true, nasty: true },
+    { name: 'Master of Thieves', mlet: '@', glyph: '@', color: CLR_MAGENTA, mlevel: 20, hpLevel: 20, difficulty: 24, mmove: 15, maligntyp: -20, genoFreq: 0, unique: true, male: true, human: true, humanoid: true, armed: true, strong: true, alwaysPeaceful: true },
+    { name: 'Master Assassin', mlet: '@', glyph: '@', color: CLR_MAGENTA, mlevel: 15, hpLevel: 15, difficulty: 20, mmove: 12, maligntyp: 18, genoFreq: 0, unique: true, nemesis: true, male: true, human: true, humanoid: true, armed: true, strong: true, alwaysHostile: true, nasty: true },
     { name: 'Keystone Kop', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 1, hpLevel: 1, difficulty: 3, mmove: 6, maligntyp: 9, genoFreq: 0, armed: true },
     { name: 'Kop Sergeant', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 2, hpLevel: 2, difficulty: 4, mmove: 8, maligntyp: 10, genoFreq: 0, armed: true },
     { name: 'Kop Lieutenant', mlet: 'K', glyph: 'K', color: CLR_CYAN, mlevel: 3, hpLevel: 3, difficulty: 5, mmove: 10, maligntyp: 11, genoFreq: 0, armed: true },
@@ -31021,12 +31023,13 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'leather golem', 'wood golem', 'flesh golem', 'clay golem',
     'stone golem', 'glass golem', 'iron golem',
     'titan', 'wererat', 'werejackal', 'werewolf',
-    'aligned cleric', 'high cleric', 'djinni',
+    'aligned cleric', 'high cleric', 'master of thief', 'master assassin',
+    'djinni',
     'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
     'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
     'salamander', 'ghost', 'shade',
 ]);
-const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
+const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha', 'master of thieves']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 const C_GENOCIDE_NAME_ALIASES = new Map([
     ['grey dragon', 'gray dragon'],
@@ -31061,6 +31064,10 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['aligned priestess', 'aligned cleric'],
     ['high priest', 'high cleric'],
     ['high priestess', 'high cleric'],
+    ['master of thieves', 'Master of Thieves'],
+    ['master of thief', 'Master of Thieves'],
+    ['master thief', 'Master of Thieves'],
+    ['master of assassin', 'Master Assassin'],
     ['human wererat', 'wererat'],
     ['human werejackal', 'werejackal'],
     ['human werewolf', 'werewolf'],

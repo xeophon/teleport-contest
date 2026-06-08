@@ -13884,6 +13884,44 @@ test('genocide resolves C djinni aliases before G_GENO refusal', async () => {
     }
 });
 
+test('genocide resolves C master title aliases before G_GENO refusal', async () => {
+    const cases = [
+        ['master of thieves', 'Master of Thieves'],
+        ['master of thief', 'Master of Thieves'],
+        ['master of thieves corpse', 'Master of Thieves'],
+        ["master of thieves' corpse", 'Master of Thieves'],
+        ['master of thief corpse', 'Master of Thieves'],
+        ['master thieves', 'Master of Thieves'],
+        ['master thief', 'Master of Thieves'],
+        ['master thief corpse', 'Master of Thieves'],
+        ['master assassin', 'Master Assassin'],
+        ['master assassins', 'Master Assassin'],
+        ['master assassin corpse', 'Master Assassin'],
+        ["master assassin's corpse", 'Master Assassin'],
+        ['master of assassin', 'Master Assassin'],
+        ['master of assassin corpse', 'Master Assassin'],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, target] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31360 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /You aren't permitted to genocide/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(target), true);
+    }
+});
+
 test('genocide refuses C non-G_GENO ki-rin aliases', async () => {
     const cases = ['ki-rin', 'ki rin', 'kirin'];
 
