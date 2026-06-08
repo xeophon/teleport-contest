@@ -167,6 +167,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [759-direct-melee-setmangry-scare-monster-scroll-onscary-2026-06-08.md](759-direct-melee-setmangry-scare-monster-scroll-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` scare-monster scroll `onscary()` parity, hero-square scroll hypocrisy gating, and hard scare-immunity canaries.
 - [760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md](760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` altar/vampire `onscary()` parity, hero-square altar scare source for vampires and vampire shifters, and final-restriction bypass canaries.
 - [761-direct-melee-setmangry-blind-elbereth-fade-2026-06-08.md](761-direct-melee-setmangry-blind-elbereth-fade-2026-06-08.md): direct hero melee `setmangry(TRUE)` blind-hero Elbereth fade-message suppression while preserving hypocrisy penalties and direct engraving deletion.
+- [762-direct-melee-setmangry-peacefuls-respond-humanoid-bystander-2026-06-08.md](762-direct-melee-setmangry-peacefuls-respond-humanoid-bystander-2026-06-08.md): direct hero melee `setmangry(TRUE)` bounded `peacefuls_respond()` parity for visible ordinary humanoid bystanders, response gates, target/bystander message ordering, and social alignment penalties.
 
 ## Cross-Cutting Themes
 

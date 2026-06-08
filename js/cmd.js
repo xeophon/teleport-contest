@@ -23045,6 +23045,85 @@ function directMeleeOnscaryAtHero(mon) {
     return true;
 }
 
+function directMeleePeacefulResponderCanSeeHero(mon, attacked) {
+    if (!mon || mon === attacked || mon.dead || mon.mhp <= 0) return false;
+    const data = mon.data || {};
+    if (!mon.mpeaceful || mon.msleeping || data.mindless || mon.mindless) return false;
+    if (mon.mcansee === false || mon.mcansee === 0 || mon.blind) return false;
+    if (!couldsee(mon.mx ?? 0, mon.my ?? 0)) return false;
+    if (game.u?.invisible && !(mon.seeInvisible || mon.mseeinvis || data.seeInvisible)) return false;
+    return true;
+}
+
+function directMeleeResponderIsOrdinaryHumanoid(mon) {
+    const data = mon?.data || {};
+    const mlet = String(data.mlet ?? mon?.mlet ?? '');
+    return !!(data.humanoid || mon?.humanoid || mlet === '@');
+}
+
+function directMeleeResponderIsQuestLeader(mon) {
+    const data = mon?.data || {};
+    if (mon?.questLeader || data.questLeader) return true;
+    const sound = String(mon?.msound ?? mon?.sound ?? data.msound ?? data.sound ?? '')
+        .toLowerCase().replace(/^ms_/, '');
+    if (sound !== 'leader') return false;
+    const roleName = game.urole?.name?.m || game._startup_role || '';
+    const leader = String(QUEST_ROLE_DATA[roleName]?.leader || '').toLowerCase();
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return !!leader && name === leader;
+}
+
+function directMeleeResponderGasp(mon) {
+    if (heroIsDeaf() || rn2(5)) return { exclaimed: false, text: '', needPunct: false };
+    const data = mon?.data || {};
+    const msound = String(data.msound || data.sound || '').toUpperCase().replace(/^MS_/, '');
+    const canGasp = data.humanoid || mon?.humanoid
+        || ['HUMANOID', 'ARREST', 'SOLDIER', 'GUARD', 'NURSE', 'SEDUCE',
+            'LEADER', 'GUARDIAN', 'SELL', 'ORACLE', 'PRIEST', 'BOAST',
+            'IMITATE'].includes(msound);
+    if (!canGasp) return { exclaimed: false, text: '', needPunct: false };
+    const exclam = ['Gasp!', 'Uh-oh.', 'Oh my!', 'What?', 'Why?'][rn2(5)];
+    const name = fireScrollMonsterName(mon);
+    if (/^gasp/i.test(exclam))
+        return { exclaimed: true, text: `${name} gasps`, needPunct: true };
+    return { exclaimed: true, text: `${name} exclaims "${exclam}"`, needPunct: false };
+}
+
+function directMeleePeacefulHumanoidBystandersRespond(attacked, messages) {
+    for (const mon of game.level?.monsters || []) {
+        if (!directMeleePeacefulResponderCanSeeHero(mon, attacked)) continue;
+        if (isTownWatchMonster(mon) || mon.isshk || mon.ispriest
+            || directMeleeResponderIsQuestLeader(mon)) continue;
+        if (!directMeleeResponderIsOrdinaryHumanoid(mon)) continue;
+
+        const gasp = directMeleeResponderGasp(mon);
+        const level = Number(mon.data?.mlevel ?? mon.m_lev ?? 0);
+        const guardian = mon.data?.guardian || mon.guardian || mon.data?.msound === 'MS_GUARDIAN';
+        const alreadyFleeing = !!(mon.mflee || mon.mfleetim);
+        if (!guardian && level < rn2(10)) {
+            mon.mflee = 1;
+            mon.mfleetim = Math.min((mon.mfleetim || 0) + rn2(50) + 25, 127);
+            if (gasp.exclaimed && game.flags?.verbose !== false && !alreadyFleeing) {
+                gasp.text = `${gasp.text} and then turns to flee.`;
+                gasp.needPunct = false;
+            } else if (!gasp.exclaimed) {
+                messages.push(`${fireScrollMonsterName(mon)} turns to flee.`);
+            }
+        }
+        if (gasp.text) messages.push(`${gasp.text}${gasp.needPunct ? '.' : ''}`);
+        if (mon.mtame || mon.pet) continue;
+        mon.mpeaceful = 0;
+        mon.hostile = true;
+        mon.angry = true;
+        clearDirectMeleeWaitStrategyMask(mon);
+        if (game.u?.ualign) {
+            game.u.ualign.record = (game.u.ualign.record || 0) - 1;
+            game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 1;
+        }
+        if (!gasp.exclaimed) messages.push(`${fireScrollMonsterName(mon)} gets angry!`);
+    }
+}
+
 function directMeleeSetmangryElberethHypocrisy(mon, messages) {
     if (!directMeleeStrictElberethAtHero()) return false;
     if (!mon?.mpeaceful && !directMeleeOnscaryAtHero(mon)) return false;
@@ -23088,6 +23167,8 @@ function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}
             if (verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
         }
     }
+    if (!game._monster_moving)
+        directMeleePeacefulHumanoidBystandersRespond(mon, messages);
     return true;
 }
 

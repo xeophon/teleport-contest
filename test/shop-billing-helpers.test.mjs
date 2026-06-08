@@ -76022,6 +76022,130 @@ test('direct hero melee surviving peaceful non-priest wakes angry', async () => 
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee peaceful humanoid bystander responds after target anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876848 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: { name: 'gnome', mlevel: 12, mlet: 'G', humanoid: true, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  The gnome gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(bystander.mpeaceful, 0);
+    assert.equal(bystander.hostile, true);
+    assert.equal(bystander.angry, true);
+    assert.equal(bystander.mstrategy, 0);
+    assert.equal(game.u.ualign.record, -2);
+    assert.equal(game.u.ualign.abuse, 2);
+});
+
+test('direct hero melee sleeping peaceful humanoid bystander does not respond', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876849 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 1,
+        mcanmove: false,
+        mcansee: true,
+        mpeaceful: 1,
+        data: { name: 'gnome', mlevel: 12, mlet: 'G', humanoid: true, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee blind peaceful humanoid bystander does not respond', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876850 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: false,
+        mblinded: 7,
+        mpeaceful: 1,
+        data: { name: 'gnome', mlevel: 12, mlet: 'G', humanoid: true, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee quest leader bystander is outside ordinary humanoid response', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876851 });
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    const bystander = ordinaryThrowTarget('Neferet the Green', 5, 6, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: {
+            name: 'Neferet the Green',
+            mlevel: 20,
+            mlet: '@',
+            humanoid: true,
+            msound: 'MS_LEADER',
+            unique: true,
+            maligntyp: 0,
+        },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mstrategy, 'waitforu');
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
 test('direct hero melee surviving peaceful target on Elbereth feels hypocritical before anger', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor();
     game.u.ualign.record = 7;
@@ -76465,13 +76589,16 @@ test('direct hero melee sleeping growl wakes nearby sleepers before anger', asyn
     await rhack('l');
 
     assert.equal(game._pending_message,
-        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The jackal wakes up.  The Oracle wakes up.  The goblin gets angry!');
+        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The jackal wakes up.  The Oracle wakes up.  The goblin gets angry!  The Oracle gets angry!');
     assert.equal(mon.msleeping, 0);
     assert.equal(mon.mpeaceful, 0);
     assert.equal(nearbySleeper.msleeping, 0);
     assert.equal(nearbySleeper.mstrategy, 0);
     assert.equal(uniqueSleeper.msleeping, 0);
-    assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(uniqueSleeper.mpeaceful, 0);
+    assert.equal(uniqueSleeper.hostile, true);
+    assert.equal(uniqueSleeper.angry, true);
+    assert.equal(uniqueSleeper.mstrategy, 0);
     assert.equal(farSleeper.msleeping, 1);
     assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
     assert.equal(buriedCorpse.zombifyTurn, 160);
@@ -76479,8 +76606,8 @@ test('direct hero melee sleeping growl wakes nearby sleepers before anger', asyn
     assert.equal(farBuriedCorpse.zombifyTurn, 190);
     assert.equal(unburiedCorpse.zombifyTurn, 190);
     assert.equal(dueCorpse.zombifyTurn, 100);
-    assert.equal(game.u.ualign.record, -1);
-    assert.equal(game.u.ualign.abuse, 1);
+    assert.equal(game.u.ualign.record, -2);
+    assert.equal(game.u.ualign.abuse, 2);
 });
 
 test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl text', async () => {
