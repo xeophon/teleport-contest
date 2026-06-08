@@ -8787,6 +8787,17 @@ export async function processMonsterTurns() {
                                                 deathCleanupGlyph: thrownMissile.glyph || ')',
                                                 deathCleanupColor: CLR_CYAN,
                                                 deathCause: `killed by ${dartArticle} ${dartKillerName}`,
+                                                lifeSavingContinuation: {
+                                                    exerciseStrength: true,
+                                                    monsterThrow: {
+                                                        missile: thrownMissile,
+                                                        x: game.u?.ux || 0,
+                                                        y: game.u?.uy || 0,
+                                                        glyph: ')',
+                                                        color: CLR_CYAN,
+                                                        ohit: true,
+                                                    },
+                                                },
                                             };
                                             game._death_cause = `killed by ${dartArticle} ${dartKillerName}`;
                                             if (!throwerVisible) {

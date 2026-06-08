@@ -38971,6 +38971,25 @@ function promoteLethalProjectileAfterMore() {
     return true;
 }
 
+function continueLethalAttackAfterLifeSaving(attack) {
+    const continuation = attack?.lifeSavingContinuation || {};
+    const messages = [];
+    if (continuation.exerciseStrength) exerciseAttribute(A_STR, false);
+    const thrown = continuation.monsterThrow;
+    if (thrown?.missile) {
+        const floorMessages = [];
+        landMonsterThrownObject(thrown.missile, thrown.x ?? game.u?.ux ?? 0, thrown.y ?? game.u?.uy ?? 0, {
+            glyph: thrown.glyph || thrown.missile.glyph || ')',
+            color: thrown.color ?? thrown.missile.color ?? CLR_CYAN,
+            messages: floorMessages,
+            ohit: !!thrown.ohit,
+            passiveTarget: thrown.passiveTarget || null,
+        });
+        messages.push(...floorMessages);
+    }
+    return messages;
+}
+
 // C done_object_cleanup() salvages gt.thrownobj for bones without drop_throw().
 function deathCleanupThrownObjectLandingSpot() {
     const ux = game.u?.ux || 0;
@@ -58063,9 +58082,14 @@ export async function rhack(_cmd) {
                     removeInventoryItem(lifesaving);
                     game._life_saving_refresh_con = 1;
                     if (game.u) game.u.uhp = 0;
+                    const continuationMessages = continueLethalAttackAfterLifeSaving(attack);
                     game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                     game._command_mode = 'lifeSavingMore';
-                    await setMessage('You die...  But wait...  Your medallion begins to glow!', true);
+                    const lifeSavingMessage = [
+                        'You die...  But wait...  Your medallion begins to glow!',
+                        ...continuationMessages,
+                    ].filter(Boolean).join('  ');
+                    await setMessage(lifeSavingMessage, true);
                     return;
                 }
                 if (deferredLethal) {
