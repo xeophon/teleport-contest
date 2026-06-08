@@ -13483,6 +13483,124 @@ test('genociding current polyself form rehumanizes instead of ignoring form', as
     assert.equal(game.u.uac, 7);
 });
 
+function installShiftedVampireBatPolyself() {
+    initRng(1);
+    game.urace = { adj: 'human', noun: 'human' };
+    Object.assign(game.u, {
+        uhp: 12,
+        uhpmax: 18,
+        mh: 6,
+        mhmax: 6,
+        _polyself_form: {
+            name: 'vampire bat',
+            mlet: 'B',
+            glyph: 'B',
+            mlevel: 5,
+            mmove: 20,
+            mac: 7,
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+        _polyself_base: {
+            uhp: 12,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+}
+
+test('genociding visible shifted vampire form reverts before named wipeout', async () => {
+    installNonShopFloorState();
+    installShiftedVampireBatPolyself();
+    const scroll = scrollOfGenocide(30922, 's');
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('vampire bat');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You turn into a vampire!/);
+    assert.match(message, /Wiped out all vampire bats\./);
+    assert.equal(message.indexOf('You turn into a vampire!') < message.indexOf('Wiped out all vampire bats.'), true);
+    assert.doesNotMatch(message, /You return to human form|You die|dead inside/);
+    assert.equal(game.u._polyself_form?.name, 'vampire');
+    assert.ok(game.u._polyself_base);
+    assert.equal(game._genocided_monsters.includes('vampire bat'), true);
+    assert.equal(game._genocided_monsters.includes('vampire'), false);
+});
+
+test('genociding shifted vampire base reverts before named wipeout then rehumanizes', async () => {
+    installNonShopFloorState();
+    installShiftedVampireBatPolyself();
+    const scroll = scrollOfGenocide(30923, 's');
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('vampire');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You turn into a vampire!/);
+    assert.match(message, /Wiped out all vampires\./);
+    assert.match(message, /You return to human form!/);
+    assert.equal(message.indexOf('You turn into a vampire!') < message.indexOf('Wiped out all vampires.'), true);
+    assert.equal(message.indexOf('Wiped out all vampires.') < message.indexOf('You return to human form!'), true);
+    assert.doesNotMatch(message, /You die|dead inside|rather vampire-ish/);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game._genocided_monsters.includes('vampire'), true);
+});
+
+test('class-genociding shifted vampire visible class reverts after wipeout', async () => {
+    installNonShopFloorState();
+    installShiftedVampireBatPolyself();
+    const scroll = scrollOfGenocide(30924, 's', { blessed: true });
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('B');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /Wiped out all vampire bats\./);
+    assert.match(message, /You turn into a vampire!/);
+    assert.equal(message.indexOf('Wiped out all vampire bats.') < message.indexOf('You turn into a vampire!'), true);
+    assert.doesNotMatch(message, /You return to human form|You die|dead inside/);
+    assert.equal(game.u._polyself_form?.name, 'vampire');
+    assert.ok(game.u._polyself_base);
+    assert.equal(game._genocided_monsters.includes('vampire bat'), true);
+});
+
+test('class-genociding shifted vampire base fails post-wipeout revert', async () => {
+    installNonShopFloorState();
+    installShiftedVampireBatPolyself();
+    const scroll = scrollOfGenocide(30925, 's', { blessed: true });
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('V');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /Wiped out all vampires\./);
+    assert.match(message, /You feel rather vampire-ish\./);
+    assert.equal(message.indexOf('Wiped out all vampires.') < message.indexOf('You feel rather vampire-ish.'), true);
+    assert.doesNotMatch(message, /You turn into a vampire|You return to human form|You die|dead inside/);
+    assert.equal(game.u._polyself_form?.name, 'vampire bat');
+    assert.ok(game.u._polyself_base);
+    assert.equal(game._genocided_monsters.includes('vampire'), true);
+});
+
 test('explore self-genocide death decline survives and clears death state', async () => {
     installCommandShopState();
     game.flags.explore = true;

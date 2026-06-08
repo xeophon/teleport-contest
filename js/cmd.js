@@ -31131,6 +31131,51 @@ function isCurrentPolyselfGenocideTarget(name) {
     return !!formName && normalizeGenocideName(formName) === normalizeGenocideName(name);
 }
 
+function heroPolyselfIsVampireOwnForm(name) {
+    return /^(?:vampire|vampire lord|vampire leader|vampire lady|vampire mage)$/.test(normalizeGenocideName(name));
+}
+
+function heroVampshiftBaseName(form = game.u?._polyself_form) {
+    if (!form) return '';
+    const rawBase = form.vampBase || form.chamName || form.cham || form.baseName
+        || (form.vampshifter && !heroPolyselfIsVampireOwnForm(form.name) ? 'vampire' : '');
+    const base = normalizeGenocideName(rawBase);
+    if (base === 'vampire lord' || base === 'vampire lady' || base === 'vampire leader')
+        return 'vampire leader';
+    if (base === 'vampire') return 'vampire';
+    return base;
+}
+
+function heroPolyselfIsShiftedVampire(form = game.u?._polyself_form) {
+    if (!form || heroPolyselfIsVampireOwnForm(form.name)) return false;
+    return !!(form.vampshifter || form.vampBase || form.chamName || form.cham);
+}
+
+function shouldRevertHeroVampshifterForGenocide(targetName) {
+    const form = game.u?._polyself_form;
+    if (!heroPolyselfIsShiftedVampire(form)) return false;
+    const target = normalizeGenocideName(targetName);
+    return !!target && (target === normalizeGenocideName(form.name)
+        || target === heroVampshiftBaseName(form));
+}
+
+function revertHeroVampshifterForGenocide(targetName, messages) {
+    if (!shouldRevertHeroVampshifterForGenocide(targetName)) return false;
+    const baseName = heroVampshiftBaseName(game.u?._polyself_form) || 'vampire';
+    if (isMonsterGenocidedName(baseName)) {
+        messages.push(`You feel rather ${baseName}-ish.`);
+        return false;
+    }
+    const hadMonsterHp = game.u?.mh != null || game.u?.mhmax != null;
+    const result = becomeMonster(baseName);
+    if (result && hadMonsterHp && game.u) {
+        game.u.mh = game.u.uhp;
+        game.u.mhmax = game.u.uhpmax;
+    }
+    if (result?.message) messages.push(result.message);
+    return !!result;
+}
+
 function polyselfDeadInsideState() {
     const form = game.u?._polyself_form || {};
     const name = String(form.name || '').toLowerCase();
@@ -31164,14 +31209,16 @@ function finishPendingBaseGenocideAfterRehumanize(messages) {
     return true;
 }
 
-function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scroll of genocide' } = {}) {
+function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scroll of genocide', classMode = false } = {}) {
     const name = data?.name || heroGenocideTargetName();
+    if (!classMode) revertHeroVampshifterForGenocide(name, messages);
     markMonsterGenocided(name);
     game._chronicle_genocide_count = (game._chronicle_genocide_count || 0) + 1;
     messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
     killDeadSpeciesEggHatchTimers(game);
     killGenocidedMonsters();
     killDeadSpeciesEggHatchTimers(game);
+    if (classMode) revertHeroVampshifterForGenocide(name, messages);
     if (killPlayer) {
         if (game.u?._polyself_form && !isCurrentPolyselfGenocideTarget(name))
             delayHeroGenocideUntilRehumanized(messages, cause);
@@ -31298,7 +31345,7 @@ async function finishGenocideInput(raw) {
         let wiped = 0;
         for (const data of members) {
             if (isMonsterGenocidedName(data.name) || data.unique || data.nemesis) continue;
-            genocideMonsterType(data, messages);
+            genocideMonsterType(data, messages, { classMode: true });
             wiped++;
         }
         if (!wiped) messages.push('All such monsters are already nonexistent.');
