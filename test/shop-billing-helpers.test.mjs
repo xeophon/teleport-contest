@@ -53132,6 +53132,7 @@ async function runMonsterSlingRockLanding({
 
 async function runMonsterDartHitLanding({
     seed = 8,
+    coreRngValues = null,
     heroBlind = true,
     heroDeaf = false,
     heroDex = 10,
@@ -53150,6 +53151,7 @@ async function runMonsterDartHitLanding({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    if (coreRngValues) installCoreRngValues(coreRngValues);
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -55708,6 +55710,143 @@ test('production visible kobold dart catch retains split dart in inventory', asy
         || entry.startsWith('rnd(3)=')
         || entry.startsWith('rnd(20)=')
         || entry.startsWith('rn2(3)=')), false, rawRng.join(', '));
+});
+
+test('production visible kobold cursed dart zero-vector slip lands at thrower', async () => {
+    const dart = { ...dartStack(874504, 'd', 1), letter: undefined, line: undefined, cursed: true };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        coreRngValues: [1, 1, 99, 99, 0, 1, 1],
+        heroBlind: false,
+        throwerX: 9,
+        projectile: dart,
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, thrower.mx);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.cursed, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /The dart slips as the kobold throws it!/);
+    assert.doesNotMatch(messages, /drops onto the sink|You catch|You are hit|misses you|dart hits|Clonk/);
+    assert.deepEqual(rawRng, [
+        'rn2(5)=1', 'rn2(5)=1', 'rnd(1)=1', 'rnd(2)=2', 'rn2(7)=0',
+        'rn2(3)=1', 'rn2(3)=1',
+    ]);
+});
+
+test('production visible kobold greased dart redirected slip drops onto visible sink', async () => {
+    const dart = { ...dartStack(874505, 'd', 1), letter: undefined, line: undefined, greased: true };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        coreRngValues: [1, 1, 99, 99, 0, 2, 1, 2],
+        heroBlind: false,
+        throwerX: 9,
+        projectile: dart,
+        levelCells: [[10, 5, { typ: SINK }]],
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /The dart slips as the kobold throws it!/);
+    assert.match(messages, /The dart drops onto the sink\./);
+    assert.doesNotMatch(messages, /You catch|You are hit|misses you|dart hits|Clonk/);
+    assert.deepEqual(rawRng, [
+        'rn2(5)=1', 'rn2(5)=1', 'rnd(1)=1', 'rnd(2)=2', 'rn2(7)=0',
+        'rn2(3)=2', 'rn2(3)=1', 'rn2(5)=2', 'rn2(5)=0',
+    ]);
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rnd(3)=') || entry.startsWith('rn2(3)=0')
+        || entry.startsWith('rn2(100)=')), false, rawRng.join(', '));
+});
+
+test('production visible kobold greased dart redirected slip stops before ordinary wall', async () => {
+    const dart = { ...dartStack(874506, 'd', 1), letter: undefined, line: undefined, greased: true };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        coreRngValues: [1, 1, 99, 99, 0, 2, 1, 2],
+        heroBlind: false,
+        throwerX: 9,
+        projectile: dart,
+        levelCells: [[11, 5, { typ: STONE }]],
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /The dart slips as the kobold throws it!/);
+    assert.doesNotMatch(messages, /drops onto the sink|You catch|You are hit|misses you|dart hits|Clonk/);
+    assert.deepEqual(rawRng, [
+        'rn2(5)=1', 'rn2(5)=1', 'rnd(1)=1', 'rnd(2)=2', 'rn2(7)=0',
+        'rn2(3)=2', 'rn2(3)=1', 'rn2(5)=2', 'rn2(5)=0',
+    ]);
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rnd(3)=') || entry.startsWith('rn2(3)=0')
+        || entry.startsWith('rn2(100)=')), false, rawRng.join(', '));
+});
+
+test('production visible kobold greased dart redirected slip can clonk iron bars', async () => {
+    const dart = { ...dartStack(874507, 'd', 1), letter: undefined, line: undefined, greased: true };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        coreRngValues: [1, 1, 99, 99, 0, 2, 1, 0, 50],
+        heroBlind: false,
+        throwerX: 9,
+        projectile: dart,
+        levelCells: [[11, 5, { typ: IRONBARS }]],
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /The dart slips as the kobold throws it!/);
+    assert.match(messages, /Clonk!/);
+    assert.doesNotMatch(messages, /drops onto the sink|You catch|You are hit|misses you|dart hits/);
+    assert.deepEqual(rawRng.map(rngCallName), [
+        'rn2(5)', 'rn2(5)', 'rnd(1)', 'rnd(2)', 'rn2(7)',
+        'rn2(3)', 'rn2(3)', 'rn2(5)', 'rn2(5)', 'rn2(100)',
+    ]);
+    assert.equal(rawRng[4], 'rn2(7)=0', rawRng.join(', '));
+    assert.equal(rawRng[5], 'rn2(3)=2', rawRng.join(', '));
+    assert.equal(rawRng[6], 'rn2(3)=1', rawRng.join(', '));
+    assert.equal(rawRng[7], 'rn2(5)=0', rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rnd(3)=') || entry.startsWith('rn2(3)=0')), false, rawRng.join(', '));
 });
 
 test('production large kobold dart hit uses kobold-family ranged path', async () => {
