@@ -188,6 +188,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [780-monster-launcher-intervening-passive-object-2026-06-08.md](780-monster-launcher-intervening-passive-object-2026-06-08.md): monster-fired launcher-arrow intervening hits preserve the live `drop_throw()` passive-object target through deferred landing, including rust-prone projectile material, hit-only mulch before passive erosion, and passive erosion before stacking.
 - [781-monster-cobra-spit-intervening-blinding-2026-06-08.md](781-monster-cobra-spit-intervening-blinding-2026-06-08.md): cobra blinding-venom spit now routes through the production intervening-monster `ohitmon()` path before hero delivery, including accidental-hit threshold, mimic reveal, wakeup, monster blindness duration, and hit-only venom consumption.
 - [782-monster-acid-spit-venom-2026-06-08.md](782-monster-acid-spit-venom-2026-06-08.md): black-naga and Juiblex acid-venom spit now covers hero and intervening-monster delivery, including `2d6` damage before resistance, burn/unaffected feedback, lethal cleanup, and hit-only venom consumption.
+- [783-monster-thrown-cockatrice-egg-intervening-2026-06-08.md](783-monster-thrown-cockatrice-egg-intervening-2026-06-08.md): monster-thrown petrifying eggs now use C's production ranged-weapon selection priority and intervening-monster `ohitmon()` path, including `Splat!` wording, no-hero-credit stoning, statue placement, and hit-only egg deletion.
 
 ## Cross-Cutting Themes
 

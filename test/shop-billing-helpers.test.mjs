@@ -53309,6 +53309,84 @@ async function runMonsterKopCreamPieLanding({
     return { pie, thrower, rng: getRngLog(), preNhgetchMessages };
 }
 
+async function runMonsterPetrifyingEggThrow({
+    seed = 8,
+    heroBlind = false,
+    heroDex = 10,
+    uac = 20,
+    levelCells = [],
+    throwerX = 9,
+    monsterName = 'soldier',
+    monsterData = {},
+    eggItem = null,
+    eggQuan = 1,
+    extraMonsters = [],
+} = {}) {
+    installNonShopFloorState();
+    resetInputState();
+    pushKey('\x1b');
+    initRng(seed);
+    enableRngLog({ reset: true });
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        ux0: 5,
+        uy0: 5,
+        blind: heroBlind,
+        _statusSuffix: heroBlind ? ' Blind' : '',
+        uhp: 20,
+        uhpmax: 20,
+        uac,
+        umovement: NORMAL_SPEED,
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
+    });
+    game.moves = 1;
+    game.context = {};
+    if (levelCells.length) {
+        const cells = new Map();
+        for (const [x, y, loc] of levelCells)
+            cells.set(`${x},${y}`, { roomno: 0, ...loc });
+        game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: 0, typ: ROOM };
+    }
+    for (let x = 5; x <= throwerX; x++) markSquareVisible(x, 5);
+    for (const [x, y] of levelCells) markSquareVisible(x, y);
+    const eggProjectile = eggItem || {
+        ...egg(874395, 'e', eggQuan),
+        letter: undefined,
+        line: undefined,
+        corpsenm: { name: 'cockatrice', touchPetrifies: true },
+        known: true,
+    };
+    const thrower = {
+        mx: throwerX,
+        my: 5,
+        movement: NORMAL_SPEED,
+        data: { name: monsterName, mlet: '@', mmove: NORMAL_SPEED, mlevel: 1, ...monsterData },
+        mpeaceful: false,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [eggProjectile],
+        mcansee: true,
+    };
+    game.level.monsters = [thrower, ...extraMonsters];
+    game._pending_time_passed = 1;
+    const preNhgetchMessages = [];
+    const priorPreNhgetchHook = game._preNhgetchHook;
+    game._preNhgetchHook = async () => {
+        const message = [game._pending_message, game._topline_after_more]
+            .filter(Boolean).join('  ');
+        if (message) preNhgetchMessages.push(message);
+        if (priorPreNhgetchHook) await priorPreNhgetchHook();
+    };
+    try {
+        await moveloop_core();
+    } finally {
+        game._preNhgetchHook = priorPreNhgetchHook;
+    }
+    resetInputState();
+    return { eggProjectile, thrower, rng: getRngLog(), preNhgetchMessages };
+}
+
 async function runMonsterOffensivePotionCatch({
     seed = 1,
     coreRngValues = null,
@@ -55742,6 +55820,43 @@ test('production Kop cream pie hits intervening monster and blinds before hero',
     assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
     assert.ok(rngNames.includes('rnd(25)'), rng.join(', '));
     assert.equal(rngNames.includes('rn2(1)'), false, rng.join(', '));
+});
+
+test('production monster cockatrice egg petrifies intervening monster before hero', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 5,
+        mhpmax: 5,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+    const rngNames = rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.dead, true);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), true);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /Splat!  The goblin is hit with a cockatrice egg!/);
+    assert.match(messages, /The goblin turns to stone!/);
+    assert.doesNotMatch(messages, /You are hit|misses you|Clonk!/);
+    assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
+    assert.equal(rngNames.includes('rn2(100)'), false, rng.join(', '));
 });
 
 test('production Kop cream pie catch adds the thrown pie to inventory', async () => {

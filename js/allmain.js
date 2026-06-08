@@ -6595,6 +6595,10 @@ export async function processMonsterTurns() {
                         && !(mon.data?.name === 'grid bug' && throwTargetX !== mon.mx && throwTargetY !== mon.my);
                     const canThrowDart = monsterIsKoboldDartThrower(mon) && mon.missile?.otyp === DART && mon.missile.quan > 0
                         && throwRange > 1 && throwRange <= 4 && straightThrow;
+                    const eggIndex = monsterThrownEggIndex(mon);
+                    const canThrowEgg = !mon._opened_door_this_move && !mon.mpeaceful && eggIndex >= 0
+                        && throwRange > 1 && throwRange < BOLT_LIM && straightThrow
+                        && clearPath(mon.mx, mon.my, throwTargetX, throwTargetY);
                     const canThrowCreamPie = !mon._opened_door_this_move && !mon.mpeaceful
                         && monsterIsKopCreamPieThrower(mon) && isMonsterThrownCreamPie(mon.missile)
                         && (mon.missile?.quan || 0) > 0
@@ -6640,7 +6644,7 @@ export async function processMonsterTurns() {
                         && (mon.data?.mercenary || mon.mw || !game._armor_wear_occupation);
                     const canUseThrownWeaponAttack = !game.level?.flags?.rogue_level
                         && (canThrowSpear || canThrowShuriken || canThrowPlainDagger || canThrowOrcishDagger
-                            || canThrowKnife || canThrowDart || canThrowCreamPie);
+                            || canThrowKnife || canThrowDart || canThrowEgg || canThrowCreamPie);
                     const canUseWeaponAttack = canUseThrownWeaponAttack || canThrowBoulder;
                     const canSelectRangedWeapon = canUseThrownWeaponAttack;
                     const canCheckOffensiveItems = !mon.data?.mindless && !mon.data?.nohands && !mon.mpeaceful;
@@ -6780,7 +6784,130 @@ export async function processMonsterTurns() {
                         }
                         continue;
                     }
-                    if (canThrowBoulder && boulderLinedUp) {
+                    if (canThrowEgg && rangedWeaponLinedUp) {
+                        const targetAc = game.u?.uac ?? 10;
+                        if (targetAc < 0 && !consumedMattackuAc) rnd(-targetAc);
+
+                        const thrownMissile = splitMonsterThrownInventoryObject(mon, eggIndex);
+                        if (!thrownMissile) continue;
+                        const eggName = monsterThrownEggHitName(thrownMissile);
+                        const eggNameCap = `${eggName[0].toUpperCase()}${eggName.slice(1)}`;
+                        const throwerVisible = !game.u?.blind
+                            && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                            && !mon.minvis && !mon.mundetected;
+                        if (throwerVisible) {
+                            addToplineMessage(`${monsterDisplayName(mon, true)} throws ${eggName}!`);
+                            game._message_more = 1;
+                            game._process_time_with_more = 0;
+                        }
+
+                        let eggTerrainStop = null;
+                        let interveningTarget = null;
+                        for (let step = 1; step < throwRange; step++) {
+                            const sx = mon.mx + throwDx * step;
+                            const sy = mon.my + throwDy * step;
+                            const remainingRange = throwRange - step;
+                            const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                            if (targetMon) {
+                                const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownMissile);
+                                const hitRoll = rnd(20);
+                                if (hitValue >= hitRoll) {
+                                    interveningTarget = targetMon;
+                                    break;
+                                }
+                            }
+                            const forcehit = !rn2(5);
+                            if (remainingRange && forcehit
+                                && game.level?.at(sx + throwDx, sy + throwDy)?.typ === IRONBARS) {
+                                eggTerrainStop = { x: sx, y: sy };
+                                break;
+                            }
+                        }
+
+                        if (eggTerrainStop) {
+                            const floorMessages = [];
+                            const breakKind = projectileTopLevelBreakKind(thrownMissile);
+                            if (breakKind) projectileTopLevelBreakMessage(thrownMissile, breakKind, floorMessages);
+                            landMonsterThrownObject(thrownMissile, eggTerrainStop.x, eggTerrainStop.y, {
+                                glyph: '%',
+                                color: CLR_WHITE,
+                                messages: floorMessages,
+                                contactBreaks: !!breakKind,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                        } else if (interveningTarget) {
+                            revealProjectileHitMimicAppearance(interveningTarget);
+                            interveningTarget.msleeping = 0;
+                            const targetVisible = !game.u?.blind && cansee(interveningTarget.mx, interveningTarget.my);
+                            const hitMessage = targetVisible
+                                ? `Splat!  ${monsterDisplayName(interveningTarget)} is hit with ${eggName}!`
+                                : 'Splat!  It is hit.';
+                            if (throwerVisible) game._topline_after_more = hitMessage;
+                            else addToplineMessage(hitMessage);
+                            petrifyMonsterFromMonsterThrownEgg(interveningTarget, targetVisible, {
+                                afterMore: throwerVisible,
+                            });
+                            const floorMessages = [];
+                            landMonsterThrownObject(thrownMissile, interveningTarget.mx, interveningTarget.my, {
+                                glyph: '%',
+                                color: CLR_WHITE,
+                                messages: floorMessages,
+                                ohit: true,
+                            });
+                            addMonsterThrownFloorMessages(floorMessages, throwerVisible || targetVisible);
+                        } else {
+                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
+                            const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
+                                && rn2(Math.max(1, catchChance)) === 0;
+                            if (caught) {
+                                const catchResult = holdCaughtThrownObject(thrownMissile, {
+                                    catchName: 'egg',
+                                    glyph: '%',
+                                    color: CLR_WHITE,
+                                });
+                                if (throwerVisible) game._topline_after_more = catchResult.message;
+                                else addToplineMessage(catchResult.message);
+                            } else {
+                                const attackRoll = rnd(20);
+                                const missed = targetAc + 8 <= attackRoll;
+                                let resultMessage = game.u?.blind || game.flags?.verbose === false
+                                    ? 'You are hit.'
+                                    : `You are hit by ${eggName}.`;
+                                if (missed) {
+                                    resultMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'It misses.'
+                                        : targetAc + 8 <= attackRoll - 2
+                                            ? `${eggNameCap} misses you.`
+                                            : `You are almost hit by ${eggName}.`;
+                                } else {
+                                    startHeroMonsterThrownEggStoning(thrownMissile);
+                                }
+                                if (throwerVisible) game._topline_after_more = resultMessage;
+                                else addToplineMessage(resultMessage);
+                                const floorMessages = [];
+                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    glyph: '%',
+                                    color: CLR_WHITE,
+                                    messages: floorMessages,
+                                    ohit: !missed,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
+                            }
+                        }
+
+                        game._search_pending_count = 0;
+                        game._run_steps_remaining = 0;
+                        game._travel_keys = [];
+                        if ((game._pending_time_passed || 0) > 2) game._pending_time_passed = 2;
+                        if (game._message_more && !game._process_time_with_more) {
+                            game._monster_resume_index = monIndex + 1;
+                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                            return false;
+                        }
+                        continue;
+                    }
+                    if (canThrowBoulder && boulderLinedUp && !(canThrowEgg && rangedWeaponLinedUp)) {
                         const thrownBoulder = splitMonsterThrownInventoryObject(mon, boulderIndex);
                         if (!thrownBoulder) continue;
                         if (mon.missile?.id === thrownBoulder.id) mon.missile = null;
@@ -9767,6 +9894,60 @@ function isMonsterThrownCreamPie(item) {
     return [item.actualKind, item.kind, item.singular, item.appearance]
         .map(name => String(name || '').toLowerCase())
         .some(name => name === 'cream pie');
+}
+
+function monsterThrownEggSpeciesName(item) {
+    return String(item?.corpsenm?.name || item?.corpsenm || '').toLowerCase();
+}
+
+function isMonsterThrownPetrifyingEgg(item) {
+    if (!item) return false;
+    const kind = String(item.kind || item.actualKind || item.singular || item.appearance || '').toLowerCase();
+    if (item.otyp !== EGG && kind !== 'egg') return false;
+    const species = monsterThrownEggSpeciesName(item);
+    return PETRIFYING_TOUCH_MONSTERS.has(species) || !!item.corpsenm?.touchPetrifies;
+}
+
+function monsterThrownEggIndex(mon) {
+    return (mon?.minvent || []).findIndex(item => isMonsterThrownPetrifyingEgg(item));
+}
+
+function monsterThrownEggHitName(item) {
+    if (item?.known === false) return 'an egg';
+    const species = monsterThrownEggSpeciesName(item);
+    return species ? `${articleFor(species)} ${species} egg` : 'an egg';
+}
+
+function petrifyMonsterFromMonsterThrownEgg(target, visible, { afterMore = false } = {}) {
+    const messages = [];
+    if (monsterResistsStoning(target)) return false;
+    if (monsterPolyWhenStoned(target) && stoneGolemPolymorphMonster(target, messages, visible)) {
+        for (const message of messages) {
+            if (afterMore) appendAfterMoreMessage(message);
+            else addToplineMessage(message);
+        }
+        return true;
+    }
+    if (visible) messages.push(`${monsterDisplayName(target)} turns to stone!`);
+    stoneMonster(target, messages, { awardExperience: false });
+    for (const message of messages) {
+        if (afterMore) appendAfterMoreMessage(message);
+        else addToplineMessage(message);
+    }
+    return true;
+}
+
+function startHeroMonsterThrownEggStoning(item) {
+    if (!game.u || !isMonsterThrownPetrifyingEgg(item)) return false;
+    const form = game.u?._polyself_form || {};
+    if (game.u.stoneResistance || form.stoneResistance || String(form.name || '').toLowerCase() === 'stone golem')
+        return false;
+    if (game.u._stonedTimeout) return false;
+    const species = monsterThrownEggSpeciesName(item) || 'cockatrice';
+    game.u._stonedTimeout = 5;
+    game.u._stonedKiller = `${species} egg`;
+    addHeroStatusSuffix('Stone');
+    return true;
 }
 
 function heroCanBeCreamedByMonsterPie() {
