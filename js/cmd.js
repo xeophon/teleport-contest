@@ -31035,6 +31035,9 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['wood-elf', 'Woodland-elf'],
     ['wood elf', 'Woodland-elf'],
     ['woodland nymph', 'wood nymph'],
+    ['halfling', 'hobbit'],
+    ['invisible stalker', 'stalker'],
+    ['high-elf', 'elven monarch'],
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
 ]);
@@ -31111,6 +31114,7 @@ function pluralizeMonsterName(name) {
     if (lower === 'dwarf') return 'dwarves';
     if (lower === 'elf') return 'elves';
     if (lower.endsWith('-elf')) return `${name.slice(0, -3)}elves`;
+    if (lower.endsWith('monarch')) return `${name}s`;
     if (/ above$/i.test(name)) return `${pluralizeMonsterName(name.slice(0, -6))} above`;
     if (/fungus$/i.test(name)) return `${name.slice(0, -6)}fungi`;
     if (/culus$/i.test(name)) return `${name.slice(0, -5)}culi`;
