@@ -13380,6 +13380,30 @@ test('confused genocide consumes life saving but still dies from genocidal confu
     assert.equal(game.u.uhp, 20);
 });
 
+test('cursed confused genocide summons hero role monsters instead of killing hero', async () => {
+    installNonShopFloorState();
+    game._startup_role = 'Wizard';
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    game.u._confusionTimeout = 10;
+    const scroll = scrollOfGenocide(30926, 's', { cursed: true });
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /Being confused, you mispronounce the magic words/);
+    assert.match(message, /Sent in .*wizard/i);
+    assert.doesNotMatch(message, /Wiped out all|You die|What type of monster/);
+    assert.equal(game.context.move, 1);
+    assert.ok(game.level.monsters.length > 0);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_no_bones || 0, 0);
+    assert.equal(game._genocided_monsters?.length || 0, 0);
+});
+
 test('polymorphed self-genocide waits until rehumanization', async () => {
     installNonShopFloorState();
     initRng(1);
