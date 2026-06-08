@@ -13602,6 +13602,51 @@ test('genocide keeps C as-is plural monster names unchanged', async () => {
     }
 });
 
+test('genocide pluralizes watchman with C man rule', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31060, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('watchman');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all watchmen\./);
+    assert.doesNotMatch(message, /watchmans/);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('watchman'), true);
+});
+
+test('genocide accepts C watchmen plural alias', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31061, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('watchmen');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all watchmen\./);
+    assert.doesNotMatch(message, /Such creatures do not exist/);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('watchman'), true);
+});
+
+test('genocide catalogs C watch captain as a normal genocidable monster', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31062, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('watch captain');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all watch captains\./);
+    assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('watch captain'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

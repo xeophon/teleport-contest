@@ -30998,6 +30998,10 @@ function scrollReadMessages(confusedReading) {
 }
 
 const GENOCIDE_MAX_TRIES = 5;
+const GENOCIDE_EXTRA_MONSTERS = [
+    { name: 'watchman', mlet: '@', glyph: '@', color: CLR_GRAY, mlevel: 6, hpLevel: 9, difficulty: 8, mmove: 10, maligntyp: -2, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
+    { name: 'watch captain', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 10, hpLevel: 11, difficulty: 12, mmove: 10, maligntyp: -4, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
+];
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 
@@ -31040,6 +31044,7 @@ function pluralizeMonsterName(name) {
     if (/fungus$/i.test(name)) return `${name.slice(0, -6)}fungi`;
     if (/culus$/i.test(name)) return `${name.slice(0, -5)}culi`;
     if (/mumak$/i.test(name)) return `${name.slice(0, -5)}mumakil`;
+    if (/watchman$/i.test(name)) return `${name.slice(0, -3)}men`;
     if (/rtex$/i.test(name)) return `${name.slice(0, -4)}rtices`;
     if (/ium$/i.test(name)) return `${name.slice(0, -3)}ia`;
     if (lower.endsWith('y')) return `${name.slice(0, -1)}ies`;
@@ -31063,6 +31068,7 @@ function genocideMonsterCatalog() {
         genoFreq: row[6],
     });
     for (const data of RANDOM_MONSTER_BY_NAME.values()) add(data);
+    for (const data of GENOCIDE_EXTRA_MONSTERS) add(data);
     return entries;
 }
 
