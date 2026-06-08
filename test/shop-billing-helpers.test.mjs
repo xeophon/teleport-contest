@@ -13733,6 +13733,9 @@ test('genocide accepts C alternate monster spellings', async () => {
         ['halfling', 'hobbit', /Wiped out all hobbits\./],
         ['invisible stalker', 'stalker', /Wiped out all stalkers\./],
         ['high-elf', 'elven monarch', /Wiped out all elven monarchs\./],
+        ['master-lich', 'master lich', /Wiped out all master liches\./],
+        ['masterlich', 'master lich', /Wiped out all master liches\./],
+        ['archlich', 'arch-lich', /Wiped out all arch-liches\./],
         ['mindflayer', 'mind flayer', /Wiped out all mind flayers\./],
         ['master mindflayer', 'master mind flayer', /Wiped out all master mind flayers\./],
     ];
@@ -13826,20 +13829,26 @@ test('genocide resolves C amorous demon aliases before G_GENO refusal', async ()
     }
 });
 
-test('genocide refuses C non-G_GENO ki-rin', async () => {
-    installNonShopFloorState();
-    game.inventory = [scrollOfGenocide(31074, 's')];
+test('genocide refuses C non-G_GENO ki-rin aliases', async () => {
+    const cases = ['ki-rin', 'kirin'];
 
-    await rhack('r');
-    await rhack('s');
-    await enterGenocideResponse('ki-rin');
+    for (let i = 0; i < cases.length; i++) {
+        const input = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31074 + i, 's')];
 
-    const message = game._pending_message || '';
-    assert.match(message, /A thunderous voice booms through the caverns:/);
-    assert.match(message, /"No, mortal!  That will not be done\."/);
-    assert.doesNotMatch(message, /Wiped out all ki-rin/);
-    assert.equal(game._command_mode, 'genocideText');
-    assert.notEqual(game._genocided_monsters?.includes('ki-rin'), true);
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /Wiped out all ki-rin/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes('ki-rin'), true);
+    }
 });
 
 test('genocide refuses C non-G_GENO ghost family', async () => {
