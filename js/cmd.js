@@ -31030,6 +31030,8 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['baby grey dragon', 'baby gray dragon'],
     ['grey unicorn', 'gray unicorn'],
     ['grey ooze', 'gray ooze'],
+    ['gray-elf', 'Grey-elf'],
+    ['gray elf', 'Grey-elf'],
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
 ]);
@@ -31105,6 +31107,7 @@ function pluralizeMonsterName(name) {
     if (lower === 'human') return 'humans';
     if (lower === 'dwarf') return 'dwarves';
     if (lower === 'elf') return 'elves';
+    if (lower.endsWith('-elf')) return `${name.slice(0, -3)}elves`;
     if (/ above$/i.test(name)) return `${pluralizeMonsterName(name.slice(0, -6))} above`;
     if (/fungus$/i.test(name)) return `${name.slice(0, -6)}fungi`;
     if (/culus$/i.test(name)) return `${name.slice(0, -5)}culi`;

@@ -13725,6 +13725,8 @@ test('genocide accepts C alternate monster spellings', async () => {
         ['baby grey dragon', 'baby gray dragon', /Wiped out all baby gray dragons\./],
         ['grey unicorn', 'gray unicorn', /Wiped out all gray unicorns\./],
         ['grey ooze', 'gray ooze', /Wiped out all gray oozes\./],
+        ['gray-elf', 'Grey-elf', /Wiped out all Grey-elves\./],
+        ['gray elf', 'Grey-elf', /Wiped out all Grey-elves\./],
         ['mindflayer', 'mind flayer', /Wiped out all mind flayers\./],
         ['master mindflayer', 'master mind flayer', /Wiped out all master mind flayers\./],
     ];
@@ -13775,18 +13777,26 @@ test('genocide accepts C monster-name prefixes with trailing object text', async
 });
 
 test('genocide rejects C alternate-spelling plural suffixes', async () => {
-    installNonShopFloorState();
-    game.inventory = [scrollOfGenocide(31255, 's')];
+    const cases = [
+        ['grey dragons', 'gray dragon', /Wiped out all gray dragons/],
+        ['gray-elfs', 'Grey-elf', /Wiped out all Grey-elves/],
+    ];
 
-    await rhack('r');
-    await rhack('s');
-    await enterGenocideResponse('grey dragons');
+    for (let i = 0; i < cases.length; i++) {
+        const [input, markedName, badMessage] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31255 + i, 's')];
 
-    const message = game._pending_message || '';
-    assert.match(message, /Such creatures do not exist in this world\./);
-    assert.doesNotMatch(message, /Wiped out all gray dragons/);
-    assert.equal(game._command_mode, 'genocideText');
-    assert.notEqual(game._genocided_monsters?.includes('gray dragon'), true);
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /Such creatures do not exist in this world\./);
+        assert.doesNotMatch(message, badMessage);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(markedName), true);
+    }
 });
 
 test('genocide resolves C amorous demon aliases before G_GENO refusal', async () => {
