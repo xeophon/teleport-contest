@@ -22798,6 +22798,23 @@ function applyHeroProjectileMonsterLifeSaving(mon, messages) {
     return true;
 }
 
+function clearDirectMeleeWaitStrategyMask(mon) {
+    if (!mon) return;
+    if (Number.isFinite(Number(mon.mstrategy))) {
+        mon.mstrategy = Math.trunc(Number(mon.mstrategy)) & ~STRAT_WAITMASK;
+    } else if (mon.mstrategy === 'waitforu') {
+        mon.mstrategy = 0;
+    }
+}
+
+function restoreDirectMeleeLethalSurvivorState(mon, state) {
+    if (!mon || !state) return;
+    mon.msleeping = state.msleeping;
+    if (state.meating !== undefined) mon.meating = state.meating;
+    if (state.mpeaceful !== undefined) mon.mpeaceful = state.mpeaceful;
+    clearDirectMeleeWaitStrategyMask(mon);
+}
+
 function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
     if (!killAccessible || !treasureDrop) return;
     if (corpseData.noCorpse || corpseData !== data) return;
@@ -53847,6 +53864,11 @@ async function moveHero(dx, dy) {
             + targetStunnedBonus + targetFleeingBonus + targetSleepingBonus + targetImmobileBonus
             + trappedPenalty;
         let wokeByHit = false;
+        const directMeleePreHitState = {
+            msleeping: mon.msleeping,
+            meating: mon.meating,
+            mpeaceful: mon.mpeaceful,
+        };
 
         if (!game.u?.uinvulnerable) {
             applyHeroOrdinaryHunger();
@@ -54142,6 +54164,20 @@ async function moveHero(dx, dy) {
         if (killedByNormalMelee)
             applyDirectMeleePassiveObject(mon, killingAttackWeapon, messages);
         recordHeroKillConduct();
+        mon.dead = true;
+        mon.mhp = 0;
+        const survivedDeath = applyHeroProjectileMonsterLifeSaving(mon, messages)
+            || reviveVampshifterFromHeroProjectileKill(mon, messages, targetPhrase, { killMessage: false });
+        if (survivedDeath) {
+            restoreDirectMeleeLethalSurvivorState(mon, directMeleePreHitState);
+            wokeByHit = false;
+            const potionCallPrompt = game._command_mode === 'callPotionAfterMore';
+            await setMessage(messages.join('  '), potionCallPrompt || (killedPet && messages.length > 1));
+            game._run_stop_now = 1;
+            game._run_steps_remaining = 0;
+            game.context.move = 1;
+            return;
+        }
         recordVanquished(mon);
         dropMonsterInventory(mon, messages);
         const potionCallPrompt = game._command_mode === 'callPotionAfterMore';

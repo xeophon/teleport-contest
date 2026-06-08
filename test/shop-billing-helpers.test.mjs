@@ -75494,6 +75494,198 @@ function installDirectPassiveObjectMeleeState({
     return { blade, target };
 }
 
+test('direct hero melee lethal target uses monster life saving before cleanup', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uhitinc: 30, udaminc: 1 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876800, 'dagger', 'd', 0);
+    const amulet = metalAmulet(876801, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const carried = { id: 876802, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        minvent: [amulet, carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    game._force_fight_target = goblin;
+    markSquareVisible(6, 5);
+    installCoreRngValues([0, 0, 3, ...Array(20).fill(5)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        "You kill the goblin!  But wait...  The goblin's medallion begins to glow!  The goblin looks much better!  The medallion crumbles to dust!");
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(goblin.dead, false);
+    assert.equal(goblin.mhp, 10);
+    assert.equal(goblin.mhpmax, 10);
+    assert.equal(goblin.msleeping, 1);
+    assert.equal(goblin.mpeaceful, 1);
+    assert.equal(goblin.meating, 4);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mcanmove, true);
+    assert.equal(goblin.mfrozen, 0);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    assert.equal(goblin.minvent.includes(carried), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game.level.objects.some(obj => /goblin corpse/.test(String(obj.kind || obj.actualKind || ''))), false);
+    assert.equal(game._vanquished_counts?.goblin || 0, 0);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uconduct?.weaphit, 1);
+    assert.equal(game.u.uexp, 0);
+    assert.equal(game.u.urexp, 0);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), true);
+    assert.equal(game.inventory.includes(blade), true);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rnd(20)'), true);
+    assert.equal(calls.includes('rnd(4)'), true);
+    assert.equal(calls.includes('rn2(6)'), false);
+});
+
+test('direct hero melee genocided target consumes life saving before cleanup', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uhitinc: 30, udaminc: 1 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876803, 'dagger', 'd', 0);
+    const amulet = metalAmulet(876804, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const carried = { id: 876805, cls: 'food', kind: 'food ration', quan: 1 };
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 1,
+        mpeaceful: 0,
+        minvent: [amulet, carried],
+        data: { name: 'goblin', mlevel: 1, mlet: 'o' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    game._genocided_monsters = ['goblin'];
+    markSquareVisible(6, 5);
+    installCoreRngValues([0, 0, 3, ...Array(20).fill(5)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        "You kill the goblin!  But wait...  The goblin's medallion begins to glow!  The goblin looks much better!  The medallion crumbles to dust!  Unfortunately, the goblin is still genocided...");
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    assert.equal(goblin.mhp, 0);
+    assert.equal(goblin.minvent.includes(amulet), false);
+    assert.equal(game.level.objects.some(obj => obj.id === amulet.id), false);
+    const dropped = game.level.objects.find(obj => obj.id === carried.id);
+    assert.ok(dropped);
+    assert.equal(dropped.ox, 6);
+    assert.equal(dropped.oy, 5);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uconduct?.weaphit, 1);
+    assert.equal(game.u.uexp > 0, true);
+    assert.equal(game.u.urexp > 0, true);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), true);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rnd(20)'), true);
+    assert.equal(calls.includes('rnd(4)'), true);
+    assert.equal(calls.includes('rn2(6)'), true);
+});
+
+test('direct hero melee revives shifted vampire before cleanup', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 12345, uhitinc: 30, udaminc: 1 });
+    const oldLevel = game.u.ulevel;
+    const oldLiveExperience = game.u.uexp;
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(876806, 'dagger', 'd', 0);
+    const carried = { id: 876807, cls: 'food', kind: 'food ration', quan: 1 };
+    const bat = ordinaryThrowTarget('vampire bat', 6, 5, {
+        mhp: 1,
+        mhpmax: 8,
+        m_lev: 5,
+        mlevel: 5,
+        msleeping: 1,
+        mpeaceful: 1,
+        meating: 4,
+        mstrategy: STRAT_WAITFORU,
+        vampshifter: true,
+        vampBase: 'vampire',
+        cham: 'vampire',
+        minvent: [carried],
+        data: {
+            name: 'vampire bat',
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [bat];
+    game._force_fight_target = bat;
+    markSquareVisible(6, 5);
+    installCoreRngValues([0, 0, 3, ...Array(20).fill(5)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You kill the vampire bat!  The seemingly dead vampire bat suddenly transforms and rises as a vampire!');
+    assert.equal(game.level.monsters.includes(bat), true);
+    assert.equal(bat.dead, false);
+    assert.equal(bat.data.name, 'vampire');
+    assert.equal(bat.name, 'vampire');
+    assert.equal(bat.mlet, 'V');
+    assert.equal(bat.glyph, 'V');
+    assert.equal(bat.mcanmove, true);
+    assert.equal(bat.mfrozen, 0);
+    assert.equal(bat.vampshifter, false);
+    assert.equal(bat.vampBase, undefined);
+    assert.equal(bat.chamName, undefined);
+    assert.equal(bat.cham, undefined);
+    assert.equal(bat.msleeping, 1);
+    assert.equal(bat.meating, 4);
+    assert.equal(bat.mstrategy, 0);
+    assert.equal(bat.mpeaceful, 1);
+    assert.equal(bat.mhp, bat.mhpmax);
+    assert.equal(bat.mhp >= 10, true);
+    assert.equal(bat.minvent.some(obj => obj.id === carried.id), true);
+    assert.equal(game.level.objects.some(obj => obj.id === carried.id), false);
+    assert.equal(game.u.ulevel, oldLevel);
+    assert.equal(game.u.uexp, oldLiveExperience);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_counts?.vampire || 0, 0);
+    assert.equal(game._vanquished_total || 0, 0);
+    assert.equal(game.u.uconduct?.killer, 1);
+    assert.equal(game.u.uconduct?.weaphit, 1);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'vampire bat corpse'), false);
+    assert.equal(game.inventory.includes(blade), true);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rnd(20)'), true);
+    assert.equal(calls.includes('rnd(4)'), true);
+    assert.equal(calls.includes('rn2(6)'), false);
+});
+
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
     const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
 
