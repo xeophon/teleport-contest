@@ -76167,6 +76167,114 @@ test('direct hero melee deaf town watch bystander arrests but suppresses guard f
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee nonhumanoid same-species bystander growls then starts to flee', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876856,
+        name: 'little dog',
+        dataExtra: { mlevel: 2, mlet: 'd', humanoid: false, mmove: 18, maligntyp: 0 },
+    });
+    const bystander = ordinaryThrowTarget('dog', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        data: { name: 'dog', mlevel: 4, mlet: 'd', humanoid: false, mmove: 16, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 0, 1, 4, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the little dog.  The little dog growls!  The dog growls!  And then starts to flee.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mflee, 1);
+    assert.equal(bystander.mfleetim, 19);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(4)').slice(-1), [0]);
+});
+
+test('direct hero melee nonhumanoid same-species silent bystander reuses growl last message', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876857,
+        name: 'little dog',
+        dataExtra: { mlevel: 2, mlet: 'd', humanoid: false, mmove: 18, maligntyp: 0 },
+    });
+    const bystander = ordinaryThrowTarget('dog', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        data: {
+            name: 'dog',
+            mlevel: 4,
+            mlet: 'd',
+            humanoid: false,
+            mmove: 16,
+            msound: 'MS_SILENT',
+            maligntyp: 0,
+        },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 0, 1, 6, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the little dog.  The little dog growls!  And then starts to flee.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mflee, 1);
+    assert.equal(bystander.mfleetim, 21);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(4)').slice(-1), [0]);
+});
+
+test('direct hero melee nonhumanoid bystander with same glyph but no progression ignores attack', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876858,
+        name: 'little dog',
+        dataExtra: { mlevel: 2, mlet: 'd', humanoid: false, mmove: 18, maligntyp: 0 },
+    });
+    const bystander = ordinaryThrowTarget('jackal', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        data: { name: 'jackal', mlevel: 0, mlet: 'd', humanoid: false, mmove: 12, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the little dog.  The little dog growls!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.mflee || 0, 0);
+    assert.equal(bystander.mfleetim || 0, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
 test('direct hero melee current quest leader bystander can gasp then shrug', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876851 });
     game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };

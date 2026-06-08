@@ -14,7 +14,7 @@ Covered behavior:
 - optional `maybe_gasp()` wording is source-shaped for `"Gasp!"` and is only printed when the outer `!rn2(5)` gate succeeds;
 - cross-aligned priest bystanders consume the outer gasp gate when eligible but suppress `maybe_gasp()` text and therefore print no shrug message.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, tame bystander behavior, or the nonhumanoid same-species response branch. Town-watch arrest is covered by audit 764.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or tame bystander behavior. Town-watch arrest is covered by audit 764, and the nonhumanoid same-species response branch is covered by audit 765.
 
 C anchors:
 
@@ -36,7 +36,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 
 - Town watch arrest and `angry_guards()` are covered by audit 764.
 - Current quest-leader anger when the attacked target is the role guardian is still deferred.
-- Tame humanoid bystanders, nonhumanoid same-species growl/flee behavior, exact `monflee()` timers, existing-fleeing wording, and all `flags.verbose` branches remain outside this slice.
+- Tame humanoid bystanders, existing-fleeing wording outside the nonhumanoid same-species branch, and all `flags.verbose` branches remain outside this slice. Nonhumanoid same-species growl/flee behavior and its local `monflee()` timer are covered by audit 765.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.
 

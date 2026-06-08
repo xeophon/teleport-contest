@@ -23065,6 +23065,109 @@ function directMeleeResponderIsHumanoidBranch(mon) {
     return directMeleeResponderIsOrdinaryHumanoid(mon) || !!mon?.isshk || !!mon?.ispriest;
 }
 
+const DIRECT_MELEE_GROWNUP_PAIRS = [
+    ['chickatrice', 'cockatrice'],
+    ['little dog', 'dog'], ['dog', 'large dog'],
+    ['hell hound pup', 'hell hound'], ['winter wolf cub', 'winter wolf'],
+    ['kitten', 'housecat'], ['housecat', 'large cat'],
+    ['pony', 'horse'], ['horse', 'warhorse'],
+    ['kobold', 'large kobold'], ['large kobold', 'kobold leader'],
+    ['gnome', 'gnome leader'], ['gnome leader', 'gnome ruler'],
+    ['dwarf', 'dwarf leader'], ['dwarf leader', 'dwarf ruler'],
+    ['mind flayer', 'master mind flayer'],
+    ['orc', 'orc captain'], ['hill orc', 'orc captain'], ['mordor orc', 'orc captain'],
+    ['uruk-hai', 'orc captain'], ['sewer rat', 'giant rat'],
+    ['cave spider', 'giant spider'], ['ogre', 'ogre leader'], ['ogre leader', 'ogre tyrant'],
+    ['elf', 'elf noble'], ['woodland elf', 'elf noble'], ['green elf', 'elf noble'],
+    ['grey elf', 'elf noble'], ['elf noble', 'elven monarch'],
+    ['lich', 'demilich'], ['demilich', 'master lich'], ['master lich', 'arch-lich'],
+    ['vampire', 'vampire leader'], ['bat', 'giant bat'],
+    ['baby gray dragon', 'gray dragon'], ['baby gold dragon', 'gold dragon'],
+    ['baby silver dragon', 'silver dragon'], ['baby red dragon', 'red dragon'],
+    ['baby white dragon', 'white dragon'], ['baby orange dragon', 'orange dragon'],
+    ['baby black dragon', 'black dragon'], ['baby blue dragon', 'blue dragon'],
+    ['baby green dragon', 'green dragon'], ['baby yellow dragon', 'yellow dragon'],
+    ['red naga hatchling', 'red naga'], ['black naga hatchling', 'black naga'],
+    ['golden naga hatchling', 'golden naga'], ['guardian naga hatchling', 'guardian naga'],
+    ['small mimic', 'large mimic'], ['large mimic', 'giant mimic'],
+    ['baby long worm', 'long worm'], ['baby purple worm', 'purple worm'],
+    ['baby crocodile', 'crocodile'],
+    ['soldier', 'sergeant'], ['sergeant', 'lieutenant'], ['lieutenant', 'captain'],
+];
+
+function directMeleeResponderMlet(mon) {
+    const data = mon?.data || {};
+    return String(data.mlet ?? mon?.mlet ?? data.glyph ?? mon?.glyph ?? '');
+}
+
+function directMeleeResponderName(mon) {
+    return String(mon?.data?.name || mon?.name || '').toLowerCase();
+}
+
+function directMeleeResponderLittleToBigName(name) {
+    return DIRECT_MELEE_GROWNUP_PAIRS.find(([little]) => little === name)?.[1] || name;
+}
+
+function directMeleeResponderBigLittleMatch(mon, attacked) {
+    const monName = directMeleeResponderName(mon);
+    const attackedName = directMeleeResponderName(attacked);
+    if (!monName || !attackedName) return false;
+    if (monName === attackedName) return true;
+
+    for (let name = monName, next = directMeleeResponderLittleToBigName(name);
+        next !== name; name = next, next = directMeleeResponderLittleToBigName(next)) {
+        if (next === attackedName) return true;
+    }
+    for (let name = attackedName, next = directMeleeResponderLittleToBigName(name);
+        next !== name; name = next, next = directMeleeResponderLittleToBigName(next)) {
+        if (next === monName) return true;
+    }
+    return false;
+}
+
+function directMeleeResponderSameSpecies(mon, attacked) {
+    const monMlet = directMeleeResponderMlet(mon);
+    return !!monMlet && monMlet === directMeleeResponderMlet(attacked)
+        && directMeleeResponderBigLittleMatch(mon, attacked);
+}
+
+function directMeleeGrowlCanMessage(mon) {
+    return directMeleeMonsterCanBeSeen(mon) || !heroIsDeaf();
+}
+
+function directMeleePushGrowlMessage(mon, messages, verb = directMeleeGrowlVerb(mon)) {
+    if (!verb) return false;
+    messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+    game._direct_melee_last_msg_kind = 'growl';
+    return true;
+}
+
+function directMeleeMonflee(mon, fleeTime, { first = false, message = false, messages = [] } = {}) {
+    if (!mon || (mon.dead || (mon.mhp != null && mon.mhp <= 0))) return false;
+    const wasFleeing = !!mon.mflee;
+    let emitted = false;
+    if (!first || !mon.mflee) {
+        if (!fleeTime) {
+            mon.mfleetim = 0;
+        } else if (!mon.mflee || mon.mfleetim) {
+            let total = fleeTime + (mon.mfleetim || 0);
+            if (total === 1) total++;
+            mon.mfleetim = Math.min(total, 127);
+        }
+        if (!mon.mflee && message && directMeleeMonsterCanBeSeen(mon)
+            && mon.appearObj == null && !mon.appearGlyph) {
+            const immobile = !mon.mcanmove || !Number(mon.data?.mmove ?? mon.mmove ?? 12);
+            messages.push(immobile
+                ? `${fireScrollMonsterName(mon)} seems to flinch.`
+                : `${fireScrollMonsterName(mon)} turns to flee.`);
+            emitted = true;
+        }
+        mon.mflee = 1;
+    }
+    clearMonsterTrack(mon);
+    return emitted || (!wasFleeing && !!mon.mflee);
+}
+
 function directMeleeResponderIsQuestLeader(mon) {
     const data = mon?.data || {};
     if (mon?.questLeader || data.questLeader) return true;
@@ -23109,7 +23212,33 @@ function directMeleeResponderGasp(mon) {
     return { exclaimed: true, text: `${name} exclaims "${exclam}"`, needPunct: false };
 }
 
-function directMeleePeacefulHumanoidBystandersRespond(attacked, messages) {
+function directMeleePeacefulSameSpeciesResponder(mon, messages) {
+    if (rn2(3)) return false;
+
+    let exclaimed = false;
+    if (!rn2(4)) {
+        if (!directMeleeGrowlSuppressed(mon)) {
+            const verb = directMeleeGrowlVerb(mon);
+            if (directMeleeGrowlCanMessage(mon))
+                directMeleePushGrowlMessage(mon, messages, verb);
+            directMeleeGrowlWakeNearby(mon, messages);
+        }
+        exclaimed = game._direct_melee_last_msg_kind === 'growl';
+    }
+    if (rn2(6)) {
+        const alreadyFleeing = !!(mon.mflee || mon.mfleetim);
+        directMeleeMonflee(mon, rn2(25) + 15, {
+            first: true,
+            message: !exclaimed,
+            messages,
+        });
+        if (exclaimed && !alreadyFleeing)
+            messages.push('And then starts to flee.');
+    }
+    return true;
+}
+
+function directMeleePeacefulBystandersRespond(attacked, messages) {
     for (const mon of game.level?.monsters || []) {
         if (!directMeleePeacefulResponderCanSeeHero(mon, attacked)) continue;
         if (isTownWatchMonster(mon)) {
@@ -23117,7 +23246,11 @@ function directMeleePeacefulHumanoidBystandersRespond(attacked, messages) {
             directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() });
             continue;
         }
-        if (!directMeleeResponderIsHumanoidBranch(mon)) continue;
+        if (!directMeleeResponderIsHumanoidBranch(mon)) {
+            if (directMeleeResponderSameSpecies(mon, attacked))
+                directMeleePeacefulSameSpeciesResponder(mon, messages);
+            continue;
+        }
 
         const gasp = directMeleeResponderGasp(mon);
         if (directMeleeResponderShrugsInsteadOfAnger(mon, attacked)) {
@@ -23192,11 +23325,11 @@ function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}
             messages.push(`${fireScrollMonsterName(mon)} gets angry!`);
         } else {
             const verb = directMeleeGrowlVerb(mon);
-            if (verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+            if (verb) directMeleePushGrowlMessage(mon, messages, verb);
         }
     }
     if (!game._monster_moving)
-        directMeleePeacefulHumanoidBystandersRespond(mon, messages);
+        directMeleePeacefulBystandersRespond(mon, messages);
     return true;
 }
 
@@ -23221,7 +23354,7 @@ function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
             if (mon.meating !== undefined) mon.meating = 0;
             const verb = directMeleeGrowlVerb(mon);
             if (!directMeleeGrowlSuppressed(mon)) {
-                if (visible && verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+                if (visible && verb) directMeleePushGrowlMessage(mon, messages, verb);
                 directMeleeGrowlWakeNearby(mon, messages);
             }
         } else if (mon.meating !== undefined) {
@@ -54320,6 +54453,7 @@ async function moveHero(dx, dy) {
             : null;
         const directMeleeFromSpecialApply = !!directMeleePrefixMessages?.length;
         const messages = directMeleePrefixMessages ? [...directMeleePrefixMessages] : [];
+        game._direct_melee_last_msg_kind = '';
         game._hero_melee_prefix_messages = null;
         if (caitiffAttack) {
             messages.push('You caitiff!');

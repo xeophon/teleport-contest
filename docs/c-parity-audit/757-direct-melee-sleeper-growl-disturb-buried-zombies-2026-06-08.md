@@ -41,8 +41,8 @@ The focused command still keeps the direct-melee sleeping/awake/tame canaries pl
 - Other `wake_nearto()` callers still need separate `disturb_buried_zombies()` coverage where their local JS helpers do not already call it.
 - Object drop/throw impact disturbance via C `maybe_disturb_buried_zombies()` remains separate.
 - Exact timer API parity beyond the modeled `zombifyTurn` shortening remains deferred.
-- Unseen/audible growl naming, hallucinated growl table, `iflags.last_msg`, and run interruption remain deferred.
-- Full `wakeup()` mimic/reveal and remaining `setmangry()` peaceful-neighbor fallout remain deferred; ordinary/special humanoid bystander subsets and town-watch arrest are covered by audits 762-764.
+- Unseen/audible growl naming, hallucinated growl table, and run interruption remain deferred. The local direct-melee `PLNMSG_GROWL` reuse for same-species bystander flee wording is covered by audit 765.
+- Full `wakeup()` mimic/reveal and remaining `setmangry()` peaceful-neighbor fallout remain deferred; ordinary/special humanoid bystander subsets, town-watch arrest, and nonhumanoid same-species growl/flee are covered by audits 762-765.
 
 ## Verification
 
