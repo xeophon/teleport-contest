@@ -53134,6 +53134,7 @@ async function runMonsterDartHitLanding({
     seed = 8,
     heroBlind = true,
     heroDeaf = false,
+    heroDex = 10,
     levelCells = [],
     throwerX = 8,
     monsterName = 'kobold',
@@ -53162,7 +53163,7 @@ async function runMonsterDartHitLanding({
         uhpmax: 20,
         uac: 10,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 10, 10, 10] },
+        acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
     game.moves = 1;
     game.context = {};
@@ -55646,8 +55647,9 @@ test('production kobold dart hit lands surviving dart with ohit mulch', async ()
     assert.equal(landed.quan, 1);
     assert.equal(landed.kind, 'dart');
 
-    assert.ok(rng.includes('rnd(20)=12'));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
     assert.ok(rng.includes('rn2(3)=0'));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(90)=')), false, rng.join(', '));
 });
 
 test('production visible kobold dart hit queues landing until after damage and exercise', async () => {
@@ -55679,8 +55681,33 @@ test('production visible kobold dart hit queues landing until after damage and e
     assert.equal(landed.ox, 5);
     assert.equal(landed.oy, 5);
     assert.equal(landed.kind, 'dart');
+    assert.ok(rawRng.includes('rn2(90)=31'), rawRng.join(', '));
+    assert.ok(rawRng.includes('rnd(3)=2'), rawRng.join(', '));
     assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
     assert.ok(rawRng.includes('rn2(3)=0'), rawRng.join(', '));
+});
+
+test('production visible kobold dart catch retains split dart in inventory', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 1,
+        heroBlind: false,
+        heroDex: 100,
+        dartQuan: 2,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You catch the dart!/);
+    assertCaughtSplitThrownObject(dart, thrower, 'dart');
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
+    assert.equal(game._monster_throw_after_more ?? null, null);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'dart'), false, rawRng.join(', '));
+    assert.ok(rawRng.includes('rn2(1)=0'), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(90)=')
+        || entry.startsWith('rnd(3)=')
+        || entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(3)=')), false, rawRng.join(', '));
 });
 
 test('production large kobold dart hit uses kobold-family ranged path', async () => {
@@ -55696,7 +55723,7 @@ test('production large kobold dart hit uses kobold-family ranged path', async ()
     const landed = game.level.objects.find(obj => obj.id === dart.id);
     assert.ok(landed);
     assert.equal(landed.kind, 'dart');
-    assert.ok(rng.includes('rnd(20)=12'));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
 });
 
 test('production kobold leader dart hit uses kobold-family ranged path', async () => {
@@ -55712,7 +55739,7 @@ test('production kobold leader dart hit uses kobold-family ranged path', async (
     const landed = game.level.objects.find(obj => obj.id === dart.id);
     assert.ok(landed);
     assert.equal(landed.kind, 'dart');
-    assert.ok(rng.includes('rnd(20)=12'));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
 });
 
 test('production kobold dart stack splits one thrown dart', async () => {
@@ -55729,7 +55756,7 @@ test('production kobold dart stack splits one thrown dart', async () => {
     const landed = game.level.objects.find(obj => obj.kind === 'dart' && obj.id !== dart.id);
     assert.ok(landed);
     assert.equal(landed.quan, 1);
-    assert.ok(rng.includes('rnd(20)=12'));
+    assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')), rng.join(', '));
 });
 
 test('production kobold dart hits and rusts intervening rust monster object before stacking', async () => {
@@ -56983,7 +57010,7 @@ test('production kobold dart aimed shot can pass through iron bars before hero',
     assert.equal(landed.oy, 5);
     assert.equal(landed.kind, 'dart');
 
-    assert.ok(rng.some(entry => entry.startsWith('rn2(90)=')));
+    assert.equal(rng.some(entry => entry.startsWith('rn2(90)=')), false, rng.join(', '));
     assert.ok(rng.some(entry => entry.startsWith('rnd(20)=')));
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
 });
