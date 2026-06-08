@@ -31540,6 +31540,10 @@ async function finishGenocideInput(raw) {
     }
     if (pending.classMode) {
         const cls = genocideClassFromInput(input);
+        if (cls === 'I') {
+            await retryGenocidePrompt(pending, "You aren't permitted to genocide such monsters.");
+            return;
+        }
         const members = cls ? genocideClassMembers(cls) : [];
         if (!members.length) {
             await retryGenocidePrompt(pending, `That ${input.length === 1 ? 'symbol' : 'response'} does not represent any monster.`);
@@ -48401,7 +48405,8 @@ const GENOCIDE_MONSTER_CLASS_NAMES = new Map([
     ['trapper', 't'], ['unicorn', 'u'], ['vortex', 'v'], ['worm', 'w'],
     ['xan', 'x'], ['light', 'y'], ['zruty', 'z'], ['angel', 'A'],
     ['bat', 'B'], ['centaur', 'C'], ['dragon', 'D'], ['elemental', 'E'],
-    ['fungus', 'F'], ['giant', 'H'], ['jabberwock', 'J'], ['kop', 'K'],
+    ['fungus', 'F'], ['giant', 'H'], ['invisible', 'I'],
+    ['invisible monster', 'I'], ['jabberwock', 'J'], ['kop', 'K'],
     ['lich', 'L'], ['mummy', 'M'], ['naga', 'N'], ['ogre', 'O'],
     ['pudding', 'P'], ['quantum mechanic', 'Q'], ['rust monster', 'R'],
     ['snake', 'S'], ['troll', 'T'], ['umber hulk', 'U'], ['vampire', 'V'],

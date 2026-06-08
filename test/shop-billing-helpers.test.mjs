@@ -13840,6 +13840,24 @@ test('blessed genocide refuses C non-G_GENO ghost class', async () => {
         assert.notEqual(game._genocided_monsters?.includes(name), true);
 });
 
+test('blessed genocide refuses C invisible class marker', async () => {
+    for (const [input, scrollId] of [['I', 31245], ['invisible monster', 31246]]) {
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(scrollId, 's', { blessed: true })];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /You aren't permitted to genocide such monsters\./);
+        assert.match(message, /What class of monsters do you want to genocide\?/);
+        assert.doesNotMatch(message, /That (?:symbol|response) does not represent any monster/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+    }
+});
+
 test('blessed genocide catalogs C Kop class', async () => {
     installNonShopFloorState();
     game.inventory = [scrollOfGenocide(31244, 's', { blessed: true })];
