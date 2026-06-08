@@ -41,9 +41,9 @@ Focused regression coverage in `test/shop-billing-helpers.test.mjs` now asserts:
 ## Deferred Gaps
 
 - Full `buzz()` lightning physics remain shared ray work: reflection, collision, range RNG, shock resistance, flash blindness, inventory destruction, terrain, and monster interception are still outside this helper.
-- `setmangry()`'s Elbereth scare/flee branch and peaceful-neighbor response messages are not implemented in this narrow direct-melee priest slice.
+- `setmangry()`'s Elbereth scare/flee branch and remaining peaceful-neighbor response messages are not implemented in this narrow direct-melee priest slice.
 - The C room-edge fallback for non-lined-up shrine lightning origins remains deferred until room geometry and ray traversal are centralized.
-- Ordinary non-priest peaceful survivor anger is covered by audit 754; sleeping wake messages, Elbereth hypocrisy, peaceful-neighbor response messages, and knockback interactions remain separate follow-ups.
+- Ordinary non-priest peaceful survivor anger is covered by audit 754; sleeping wake messages, Elbereth hypocrisy, ordinary/special humanoid bystanders from audits 762-763, remaining peaceful-neighbor response branches, and knockback interactions remain separate follow-ups.
 
 ## Verification
 

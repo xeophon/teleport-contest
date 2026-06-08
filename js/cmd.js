@@ -23061,6 +23061,10 @@ function directMeleeResponderIsOrdinaryHumanoid(mon) {
     return !!(data.humanoid || mon?.humanoid || mlet === '@');
 }
 
+function directMeleeResponderIsHumanoidBranch(mon) {
+    return directMeleeResponderIsOrdinaryHumanoid(mon) || !!mon?.isshk || !!mon?.ispriest;
+}
+
 function directMeleeResponderIsQuestLeader(mon) {
     const data = mon?.data || {};
     if (mon?.questLeader || data.questLeader) return true;
@@ -23073,14 +23077,30 @@ function directMeleeResponderIsQuestLeader(mon) {
     return !!leader && name === leader;
 }
 
+function directMeleeResponderAttackedRoleGuardian(attacked) {
+    const name = String(attacked?.data?.name || attacked?.name || '').toLowerCase();
+    return tipHatMonsterIsRoleQuestGuardian(attacked, name);
+}
+
+function directMeleeResponderShrugsInsteadOfAnger(mon, attacked) {
+    if (mon?.isshk || mon?.ispriest) return true;
+    return directMeleeResponderIsQuestLeader(mon)
+        && !directMeleeResponderAttackedRoleGuardian(attacked);
+}
+
 function directMeleeResponderGasp(mon) {
     if (heroIsDeaf() || rn2(5)) return { exclaimed: false, text: '', needPunct: false };
     const data = mon?.data || {};
-    const msound = String(data.msound || data.sound || '').toUpperCase().replace(/^MS_/, '');
-    const canGasp = data.humanoid || mon?.humanoid
-        || ['HUMANOID', 'ARREST', 'SOLDIER', 'GUARD', 'NURSE', 'SEDUCE',
-            'LEADER', 'GUARDIAN', 'SELL', 'ORACLE', 'PRIEST', 'BOAST',
-            'IMITATE'].includes(msound);
+    let msound = String(data.msound || data.sound || mon?.msound || mon?.sound || '')
+        .toUpperCase().replace(/^MS_/, '');
+    if (!msound && (data.humanoid || mon?.humanoid)) msound = 'HUMANOID';
+    if (msound === 'PRIEST') {
+        const coaligned = Number(game.u?.ualign?.type ?? A_NEUTRAL) === tipHatPriestAlign(mon);
+        if (!coaligned) msound = 'SILENT';
+    }
+    const canGasp = ['HUMANOID', 'ARREST', 'SOLDIER', 'GUARD', 'NURSE', 'SEDUCE',
+        'LEADER', 'GUARDIAN', 'SELL', 'ORACLE', 'PRIEST', 'BOAST',
+        'IMITATE'].includes(msound);
     if (!canGasp) return { exclaimed: false, text: '', needPunct: false };
     const exclam = ['Gasp!', 'Uh-oh.', 'Oh my!', 'What?', 'Why?'][rn2(5)];
     const name = fireScrollMonsterName(mon);
@@ -23092,11 +23112,15 @@ function directMeleeResponderGasp(mon) {
 function directMeleePeacefulHumanoidBystandersRespond(attacked, messages) {
     for (const mon of game.level?.monsters || []) {
         if (!directMeleePeacefulResponderCanSeeHero(mon, attacked)) continue;
-        if (isTownWatchMonster(mon) || mon.isshk || mon.ispriest
-            || directMeleeResponderIsQuestLeader(mon)) continue;
-        if (!directMeleeResponderIsOrdinaryHumanoid(mon)) continue;
+        if (isTownWatchMonster(mon)) continue;
+        if (!directMeleeResponderIsHumanoidBranch(mon)) continue;
 
         const gasp = directMeleeResponderGasp(mon);
+        if (directMeleeResponderShrugsInsteadOfAnger(mon, attacked)) {
+            if (gasp.text) messages.push(`${gasp.text} then shrugs.`);
+            continue;
+        }
+
         const level = Number(mon.data?.mlevel ?? mon.m_lev ?? 0);
         const guardian = mon.data?.guardian || mon.guardian || mon.data?.msound === 'MS_GUARDIAN';
         const alreadyFleeing = !!(mon.mflee || mon.mfleetim);

@@ -33,7 +33,7 @@ The focused command keeps adjacent visible-hero Elbereth, peaceful-target, and n
 
 ## Deferred Gaps
 
-- Bounded direct ordinary-humanoid `peacefuls_respond()` bystanders are covered by audit 762; full town watch, shopkeeper, priest, quest-leader, tame, and nonhumanoid same-species response behavior remains deferred.
+- Bounded direct ordinary-humanoid `peacefuls_respond()` bystanders are covered by audit 762; shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763; remaining town watch, role-guardian quest-leader anger, tame, nonhumanoid same-species response behavior, and broader optional gasp/flee wording remain deferred.
 - Exact `adjalign()` threshold side effects such as Erinys adjustments remain outside this local direct-melee alignment model.
 - Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred wake queues, swallowed/jousting/artifact melee, and other special helpers remain separate from this ordinary direct-melee hook.
 - Full knockback movement, trap collisions, stun, and wording are still represented only by the existing RNG placeholder.

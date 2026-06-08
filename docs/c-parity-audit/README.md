@@ -168,6 +168,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md](760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` altar/vampire `onscary()` parity, hero-square altar scare source for vampires and vampire shifters, and final-restriction bypass canaries.
 - [761-direct-melee-setmangry-blind-elbereth-fade-2026-06-08.md](761-direct-melee-setmangry-blind-elbereth-fade-2026-06-08.md): direct hero melee `setmangry(TRUE)` blind-hero Elbereth fade-message suppression while preserving hypocrisy penalties and direct engraving deletion.
 - [762-direct-melee-setmangry-peacefuls-respond-humanoid-bystander-2026-06-08.md](762-direct-melee-setmangry-peacefuls-respond-humanoid-bystander-2026-06-08.md): direct hero melee `setmangry(TRUE)` bounded `peacefuls_respond()` parity for visible ordinary humanoid bystanders, response gates, target/bystander message ordering, and social alignment penalties.
+- [763-direct-melee-setmangry-peacefuls-respond-special-humanoid-bystander-shrug-gasp-2026-06-08.md](763-direct-melee-setmangry-peacefuls-respond-special-humanoid-bystander-shrug-gasp-2026-06-08.md): direct hero melee `setmangry(TRUE)` bounded `peacefuls_respond()` parity for visible special humanoid bystanders, shopkeeper/priest no-anger shrug, current quest-leader non-guardian-target shrug, optional `maybe_gasp()` wording, and preserved peaceful/wait/alignment state.
 
 ## Cross-Cutting Themes
 

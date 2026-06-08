@@ -40,7 +40,7 @@ The focused run also keeps canaries for the awake survivor path, bullwhip apply 
 
 - Direct-melee sleeper growl `wake_nearto()` side effects are covered by audit 756; remaining `growl()` gaps are deaf/audible unseen naming, hallucinated sound table, run interruption, and `iflags.last_msg`.
 - Full `wakeup()` reveal behavior for object/furniture mimics and force-fight `mundetected` cases remains deferred.
-- `setmangry()` Elbereth hypocrisy, engraving fade/deletion, and peaceful-neighbor responses remain deferred.
+- `setmangry()` Elbereth hypocrisy and engraving fade/deletion are covered by audits 758-761; ordinary/special humanoid bystanders are covered by audits 762-763, with remaining peaceful-neighbor response branches still deferred.
 - Sleeping priest/shopkeeper special follow-ups beyond existing priest canaries and non-shop non-priest fixtures remain deferred.
 - Two-weapon deferred sleeping-hit queues, knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
 

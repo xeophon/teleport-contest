@@ -76108,7 +76108,7 @@ test('direct hero melee blind peaceful humanoid bystander does not respond', asy
     assert.equal(game.u.ualign.abuse, 1);
 });
 
-test('direct hero melee quest leader bystander is outside ordinary humanoid response', async () => {
+test('direct hero melee current quest leader bystander can gasp then shrug', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876851 });
     game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
     const bystander = ordinaryThrowTarget('Neferet the Green', 5, 6, {
@@ -76126,13 +76126,92 @@ test('direct hero melee quest leader bystander is outside ordinary humanoid resp
             humanoid: true,
             msound: 'MS_LEADER',
             unique: true,
+            properName: true,
             maligntyp: 0,
         },
     });
     game.level.monsters = [mon, bystander];
-    game.u._statusSuffix = ' Deaf';
     markSquareVisible(5, 6);
-    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  Neferet the Green gasps then shrugs.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mstrategy, 'waitforu');
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee shopkeeper bystander can gasp then shrug', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876852 });
+    const bystander = ordinaryThrowTarget('shopkeeper', 5, 6, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        isshk: true,
+        shknam: 'Izchak',
+        data: {
+            name: 'shopkeeper',
+            mlevel: 12,
+            mlet: '@',
+            humanoid: true,
+            shopkeeper: true,
+            msound: 'MS_SELL',
+            maligntyp: 0,
+        },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  Izchak gasps then shrugs.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mstrategy, 'waitforu');
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee cross-aligned priest bystander does not gasp or anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876853 });
+    const bystander = ordinaryThrowTarget('aligned cleric', 5, 6, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        ispriest: true,
+        align: A_CHAOTIC,
+        data: {
+            name: 'aligned cleric',
+            mlevel: 12,
+            mlet: '@',
+            humanoid: true,
+            priest: true,
+            msound: 'MS_PRIEST',
+            maligntyp: A_CHAOTIC,
+        },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
 
     await rhack('l');
 
@@ -76144,6 +76223,7 @@ test('direct hero melee quest leader bystander is outside ordinary humanoid resp
     assert.equal(bystander.mstrategy, 'waitforu');
     assert.equal(game.u.ualign.record, -1);
     assert.equal(game.u.ualign.abuse, 1);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(5)').slice(-1), [0]);
 });
 
 test('direct hero melee surviving peaceful target on Elbereth feels hypocritical before anger', async () => {
