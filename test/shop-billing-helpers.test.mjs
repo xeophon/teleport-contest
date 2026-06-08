@@ -13406,6 +13406,68 @@ test('cursed confused genocide summons hero role monsters without life saving', 
     assert.equal(game._genocided_monsters?.length || 0, 0);
 });
 
+test('caveman role genocide of cave dweller follows C self-genocide before refusal', async () => {
+    installNonShopFloorState();
+    game._startup_role = 'Caveman';
+    game.urole = { ...(game.urole || {}), name: { m: 'Caveman', f: 'Cavewoman' } };
+    game.u.uhp = 10;
+    game.u.uhpmax = 20;
+    game.inventory = [scrollOfGenocide(31460, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('cavemen');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /Wiped out all cave dwellers\./);
+    assert.match(message, /You die\.\.\./);
+    assert.doesNotMatch(message, /A thunderous voice booms through the caverns/);
+    assert.equal(game._genocided_monsters.includes('cave dweller'), true);
+    assert.equal(game._death_cause, 'scroll of genocide');
+    assert.equal(game._death_no_bones, 1);
+    assert.equal(game.u.uhp, 0);
+});
+
+test('polymorphed caveman role genocide of cave dweller delays death before refusal', async () => {
+    installNonShopFloorState();
+    game._startup_role = 'Caveman';
+    game.urole = { ...(game.urole || {}), name: { m: 'Caveman', f: 'Cavewoman' } };
+    Object.assign(game.u, {
+        uhp: 10,
+        uhpmax: 20,
+        mh: 6,
+        mhmax: 6,
+        _polyself_form: { name: 'newt', mlet: ':', glyph: ':', mlevel: 0, mmove: 6, mac: 8 },
+        _polyself_base: {
+            uhp: 10,
+            uhpmax: 20,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Caveman', f: 'Cavewoman' },
+        },
+    });
+    game.inventory = [scrollOfGenocide(31461, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('cave dweller');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /Wiped out all cave dwellers\./);
+    assert.match(message, /You feel dead inside\./);
+    assert.doesNotMatch(message, /A thunderous voice booms through the caverns/);
+    assert.doesNotMatch(message, /You die\.\.\./);
+    assert.equal(game._genocided_monsters.includes('cave dweller'), true);
+    assert.equal(game._polyself_genocide_delayed, 1);
+    assert.equal(game._polyself_genocide_delayed_cause, 'scroll of genocide');
+    assert.equal(game.u.uhp, -1);
+    assert.equal(game.u.mh, 6);
+});
+
 test('polymorphed self-genocide waits until rehumanization', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -13979,6 +14041,39 @@ test('genocide resolves C valley-only demon names before G_GENO refusal', async 
         assert.doesNotMatch(message, /Wiped out all/);
         assert.equal(game._command_mode, 'genocideText');
         assert.notEqual(game._genocided_monsters?.includes(target), true);
+    }
+});
+
+test('genocide resolves C cave dweller aliases before G_GENO refusal for other roles', async () => {
+    const cases = [
+        'caveman',
+        'cavewoman',
+        'cave dweller',
+        'cavemen',
+        'cavewomen',
+        'caveman corpse',
+        'cavemen corpse',
+        'cavewomen corpse',
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const input = cases[i];
+        installNonShopFloorState();
+        game._startup_role = 'Wizard';
+        game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+        game.inventory = [scrollOfGenocide(31470 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes('cave dweller'), true);
     }
 });
 

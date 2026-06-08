@@ -27223,6 +27223,7 @@ const GENDERED_CORPSTAT_MONSTER_NAMES = new Map([
     ['vampire leader', { male: 'vampire lord', female: 'vampire lady', neutral: 'vampire leader' }],
     ['elf-noble', { male: 'elf-lord', female: 'elf-lady', neutral: 'elf-noble' }],
     ['elven monarch', { male: 'Elvenking', female: 'Elvenqueen', neutral: 'elven monarch' }],
+    ['cave dweller', { male: 'caveman', female: 'cavewoman', neutral: 'cave dweller' }],
     ['amorous demon', { male: 'incubus', female: 'succubus', neutral: 'amorous demon' }],
 ]);
 
@@ -31005,6 +31006,7 @@ const GENOCIDE_EXTRA_MONSTERS = [
     { name: 'high cleric', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 25, hpLevel: 29, difficulty: 30, mmove: 15, maligntyp: 0, genoFreq: 0, priest: true, armed: true, alwaysPeaceful: true, nasty: true },
     { name: 'Master of Thieves', mlet: '@', glyph: '@', color: CLR_MAGENTA, mlevel: 20, hpLevel: 20, difficulty: 24, mmove: 15, maligntyp: -20, genoFreq: 0, unique: true, male: true, human: true, humanoid: true, armed: true, strong: true, alwaysPeaceful: true },
     { name: 'Master Assassin', mlet: '@', glyph: '@', color: CLR_MAGENTA, mlevel: 15, hpLevel: 15, difficulty: 20, mmove: 12, maligntyp: 18, genoFreq: 0, unique: true, nemesis: true, male: true, human: true, humanoid: true, armed: true, strong: true, alwaysHostile: true, nasty: true },
+    { name: 'cave dweller', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 10, hpLevel: 10, difficulty: 12, mmove: 12, maligntyp: 1, genoFreq: 0, human: true, humanoid: true, armed: true, strong: true },
     { name: 'Keystone Kop', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 1, hpLevel: 1, difficulty: 3, mmove: 6, maligntyp: 9, genoFreq: 0, armed: true },
     { name: 'Kop Sergeant', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 2, hpLevel: 2, difficulty: 4, mmove: 8, maligntyp: 10, genoFreq: 0, armed: true },
     { name: 'Kop Lieutenant', mlet: 'K', glyph: 'K', color: CLR_CYAN, mlevel: 3, hpLevel: 3, difficulty: 5, mmove: 10, maligntyp: 11, genoFreq: 0, armed: true },
@@ -31025,7 +31027,7 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'stone golem', 'glass golem', 'iron golem',
     'titan', 'wererat', 'werejackal', 'werewolf',
     'aligned cleric', 'high cleric', 'master of thief', 'master assassin',
-    'djinni', 'water demon', 'horned devil', 'erinys', 'barbed devil',
+    'cave dweller', 'djinni', 'water demon', 'horned devil', 'erinys', 'barbed devil',
     'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
     'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
     'salamander', 'ghost', 'shade',
@@ -31083,6 +31085,8 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['homunculi', 'homunculus'],
     ['baluchitheria', 'baluchitherium'],
     ['lurkers above', 'lurker above'],
+    ['cavemen', 'cave dweller'],
+    ['cavewomen', 'cave dweller'],
     ['watchmen', 'watchman'],
     ['djinn', 'djinni'],
     ['mumakil', 'mumak'],
@@ -31404,6 +31408,17 @@ function isHeroGenocideTarget(name) {
         || (raceAdj === 'human' && lower === 'human'));
 }
 
+function isHeroGenocideResolvedTarget(data) {
+    if (!data?.name) return false;
+    const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
+    return [
+        data.name,
+        genderNames?.neutral,
+        genderNames?.male,
+        genderNames?.female,
+    ].filter(Boolean).some(name => isHeroGenocideTarget(name));
+}
+
 function finishHeroGenocide(messages, cause = 'scroll of genocide') {
     messages.push('You die...');
     if (game.u) game.u.uhp = 0;
@@ -31700,7 +31715,8 @@ async function finishGenocideInput(raw) {
         await retryGenocidePrompt(pending, 'Such creatures no longer exist in this world.');
         return;
     }
-    if (isMonsterForbiddenForGenocideName(data.name)) {
+    const killPlayer = isHeroGenocideResolvedTarget(data);
+    if (isMonsterForbiddenForGenocideName(data.name) && !killPlayer) {
         await retryGenocidePrompt(pending, 'A thunderous voice booms through the caverns:  "No, mortal!  That will not be done."');
         return;
     }
@@ -31709,7 +31725,6 @@ async function finishGenocideInput(raw) {
         await endGenocidePrompt(messages, messages.length > 1);
         return;
     }
-    const killPlayer = isHeroGenocideTarget(input);
     if (data.unique || data.nemesis) {
         await retryGenocidePrompt(pending, `You aren't permitted to genocide ${data.unique ? `the ${data.name}` : pluralizeMonsterName(data.name)}.`);
         return;
