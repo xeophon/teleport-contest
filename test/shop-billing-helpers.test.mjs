@@ -13729,6 +13729,20 @@ test('genocide accepts C alternate monster spellings', async () => {
         ['gray elf', 'Grey-elf', /Wiped out all Grey-elves\./],
         ['wood-elf', 'Woodland-elf', /Wiped out all Woodland-elves\./],
         ['wood elf', 'Woodland-elf', /Wiped out all Woodland-elves\./],
+        ['uruk hai', 'Uruk-hai', /Wiped out all Uruk-hai\./],
+        ['orc captain', 'orc-captain', /Wiped out all orc-captains\./],
+        ['woodland elf', 'Woodland-elf', /Wiped out all Woodland-elves\./],
+        ['woodland elves', 'Woodland-elf', /Wiped out all Woodland-elves\./],
+        ['green elf', 'Green-elf', /Wiped out all Green-elves\./],
+        ['green elves', 'Green-elf', /Wiped out all Green-elves\./],
+        ['grey elf', 'Grey-elf', /Wiped out all Grey-elves\./],
+        ['grey elves', 'Grey-elf', /Wiped out all Grey-elves\./],
+        ['gray elves', 'Grey-elf', /Wiped out all Grey-elves\./],
+        ['elf lady', 'elf-noble', /Wiped out all elf-nobles\./],
+        ['elf lord', 'elf-noble', /Wiped out all elf-nobles\./],
+        ['elf noble', 'elf-noble', /Wiped out all elf-nobles\./],
+        ['olog hai', 'Olog-hai', /Wiped out all Olog-hai\./],
+        ['arch lich', 'arch-lich', /Wiped out all arch-liches\./],
         ['woodland nymph', 'wood nymph', /Wiped out all wood nymphs\./],
         ['halfling', 'hobbit', /Wiped out all hobbits\./],
         ['invisible stalker', 'stalker', /Wiped out all stalkers\./],
@@ -13764,6 +13778,7 @@ test('genocide accepts C monster-name prefixes with trailing object text', async
         ['grid bugs corpse', 'grid bug', /Wiped out all grid bugs\./],
         ["grid bug's corpse", 'grid bug', /Wiped out all grid bugs\./],
         ['grey dragon corpse', 'gray dragon', /Wiped out all gray dragons\./],
+        ['arch lich corpse', 'arch-lich', /Wiped out all arch-liches\./],
     ];
 
     for (let i = 0; i < cases.length; i++) {
@@ -13789,6 +13804,13 @@ test('genocide rejects C alternate-spelling plural suffixes', async () => {
     const cases = [
         ['grey dragons', 'gray dragon', /Wiped out all gray dragons/],
         ['gray-elfs', 'Grey-elf', /Wiped out all Grey-elves/],
+        ['ki rins', 'ki-rin', /Wiped out all ki-rin/],
+        ['uruk hais', 'Uruk-hai', /Wiped out all Uruk-hai/],
+        ['olog hais', 'Olog-hai', /Wiped out all Olog-hai/],
+        ['arch liches', 'arch-lich', /Wiped out all arch-liches/],
+        ['woodland elfs', 'Woodland-elf', /Wiped out all Woodland-elves/],
+        ['green elfs', 'Green-elf', /Wiped out all Green-elves/],
+        ['grey elfs', 'Grey-elf', /Wiped out all Grey-elves/],
     ];
 
     for (let i = 0; i < cases.length; i++) {
@@ -13830,7 +13852,7 @@ test('genocide resolves C amorous demon aliases before G_GENO refusal', async ()
 });
 
 test('genocide refuses C non-G_GENO ki-rin aliases', async () => {
-    const cases = ['ki-rin', 'kirin'];
+    const cases = ['ki-rin', 'ki rin', 'kirin'];
 
     for (let i = 0; i < cases.length; i++) {
         const input = cases[i];

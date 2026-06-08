@@ -31043,8 +31043,19 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['high-elf', 'elven monarch'],
     ['master-lich', 'master lich'],
     ['masterlich', 'master lich'],
+    ['ki rin', 'ki-rin'],
     ['kirin', 'ki-rin'],
+    ['uruk hai', 'Uruk-hai'],
+    ['orc captain', 'orc-captain'],
+    ['woodland elf', 'Woodland-elf'],
+    ['green elf', 'Green-elf'],
+    ['grey elf', 'Grey-elf'],
     ['archlich', 'arch-lich'],
+    ['elf lady', 'elf-noble'],
+    ['elf lord', 'elf-noble'],
+    ['elf noble', 'elf-noble'],
+    ['olog hai', 'Olog-hai'],
+    ['arch lich', 'arch-lich'],
     ['aligned priest', 'aligned cleric'],
     ['aligned priestess', 'aligned cleric'],
     ['high priest', 'high cleric'],
@@ -31182,11 +31193,8 @@ function genocideMonsterByName(name) {
         const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
         const canonicalCandidates = [
             data.name,
-            data.name?.replace(/-/g, ' '),
             genderNames?.male,
-            genderNames?.male?.replace(/-/g, ' '),
             genderNames?.female,
-            genderNames?.female?.replace(/-/g, ' '),
         ].filter(Boolean).map(normalizeGenocidePrefixInput);
         for (const candidate of canonicalCandidates) {
             if (candidate.length <= bestLength) continue;
@@ -31200,13 +31208,10 @@ function genocideMonsterByName(name) {
         const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
         const candidates = [
             data.name,
-            data.name?.replace(/-/g, ' '),
             pluralizeMonsterName(data.name || ''),
             genderNames?.male,
-            genderNames?.male?.replace(/-/g, ' '),
             genderNames?.male ? pluralizeMonsterName(genderNames.male) : null,
             genderNames?.female,
-            genderNames?.female?.replace(/-/g, ' '),
             genderNames?.female ? pluralizeMonsterName(genderNames.female) : null,
             genderNames?.male === 'incubus' ? 'incubi' : null,
             genderNames?.female === 'succubus' ? 'succubi' : null,
