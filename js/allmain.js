@@ -9932,7 +9932,8 @@ function monsterCanUseMunstone(mon) {
 function monsterAcidResistant(mon) {
     const data = mon?.data || {};
     const name = String(data.name || '').toLowerCase();
-    return !!(data.acidResistance || data.resistsAcid || name === 'acid blob'
+    return !!(mon?.acidResistance || mon?.resistsAcid || mon?.resists_acid
+        || data.acidResistance || data.resistsAcid || data.resists_acid || name === 'acid blob'
         || name === 'yellow dragon' || name === 'baby yellow dragon');
 }
 
@@ -10050,9 +10051,9 @@ function monsterMunstone(mon, messages, visible) {
         if (visible) messages.push(`${monsterDisplayName(mon)} has a very bad case of stomach acid.`);
         if ((mon.mhp || 0) <= 0) {
             messages.push(`${monsterDisplayName(mon)} dies!`);
-            game.level.monsters = (game.level.monsters || []).filter(other => other !== mon);
             mon.dead = true;
             mon.movement = 0;
+            detachMonsterMunstoneDeath(mon);
             return true;
         }
     }
@@ -10580,6 +10581,15 @@ function killMonsterFromThrownInterveningHit(target, visible, { afterMore = fals
         && monsterLeavesCorpseLikeDrop(corpseData)
         && monsterCorpseDropSucceeds(target, data);
     if (canDropCorpse) createMonsterCorpseOrGlob(target, corpseData);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
+    newsym(target.mx, target.my);
+}
+
+function detachMonsterMunstoneDeath(target) {
+    if (!target) return;
+    noteMonsterResumeRemoval(target);
+    recordVanquished(target, false);
+    dropMonsterInventory(target);
     game.level.monsters = (game.level?.monsters || []).filter(other => other !== target);
     newsym(target.mx, target.my);
 }

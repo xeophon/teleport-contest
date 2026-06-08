@@ -43,6 +43,8 @@ const POT_WATER = 253;
 const SLIME_MOLD = 11009;
 const BEARTRAP = 10161;
 const MEAT_RING = 10164;
+const TIN_OPENER = 10159;
+const GLOB_OF_GREEN_SLIME = 10182;
 const MEATBALL = 11012;
 const ENORMOUS_MEATBALL = 11013;
 const MEAT_STICK = 11014;
@@ -55892,6 +55894,7 @@ test('production monster cockatrice egg hit lets target eat lizard corpse before
     assert.equal(game.u._stonedTimeout || 0, 0);
     assert.equal(blocker.dead || false, false);
     assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.mhp, 12);
     assert.equal(blocker.msleeping, 0);
     assert.equal(blocker.minvent.includes(lizardCorpse), false);
     assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
@@ -55905,6 +55908,204 @@ test('production monster cockatrice egg hit lets target eat lizard corpse before
     assert.match(messages, /The goblin eats a lizard corpse\./);
     assert.match(messages, /The goblin seems limber!/);
     assert.doesNotMatch(messages, /turns to stone|Now it's a stone golem|You are hit|misses you/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('production monster cockatrice egg cured target takes no physical egg impact damage', async () => {
+    const lizardCorpse = corpse(878132, undefined, 'lizard');
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 1,
+        mhpmax: 1,
+        minvent: [lizardCorpse],
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(blocker.dead || false, false);
+    assert.equal(blocker.mhp, 1);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), false);
+
+    assert.match(messages, /The goblin eats a lizard corpse\./);
+    assert.match(messages, /The goblin seems limber!/);
+    assert.doesNotMatch(messages, /is killed|turns to stone|Now it's a stone golem/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('production monster cockatrice egg acid potion cure can kill target before petrifying', async () => {
+    const acid = acidPotion(878133, undefined);
+    const lizardCorpse = corpse(878137, undefined, 'lizard');
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [acid, lizardCorpse],
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1, 14],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(blocker.dead, true);
+    assert.equal(game.level.monsters.includes(blocker), false);
+    assert.equal(blocker.minvent.includes(acid), false);
+    assert.equal(blocker.minvent.includes(lizardCorpse), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'goblin corpse' && obj.ox === 7 && obj.oy === 5), false);
+    assert.equal(game.level.objects.some(obj => obj.id === lizardCorpse.id && obj.ox === 7 && obj.oy === 5), true);
+
+    assert.match(messages, /The goblin quaffs a potion of acid\./);
+    assert.match(messages, /The goblin has a very bad case of stomach acid\./);
+    assert.match(messages, /The goblin dies!/);
+    assert.doesNotMatch(messages, /eats a lizard corpse|seems limber|turns to stone|Now it's a stone golem/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)', 'rnd(15)']);
+});
+
+test('production monster cockatrice egg acid resistant target quaffs acid without stomach damage', async () => {
+    const acid = acidPotion(878138, undefined);
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 5,
+        mhpmax: 5,
+        minvent: [acid],
+        resistsAcid: true,
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(blocker.dead || false, false);
+    assert.equal(blocker.mhp, 5);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.includes(acid), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), false);
+
+    assert.match(messages, /The goblin quaffs a potion of acid\./);
+    assert.match(messages, /The goblin seems limber!/);
+    assert.doesNotMatch(messages, /stomach acid|turns to stone|Now it's a stone golem/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('production monster cockatrice egg target opens lizard tin with tin opener before petrifying', async () => {
+    const lizardTin = { ...tin(878134, undefined), corpsenm: { name: 'lizard' } };
+    const opener = {
+        id: 878135,
+        otyp: TIN_OPENER,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'tin opener',
+        actualKind: 'tin opener',
+        quan: 1,
+    };
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 12,
+        mhpmax: 12,
+        minvent: [lizardTin, opener],
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(blocker.dead || false, false);
+    assert.equal(blocker.mhp, 12);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.includes(lizardTin), false);
+    assert.equal(blocker.minvent.includes(opener), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+
+    assert.match(messages, /The goblin opens and eats the contents of a tin\./);
+    assert.match(messages, /The goblin seems limber!/);
+    assert.doesNotMatch(messages, /turns to stone|Now it's a stone golem/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('production monster cockatrice egg stone-resistant slimeproof target keeps green slime glob', async () => {
+    const glob = {
+        id: 878136,
+        otyp: GLOB_OF_GREEN_SLIME,
+        cls: 'food',
+        glyph: '%',
+        kind: 'glob of green slime',
+        actualKind: 'glob of green slime',
+        globby: true,
+        quan: 1,
+    };
+    const blocker = ordinaryThrowTarget('fire elemental', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 12,
+        mhpmax: 12,
+        minvent: [glob],
+        data: { name: 'fire elemental', mlevel: 8, mac: 20, flaming: true },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(blocker.dead || false, false);
+    assert.equal(blocker.mhp, 12);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.includes(glob), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), false);
+
+    assert.match(messages, /Splat!  The fire elemental is hit with a cockatrice egg!/);
+    assert.doesNotMatch(messages, /eats a glob of green slime|seems limber|turns to stone|Now it's a stone golem/);
     assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
 });
 

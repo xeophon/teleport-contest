@@ -43,6 +43,6 @@ Implemented the next production monster-thrown petrifying egg intervening-monste
 
 ## Remaining Gaps
 
-- Acid-potion cure stomach-damage death, openable-tin cure rows, and slimeproof green-slime glob cure rows still need focused canaries.
-- C's ordinary physical egg hit damage after a successful `munstone()` cure is still not modeled in this branch.
+- Acid-potion cure stomach-damage death, openable-tin cure rows, stone-resistant slimeproof green-slime glob guard behavior, and C's zero physical egg damage after a successful `munstone()` cure are covered in audit 786.
+- Broader acidic non-lizard corpse/tin species still need focused production canaries.
 - Cursed/greased monster-thrown egg misfire and sink/ordinary wall stop handling remain separate projectile slices.
