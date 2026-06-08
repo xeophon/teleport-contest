@@ -34612,7 +34612,7 @@ function trappedKickedFloorObjectRefusal(obj, x, y) {
 
 function kickFloorObjectSupported(obj, x, y, options = {}) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
-    if (isBoulderObject(obj) || shopBillableGold(obj)) return false;
+    if (isBoulderObject(obj)) return false;
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind) return false;
@@ -34763,6 +34763,19 @@ function splitKickedFloorObjectForFlight(obj) {
     return kicked;
 }
 
+function kickedFloorObjectKickName(obj) {
+    if (!shopBillableGold(obj)) return floorObjectArticleName(obj);
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    return pickupObjectName({ ...obj, line: '', quan: quantity });
+}
+
+function kickedCoinFlightStopPileAt(obj, x, y) {
+    if (!shopBillableGold(obj)) return null;
+    return (game.level?.objects || []).find(candidate =>
+        candidate && candidate !== obj && !candidate.hidden && !candidate.buried
+        && !candidate.transientProjectile && candidate.ox === x && candidate.oy === y) || null;
+}
+
 function kickedObjectIronBarsBreakChance(obj) {
     if (objectKindKey(obj) !== 'war hammer') return 0;
     const strength = Math.max(3, Math.trunc(Number(game.u?.acurr?.a?.[A_STR] || game.u?.ustr || 10)));
@@ -34811,6 +34824,11 @@ function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
                 newsym(nx, ny);
             }
             return { x: landX, y: landY, gate: null, webStuck: true };
+        }
+        if (kickedCoinFlightStopPileAt(obj, nx, ny)) {
+            landX = nx;
+            landY = ny;
+            break;
         }
         const closedDoor = typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
         const gate = remoteProjectileDownGateAt(obj, nx, ny);
@@ -34905,7 +34923,7 @@ async function kickFloorObjectToward(dir, x, y) {
         return { handled: false };
 
     const range = kickFloorObjectRange(obj, x, y, dir);
-    const messages = [`You kick ${floorObjectArticleName(obj)}.`];
+    const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
     if (localBoxImpact) {
         const boxImpact = applyKickedBoxImpact(obj, range, messages);
         if (boxImpact.handled)

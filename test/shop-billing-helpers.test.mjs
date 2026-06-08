@@ -44722,6 +44722,53 @@ test('command kick ordinary floor object flies across same-level open terrain', 
     assert.deepEqual(getRngLog(), []);
 });
 
+test('command kick single gold piece flies across same-level open terrain', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const coin = { ...goldPieces(512097, 1), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(coin), true);
+    assert.equal(coin.ox, 14);
+    assert.equal(coin.oy, 5);
+    assert.equal(game._pending_message, 'You kick gold piece.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses|Thwwpingg/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kicked single gold piece stops and stacks at first occupied square', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const coin = { ...goldPieces(512098, 1), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    const pile = { ...goldPieces(512099, 4), letter: undefined, line: undefined, ox: 8, oy: 5 };
+    game.level.objects = [coin, pile];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], coin);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.equal(coin.ox, 8);
+    assert.equal(coin.oy, 5);
+    assert.equal(coin.quan, 5);
+    assert.equal(pile.quan, 0);
+    assert.equal(game._pending_message, 'You kick gold piece.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses|Thwwpingg/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('command kicked ordinary floor object can get stuck in visible web mid-flight', async () => {
     installNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
