@@ -38801,14 +38801,23 @@ function monsterAtSquareForPassiveObject(x, y) {
     return null;
 }
 
+function liveMonsterThrownPassiveTarget(target, x, y) {
+    if (!target) return null;
+    if (game.u && target.ux === game.u.ux && target.uy === game.u.uy && x === game.u.ux && y === game.u.uy)
+        return target;
+    if (target.dead || (target.mhp != null && target.mhp <= 0)) return null;
+    if (target.mx != null && target.my != null && (target.mx !== x || target.my !== y)) return null;
+    return target;
+}
+
 function erodeMonsterThrownPassiveObject(obj, type, messages) {
     const profile = wishedDamageProfile(obj);
     const erosion = type === 'rust'
-        ? { field: 'oeroded', word: 'rusty', action: 'rust' }
+        ? { field: 'oeroded', word: 'rusty', action: 'rust', bythe: 'oxidation' }
         : type === 'corr' || type === 'acid'
-            ? { field: 'oeroded2', word: 'corroded', action: 'corrode' }
+            ? { field: 'oeroded2', word: 'corroded', action: 'corrode', bythe: 'corrosion' }
             : type === 'fire'
-                ? { field: 'oeroded', word: 'burnt', action: 'smoulder' }
+                ? { field: 'oeroded', word: 'burnt', action: 'smoulder', bythe: 'heat' }
                 : null;
     if (!erosion) return { handled: false, damaged: false };
     if ((type === 'rust' || type === 'corr' || type === 'acid') && obj.greased) {
@@ -38818,6 +38827,10 @@ function erodeMonsterThrownPassiveObject(obj, type, messages) {
     if (!profile.erosionMatters || (erosion.field === 'oeroded' ? profile.primaryWord : profile.secondaryWord) !== erosion.word)
         return { handled: !!erosion, damaged: false };
     if (obj.oerodeproof || obj.rustproof) {
+        const name = floorObjectBaseName(obj);
+        if (!obj.rknown && game.flags?.verbose !== false && floorObjectVisible(obj.ox, obj.oy)
+            && Array.isArray(messages))
+            messages.push(`Somehow, the ${name} ${rustTrapNameVerb(name, 'is', 'are')} not affected by the ${erosion.bythe}.`);
         obj.rknown = true;
         return { handled: true, damaged: false };
     }
@@ -38886,7 +38899,8 @@ export function landMonsterThrownObject(missile, x, y, {
             dropThrow,
         };
     }
-    const passiveObjectTarget = passiveTarget || monsterAtSquareForPassiveObject(x, y);
+    const passiveObjectTarget = liveMonsterThrownPassiveTarget(passiveTarget, x, y)
+        || monsterAtSquareForPassiveObject(x, y);
     const landing = {
         ...missile,
         ox: x,

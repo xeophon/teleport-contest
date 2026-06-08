@@ -195,6 +195,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [787-monster-thrown-cockatrice-egg-acidic-food-species-2026-06-08.md](787-monster-thrown-cockatrice-egg-acidic-food-species-2026-06-08.md): monster-thrown petrifying eggs now cover C's broader `M1_ACID` corpse/tin species for monster `munstone()`, including acidic-corpse stomach damage and acidic-tin damage suppression.
 - [788-monster-thrown-cockatrice-egg-tin-opener-eligibility-2026-06-08.md](788-monster-thrown-cockatrice-egg-tin-opener-eligibility-2026-06-08.md): monster-thrown petrifying eggs now cover C-shaped monster tin opener eligibility, including `tin:<species>` metadata, numeric tin openers, animal rejection, and cursed/welded wielded-weapon gating.
 - [789-monster-thrown-cockatrice-egg-misfire-sink-wall-2026-06-08.md](789-monster-thrown-cockatrice-egg-misfire-sink-wall-2026-06-08.md): monster-thrown petrifying eggs now cover cursed/greased slip misfires, zero-vector launch-square drops, redirected sink stops, and ordinary wall obstruction landing.
+- [790-monster-thrown-passive-proof-stale-target-2026-06-08.md](790-monster-thrown-passive-proof-stale-target-2026-06-08.md): monster-thrown passive-object landings now reveal visible proofed floor-object protection and skip stale passive targets after lethal intervening cleanup.
 
 ## Cross-Cutting Themes
 

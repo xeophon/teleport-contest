@@ -60881,6 +60881,91 @@ test('production monster plain dagger hits and rusts intervening rust monster ob
         preNhgetchMessages.join('\n'));
 });
 
+test('production monster plain dagger hit reveals rustproof passive object protection before stacking', async () => {
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const proofDagger = {
+        ...dagger(874411),
+        letter: undefined,
+        line: undefined,
+        spe: 0,
+        oerodeproof: true,
+        rknown: false,
+    };
+    const { daggerItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: proofDagger,
+        extraMonsters: [rustMonster],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the rust monster|It is hit/);
+    assert.match(messages, /Somehow, the dagger is not affected by the oxidation\./);
+    assert.equal(rustMonster.mhp < 20, true, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded || 0, 0);
+    assert.equal(landed.rknown, true);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.ok(rng.some(entry => entry === 'rnd(20)'), rawRng.join(', '));
+    assert.ok(rng.some(entry => entry === 'rnd(4)'), rawRng.join(', '));
+    assert.equal(rng.some(entry => entry === 'rnl(4)'
+        || entry === 'rn2(2)'
+        || entry === 'rn2(100)'
+        || entry === 'rn2(3)'), false, rawRng.join(', '));
+});
+
+test('production monster plain dagger lethal rust monster hit skips stale passive rust before landing', async () => {
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 1,
+        mhpmax: 1,
+        msleeping: 1,
+    });
+    const daggerItem = { ...dagger(874412), letter: undefined, line: undefined, spe: 0 };
+    const { thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        uac: 100,
+        projectile: daggerItem,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the rust monster\./);
+    assert.match(messages, /rust monster is killed!/i);
+    assert.doesNotMatch(messages, /dagger rusts|oxidation/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.dead, true);
+    assert.equal(rustMonster.mhp, 0);
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(game.level.monsters.includes(rustMonster), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dagger');
+    assert.equal(landed.oeroded || 0, 0);
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(100)=') || entry.startsWith('rn2(2)=')), false,
+        rawRng.join(', '));
+});
+
 test('production monster plain dagger big polyself hit corrodes landing object before stacking', async () => {
     const cleanStack = { ...dagger(8744101), ox: 5, oy: 5, letter: undefined, line: undefined, spe: 0 };
     const daggerItem = { ...dagger(8744102), letter: undefined, line: undefined, spe: 0 };
