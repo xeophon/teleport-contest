@@ -163,6 +163,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [755-direct-melee-sleeping-wakeup-growl-2026-06-08.md](755-direct-melee-sleeping-wakeup-growl-2026-06-08.md): direct hero melee sleeping survivor wake message/growl ordering, `wakeup()`/`setmangry()` cleanup, and hostile no-anger canaries.
 - [756-direct-melee-sleeper-growl-wake-nearto-2026-06-08.md](756-direct-melee-sleeper-growl-wake-nearto-2026-06-08.md): direct hero melee sleeper growl `wake_nearto()` side effect, nearby sleeper wait-mask cleanup, and silent/hostile canaries.
 - [757-direct-melee-sleeper-growl-disturb-buried-zombies-2026-06-08.md](757-direct-melee-sleeper-growl-disturb-buried-zombies-2026-06-08.md): direct hero melee sleeper growl `wake_nearto()` buried-zombie disturbance, adjacent buried corpse zombify timer shortening, and silent-source no-disturb canaries.
+- [758-direct-melee-setmangry-elbereth-hypocrisy-2026-06-08.md](758-direct-melee-setmangry-elbereth-hypocrisy-2026-06-08.md): direct hero melee `setmangry()` Elbereth hypocrisy, post-wipe engraving fade/deletion, high/low alignment penalties, and peaceful/vulnerable gates.
 
 ## Cross-Cutting Themes
 

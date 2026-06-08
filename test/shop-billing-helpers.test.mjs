@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, BURN, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -76020,6 +76020,97 @@ test('direct hero melee surviving peaceful non-priest wakes angry', async () => 
     assert.equal(mon.meating, 0);
     assert.equal(game.u.ualign.record, -1);
     assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee surviving peaceful target on Elbereth feels hypocritical before anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor();
+    game.u.ualign.record = 7;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  You feel like a hypocrite.  The engraving beneath you fades.  The goblin gets angry!');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 1);
+    assert.equal(game.u.ualign.abuse, 6);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
+});
+
+test('direct hero melee nonexact Elbereth engraving does not trigger hypocrisy', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876832 });
+    game.u.ualign.record = 7;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth!', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(game.level.engravings[0].text, 'Elbereth!');
+    assert.equal(game.u.ualign.record, 6);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
+});
+
+test('direct hero melee hostile vulnerable target on Elbereth uses low-record hypocrisy roll', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876830,
+        monsterExtra: { mpeaceful: 0, hostile: true },
+    });
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message,
+        'You hit the goblin.  You feel like a hypocrite.  The engraving beneath you fades.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
+test('direct hero melee hostile human-shaped target does not treat Elbereth as scary', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876831,
+        name: 'watchman',
+        monsterExtra: { mpeaceful: 0, hostile: true },
+        dataExtra: { mlevel: 6, mlet: '@', humanoid: true },
+    });
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the watchman.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.level.engravings[0].text, 'Elbereth');
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
 });
 
 test('direct hero melee sleeping peaceful humanoid wakes screams then angers', async () => {

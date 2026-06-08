@@ -22973,6 +22973,56 @@ function directMeleeGrowlWakeNearby(mon, messages) {
     disturbBuriedZombieCorpseTimersAt(mon?.mx || 0, mon?.my || 0);
 }
 
+function directMeleeStrictElberethAtHero() {
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    const now = game.moves || 0;
+    return (game.level?.engravings || []).find(engr => {
+        if (!engr || engr.x !== ux || engr.y !== uy || engr.type === HEADSTONE) return false;
+        const engrTime = engr.engr_time ?? engr.time;
+        if (engrTime != null && Number(engrTime) > now) return false;
+        return String(engr.text || '').toLowerCase() === 'elbereth';
+    }) || null;
+}
+
+function directMeleeDeleteEngravingAtHero() {
+    if (!game.level?.engravings) return;
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    game.level.engravings = game.level.engravings.filter(engr => engr.x !== ux || engr.y !== uy);
+}
+
+function directMeleeMonsterVulnerableToWrittenElbereth(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    const mlet = String(data.mlet ?? mon?.mlet ?? '');
+    if (mon?.iswiz || data.iswiz || name === 'wizard of yendor') return false;
+    if (mon?.lawfulMinion || data.lawfulMinion || data.lminion) return false;
+    if (mlet === 'A' || name === 'angel' || mon?.rider || data.rider) return false;
+    if (mlet === '@' || mon?.unique || data.unique || data.uniq || data.nemesis) return false;
+    if (mon?.isshk || mon?.isgd || mon?.guard) return false;
+    if (mon?.mcansee === false || mon?.mcansee === 0) return false;
+    if (name === 'minotaur') return false;
+    if (game.inhell || In_endgame(game.u?.uz)) return false;
+    return true;
+}
+
+function directMeleeSetmangryElberethHypocrisy(mon, messages) {
+    if (!directMeleeStrictElberethAtHero()) return false;
+    if (!mon?.mpeaceful && !directMeleeMonsterVulnerableToWrittenElbereth(mon)) return false;
+
+    messages.push('You feel like a hypocrite.');
+    if (game.u?.ualign) {
+        const record = game.u.ualign.record || 0;
+        const penalty = record > 5 ? 5 : rnd(5);
+        game.u.ualign.record = record - penalty;
+        game.u.ualign.abuse = (game.u.ualign.abuse || 0) + penalty;
+    }
+    if (!game.u?.blind) messages.push('The engraving beneath you fades.');
+    directMeleeDeleteEngravingAtHero();
+    return true;
+}
+
 function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}) {
     if (!mon?.mpeaceful) return false;
     mon.msleeping = 0;
@@ -23017,6 +23067,7 @@ function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
 } = {}) {
     if (!mon) return false;
     if (ordinaryMelee) {
+        directMeleeSetmangryElberethHypocrisy(mon, messages);
         if (preHitState?.msleeping) {
             if (visible) messages.push(directMeleeWakeMessage(mon, true));
             mon.msleeping = 0;
@@ -54317,7 +54368,8 @@ async function moveHero(dx, dy) {
             messages.push(`You hit ${hitPhrase}${hitPunctuation}`);
             applyConfuseMonsterOnHit(mon, messages, targetPhrase);
             if (directMeleeHit
-                && (((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
+                && (directMeleeOrdinaryWakeupAllowed
+                    || ((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
                     && (mon.ispriest || directMeleeOrdinaryWakeupAllowed))
                     || mon.ispriest || angerTownWatchAfterHit)) {
                 directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
@@ -54400,7 +54452,8 @@ async function moveHero(dx, dy) {
                 }
             }
             if (directMeleeHit && !directMeleeNonlethalWakeupApplied
-                && (((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
+                && (directMeleeOrdinaryWakeupAllowed
+                    || ((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
                     && (mon.ispriest || directMeleeOrdinaryWakeupAllowed))
                     || mon.ispriest || angerTownWatchAfterHit))
                 directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {

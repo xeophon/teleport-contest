@@ -41,7 +41,7 @@ The existing priest survivor tests continue to cover the specialized priest wake
 
 ## Deferred Gaps
 
-- Elbereth hypocrisy handling in `setmangry()` remains deferred: intact engraving detection after pre-hit wipe, `rnd(5)` low-record penalty, fade messaging, and deletion need a dedicated engraving-aware slice.
+- Elbereth hypocrisy handling in `setmangry()` is covered for ordinary direct melee by audit 758; full `onscary()` breadth and special attack helpers remain separate.
 - Full peaceful-neighbor responses from `peacefuls_respond()` remain deferred because they scan many monsters and have multiple RNG/message/flee branches.
 - Sleeping wake messages and sleeper growl ordering for ordinary direct melee are covered by audit 755; two-weapon deferred wake queues and special attack helpers remain broader wakeup work.
 - Special attack helpers that borrow melee hit plumbing, including bullwhip apply force-attacks and wielded potion/egg bash, need source-specific follow-ups before broad non-priest anger is enabled there.
