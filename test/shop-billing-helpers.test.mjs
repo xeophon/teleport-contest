@@ -44669,6 +44669,35 @@ test('command kick ordinary floor object through seen remote hole', async () => 
     assert.match(game._pending_message, /A dagger falls through the hole\./);
 });
 
+test('command kicked shop-floor ordinary object through seen remote hole charges before migration', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installSeenRemoteShaft(HOLE, 7, 5);
+    initRng(1);
+    const blade = { ...dagger(512081), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    const expectedPrice = shop.shopItemPrice(blade, 6, 5);
+    assert.equal(expectedPrice > 0, true);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queued.includes(blade), true);
+    assert.equal(blade._impactDropMigration, undefined);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /A dagger falls through the hole\./);
+    assert.match(game._pending_message,
+        new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for goods lost\\.`));
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
+});
+
 test('command kick locked trapped empty box breaks lock then fires trap', async () => {
     installNonShopFloorState();
     const box = shopFloorContainer(512090, 6, 5);
@@ -45501,6 +45530,35 @@ test('command kick ordinary floor object down stairs records reciprocal metadata
     assert.equal(blade._impactDropMigration?.where, MIGR_STAIRS_UP);
     assert.match(game._pending_message, /You kick a dagger\./);
     assert.match(game._pending_message, /A dagger falls down the stairs\./);
+});
+
+test('command kicked shop-floor ordinary object down stairs charges before migration', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    initRng(1);
+    const blade = { ...dagger(512082), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    const expectedPrice = shop.shopItemPrice(blade, 6, 5);
+    assert.equal(expectedPrice > 0, true);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queued.includes(blade), true);
+    assert.deepEqual(blade._impactDropMigration?.fromLevel, { dnum: 0, dlevel: 1 });
+    assert.equal(blade._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /A dagger falls down the stairs\./);
+    assert.match(game._pending_message,
+        new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for goods lost\\.`));
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(shkp.billct, 0);
 });
 
 test('command kicked stone missile hits rock-passing monster harmlessly', async () => {

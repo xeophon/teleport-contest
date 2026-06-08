@@ -34564,14 +34564,16 @@ function kickFloorObjectAt(x, y) {
         && obj.ox === x && obj.oy === y);
 }
 
-function kickFloorObjectSupported(obj, x, y) {
+function kickFloorObjectSupported(obj, x, y, options = {}) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj) || shopBillableGold(obj)) return false;
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind) return false;
     if ((!isBoxObject(obj) && isTipContainerObject(obj)) || globContents(obj).length) return false;
-    if ((shopkeeperForCostlySpot(x, y) || shopObjectOrContentsUnpaid(obj)) && !fragileBreakKind)
+    const shopFloorGate = !!options.shopFloorGate;
+    if ((shopObjectOrContentsUnpaid(obj) || (shopkeeperForCostlySpot(x, y) && !shopFloorGate))
+        && !fragileBreakKind)
         return false;
     if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
     return true;
@@ -34772,10 +34774,11 @@ function chargeHeroBrokenShopFloorObject(obj, x, y, messages) {
 
 async function kickFloorObjectToward(dir, x, y) {
     let obj = kickFloorObjectAt(x, y);
-    if (!kickFloorObjectSupported(obj, x, y)) return { handled: false };
-
     const landX = x + dir.dx;
     const landY = y + dir.dy;
+    const gate = remoteProjectileDownGateAt(obj, landX, landY);
+    if (!kickFloorObjectSupported(obj, x, y, { shopFloorGate: !!gate })) return { handled: false };
+
     const targetMon = (game.level?.monsters || []).find(mon =>
         mon && !mon.dead && mon.mx === landX && mon.my === landY
         && (mon.mhp == null || mon.mhp > 0));
@@ -34784,7 +34787,6 @@ async function kickFloorObjectToward(dir, x, y) {
             || heroThrownStoneMissileHarmlessRockPasser(obj, targetMon)
             || heroThrownGemClassObject(obj)
             || heroProjectileSupportedWeaponObject(obj));
-    const gate = remoteProjectileDownGateAt(obj, landX, landY);
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     const localBoxImpact = isBoxObject(obj);
     if (!localBoxImpact && !gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
@@ -34833,7 +34835,9 @@ async function kickFloorObjectToward(dir, x, y) {
     obj.ox = landX;
     obj.oy = landY;
 
-    const shipped = maybeShipRemoteProjectileObject(obj, landX, landY, messages);
+    const shipped = maybeShipRemoteProjectileObject(obj, landX, landY, messages, {
+        shopFloorObj: !!shopkeeperForCostlySpot(x, y),
+    });
     if (!shipped.handled) {
         placeKickedFloorObject(obj, landX, landY, messages);
     }
@@ -34921,7 +34925,7 @@ function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
         if (impact.message) messages.push(impact.message);
         return projectileShipObjectResult({ noDrop: true, target, where: gate.where, gateText, impact });
     }
-    const debt = shipObjectShopDebt(obj, x, y);
+    const debt = shipObjectShopDebt(obj, x, y, { shopFloorObj: !!options.shopFloorObj });
     if (debt.message) messages.push(debt.message);
     const breakKind = impactDropObjectBreaks(obj);
     if (breakKind) {
