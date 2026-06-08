@@ -13820,9 +13820,11 @@ test('blessed genocide skips C non-G_GENO titan in giant class', async () => {
 
     const message = game._pending_message || '';
     assert.match(message, /Wiped out all stone giants\./);
+    assert.match(message, /Wiped out all minotaurs\./);
     assert.match(message, /You aren't permitted to genocide titans\./);
     assert.equal(game._command_mode || null, null);
     assert.equal(game._genocided_monsters.includes('stone giant'), true);
+    assert.equal(game._genocided_monsters.includes('minotaur'), true);
     assert.notEqual(game._genocided_monsters?.includes('titan'), true);
 });
 

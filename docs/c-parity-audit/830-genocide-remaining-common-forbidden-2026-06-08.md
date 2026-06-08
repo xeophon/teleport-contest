@@ -30,7 +30,7 @@ No replay maps, private seeds, player names, move-count branches, or seed-specif
 - `test/shop-billing-helpers.test.mjs:13787`
   - Added normal genocide coverage for titan, wererat, werejackal, werewolf, all generated common demon rows, and salamander, requiring the divine refusal and open retry prompt.
 - `test/shop-billing-helpers.test.mjs:13814`
-  - Added a blessed `H` class canary requiring giants to be wiped while titan is refused and left unmarked.
+  - Added a blessed `H` class canary requiring eligible giants and minotaur to be wiped while titan is refused and left unmarked.
 - `test/shop-billing-helpers.test.mjs:13830`
   - Added a blessed `&` class canary requiring all-generated-common demon class refusal and no marked demon rows.
 - `test/shop-billing-helpers.test.mjs:13852`
