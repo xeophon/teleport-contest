@@ -13647,6 +13647,38 @@ test('genocide catalogs C watch captain as a normal genocidable monster', async 
     assert.equal(game._genocided_monsters.includes('watch captain'), true);
 });
 
+test('genocide catalogs special C normal-genocide monsters', async () => {
+    const cases = [
+        ['queen bee', /Wiped out all queen bees\./],
+        ['woodchuck', /Wiped out all woodchucks\./],
+        ['jellyfish', /Wiped out all jellyfish\./],
+        ['piranha', /Wiped out all piranha\./],
+        ['shark', /Wiped out all sharks\./],
+        ['giant eel', /Wiped out all giant eels\./],
+        ['electric eel', /Wiped out all electric eels\./],
+        ['kraken', /Wiped out all krakens\./],
+        ['giant', /Wiped out all giants\./],
+        ['minotaur', /Wiped out all minotaurs\./],
+        ['water troll', /Wiped out all water trolls\./],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [name, expected] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31063 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(name);
+
+        const message = game._pending_message || '';
+        assert.match(message, expected);
+        assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+        assert.equal(game._command_mode || null, null);
+        assert.equal(game._genocided_monsters.includes(name), true);
+    }
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

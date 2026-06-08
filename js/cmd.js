@@ -31002,6 +31002,10 @@ const GENOCIDE_EXTRA_MONSTERS = [
     { name: 'watchman', mlet: '@', glyph: '@', color: CLR_GRAY, mlevel: 6, hpLevel: 9, difficulty: 8, mmove: 10, maligntyp: -2, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
     { name: 'watch captain', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 10, hpLevel: 11, difficulty: 12, mmove: 10, maligntyp: -4, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
 ];
+const GENOCIDE_EXTRA_MONSTER_NAMES = [
+    'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
+    'electric eel', 'kraken', 'giant', 'minotaur', 'water troll',
+];
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 
@@ -31069,6 +31073,7 @@ function genocideMonsterCatalog() {
     });
     for (const data of RANDOM_MONSTER_BY_NAME.values()) add(data);
     for (const data of GENOCIDE_EXTRA_MONSTERS) add(data);
+    for (const name of GENOCIDE_EXTRA_MONSTER_NAMES) add(monsterByRndName(name));
     return entries;
 }
 
