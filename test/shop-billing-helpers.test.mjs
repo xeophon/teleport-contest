@@ -13917,7 +13917,8 @@ test('genocide cleanup drops worn life saving amulet from nonliving steam vortex
     await enterGenocideResponse('steam vortex');
 
     const message = game._pending_message || '';
-    assert.match(message, /Wiped out all steam vortex/);
+    assert.match(message, /Wiped out all steam vortices\./);
+    assert.doesNotMatch(message, /vortexes/);
     assert.doesNotMatch(message, /But wait|medallion|still genocided/);
     assert.equal(game.level.monsters.includes(monster), false);
     assert.equal(monster.dead, true);
