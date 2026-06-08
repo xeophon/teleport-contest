@@ -8751,14 +8751,26 @@ export async function processMonsterTurns() {
                                     if (throwerVisible) game._topline_after_more = catchResult.message;
                                     else addToplineMessage(catchResult.message);
                                 } else {
-                                    const dartDamage = Math.max(1, rnd(3) + missileSpe - missileErosion);
+                                    let dartDamage = Math.max(1,
+                                        rnd(heroMonsterThrownDartDamageSides()) + missileSpe - missileErosion);
+                                    dartDamage = maybeHalfPhysicalDamage(dartDamage);
+                                    const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe
+                                        + heroPolyselfMonsterThrownHitBonus();
                                     const hitRoll = rnd(20);
-                                    if (hitRoll < 20) {
-                                        const hitMessage = game.u?.blind || game.flags?.verbose === false
-                                            ? 'You are hit.'
-                                            : 'You are hit by a dart.';
-                                        if (throwerVisible) game._topline_after_more = hitMessage;
-                                        else addToplineMessage(hitMessage);
+                                    const missed = (game.u?.uac ?? 10) + hitv <= hitRoll;
+                                    let resultMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'You are hit.'
+                                        : `You are hit by a dart${dartDamage > 4 ? '!' : '.'}`;
+                                    if (missed) {
+                                        resultMessage = game.u?.blind || game.flags?.verbose === false
+                                            ? 'It misses.'
+                                            : (game.u?.uac ?? 10) + hitv <= hitRoll - 2
+                                                ? 'A dart misses you.'
+                                                : 'You are almost hit by a dart.';
+                                    }
+                                    if (throwerVisible) game._topline_after_more = resultMessage;
+                                    else addToplineMessage(resultMessage);
+                                    if (!missed) {
                                         if (throwerVisible) {
                                             game._damage_after_topline_more = (game._damage_after_topline_more || 0) + dartDamage;
                                             game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
@@ -8766,26 +8778,15 @@ export async function processMonsterTurns() {
                                             game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
                                             exerciseAttribute(A_STR, false);
                                         }
-                                        finishMonsterThrownHeroLanding(thrownMissile, {
-                                            glyph: ')',
-                                            color: CLR_CYAN,
-                                            ohit: true,
-                                            afterMore: throwerVisible,
-                                        });
                                     } else {
-                                        const missMessage = game.u?.blind || game.flags?.verbose === false
-                                            ? 'It misses.'
-                                            : 'A dart misses you.';
-                                        if (throwerVisible) game._topline_after_more = missMessage;
-                                        else addToplineMessage(missMessage);
                                         rn2(5);
-                                        finishMonsterThrownHeroLanding(thrownMissile, {
-                                            glyph: ')',
-                                            color: CLR_CYAN,
-                                            ohit: false,
-                                            afterMore: throwerVisible,
-                                        });
                                     }
+                                    finishMonsterThrownHeroLanding(thrownMissile, {
+                                        glyph: ')',
+                                        color: CLR_CYAN,
+                                        ohit: !missed,
+                                        afterMore: throwerVisible,
+                                    });
                                 }
                             }
                             if (!finishDartThrowAction()) return false;
@@ -10750,6 +10751,26 @@ function heroPolyselfMonsterThrownHitBonus() {
     return big ? 1 : 0;
 }
 
+function heroMonsterThrownDartDamageSides() {
+    const form = game.u?._polyself_form || game.u?.youmonst?.data || game.u?.data || null;
+    const big = form && (monsterObjectHitSizeValue({ data: form }) >= 3
+        || form.big || form.bigmonst || form.large || form.giant);
+    return big ? 2 : 3;
+}
+
+function heroHasHalfPhysicalDamage() {
+    return !!(game.u?.halfPhysicalDamage
+        || game.u?.half_physical_damage
+        || game.u?.halfPhysical
+        || game.u?.halfPhysicalDamageTimeout
+        || game.u?.extrinsics?.halfPhysicalDamage
+        || game.u?.intrinsics?.halfPhysicalDamage);
+}
+
+function maybeHalfPhysicalDamage(damage) {
+    return heroHasHalfPhysicalDamage() ? Math.trunc((damage + 1) / 2) : damage;
+}
+
 function monsterHatesBlessedWeapon(target) {
     const data = target?.data || {};
     const mlet = String(target?.mlet || data.mlet || data.glyph || '').toLowerCase();
@@ -12166,15 +12187,6 @@ function rollingBoulderChainIntoBoulderAt(x, y, dx, dy, remainingDistance, movin
     return chainedBoulder;
 }
 
-function heroHasHalfPhysicalDamageForRollingBoulder() {
-    return !!(game.u?.halfPhysicalDamage
-        || game.u?.half_physical_damage
-        || game.u?.halfPhysical
-        || game.u?.halfPhysicalDamageTimeout
-        || game.u?.extrinsics?.halfPhysicalDamage
-        || game.u?.intrinsics?.halfPhysicalDamage);
-}
-
 function rollingBoulderHeroPassesRocks() {
     const form = game.u?._polyself_form;
     return monsterPassesRocks({
@@ -12197,7 +12209,7 @@ function rollingBoulderHitHeroAt(x, y, movingBoulder) {
     if ((game.u?.ux ?? 0) !== x || (game.u?.uy ?? 0) !== y) return false;
 
     const rawDamage = rnd(20);
-    const damage = heroHasHalfPhysicalDamageForRollingBoulder() ? Math.trunc((rawDamage + 1) / 2) : rawDamage;
+    const damage = maybeHalfPhysicalDamage(rawDamage);
     interruptPositiveMulti();
     const hitValue = 9 + (movingBoulder?.spe || 0);
     const attackRoll = rnd(20);

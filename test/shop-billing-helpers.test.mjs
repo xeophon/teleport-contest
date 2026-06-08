@@ -53136,6 +53136,9 @@ async function runMonsterDartHitLanding({
     heroBlind = true,
     heroDeaf = false,
     heroDex = 10,
+    uac = 10,
+    halfPhysicalDamage = false,
+    heroPolyselfForm = null,
     levelCells = [],
     throwerX = 8,
     monsterName = 'kobold',
@@ -53163,7 +53166,10 @@ async function runMonsterDartHitLanding({
         _deafTimeout: heroDeaf ? 5 : 0,
         uhp: 20,
         uhpmax: 20,
-        uac: 10,
+        uac,
+        halfPhysicalDamage,
+        _polyself_form: heroPolyselfForm,
+        youmonst: heroPolyselfForm ? { data: heroPolyselfForm } : null,
         umovement: NORMAL_SPEED,
         acurr: { a: [10, 10, 10, heroDex, 10, 10] },
     });
@@ -55687,6 +55693,109 @@ test('production visible kobold dart hit queues landing until after damage and e
     assert.ok(rawRng.includes('rnd(3)=2'), rawRng.join(', '));
     assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
     assert.ok(rawRng.includes('rn2(3)=0'), rawRng.join(', '));
+});
+
+test('production visible kobold dart armor-class miss is not limited to natural 20', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        uac: 0,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /A dart misses you\./);
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dart');
+
+    assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(3)=')), false, rawRng.join(', '));
+});
+
+test('production visible kobold dart armor-class near miss uses almost-hit wording', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        uac: 3,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are almost hit by a dart\./);
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'dart');
+
+    assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(3)=')), false, rawRng.join(', '));
+});
+
+test('production visible kobold dart hero half physical damage applies after damage roll', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages, preNhgetchSnapshots } = await runMonsterDartHitLanding({
+        seed: 8,
+        coreRngValues: [1, 1, 99, 99, 1, 31, 2, 1],
+        heroBlind: false,
+        halfPhysicalDamage: true,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+    const hitSnapshot = preNhgetchSnapshots.find(snapshot => /You are hit by a dart\./.test(snapshot.message));
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a dart\./);
+    assert.ok(hitSnapshot, preNhgetchMessages.join('\n'));
+    assert.equal(hitSnapshot.damageAfterMore, 2, rawRng.join(', '));
+    assert.equal(game.u.uhp, 18, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+
+    assert.ok(rawRng.includes('rnd(3)=3'), rawRng.join(', '));
+    assert.ok(rawRng.includes('rnd(20)=2'), rawRng.join(', '));
+});
+
+test('production visible kobold dart large polyself uses large target die and hit bonus', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        uac: 4,
+        heroPolyselfForm: { name: 'large mimic', msize: 'large', big: true },
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+    const catchIndex = rawRng.findIndex(entry => entry.startsWith('rn2(90)='));
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a dart\./);
+    assert.equal(game.u.uhp < 20, true, rawRng.join(', '));
+    assert.equal(thrower.missile, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+
+    assert.notEqual(catchIndex, -1, rawRng.join(', '));
+    assert.match(rawRng[catchIndex + 1] || '', /^rnd\(2\)=/, rawRng.join(', '));
+    assert.equal(rawRng.slice(catchIndex + 1).some(entry => entry.startsWith('rnd(3)=')), false,
+        rawRng.join(', '));
+    assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
 });
 
 test('production visible kobold dart catch retains split dart in inventory', async () => {
