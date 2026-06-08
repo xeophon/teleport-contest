@@ -22950,6 +22950,34 @@ function directMeleeWakeMessage(mon, interesting = false) {
     return `${fireScrollMonsterName(mon)} wakes up${interesting ? '!' : '.'}${alive}`;
 }
 
+function directMeleeClearInvisibleMarker(mon) {
+    const loc = game.level?.at?.(mon?.mx, mon?.my);
+    if (!loc) return;
+    if (loc.map_invisible) loc.map_invisible = false;
+    if (loc.remembered_glyph?.ch === 'I') loc.remembered_glyph = null;
+}
+
+function directMeleeWakeupReveal(mon, { forcefight = false } = {}) {
+    const appearance = M_AP_TYPE(mon);
+    const legacyAppearance = !appearance && (mon?.appearObj != null || mon?.appearGlyph);
+    if ((appearance && appearance !== M_AP_MONSTER) || legacyAppearance) {
+        mon.m_ap_type = 0;
+        mon.mappearance = 0;
+        mon.appearObj = null;
+        mon.appearGlyph = null;
+        mon.appearColor = null;
+        newsym(mon.mx, mon.my);
+        return true;
+    }
+    if (forcefight && !game._monster_moving && mon?.mundetected) {
+        mon.mundetected = 0;
+        directMeleeClearInvisibleMarker(mon);
+        newsym(mon.mx, mon.my);
+        return true;
+    }
+    return false;
+}
+
 function directMeleeGrowlSuppressed(mon) {
     return !!(mon?.helpless || mon?.mfrozen || mon?.mcanmove === false || mon?.mcanmove === 0)
         || !directMeleeGrowlVerb(mon);
@@ -23344,11 +23372,13 @@ function directMeleeAngerPeacefulPriest(priest, messages, { visible = false } = 
 
 function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
     ordinaryMelee = false,
+    forcefight = false,
     visible = false,
 } = {}) {
     if (!mon) return false;
     if (ordinaryMelee) {
         directMeleeSetmangryElberethHypocrisy(mon, messages);
+        directMeleeWakeupReveal(mon, { forcefight });
         if (preHitState?.msleeping) {
             if (visible) messages.push(directMeleeWakeMessage(mon, true));
             mon.msleeping = 0;
@@ -54357,15 +54387,18 @@ async function moveHero(dx, dy) {
         else if (name === 'gnome leader') name = 'gnome lord';
         else if (name === 'dwarf ruler') name = 'dwarf king';
         else if (name === 'dwarf leader') name = 'dwarf lord';
-        if (mon.appearObj != null || mon.appearGlyph) {
+        const directMeleeForcefight = forcedPeacefulAttack || game._force_fight_target === mon;
+        if (!directMeleeForcefight && (mon.appearObj != null || mon.appearGlyph)) {
+            const appearance = M_AP_TYPE(mon);
+            if (appearance === M_AP_OBJECT || (!appearance && mon.appearObj != null))
+                next_ident();
             const objectName = mon.appearObj === CHEST ? 'chest' : mon.appearObj === LARGE_BOX ? 'large box' : 'object';
-            mon.appearObj = null;
-            mon.appearGlyph = null;
-            mon.appearColor = null;
+            const revealName = (mon.msleeping || mon.mfrozen) ? `sleeping ${name}` : name;
+            directMeleeWakeupReveal(mon);
+            mon.msleeping = 0;
+            if (mon.meating !== undefined) mon.meating = 0;
             mon._skip_after_mimic_reveal = 1;
-            rnd(2);
-            newsym(mon.mx, mon.my);
-            await setMessage(`That ${objectName} is a ${name}!`);
+            await setMessage(`That ${objectName} is a ${revealName}!`);
             game._run_stop_now = 1;
             game._run_steps_remaining = 0;
             game.context.move = 1;
@@ -54656,6 +54689,7 @@ async function moveHero(dx, dy) {
                     || mon.ispriest || angerTownWatchAfterHit)) {
                 directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
                     ordinaryMelee: directMeleeOrdinaryWakeupAllowed,
+                    forcefight: directMeleeForcefight,
                     visible: targetSpotted,
                 });
                 if (directMeleePreHitState?.msleeping && directMeleeOrdinaryWakeupAllowed)
@@ -54740,6 +54774,7 @@ async function moveHero(dx, dy) {
                     || mon.ispriest || angerTownWatchAfterHit))
                 directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
                     ordinaryMelee: directMeleeOrdinaryWakeupAllowed,
+                    forcefight: directMeleeForcefight,
                     visible: targetSpotted,
                 });
             if (directMeleeHit && !directMeleeNonlethalWrapperApplied && (mon.ispriest || angerTownWatchAfterHit))

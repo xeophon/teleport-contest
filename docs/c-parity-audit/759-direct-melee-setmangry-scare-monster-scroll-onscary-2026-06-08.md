@@ -42,7 +42,7 @@ The focused command keeps the adjacent Elbereth hypocrisy canaries from audit 75
 - Full shopkeeper/priest room-boundary edge cases remain broader than the current direct helpers, especially C `inhishop()` boundary semantics and all `inhistemple()` level/room cases.
 - Scare-monster scroll pickup/read/dust/shop billing lifecycle remains covered elsewhere in the shop/pickup stream, not this melee hook.
 - Branch-predicate bypass through the scroll is implemented by ordering but does not have separate Gehennom/endgame canaries in this slice.
-- Exact `adjalign()` side effects such as Erinys adjustments, broader `peacefuls_respond()` cases beyond audits 762-765's humanoid, town-watch, and nonhumanoid same-species bystander subsets, knockback/trap collisions, and special melee helpers remain separate. Blind fade-message suppression is covered by audit 761.
+- Exact `adjalign()` side effects such as Erinys adjustments, broader `peacefuls_respond()` cases beyond audits 762-767's bounded bystander subsets, knockback/trap collisions, and special melee helpers remain separate. Blind fade-message suppression is covered by audit 761.
 
 ## Verification
 

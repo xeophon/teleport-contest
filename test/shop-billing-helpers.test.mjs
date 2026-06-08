@@ -76022,6 +76022,113 @@ test('direct hero melee surviving peaceful non-priest wakes angry', async () => 
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee force-fought hidden survivor reveals in wakeup tail', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876865,
+        name: 'trapper',
+        monsterExtra: {
+            mpeaceful: 0,
+            hostile: true,
+            mundetected: true,
+            mstrategy: 'waitforu',
+        },
+        dataExtra: { name: 'trapper', humanoid: false, maligntyp: -3 },
+    });
+    const loc = game.level.at(6, 5);
+    loc.map_invisible = true;
+    loc.remembered_glyph = { ch: 'I', color: 8, dec: false };
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit it.');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.mundetected, 0);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(loc.map_invisible, false);
+    assert.equal(loc.remembered_glyph, null);
+    assert.equal(game.u.ualign.record, 0);
+    assert.equal(game.u.ualign.abuse, 0);
+});
+
+test('direct hero melee force-fought object mimic reveals after hit', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876866,
+        name: 'large mimic',
+        monsterExtra: {
+            mpeaceful: 0,
+            hostile: true,
+            m_ap_type: M_AP_OBJECT,
+            appearObj: 215,
+            appearGlyph: '(',
+            appearColor: 7,
+            mstrategy: 'waitforu',
+        },
+        dataExtra: { name: 'large mimic', mlet: 'mimic', humanoid: false, mac: 10, maligntyp: 0 },
+    });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the large mimic.');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.m_ap_type || 0, 0);
+    assert.equal(mon.mappearance || 0, 0);
+    assert.equal(mon.appearObj, null);
+    assert.equal(mon.appearGlyph, null);
+    assert.equal(mon.appearColor, null);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.doesNotMatch(game._pending_message, /Wait|That .* is a/);
+    assert.equal(game.u.ualign.record, 0);
+    assert.equal(game.u.ualign.abuse, 0);
+});
+
+test('direct hero melee object mimic stumble consumes fake object ident only', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876867,
+        name: 'large mimic',
+        monsterExtra: {
+            mpeaceful: 0,
+            hostile: true,
+            msleeping: 1,
+            appearObj: 215,
+            appearGlyph: '(',
+            appearColor: 7,
+            mstrategy: 'waitforu',
+        },
+        dataExtra: { name: 'large mimic', mlet: 'mimic', humanoid: false, mac: 10, maligntyp: 0 },
+    });
+    game._force_fight_target = null;
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'That chest is a sleeping large mimic!');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.mhp, 20);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.m_ap_type || 0, 0);
+    assert.equal(mon.mappearance || 0, 0);
+    assert.equal(mon.appearObj, null);
+    assert.equal(mon.appearGlyph, null);
+    assert.equal(mon.appearColor, null);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.meating, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rnd(2)']);
+    assert.equal(game.u.ualign.record, 0);
+    assert.equal(game.u.ualign.abuse, 0);
+});
+
 test('direct hero melee peaceful humanoid bystander responds after target anger', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876848 });
     const bystander = ordinaryThrowTarget('gnome', 5, 6, {
