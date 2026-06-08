@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns, processPickLockOccupation, __allmainTestHooks as allmain } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, recordVanquished, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, heroThrownPotionHitMonster, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, recordVanquished, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
@@ -90100,6 +90100,53 @@ test('hero-thrown sleeping potion puts visible monster into timed sleep', async 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)',
     ]);
+});
+
+test('hero-thrown sleeping potion relaxes stuck grabber grip after sleep', async () => {
+    installNonShopFloorState();
+    initRng(17);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = sleepingPotion(87670, 's', 1, { dknown: true });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, { mcanmove: true });
+    game.u.ustuck = goblin;
+    game.u.uswallow = 0;
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+
+    await rhack('t');
+    await rhack('s');
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /The goblin falls asleep\./);
+    assert.match(message, /The goblin's grip relaxes\./);
+    assert.match(message, /You feel rather tired\./);
+    assert.ok(message.indexOf('The goblin falls asleep.') < message.indexOf("The goblin's grip relaxes."));
+    assert.ok(message.indexOf("The goblin's grip relaxes.") < message.indexOf('You feel rather tired.'));
+    assert.equal(game.u.ustuck || null, null);
+    assert.equal(game.u.uswallow || 0, 0);
+    assert.equal(goblin.mcanmove, false);
+    assert.equal(game.inventory.includes(potion), false);
+});
+
+test('direct hero-thrown sleeping potion keeps swallowed engulfer stuck', () => {
+    installNonShopFloorState();
+    initRng(2);
+    const potion = sleepingPotion(87671, 's', 1);
+    const worm = ordinaryThrowTarget('purple worm', 7, 5, { mcanmove: true });
+    markSquareVisible(7, 5);
+    game.u.ustuck = worm;
+    game.u.uswallow = 1;
+    game.level.monsters = [worm];
+
+    const messages = heroThrownPotionHitMonster(potion, worm);
+    const message = messages.join('  ');
+
+    assert.match(message, /The purple worm falls asleep\./);
+    assert.doesNotMatch(message, /grip relaxes/);
+    assert.equal(game.u.ustuck, worm);
+    assert.equal(game.u.uswallow, 1);
+    assert.equal(worm.mcanmove, false);
 });
 
 test('hero-thrown sleeping potion respects monster sleep resistance', async () => {

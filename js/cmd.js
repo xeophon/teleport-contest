@@ -18637,6 +18637,19 @@ function potionHitMonsterName(mon) {
     return sentenceCase(name);
 }
 
+function heroStuckMonsterMatches(mon) {
+    const stuck = game.u?.ustuck;
+    if (stuck === mon) return true;
+    if (!stuck || !mon) return false;
+    return (stuck.m_id != null && stuck.m_id === mon.m_id)
+        || (stuck.id != null && stuck.id === mon.id);
+}
+
+function heroFormSticks() {
+    const form = polyselfForm() || game.u?.youmonst?.data || game.u?.data || {};
+    return !!(game.u?.sticks || game.u?.sticky || form.sticks || form.sticky);
+}
+
 function sleepMonsterFromPotion(mon, duration) {
     if (monsterResistsSleepEffect(mon)) return false;
     if (monsterResistsEffect(mon, 6)) return false;
@@ -18644,6 +18657,14 @@ function sleepMonsterFromPotion(mon, duration) {
     mon.mcanmove = false;
     mon.mfrozen = Math.min(127, (mon.mfrozen || 0) + duration);
     mon.meating = 0;
+    return true;
+}
+
+function sleptMonsterFromPotion(mon, messages) {
+    if (!heroStuckMonsterMatches(mon) || game.u?.uswallow || heroFormSticks()) return false;
+    messages.push(`${potionHitMonsterName(mon)}'s grip relaxes.`);
+    game.u.ustuck = null;
+    game.u.uswallow = 0;
     return true;
 }
 
@@ -19644,8 +19665,10 @@ export function heroThrownPotionHitMonster(potion, mon, { yourFault = true, allo
     } else if (kind === 'paralysis') {
         if (monsterCanMoveForPotionParalysis(mon)) paralyzeMonsterFromPotion(mon, rnd(25));
     } else if (kind === 'sleeping') {
-        if (sleepMonsterFromPotion(mon, rnd(12)))
+        if (sleepMonsterFromPotion(mon, rnd(12))) {
             messages.push(`${potionHitMonsterName(mon)} falls asleep.`);
+            sleptMonsterFromPotion(mon, messages);
+        }
     } else if (kind === 'blindness') {
         blindMonsterFromPotion(mon);
     } else if (kind === 'speed') {
@@ -52812,11 +52835,7 @@ function heroIsUnderwater() {
 }
 
 function heroIsSwallowedBy(mon) {
-    const stuck = game.u?.ustuck;
-    if (stuck === mon) return true;
-    if (!stuck || !mon) return false;
-    return (stuck.m_id != null && stuck.m_id === mon.m_id)
-        || (stuck.id != null && stuck.id === mon.id);
+    return heroStuckMonsterMatches(mon);
 }
 
 function heroSensemonRestrictionsAllowRollingBoulder(mon) {
