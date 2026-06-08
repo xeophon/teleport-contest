@@ -31014,7 +31014,8 @@ const GENOCIDE_EXTRA_MONSTERS = [
 ];
 const GENOCIDE_EXTRA_MONSTER_NAMES = [
     'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
-    'electric eel', 'kraken', 'giant', 'minotaur', 'water troll', 'djinni',
+    'electric eel', 'kraken', 'giant', 'minotaur', 'water troll',
+    'djinni', 'water demon', 'horned devil', 'erinys', 'barbed devil',
 ];
 const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'couatl', 'aleax', 'angel', 'ki-rin', 'archon',
@@ -31024,7 +31025,7 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'stone golem', 'glass golem', 'iron golem',
     'titan', 'wererat', 'werejackal', 'werewolf',
     'aligned cleric', 'high cleric', 'master of thief', 'master assassin',
-    'djinni',
+    'djinni', 'water demon', 'horned devil', 'erinys', 'barbed devil',
     'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
     'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
     'salamander', 'ghost', 'shade',
@@ -31077,6 +31078,7 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
     ['djinn', 'djinni'],
+    ['erinyes', 'erinys'],
 ]);
 
 function isCAsIsMonsterPlural(name) {
@@ -31094,6 +31096,7 @@ function normalizeGenocideName(name) {
         fungi: 'fungus',
         men: 'human',
         humans: 'human',
+        erinys: 'erinys',
         bees: 'bee',
         vortices: 'vortex',
         liches: 'lich',
@@ -31156,6 +31159,7 @@ function pluralizeMonsterName(name) {
     if (/fungus$/i.test(name)) return `${name.slice(0, -6)}fungi`;
     if (/culus$/i.test(name)) return `${name.slice(0, -5)}culi`;
     if (/mumak$/i.test(name)) return `${name.slice(0, -5)}mumakil`;
+    if (lower === 'erinys') return 'erinyes';
     if (/watchman$/i.test(name)) return `${name.slice(0, -3)}men`;
     if (/rtex$/i.test(name)) return `${name.slice(0, -4)}rtices`;
     if (/ium$/i.test(name)) return `${name.slice(0, -3)}ia`;

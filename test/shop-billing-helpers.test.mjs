@@ -13922,6 +13922,39 @@ test('genocide resolves C master title aliases before G_GENO refusal', async () 
     }
 });
 
+test('genocide resolves C valley-only demon names before G_GENO refusal', async () => {
+    const cases = [
+        ['water demon', 'water demon'],
+        ['water demons', 'water demon'],
+        ['horned devil', 'horned devil'],
+        ['horned devil corpse', 'horned devil'],
+        ['barbed devil', 'barbed devil'],
+        ['barbed devils', 'barbed devil'],
+        ['erinys', 'erinys'],
+        ['erinys corpse', 'erinys'],
+        ['erinyes', 'erinys'],
+        ['erinyes corpse', 'erinys'],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, target] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31390 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(target), true);
+    }
+});
+
 test('genocide refuses C non-G_GENO ki-rin aliases', async () => {
     const cases = ['ki-rin', 'ki rin', 'kirin'];
 
