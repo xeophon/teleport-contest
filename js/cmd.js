@@ -31012,7 +31012,7 @@ const GENOCIDE_EXTRA_MONSTERS = [
 ];
 const GENOCIDE_EXTRA_MONSTER_NAMES = [
     'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
-    'electric eel', 'kraken', 'giant', 'minotaur', 'water troll',
+    'electric eel', 'kraken', 'giant', 'minotaur', 'water troll', 'djinni',
 ];
 const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'couatl', 'aleax', 'angel', 'ki-rin', 'archon',
@@ -31021,7 +31021,7 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'leather golem', 'wood golem', 'flesh golem', 'clay golem',
     'stone golem', 'glass golem', 'iron golem',
     'titan', 'wererat', 'werejackal', 'werewolf',
-    'aligned cleric', 'high cleric',
+    'aligned cleric', 'high cleric', 'djinni',
     'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
     'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
     'salamander', 'ghost', 'shade',
@@ -31039,6 +31039,7 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['wood elf', 'Woodland-elf'],
     ['woodland nymph', 'wood nymph'],
     ['halfling', 'hobbit'],
+    ['genie', 'djinni'],
     ['invisible stalker', 'stalker'],
     ['high-elf', 'elven monarch'],
     ['master-lich', 'master lich'],
@@ -31068,6 +31069,7 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['wolf werewolf', 'werewolf'],
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
+    ['djinn', 'djinni'],
 ]);
 
 function isCAsIsMonsterPlural(name) {

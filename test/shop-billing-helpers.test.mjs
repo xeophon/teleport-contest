@@ -13804,6 +13804,10 @@ test('genocide rejects C alternate-spelling plural suffixes', async () => {
     const cases = [
         ['grey dragons', 'gray dragon', /Wiped out all gray dragons/],
         ['gray-elfs', 'Grey-elf', /Wiped out all Grey-elves/],
+        ['genies', 'djinni', /Wiped out all djinni/],
+        ['genies corpse', 'djinni', /Wiped out all djinni/],
+        ['djinns', 'djinni', /Wiped out all djinni/],
+        ['djinnies', 'djinni', /Wiped out all djinni/],
         ['ki rins', 'ki-rin', /Wiped out all ki-rin/],
         ['uruk hais', 'Uruk-hai', /Wiped out all Uruk-hai/],
         ['olog hais', 'Olog-hai', /Wiped out all Olog-hai/],
@@ -13825,6 +13829,7 @@ test('genocide rejects C alternate-spelling plural suffixes', async () => {
         const message = game._pending_message || '';
         assert.match(message, /Such creatures do not exist in this world\./);
         assert.doesNotMatch(message, badMessage);
+        assert.doesNotMatch(message, /A thunderous voice booms through the caverns:/);
         assert.equal(game._command_mode, 'genocideText');
         assert.notEqual(game._genocided_monsters?.includes(markedName), true);
     }
@@ -13848,6 +13853,34 @@ test('genocide resolves C amorous demon aliases before G_GENO refusal', async ()
         assert.doesNotMatch(message, /Wiped out all/);
         assert.equal(game._command_mode, 'genocideText');
         assert.notEqual(game._genocided_monsters?.includes('amorous demon'), true);
+    }
+});
+
+test('genocide resolves C djinni aliases before G_GENO refusal', async () => {
+    const cases = [
+        'djinni', 'genie', 'djinn',
+        'genie corpse', "genie's corpse",
+        'djinn corpse', "djinn's corpse",
+        'djinni corpse', "djinni's corpse",
+        'djinnis', 'djinnies corpse',
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const input = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31330 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes('djinni'), true);
     }
 });
 
