@@ -13898,6 +13898,44 @@ test('genocide cleanup creates harmless gas cloud for removed steam vortex', asy
     assert.equal(region.ttl > 0, true);
 });
 
+test('genocide cleanup drops worn life saving amulet from nonliving steam vortex', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    game.level.regions = [];
+    const amulet = metalAmulet(30965, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const monster = steamVortexMonster(30966, { minvent: [amulet] });
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30967, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('steam vortex');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all steam vortex/);
+    assert.doesNotMatch(message, /But wait|medallion|still genocided/);
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(monster.minvent.includes(amulet), false);
+    const droppedAmulet = game.level.objects.find(obj => obj.id === amulet.id);
+    assert.ok(droppedAmulet);
+    assert.equal(droppedAmulet.ox, 6);
+    assert.equal(droppedAmulet.oy, 5);
+    assert.equal(game._vanquished_counts?.['steam vortex'], 1);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
+    assert.equal(game.level.regions?.length, 1);
+    assert.equal(game.level.regions[0]?.damage, 0);
+    assert.equal((game._discoveries || []).some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), false);
+});
+
 test('genocide cleanup creates steam cloud before shifted true-form death count', async () => {
     installNonShopFloorState();
     markHeroNeighborhoodVisible();
@@ -77969,6 +78007,55 @@ test('hero-thrown dagger lethal target ignores unworn monster life saving amulet
     assert.equal(game.u.uconduct?.killer, 1);
     assert.equal(game.u.uexp > 0, true);
     assert.equal(game.u.urexp > 0, true);
+    assert.equal((game._discoveries || []).some(entry => entry.section === 'Amulets'
+        && entry.name === 'amulet of life saving' && entry.known), false);
+    const landed = game.level.objects.find(obj => obj.id === blade.id);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.deepEqual(getRngLog().map(rngCallName).slice(0, 4), [
+        'rnd(20)', 'rnd(4)', 'rn2(6)', 'rn2(3)',
+    ]);
+});
+
+test('hero-thrown dagger lethal nonliving vortex ignores worn monster life saving amulet', async () => {
+    installNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uluck: 10, uhitinc: 30, udaminc: 0 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876240, 'd');
+    const amulet = metalAmulet(876241, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    const vortex = ordinaryThrowTarget('steam vortex', 7, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        m_lev: 7,
+        minvent: [amulet],
+        data: { name: 'steam vortex', mlevel: 7, hpLevel: 9, mlet: 'v', glyph: 'v', noCorpse: true },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [vortex];
+    markSquareVisible(7, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 3, 1, 1, 1, 1]);
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'The dagger hits the steam vortex.  You destroy the steam vortex!');
+    assert.doesNotMatch(game._pending_message, /But wait|medallion|Maybe not/);
+    assert.equal(game.level.monsters.includes(vortex), false);
+    assert.equal(vortex.dead, true);
+    assert.equal(vortex.minvent.includes(amulet), false);
+    const droppedAmulet = game.level.objects.find(obj => obj.id === amulet.id);
+    assert.ok(droppedAmulet);
+    assert.equal(droppedAmulet.ox, 7);
+    assert.equal(droppedAmulet.oy, 5);
+    assert.equal(game._vanquished_counts?.['steam vortex'], 1);
     assert.equal((game._discoveries || []).some(entry => entry.section === 'Amulets'
         && entry.name === 'amulet of life saving' && entry.known), false);
     const landed = game.level.objects.find(obj => obj.id === blade.id);

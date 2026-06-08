@@ -40,6 +40,12 @@ const VANQUISHED_MONSTER_DATA = new Map(
     RNDMONST_COMMON_MONSTERS.map(([name, , mlevel], index) => [name, { mlevel, index }]),
 );
 const VANQUISHED_COUNT_LIMIT = 255;
+const LIFE_SAVING_RIDER_NAMES = new Set(['death', 'pestilence', 'famine']);
+const LIFE_SAVING_LICH_NAMES = new Set(['lich', 'demilich', 'master lich', 'arch-lich']);
+const LIFE_SAVING_VAMPIRE_NAMES = new Set([
+    'vampire', 'vampire lady', 'vampire leader', 'vampire lord',
+    'vampire mage', 'vlad the impaler',
+]);
 const XP_SPECIAL_ATTACK_TYPES = new Set(['tuch', 'stng', 'hugs', 'spit', 'engl', 'brea', 'expl', 'boom', 'gaze', 'tent']);
 const XP_DOUBLE_DAMAGE_TYPES = new Set(['magm', 'fire', 'cold', 'slee', 'disn', 'elec', 'drst', 'acid', 'spc1', 'spc2']);
 const XP_FLAT_DAMAGE_TYPES = new Set(['drli', 'ston', 'slim']);
@@ -22771,15 +22777,40 @@ function reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { ki
     return true;
 }
 
-function monsterAllowsLifeSaving(mon) {
+function monsterIsVampireShifterForLifeSaving(mon) {
+    const data = mon?.data || {};
+    const shifterName = String(mon?.vampBase || data.vampBase
+        || mon?.chamBase || data.chamBase
+        || mon?.chamName || data.chamName
+        || mon?.cham || data.cham || '').toLowerCase();
+    return !!(mon?.vampshifter || data.vampshifter || LIFE_SAVING_VAMPIRE_NAMES.has(shifterName));
+}
+
+function monsterIsNonlivingForLifeSaving(mon) {
     const data = mon?.data || {};
     const name = String(data.name || mon?.name || '').toLowerCase();
-    const mlet = data.mlet || mon?.mlet;
-    const glyph = data.glyph || mon?.glyph;
-    const nonliving = data.nonliving || mon?.nonliving || mlet === 'Z' || glyph === 'Z'
-        || name.includes('zombie') || name.includes('mummy') || name.endsWith(' golem');
-    return !nonliving || mon?.vampshifter || data.vampshifter
-        || mon?.cham === 'vampire' || data.cham === 'vampire';
+    const rawMlet = String(data.mlet || mon?.mlet || '');
+    const rawGlyph = String(data.glyph || mon?.glyph || '');
+    const mlet = rawMlet.toLowerCase();
+    const glyph = rawGlyph.toLowerCase();
+    if (data.rider || mon?.rider || LIFE_SAVING_RIDER_NAMES.has(name)) return false;
+    return !!(data.nonliving || mon?.nonliving || data.undead || mon?.undead
+        || rawMlet === 'L' || rawMlet === 'M' || rawMlet === 'V'
+        || rawMlet === 'W' || rawMlet === 'Z' || rawMlet === "'" || rawMlet === 'v'
+        || rawGlyph === 'L' || rawGlyph === 'M' || rawGlyph === 'V'
+        || rawGlyph === 'W' || rawGlyph === 'Z' || rawGlyph === "'" || rawGlyph === 'v'
+        || mlet === 'ghost' || mlet === 'mummy' || mlet === 'zombie' || mlet === 'vortex'
+        || glyph === 'ghost' || glyph === 'mummy' || glyph === 'zombie' || glyph === 'vortex'
+        || name === 'manes' || name === 'ghost' || name === 'shade' || name === 'ghoul'
+        || name === 'skeleton' || name === 'wraith' || name === 'nazgul'
+        || name === 'fog cloud' || LIFE_SAVING_LICH_NAMES.has(name)
+        || LIFE_SAVING_VAMPIRE_NAMES.has(name)
+        || name.includes('mummy') || name.includes('zombie')
+        || name.endsWith(' vortex') || name.endsWith(' golem'));
+}
+
+function monsterAllowsLifeSaving(mon) {
+    return !monsterIsNonlivingForLifeSaving(mon) || monsterIsVampireShifterForLifeSaving(mon);
 }
 
 function monsterLifeSavingAmulet(mon) {
@@ -23534,8 +23565,7 @@ async function applyHeroKillLiveExperience(mon, messages) {
 async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
     if (!mon || mon.dead) return;
     const data = mon.data || {};
-    const nonliving = data.nonliving || data.mlet === 'Z' || data.glyph === 'Z'
-        || String(data.name || '').includes('zombie') || String(data.name || '').endsWith(' golem');
+    const nonliving = monsterIsNonlivingForLifeSaving(mon);
     mon.dead = true;
     mon.mhp = 0;
     recordHeroKillConduct();
@@ -55308,10 +55338,7 @@ async function moveHero(dx, dy) {
             return;
         }
 
-        const killVerb = data.nonliving || data.mlet === 'Z' || data.mlet === 'zombie'
-            || data.glyph === 'Z' || data.name?.includes('zombie') || data.name?.endsWith(' golem')
-            ? 'destroy'
-            : 'kill';
+        const killVerb = monsterIsNonlivingForLifeSaving(mon) ? 'destroy' : 'kill';
         const killedPet = mon.mtame || mon.pet;
         let killedName = shownName;
         if (killedPet && (game.u?._statusSuffix || '').includes('Hallu') && !game.u?.blind) {
