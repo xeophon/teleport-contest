@@ -44701,6 +44701,79 @@ test('command kicked shop-floor ordinary object through seen remote hole charges
     assert.equal(shkp.billct, 0);
 });
 
+test('command kick ordinary floor object in unseen web reveals trap and refuses movement', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    const blade = { ...dagger(512082), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.traps = [web];
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(web.tseen, true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 6);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message,
+        "You find a web.  You can't kick something that's in a web!");
+    assert.doesNotMatch(game._pending_message, /You kick|empty space|Thump|Ouch|falls/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+});
+
+test('command kick ordinary floor object in unseen pit reveals trap and refuses movement', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const pit = { ttyp: PIT, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    const blade = { ...dagger(512083), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.traps = [pit];
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(pit.tseen, true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 6);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message,
+        "You find a pit.  You can't kick something that's in a pit!");
+    assert.doesNotMatch(game._pending_message, /You kick|empty space|Thump|Ouch|falls/);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+});
+
+test('command kick floor object in trap while hallucinating calls it a tizzy', async () => {
+    installNonShopFloorState();
+    game.u.hallucinating = true;
+    game.u._statusSuffix = ' Hallu';
+    initRng(1);
+    const web = { ttyp: WEB, tx: 6, ty: 5, tseen: false, madeby_u: false };
+    const blade = { ...dagger(512084), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.traps = [web];
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(web.tseen, true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 6);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message,
+        "You find a web.  You can't kick something that's in a tizzy!");
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+});
+
 test('command kick locked trapped empty box breaks lock then fires trap', async () => {
     installNonShopFloorState();
     const box = shopFloorContainer(512090, 6, 5);

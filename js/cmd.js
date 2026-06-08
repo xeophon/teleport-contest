@@ -34587,6 +34587,29 @@ function kickFloorObjectAt(x, y) {
         && obj.ox === x && obj.oy === y);
 }
 
+function trappedKickedFloorObjectRefusal(obj, x, y) {
+    if (!obj || obj === game.u?.uball || obj === game.u?.uchain || isBoulderObject(obj)) return null;
+    const trap = (game.level?.traps || []).find(candidate => candidate.tx === x && candidate.ty === y) || null;
+    if (!trap) return null;
+    const stuckInPit = is_pit(trap.ttyp) && !heroPassesWalls();
+    if (!stuckInPit && trap.ttyp !== WEB) return null;
+    const messages = [];
+    if (!trap.tseen) {
+        trap.tseen = true;
+        exerciseAttribute(A_WIS, true);
+        newsym(x, y);
+        const name = trap.ttyp === WEB ? 'web' : trap.ttyp === SPIKED_PIT ? 'spiked pit' : 'pit';
+        messages.push(`You find ${articleForName(name)}.`);
+    }
+    const place = heroIsHallucinating() ? 'tizzy' : trap.ttyp === WEB ? 'web' : 'pit';
+    messages.push(`You can't kick something that's in a ${place}!`);
+    return {
+        handled: true,
+        messages,
+        moved: false,
+    };
+}
+
 function kickFloorObjectSupported(obj, x, y, options = {}) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj) || shopBillableGold(obj)) return false;
@@ -34797,6 +34820,8 @@ function chargeHeroBrokenShopFloorObject(obj, x, y, messages) {
 
 async function kickFloorObjectToward(dir, x, y) {
     let obj = kickFloorObjectAt(x, y);
+    const trapRefusal = trappedKickedFloorObjectRefusal(obj, x, y);
+    if (trapRefusal) return trapRefusal;
     const landX = x + dir.dx;
     const landY = y + dir.dy;
     const gate = remoteProjectileDownGateAt(obj, landX, landY);
