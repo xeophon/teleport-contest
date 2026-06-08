@@ -34763,7 +34763,7 @@ function splitKickedFloorObjectForFlight(obj) {
     return kicked;
 }
 
-function kickedSameLevelFlightStop(obj, x, y, dir, range) {
+function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
     let landX = x;
     let landY = y;
     for (let remaining = range - 1; remaining > 0; remaining--) {
@@ -34774,6 +34774,17 @@ function kickedSameLevelFlightStop(obj, x, y, dir, range) {
             candidate && !candidate.dead && candidate.mx === nx && candidate.my === ny
             && (candidate.mhp == null || candidate.mhp > 0));
         if (mon) break;
+        const web = (game.level?.traps || []).find(trap => trap.tx === nx && trap.ty === ny && trap.ttyp === WEB) || null;
+        if (web && !rn2(3)) {
+            landX = nx;
+            landY = ny;
+            if (!game.u?.blind && cansee(nx, ny)) {
+                messages.push(`${floorObjectSubject(obj)} gets stuck in a web!`);
+                web.tseen = true;
+                newsym(nx, ny);
+            }
+            return { x: landX, y: landY, gate: null, webStuck: true };
+        }
         const loc = game.level?.at?.(nx, ny);
         const typ = loc?.typ ?? STONE;
         const closedDoor = typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
@@ -34906,7 +34917,7 @@ async function kickFloorObjectToward(dir, x, y) {
         return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
     }
     if (ordinarySameLevelFlight) {
-        const flight = kickedSameLevelFlightStop(obj, x, y, dir, range);
+        const flight = kickedSameLevelFlightStop(obj, x, y, dir, range, messages);
         removeFloorObject(obj);
         newsym(x, y);
         obj.ox = flight.x;

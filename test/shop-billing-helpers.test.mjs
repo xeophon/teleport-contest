@@ -44722,6 +44722,80 @@ test('command kick ordinary floor object flies across same-level open terrain', 
     assert.deepEqual(getRngLog(), []);
 });
 
+test('command kicked ordinary floor object can get stuck in visible web mid-flight', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const web = { ttyp: WEB, tx: 8, ty: 5, tseen: false, madeby_u: false };
+    const blade = { ...dagger(512091), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.traps = [web];
+    game.level.objects = [blade];
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(web.tseen, true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 8);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.  A dagger gets stuck in a web!');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+});
+
+test('command kicked ordinary floor object passes web when stuck roll fails', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const web = { ttyp: WEB, tx: 8, ty: 5, tseen: false, madeby_u: false };
+    const blade = { ...dagger(512092), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.traps = [web];
+    game.level.objects = [blade];
+    markSquareVisible(8, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(web.tseen, false);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /stuck in a web|empty space|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1']);
+});
+
+test('command kicked ordinary floor object can get stuck in unseen web silently', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const web = { ttyp: WEB, tx: 8, ty: 5, tseen: false, madeby_u: false };
+    const blade = { ...dagger(512093), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.traps = [web];
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(web.tseen, false);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 8);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /stuck in a web|empty space|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+});
+
 test('command kick ordinary floor object stops before blocked same-level terrain', async () => {
     installStableNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
