@@ -49,7 +49,7 @@ The focused command keeps the adjacent direct-melee sleeping/wakeup/tame/priest 
 - Full `onscary()` parity remains broader: displacement, `guardobjects`, altar/vampire interactions, lawful-minion details, full shop/temple residency, and movement/pathing need separate coverage. The direct hero-square scare-monster scroll subcase is covered by audit 759.
 - Blind fade-message suppression is covered by audit 761.
 - Exact `adjalign()` threshold side effects such as Erinys adjustments remain outside this local direct-melee alignment model.
-- Bounded direct ordinary-humanoid `peacefuls_respond()` bystanders are covered by audit 762; shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763; remaining town watch, role-guardian quest-leader anger, tame, nonhumanoid same-species response behavior, and broader optional gasp/flee wording remain deferred.
+- Bounded direct ordinary-humanoid `peacefuls_respond()` bystanders are covered by audit 762; shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763; town-watch bystander arrest is covered by audit 764; remaining role-guardian quest-leader anger, tame, nonhumanoid same-species response behavior, and broader optional gasp/flee wording remain deferred.
 - Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred wake queues, and other special helpers remain separate from this ordinary direct-melee hook.
 - Full knockback movement, trap collisions, stun, and wording are still represented only by the existing RNG placeholder.
 

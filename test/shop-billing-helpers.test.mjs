@@ -76108,6 +76108,65 @@ test('direct hero melee blind peaceful humanoid bystander does not respond', asy
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee town watch bystander arrests and angers guards', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876854 });
+    const guard = ordinaryThrowTarget('watchman', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: { name: 'watchman', mlevel: 6, mlet: '@', humanoid: true, msound: 'MS_ARREST', maligntyp: -2 },
+    });
+    game.level.monsters = [mon, guard];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  "Halt!  You\'re under arrest!"  The guard gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(guard.mpeaceful, 0);
+    assert.equal(guard.hostile, true);
+    assert.equal(guard.angry, true);
+    assert.equal(guard.mstrategy, 'waitforu');
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee deaf town watch bystander arrests but suppresses guard feedback', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876855 });
+    const guard = ordinaryThrowTarget('watchman', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: { name: 'watchman', mlevel: 6, mlet: '@', humanoid: true, msound: 'MS_ARREST', maligntyp: -2 },
+    });
+    game.level.monsters = [mon, guard];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  "Halt!  You\'re under arrest!"');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(guard.mpeaceful, 0);
+    assert.equal(guard.hostile, true);
+    assert.equal(guard.angry, true);
+    assert.equal(guard.mstrategy, 'waitforu');
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
 test('direct hero melee current quest leader bystander can gasp then shrug', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876851 });
     game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };

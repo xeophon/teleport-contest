@@ -13,7 +13,7 @@ Covered behavior:
 - bystanders must be alive, still peaceful, not the primary target, not mindless, not sleeping, able to see, visible in hero line of sight, and able to see the hero;
 - ordinary humanoid bystanders become hostile and angry, clear `STRAT_WAITMASK`, and apply another `adjalign(-1)`;
 - sleeping and blind bystanders do not respond;
-- town watch remains outside this ordinary-humanoid response subset, while shopkeeper, priest, and current quest-leader shrug/gasp exceptions are covered by audit 763;
+- town watch remains outside this ordinary-humanoid response subset and is covered by audit 764, while shopkeeper, priest, and current quest-leader shrug/gasp exceptions are covered by audit 763;
 - the fixture uses a deaf hero and high-level bystander to avoid optional `maybe_gasp()` and `monflee()` wording while preserving the code path's C-shaped rolls.
 
 This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or the full nonhumanoid same-species response branch.
@@ -40,7 +40,7 @@ The focused command keeps adjacent direct-melee target anger and Elbereth blind-
 
 ## Deferred Gaps
 
-- Full `peacefuls_respond()` remains broader: town watch arrest and `angry_guards()`, current quest-leader anger for role-guardian targets, tame bystander handling beyond preserving peacefulness, nonhumanoid same-species growl/flee behavior, and ordinary/tame optional gasp/flee wording all need separate coverage. Shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763.
+- Full `peacefuls_respond()` remains broader: current quest-leader anger for role-guardian targets, tame bystander handling beyond preserving peacefulness, nonhumanoid same-species growl/flee behavior, and ordinary/tame optional gasp/flee wording all need separate coverage. Shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763, and town-watch bystander arrest is covered by audit 764.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
 - Exact `monflee()` timers, existing-fleeing wording, and all `flags.verbose` branches remain outside this high-level deaf fixture.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.

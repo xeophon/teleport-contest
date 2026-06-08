@@ -42,7 +42,7 @@ The focused command still keeps the direct-melee sleeping/awake/tame canaries pl
 - Object drop/throw impact disturbance via C `maybe_disturb_buried_zombies()` remains separate.
 - Exact timer API parity beyond the modeled `zombifyTurn` shortening remains deferred.
 - Unseen/audible growl naming, hallucinated growl table, `iflags.last_msg`, and run interruption remain deferred.
-- Full `wakeup()` mimic/reveal and remaining `setmangry()` peaceful-neighbor fallout remain deferred; ordinary/special humanoid bystander subsets are covered by audits 762-763.
+- Full `wakeup()` mimic/reveal and remaining `setmangry()` peaceful-neighbor fallout remain deferred; ordinary/special humanoid bystander subsets and town-watch arrest are covered by audits 762-764.
 
 ## Verification
 

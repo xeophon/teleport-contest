@@ -23112,7 +23112,11 @@ function directMeleeResponderGasp(mon) {
 function directMeleePeacefulHumanoidBystandersRespond(attacked, messages) {
     for (const mon of game.level?.monsters || []) {
         if (!directMeleePeacefulResponderCanSeeHero(mon, attacked)) continue;
-        if (isTownWatchMonster(mon)) continue;
+        if (isTownWatchMonster(mon)) {
+            messages.push('"Halt!  You\'re under arrest!"');
+            directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() });
+            continue;
+        }
         if (!directMeleeResponderIsHumanoidBranch(mon)) continue;
 
         const gasp = directMeleeResponderGasp(mon);

@@ -42,7 +42,7 @@ The focused command also keeps the awake survivor, tame survivor, bullwhip apply
 - Hallucinated growl verb RNG/table, `iflags.last_msg = PLNMSG_GROWL`, and run interruption via `nomul(0)` remain deferred.
 - `disturb_buried_zombies()` from this direct-melee growl path is covered by audit 757; other `wake_nearto()` callers remain separate.
 - Full `wakeup()` mimic/object/furniture reveal and force-fight `mundetected` behavior remains deferred.
-- `setmangry()` Elbereth hypocrisy is covered by audits 758-761; ordinary/special humanoid bystander subsets are covered by audits 762-763, with remaining `peacefuls_respond()` behavior still deferred.
+- `setmangry()` Elbereth hypocrisy is covered by audits 758-761; ordinary/special humanoid bystander subsets and town-watch arrest are covered by audits 762-764, with remaining `peacefuls_respond()` behavior still deferred.
 - Two-weapon deferred sleeping-hit queues, knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
 
 ## Verification
