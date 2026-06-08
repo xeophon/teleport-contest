@@ -13563,6 +13563,20 @@ test('genocide pluralizes mumak with C one-off suffix', async () => {
     assert.equal(game._genocided_monsters.includes('mumak'), true);
 });
 
+test('genocide pluralizes lurker above with C compound rule', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31054, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('lurker above');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all lurkers above\./);
+    assert.doesNotMatch(message, /lurker aboves/);
+    assert.equal(game._genocided_monsters.includes('lurker above'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };
