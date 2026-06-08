@@ -13768,6 +13768,28 @@ test('genocide refuses C non-G_GENO ki-rin', async () => {
     assert.notEqual(game._genocided_monsters?.includes('ki-rin'), true);
 });
 
+test('genocide refuses C non-G_GENO ghost family', async () => {
+    const names = ['ghost', 'shade'];
+
+    for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31240 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(name);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+    }
+});
+
 test('blessed genocide refuses C non-G_GENO angel class', async () => {
     installNonShopFloorState();
     game.inventory = [scrollOfGenocide(31075, 's', { blessed: true })];
@@ -13782,6 +13804,24 @@ test('blessed genocide refuses C non-G_GENO angel class', async () => {
     assert.doesNotMatch(message, /Wiped out all/);
     assert.equal(game._command_mode, 'genocideText');
     for (const name of ['couatl', 'Aleax', 'Angel', 'ki-rin', 'Archon'])
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+});
+
+test('blessed genocide refuses C non-G_GENO ghost class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31242, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('ghost');
+
+    const message = game._pending_message || '';
+    assert.match(message, /You aren't permitted to genocide such monsters\./);
+    assert.match(message, /What class of monsters do you want to genocide\?/);
+    assert.doesNotMatch(message, /That response does not represent any monster/);
+    assert.doesNotMatch(message, /Wiped out all/);
+    assert.equal(game._command_mode, 'genocideText');
+    for (const name of ['ghost', 'shade'])
         assert.notEqual(game._genocided_monsters?.includes(name), true);
 });
 

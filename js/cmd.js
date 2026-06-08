@@ -31001,6 +31001,8 @@ const GENOCIDE_MAX_TRIES = 5;
 const GENOCIDE_EXTRA_MONSTERS = [
     { name: 'watchman', mlet: '@', glyph: '@', color: CLR_GRAY, mlevel: 6, hpLevel: 9, difficulty: 8, mmove: 10, maligntyp: -2, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
     { name: 'watch captain', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 10, hpLevel: 11, difficulty: 12, mmove: 10, maligntyp: -4, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
+    { name: 'ghost', mlet: ' ', glyph: ' ', color: CLR_GRAY, mlevel: 10, hpLevel: 10, difficulty: 12, mmove: 3, maligntyp: -5, genoFreq: 0 },
+    { name: 'shade', mlet: ' ', glyph: ' ', color: CLR_BLACK, mlevel: 12, hpLevel: 12, difficulty: 14, mmove: 10, maligntyp: 0, genoFreq: 0 },
 ];
 const GENOCIDE_EXTRA_MONSTER_NAMES = [
     'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
@@ -31015,7 +31017,7 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'titan', 'wererat', 'werejackal', 'werewolf',
     'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
     'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
-    'salamander',
+    'salamander', 'ghost', 'shade',
 ]);
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
