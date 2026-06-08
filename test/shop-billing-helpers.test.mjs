@@ -76046,6 +76046,48 @@ test('direct hero melee sleeping peaceful humanoid wakes screams then angers', a
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee sleeping growl wakes nearby sleepers before anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876823,
+        monsterExtra: { msleeping: 1 },
+        dataExtra: { msound: 'MS_ORC', mlevel: 2 },
+    });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 9, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    const uniqueSleeper = ordinaryThrowTarget('Oracle', 7, 6, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'Oracle', mlevel: 12, humanoid: true, unique: true, uniq: true },
+    });
+    const farSleeper = ordinaryThrowTarget('gnome', 13, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'gnome', mlevel: 1, humanoid: true },
+    });
+    game.level.monsters = [mon, nearbySleeper, uniqueSleeper, farSleeper];
+    markSquareVisible(9, 5);
+    markSquareVisible(7, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The jackal wakes up.  The Oracle wakes up.  The goblin gets angry!');
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(uniqueSleeper.msleeping, 0);
+    assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(farSleeper.msleeping, 1);
+    assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
 test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl text', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({
         weaponId: 876821,
@@ -76053,6 +76095,13 @@ test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl
         monsterExtra: { msleeping: 1 },
         dataExtra: { mlet: 'blob', humanoid: false, msound: 'MS_SILENT' },
     });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 9, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    game.level.monsters = [mon, nearbySleeper];
+    markSquareVisible(9, 5);
     installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
 
     await rhack('l');
@@ -76066,6 +76115,8 @@ test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl
     assert.equal(mon.angry, true);
     assert.equal(mon.mstrategy, 0);
     assert.equal(mon.meating, 0);
+    assert.equal(nearbySleeper.msleeping, 1);
+    assert.equal(nearbySleeper.mstrategy, STRAT_WAITFORU);
     assert.equal(game.u.ualign.record, -1);
     assert.equal(game.u.ualign.abuse, 1);
 });
@@ -76077,11 +76128,18 @@ test('direct hero melee sleeping hostile survivor wakes and growls without anger
         monsterExtra: { msleeping: 1, mpeaceful: 0, hostile: true },
         dataExtra: { mlet: 'lizard', humanoid: false, msound: 'MS_SQEEK' },
     });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 9, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    game.level.monsters = [mon, nearbySleeper];
+    markSquareVisible(9, 5);
     installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
 
     await rhack('l');
 
-    assert.equal(game._pending_message, 'You hit the gecko.  The gecko wakes up!  The gecko squeals!');
+    assert.equal(game._pending_message, 'You hit the gecko.  The gecko wakes up!  The gecko squeals!  The jackal wakes up.');
     assert.equal(game.level.monsters.includes(mon), true);
     assert.equal(mon.dead, undefined);
     assert.equal(mon.msleeping, 0);
@@ -76090,6 +76148,8 @@ test('direct hero melee sleeping hostile survivor wakes and growls without anger
     assert.equal(mon.angry, undefined);
     assert.equal(mon.mstrategy, 0);
     assert.equal(mon.meating, 0);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
     assert.equal(game.u.ualign.record, 0);
     assert.equal(game.u.ualign.abuse, 0);
 });

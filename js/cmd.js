@@ -22939,6 +22939,39 @@ function directMeleeGrowlVerb(mon) {
     return 'screams';
 }
 
+function directMeleeMonsterCanBeSeen(mon) {
+    return !!mon && !game.u?.blind && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible) && couldsee(mon.mx, mon.my);
+}
+
+function directMeleeWakeMessage(mon, interesting = false) {
+    const alive = String(mon?.data?.name || mon?.name || '').toLowerCase() === 'flesh golem'
+        ? " It's alive!" : '';
+    return `${fireScrollMonsterName(mon)} wakes up${interesting ? '!' : '.'}${alive}`;
+}
+
+function directMeleeGrowlSuppressed(mon) {
+    return !!(mon?.helpless || mon?.mfrozen || mon?.mcanmove === false || mon?.mcanmove === 0)
+        || !directMeleeGrowlVerb(mon);
+}
+
+function directMeleeGrowlWakeNearby(mon, messages) {
+    const level = Math.max(0, Math.trunc(Number(mon?.data?.mlevel ?? mon?.mlevel ?? 0) || 0));
+    const distance = level * 18;
+    for (const sleeper of game.level?.monsters || []) {
+        if (!sleeper || sleeper === mon || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0))
+            continue;
+        const dx = (sleeper.mx || 0) - (mon?.mx || 0);
+        const dy = (sleeper.my || 0) - (mon?.my || 0);
+        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
+        if (sleeper.msleeping && directMeleeMonsterCanBeSeen(sleeper))
+            messages.push(directMeleeWakeMessage(sleeper, false));
+        sleeper.msleeping = 0;
+        if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq))
+            clearDirectMeleeWaitStrategyMask(sleeper);
+    }
+}
+
 function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}) {
     if (!mon?.mpeaceful) return false;
     mon.msleeping = 0;
@@ -22984,11 +23017,14 @@ function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
     if (!mon) return false;
     if (ordinaryMelee) {
         if (preHitState?.msleeping) {
-            if (visible) messages.push(`${fireScrollMonsterName(mon)} wakes up!`);
+            if (visible) messages.push(directMeleeWakeMessage(mon, true));
             mon.msleeping = 0;
             if (mon.meating !== undefined) mon.meating = 0;
             const verb = directMeleeGrowlVerb(mon);
-            if (visible && verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+            if (!directMeleeGrowlSuppressed(mon)) {
+                if (visible && verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+                directMeleeGrowlWakeNearby(mon, messages);
+            }
         } else if (mon.meating !== undefined) {
             mon.meating = 0;
         }

@@ -161,6 +161,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [753-direct-melee-priest-wakeup-ghod-hitsu-2026-06-08.md](753-direct-melee-priest-wakeup-ghod-hitsu-2026-06-08.md): direct hero melee nonlethal peaceful priest wakeup anger, unconditional temple `ghod_hitsu()`, and wrapper-roll second retaliation.
 - [754-direct-melee-surviving-wakeup-setmangry-2026-06-08.md](754-direct-melee-surviving-wakeup-setmangry-2026-06-08.md): direct hero melee surviving-hit non-priest `wakeup()`/`setmangry()` anger cleanup, tame preservation, and post-knockback priest/watch wrapper ordering.
 - [755-direct-melee-sleeping-wakeup-growl-2026-06-08.md](755-direct-melee-sleeping-wakeup-growl-2026-06-08.md): direct hero melee sleeping survivor wake message/growl ordering, `wakeup()`/`setmangry()` cleanup, and hostile no-anger canaries.
+- [756-direct-melee-sleeper-growl-wake-nearto-2026-06-08.md](756-direct-melee-sleeper-growl-wake-nearto-2026-06-08.md): direct hero melee sleeper growl `wake_nearto()` side effect, nearby sleeper wait-mask cleanup, and silent/hostile canaries.
 
 ## Cross-Cutting Themes
 
