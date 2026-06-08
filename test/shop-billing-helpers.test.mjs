@@ -13679,6 +13679,50 @@ test('genocide catalogs special C normal-genocide monsters', async () => {
     }
 });
 
+test('genocide resolves C gendered neutral monster aliases', async () => {
+    const cases = [
+        ['dwarf lord', 'dwarf leader', /Wiped out all dwarf leaders\./],
+        ['gnome queen', 'gnome ruler', /Wiped out all gnome rulers\./],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, markedName, expected] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31210 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, expected);
+        assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+        assert.equal(game._command_mode || null, null);
+        assert.equal(game._genocided_monsters.includes(markedName), true);
+    }
+});
+
+test('genocide resolves C amorous demon aliases before G_GENO refusal', async () => {
+    const cases = ['incubus', 'succubus', 'incubi', 'succubi'];
+    for (let i = 0; i < cases.length; i++) {
+        const input = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31220 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes('amorous demon'), true);
+    }
+});
+
 test('genocide refuses C non-G_GENO ki-rin', async () => {
     installNonShopFloorState();
     game.inventory = [scrollOfGenocide(31074, 's')];

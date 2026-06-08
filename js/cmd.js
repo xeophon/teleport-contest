@@ -31092,11 +31092,20 @@ function genocideMonsterByName(name) {
     const wanted = normalizeGenocideName(name);
     if (!wanted) return null;
     for (const data of genocideMonsterCatalog()) {
+        const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
         const candidates = [
             data.name,
             data.name?.replace(/-/g, ' '),
             pluralizeMonsterName(data.name || ''),
-        ].map(normalizeGenocideName);
+            genderNames?.male,
+            genderNames?.male?.replace(/-/g, ' '),
+            genderNames?.male ? pluralizeMonsterName(genderNames.male) : null,
+            genderNames?.female,
+            genderNames?.female?.replace(/-/g, ' '),
+            genderNames?.female ? pluralizeMonsterName(genderNames.female) : null,
+            genderNames?.male === 'incubus' ? 'incubi' : null,
+            genderNames?.female === 'succubus' ? 'succubi' : null,
+        ].filter(Boolean).map(normalizeGenocideName);
         if (candidates.includes(wanted)) return data;
     }
     return null;
