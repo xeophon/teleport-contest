@@ -41,4 +41,4 @@ Closed the `GENOCIDED` life-saving gap left by audit 804. JS now consumes a worn
 ## Remaining Gaps
 
 - The broader terminal genocide endgame presentation still shares JS's generic death disclosure UI; this audit only covers the life-saving and wizard/explore survival rules.
-- Polymorphed delayed self-genocide (`ugenocided()` after rehumanization) remains a separate `polyself()` lifecycle slice.
+- Polymorphed delayed self-genocide (`ugenocided()` after rehumanization) is covered in audit 806.

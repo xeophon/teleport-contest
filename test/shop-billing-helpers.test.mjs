@@ -13380,12 +13380,115 @@ test('confused genocide consumes life saving but still dies from genocidal confu
     assert.equal(game.u.uhp, 20);
 });
 
+test('polymorphed self-genocide waits until rehumanization', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    game._startup_race = 'dwarf';
+    game.urace = { adj: 'dwarf', noun: 'dwarf' };
+    Object.assign(game.u, {
+        uhp: 10,
+        uhpmax: 20,
+        mh: 1,
+        mhmax: 4,
+        _polyself_form: { name: 'newt', mlet: ':', glyph: ':', mlevel: 0, mmove: 6, mac: 8 },
+        _polyself_base: {
+            uhp: 10,
+            uhpmax: 20,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    const scroll = scrollOfGenocide(30916, 's');
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('dwarf');
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /Wiped out all dwarves\./);
+    assert.match(game._pending_message, /You feel dead inside\./);
+    assert.doesNotMatch(game._pending_message, /You die/);
+    assert.equal(game._polyself_genocide_delayed, 1);
+    assert.equal(game._polyself_genocide_delayed_cause, 'scroll of genocide');
+    assert.equal(game.u._polyself_form?.name, 'newt');
+    assert.equal(game.u.uhp, -1);
+    assert.equal(game.u.mh, 1);
+
+    await rhack(' ');
+    const opener = ordinaryTool(30917, 'tin opener', 't');
+    game.inventory = [opener];
+
+    await rhack('t');
+    await rhack('t');
+    await rhack('<');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /A tin opener (?:almost hits|hits) the ceiling, then falls back on top of your head\./);
+    assert.match(message, /You return to dwarf form!/);
+    assert.match(message, /You die\.\.\./);
+    assert.doesNotMatch(message, /Your old form was not healthy enough to survive/);
+    assert.equal(message.indexOf('You return to dwarf form!') < message.indexOf('You die...'), true);
+    assert.equal(game._death_cause, 'scroll of genocide');
+    assert.equal(game._death_no_bones, 1);
+    assert.equal(game._polyself_genocide_delayed || 0, 0);
+    assert.equal(game._polyself_genocide_delayed_cause || '', '');
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.uhpmax, 20);
+});
+
+test('genociding current polyself form rehumanizes instead of ignoring form', async () => {
+    installNonShopFloorState();
+    game.urace = { adj: 'human', noun: 'human' };
+    Object.assign(game.u, {
+        uhp: 12,
+        uhpmax: 18,
+        mh: 6,
+        mhmax: 6,
+        _polyself_form: { name: 'newt', mlet: ':', glyph: ':', mlevel: 0, mmove: 6, mac: 8 },
+        _polyself_base: {
+            uhp: 12,
+            uhpmax: 18,
+            uen: 3,
+            uenmax: 5,
+            uac: 7,
+            ulevel: 2,
+            rank: { m: 'Wizard', f: 'Wizard' },
+        },
+    });
+    const scroll = scrollOfGenocide(30918, 's');
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('newt');
+
+    assert.equal(game._command_mode || null, null);
+    assert.match(game._pending_message, /Wiped out all newts\./);
+    assert.match(game._pending_message, /You return to human form!/);
+    assert.doesNotMatch(game._pending_message, /You die|dead inside|old form was not healthy enough/);
+    assert.equal(game._genocided_monsters.includes('newt'), true);
+    assert.equal(game.u._polyself_form, null);
+    assert.equal(game.u._polyself_base, null);
+    assert.equal(game.u.mh, null);
+    assert.equal(game.u.mhmax, null);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.uhpmax, 18);
+    assert.equal(game.u.uac, 7);
+});
+
 test('explore self-genocide death decline survives and clears death state', async () => {
     installCommandShopState();
     game.flags.explore = true;
     game._startup_race = 'dwarf';
     game.urace = { adj: 'dwarf', noun: 'dwarf' };
-    const scroll = scrollOfGenocide(30916, 's');
+    const scroll = scrollOfGenocide(30919, 's');
     game.inventory = [scroll];
 
     await rhack('r');
@@ -13418,8 +13521,8 @@ test('explore self-genocide life saving decline uses savelife hp cap', async () 
     game.u.uhp = 10;
     game.u.uhpmax = 200;
     game.u.acurr.a[A_CON] = 10;
-    const scroll = scrollOfGenocide(30917, 's');
-    const amulet = wornHeroLifeSavingAmulet(30918, 'a');
+    const scroll = scrollOfGenocide(30920, 's');
+    const amulet = wornHeroLifeSavingAmulet(30921, 'a');
     game.inventory = [amulet, scroll];
 
     await rhack('r');

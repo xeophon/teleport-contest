@@ -211,6 +211,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [803-deferred-projectile-lifesaving-death-state-2026-06-08.md](803-deferred-projectile-lifesaving-death-state-2026-06-08.md): deferred lethal projectile life-saving now clears immediate death metadata after successful amulet survival for monster-fired arrows and monster-thrown darts.
 - [804-generic-lifesaving-survival-death-state-2026-06-08.md](804-generic-lifesaving-survival-death-state-2026-06-08.md): generic successful life-saving and wizard/explore survival now clear immediate death metadata after the survival prompt resolves.
 - [805-genocide-lifesaving-still-terminal-2026-06-08.md](805-genocide-lifesaving-still-terminal-2026-06-08.md): hero self-genocide now consumes life saving and prints the still-genocided follow-up while remaining terminal unless wizard/explore death decline saves the hero.
+- [806-polymorphed-genocide-rehumanization-2026-06-08.md](806-polymorphed-genocide-rehumanization-2026-06-08.md): polymorphed base self-genocide now delays terminal genocide until rehumanization, while current-form genocide forces rehumanization.
 
 ## Cross-Cutting Themes
 
