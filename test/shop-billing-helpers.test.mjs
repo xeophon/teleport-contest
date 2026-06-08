@@ -14037,6 +14037,37 @@ test('genocide refuses remaining generated C non-G_GENO common monsters', async 
     }
 });
 
+test('genocide resolves C lycanthrope disambiguation aliases before refusal', async () => {
+    const cases = [
+        ['human wererat', 'wererat'],
+        ['human werejackal', 'werejackal'],
+        ['human werewolf', 'werewolf'],
+        ['rat wererat', 'wererat'],
+        ['jackal werejackal', 'werejackal', 'jackal'],
+        ['wolf werewolf', 'werewolf', 'wolf'],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, forbiddenName, wrongTarget] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31310 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(forbiddenName), true);
+        if (wrongTarget)
+            assert.notEqual(game._genocided_monsters?.includes(wrongTarget), true);
+    }
+});
+
 test('blessed genocide skips C non-G_GENO titan in giant class', async () => {
     installNonShopFloorState();
     game.inventory = [scrollOfGenocide(31095, 's', { blessed: true })];

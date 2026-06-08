@@ -31038,6 +31038,12 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['halfling', 'hobbit'],
     ['invisible stalker', 'stalker'],
     ['high-elf', 'elven monarch'],
+    ['human wererat', 'wererat'],
+    ['human werejackal', 'werejackal'],
+    ['human werewolf', 'werewolf'],
+    ['rat wererat', 'wererat'],
+    ['jackal werejackal', 'werejackal'],
+    ['wolf werewolf', 'werewolf'],
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
 ]);
