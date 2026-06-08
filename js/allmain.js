@@ -56,6 +56,12 @@ const GENDER_CANONICAL = new Map(['male', 'female'].map(name => [name, name]));
 const EGG = 10001;
 const TIN = 10004;
 const GLOB_OF_GREEN_SLIME = 10182;
+const ACIDIC_MONSTER_NAMES = new Set([
+    'acid blob', 'gelatinous cube', 'spotted jelly', 'ochre jelly',
+    'baby yellow dragon', 'yellow dragon', 'green mold', 'black naga hatchling',
+    'black naga', 'gray ooze', 'brown pudding', 'green slime', 'black pudding',
+    'juiblex',
+]);
 const LUMP_OF_ROYAL_JELLY = 10089;
 const MEAT_RING = 10164;
 const MEATBALL = 11012;
@@ -9979,7 +9985,7 @@ function monsterMunstoneItemIsGreenSlimeGlob(item) {
 
 function monsterMunstoneItemIsAcidicFood(item) {
     const species = monsterMunstoneFoodSpecies(item);
-    return !!(item?.corpsenm?.acidic || species === 'acid blob');
+    return !!(item?.corpsenm?.acidic || ACIDIC_MONSTER_NAMES.has(species));
 }
 
 function monsterMunstoneCureKind(mon, item, tinok) {

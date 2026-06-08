@@ -45,5 +45,5 @@ Implemented the next production monster-thrown petrifying egg intervening-monste
 
 ## Remaining Gaps
 
-- Broader acidic non-lizard corpse/tin species are still only covered by the predicate shape, not by focused production canaries.
+- Broader acidic non-lizard corpse/tin species are covered in audit 787.
 - Cursed/greased monster-thrown egg misfire and sink/ordinary wall stop handling remain separate projectile slices.

@@ -56022,6 +56022,42 @@ test('production monster cockatrice egg acid resistant target quaffs acid withou
     assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
 });
 
+test('production monster cockatrice egg target eats acidic corpse before petrifying', async () => {
+    const greenMoldCorpse = corpse(878139, undefined, 'green mold');
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 12,
+        mhpmax: 12,
+        minvent: [greenMoldCorpse],
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1, 4],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(blocker.dead || false, false);
+    assert.equal(blocker.mhp, 7);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.includes(greenMoldCorpse), false);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), false);
+
+    assert.match(messages, /The goblin eats a green mold corpse\./);
+    assert.match(messages, /The goblin has a very bad case of stomach acid\./);
+    assert.match(messages, /The goblin seems limber!/);
+    assert.doesNotMatch(messages, /turns to stone|Now it's a stone golem|dies/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)', 'rnd(15)']);
+});
+
 test('production monster cockatrice egg target opens lizard tin with tin opener before petrifying', async () => {
     const lizardTin = { ...tin(878134, undefined), corpsenm: { name: 'lizard' } };
     const opener = {
@@ -56063,6 +56099,51 @@ test('production monster cockatrice egg target opens lizard tin with tin opener 
     assert.match(messages, /The goblin opens and eats the contents of a tin\./);
     assert.match(messages, /The goblin seems limber!/);
     assert.doesNotMatch(messages, /turns to stone|Now it's a stone golem/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('production monster cockatrice egg target opens acidic tin without stomach damage', async () => {
+    const greenMoldTin = { ...tin(878140, undefined), corpsenm: { name: 'green mold' } };
+    const opener = {
+        id: 878141,
+        otyp: TIN_OPENER,
+        cls: 'tool',
+        glyph: '(',
+        kind: 'tin opener',
+        actualKind: 'tin opener',
+        quan: 1,
+    };
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 20,
+        mac: 20,
+        mhp: 12,
+        mhpmax: 12,
+        minvent: [greenMoldTin, opener],
+        data: { name: 'goblin', mlevel: 1, mac: 20 },
+    });
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1],
+        throwerX: 9,
+        extraMonsters: [blocker],
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+
+    assert.equal(blocker.dead || false, false);
+    assert.equal(blocker.mhp, 12);
+    assert.equal(game.level.monsters.includes(blocker), true);
+    assert.equal(blocker.minvent.includes(greenMoldTin), false);
+    assert.equal(blocker.minvent.includes(opener), true);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'statue' && obj.ox === 7 && obj.oy === 5), false);
+
+    assert.match(messages, /The goblin opens and eats the contents of a tin\./);
+    assert.match(messages, /The goblin seems limber!/);
+    assert.doesNotMatch(messages, /stomach acid|turns to stone|Now it's a stone golem|dies/);
     assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rnd(20)']);
 });
 

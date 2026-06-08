@@ -192,6 +192,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [784-monster-thrown-cockatrice-egg-hero-bars-2026-06-08.md](784-monster-thrown-cockatrice-egg-hero-bars-2026-06-08.md): monster-thrown petrifying eggs now cover hero catch, hero hit/miss landing, golem-polyself rescue, generic petrification death cause, and forced iron-bars breaktest versus resisted `Flapp!` landing.
 - [785-monster-thrown-cockatrice-egg-munstone-tiny-2026-06-08.md](785-monster-thrown-cockatrice-egg-munstone-tiny-2026-06-08.md): monster-thrown petrifying eggs now cover intervening-monster self-cure via lizard corpse, C slowdown/limber wording, period punctuation, and tiny target rock/statue fallout.
 - [786-monster-thrown-cockatrice-egg-munstone-acid-tin-2026-06-08.md](786-monster-thrown-cockatrice-egg-munstone-acid-tin-2026-06-08.md): monster-thrown petrifying eggs now cover acid-potion `munstone()` death/survival fallout, openable lizard tin self-cure, stone-resistant slimeproof glob guard behavior, and C's zero physical egg damage after cure.
+- [787-monster-thrown-cockatrice-egg-acidic-food-species-2026-06-08.md](787-monster-thrown-cockatrice-egg-acidic-food-species-2026-06-08.md): monster-thrown petrifying eggs now cover C's broader `M1_ACID` corpse/tin species for monster `munstone()`, including acidic-corpse stomach damage and acidic-tin damage suppression.
 
 ## Cross-Cutting Themes
 
