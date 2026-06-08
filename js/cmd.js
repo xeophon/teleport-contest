@@ -54624,8 +54624,7 @@ async function moveHero(dx, dy) {
                 refreshSurvivingWieldedPotionStack(attackWeapon);
                 killed = !!(mon.dead || (mon.mhp || 0) <= 0);
                 if (!potionFatal && !killed) {
-                    const potionBashDamage = (mon.data?.name === 'shade') ? 0
-                        : Math.max(1, 1 + strengthDamageBonus + (game.u?.udaminc || 0));
+                    const potionBashDamage = (mon.data?.name === 'shade') ? 0 : 1;
                     if (potionBashDamage > 0) {
                         mon.mhp = (mon.mhp || 1) - potionBashDamage;
                         killed = (mon.mhp || 0) <= 0;
@@ -54637,6 +54636,13 @@ async function moveHero(dx, dy) {
                 if (potionMessages.more) messages.more = true;
                 if (potionLifeSaving || potionFatal) break;
                 if (killed) break;
+                directMeleeNonlethalWakeupTail(mon, messages, attackPreHitState, {
+                    ordinaryMelee: !directMeleeFromSpecialApply,
+                    forcefight: directMeleeForcefight,
+                    visible: targetSpotted,
+                    wakeMessage: false,
+                });
+                directMeleeNonlethalWakeupApplied = true;
                 if (attackIndex === 0 && !deferSleepingWakeTail) {
                     const fleeRoll = rn2(25);
                     if (!fleeRoll && (mon.mhp || 0) < Math.trunc((mon.mhpmax || 0) / 2)

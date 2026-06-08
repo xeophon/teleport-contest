@@ -75192,6 +75192,51 @@ test('wielded potion stack bash consumes one and keeps the stack wielded', async
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
 });
 
+test('wielded speed potion bash survivor still runs melee wakeup anger tail', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0, 0, 0, 1, 1]);
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.udaminc = 9;
+    game.u._polyself_form = { name: 'gas cloud', breathless: true, noeyes: true };
+    const potion = speedPotion(87651, 's', 1, { dknown: true });
+    potion.wielded = true;
+    potion.line = 's - a potion of speed (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 0,
+        mpeaceful: true,
+        data: { name: 'goblin', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin];
+    game._force_fight_target = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const message = game._pending_message;
+    assert.match(message, /The potion of speed evaporates\./);
+    assert.match(message, /The goblin is suddenly moving faster\./);
+    assert.match(message, /The goblin gets angry!/);
+    assert.ok(message.indexOf('suddenly moving faster') < message.indexOf('gets angry!'));
+    assert.doesNotMatch(message, /You hit|misses|shatters|Your knees seem/);
+    assert.equal(goblin.mspeed, 'fast');
+    assert.equal(goblin.permspeed, 'fast');
+    assert.equal(goblin.mhp, 29);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.hostile, true);
+    assert.equal(goblin.angry, true);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(-4), [
+        'rn2(7)', 'rn2(5)', 'rn2(13)', 'rn2(25)',
+    ]);
+});
+
 test('wielded blessed water potion bash vapor rehumanizes lycanthrope after monster hit', async () => {
     installNonShopFloorState();
     initRng(1);
@@ -75237,7 +75282,9 @@ test('wielded blessed water potion bash vapor rehumanizes lycanthrope after mons
     assert.doesNotMatch(message, /You feel purified|peculiar odor|You die/);
     assert.ok(clone);
     assert.equal(game.level.monsters.includes(gremlin), true);
-    assert.equal(gremlin.mpeaceful, true);
+    assert.equal(gremlin.mpeaceful, 0);
+    assert.equal(gremlin.hostile, true);
+    assert.equal(gremlin.angry, true);
     assert.equal(game.u.ulycn, 'werewolf');
     assert.equal(game.u.lycanthrope, true);
     assert.equal(game.u._polyself_form, null);

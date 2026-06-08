@@ -177,6 +177,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [769-direct-melee-force-fought-hidden-sleeper-reveal-growl-anger-2026-06-08.md](769-direct-melee-force-fought-hidden-sleeper-reveal-growl-anger-2026-06-08.md): direct hero melee `wakeup()` ordering for force-fought sleeping `mundetected` survivors, including hidden pre-reveal hit wording, no hidden wake message, survivor-tail reveal before visible growl, and post-growl peaceful anger wording.
 - [770-direct-melee-two-weapon-sleeper-wakeup-offhand-order-2026-06-08.md](770-direct-melee-two-weapon-sleeper-wakeup-offhand-order-2026-06-08.md): direct hero melee two-weapon sleeping survivor ordering, including primary-hit wake/growl/nearby-wake/anger before offhand hit text, primary-miss offhand wakeup, and per-attack target-state hit bonus recalculation.
 - [771-direct-melee-acid-jelly-passive-fallback-2026-06-08.md](771-direct-melee-acid-jelly-passive-fallback-2026-06-08.md): direct hero melee production-name fallback for spotted jelly and ochre jelly `AT_NONE/AD_ACID` passive object corrosion, without replay-seed coupling.
+- [772-direct-melee-potion-bash-survivor-wakeup-2026-06-08.md](772-direct-melee-potion-bash-survivor-wakeup-2026-06-08.md): direct hero melee wielded potion bash fixed one-point survivor damage plus post-`potionhit()` `wakeup(TRUE)` peaceful anger tail.
 
 ## Cross-Cutting Themes
 
