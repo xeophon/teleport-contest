@@ -11987,7 +11987,9 @@ function quantityObjectName(obj, name = pickupObjectName(obj), quan = Math.max(1
 }
 
 function floorObjectBaseName(obj) {
-    return pickupObjectName({ ...obj, line: '', quan: 1 }).replace(/ \(lit\)$/, '');
+    const name = pickupObjectName({ ...obj, line: '', quan: 1 }).replace(/ \(lit\)$/, '');
+    if (name !== 'object' || !obj?.appearance) return name;
+    return String(obj.appearance).trim().replace(/ \(lit\)$/, '') || name;
 }
 
 function floorObjectTheName(obj) {
@@ -40102,18 +40104,26 @@ function wishedDamageProfile(item) {
     const erosionMatters = weapon || armor || ballOrChain || weptool;
     if (!erosionMatters) return { erosionMatters: false };
 
-    const excludedMetal = /\b(?:silver|gold|mithril|platinum|gem|stone|crystal ball|shield of reflection)\b/.test(kind);
-    const glassArmor = armor && /\b(?:crystal plate mail|helm of brilliance|crystal helmet)\b/.test(kind);
+    const material = String(item?.material || item?.oc_material || '').toLowerCase().replace(/_/g, ' ');
+    const hasMaterial = !!material;
+    const materialIron = /^(?:iron|steel)$/.test(material);
+    const materialCopper = /^(?:copper|bronze)$/.test(material);
+    const materialGlass = /^(?:glass|crystal)$/.test(material);
+    const materialFlammable = /^(?:wood|leather|cloth|paper|wax|veggy|vegetable|flesh|plastic)$/.test(material);
+    const materialExcluded = /^(?:silver|gold|mithril|platinum|gem|stone|mineral|metal)$/.test(material);
+    const excludedMetal = materialExcluded || /\b(?:silver|gold|mithril|platinum|gem|stone|crystal ball|shield of reflection)\b/.test(kind);
+    const glassArmor = armor && (materialGlass || /\b(?:crystal plate mail|helm of brilliance|crystal helmet)\b/.test(kind));
     const dragonHide = armor && /\bdragon (?:scales|scale mail|hide)\b/.test(kind);
     const flammableArmor = armor && FIRE_FLAMMABLE_ARMOR_KINDS.has(kind);
     const nonflammableArmor = armor && FIRE_NONFLAMMABLE_ARMOR_KINDS.has(kind);
-    const copperLike = /\b(?:copper|bronze)\b/.test(kind);
-    const rustproneProjectile = /^(?:arrow|orcish arrow|crude arrow|ya|bamboo arrow|crossbow bolt)$/.test(kind);
-    const ironLike = !flammableArmor && !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
+    const copperLike = materialCopper || /\b(?:copper|bronze)\b/.test(kind);
+    const rustproneProjectile = /^(?:arrow|orcish arrow|crude arrow|crossbow bolt)$/.test(kind);
+    const inferredIronLike = !hasMaterial && !flammableArmor && !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
         || rustproneProjectile
         || IRON_POLEARM_KINDS.has(kind)
         || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart|shuriken|throwing star)\b/.test(kind));
-    const flammableLike = flammableArmor || (!nonflammableArmor && !glassArmor && !ironLike && !copperLike && !excludedMetal
+    const ironLike = materialIron || inferredIronLike;
+    const flammableLike = materialFlammable || flammableArmor || (!hasMaterial && !nonflammableArmor && !glassArmor && !ironLike && !copperLike && !excludedMetal
         && /\b(?:leather|cloth|cloak|robe|shirt|boots|gloves|wooden|small shield|bow|crossbow|arrow|club|quarterstaff|aklys|bullwhip|sling)\b/.test(kind));
     const rustprone = ironLike;
     const crackable = glassArmor;

@@ -60034,6 +60034,68 @@ test('production monster spear hits and rusts intervening rust monster object be
         preNhgetchMessages.join('\n'));
 });
 
+test('production monster runed spear hit can smoulder from intervening red mold before stacking', async () => {
+    const cleanStack = monsterSpear(874412, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'runed spears',
+        appearance: 'runed spear',
+        material: 'wood',
+        ox: 8,
+        oy: 5,
+        letter: undefined,
+        line: undefined,
+    });
+    const redMold = passiveObjectTarget('red mold', 'fire', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const runedSpear = monsterSpear(874413, {
+        otyp: undefined,
+        kind: undefined,
+        actualKind: undefined,
+        singular: undefined,
+        plural: 'runed spears',
+        appearance: 'runed spear',
+        material: 'wood',
+    });
+    const { spearItem, thrower, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        seed: 10,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: runedSpear,
+        extraMonsters: [redMold],
+        initialObjects: [cleanStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /runed spear hits the red mold|It is hit/);
+    assert.match(messages, /The runed spear smoulders!/, rawRng.join(', '));
+    assert.equal(redMold.mhp < 20, true, rawRng.join(', '));
+    assert.equal(redMold.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === spearItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === spearItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.equal(rawRng.some(entry => entry === 'rn2(6)=0'), true, rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(2)=')
+        || entry.startsWith('rnl(4)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+});
+
 test('production monster dwarvish spear hit uses stout spear damage and text', async () => {
     const dwarvishSpear = monsterDwarvishSpear(874383);
     const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({

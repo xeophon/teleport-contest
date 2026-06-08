@@ -196,6 +196,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [788-monster-thrown-cockatrice-egg-tin-opener-eligibility-2026-06-08.md](788-monster-thrown-cockatrice-egg-tin-opener-eligibility-2026-06-08.md): monster-thrown petrifying eggs now cover C-shaped monster tin opener eligibility, including `tin:<species>` metadata, numeric tin openers, animal rejection, and cursed/welded wielded-weapon gating.
 - [789-monster-thrown-cockatrice-egg-misfire-sink-wall-2026-06-08.md](789-monster-thrown-cockatrice-egg-misfire-sink-wall-2026-06-08.md): monster-thrown petrifying eggs now cover cursed/greased slip misfires, zero-vector launch-square drops, redirected sink stops, and ordinary wall obstruction landing.
 - [790-monster-thrown-passive-proof-stale-target-2026-06-08.md](790-monster-thrown-passive-proof-stale-target-2026-06-08.md): monster-thrown passive-object landings now reveal visible proofed floor-object protection and skip stale passive targets after lethal intervening cleanup.
+- [791-monster-thrown-passive-fire-material-2026-06-08.md](791-monster-thrown-passive-fire-material-2026-06-08.md): monster-thrown passive-object fire erosion now honors explicit projectile material and appearance naming for unidentified wooden projectiles.
 
 ## Cross-Cutting Themes
 
