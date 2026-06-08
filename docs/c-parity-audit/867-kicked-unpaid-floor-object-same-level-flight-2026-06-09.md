@@ -29,11 +29,11 @@
 
 - `command kicked unpaid floor object same-shop flight removes bill row` covers a real unpaid dagger bill row flying across the same shop: it lands, clears `unpaid`, removes the bill row, and creates no debit, loan, or robbed value.
 - `command kicked unpaid floor object leaving shop converts bill row to debt` covers the same unpaid dagger leaving the shop: it lands outside, clears the bill row, and charges the row price into `debit` with the C-style `for it!` message.
-- `command kicked box with unpaid contents remains unsupported` documents this slice boundary so paid/top-level container content billing does not silently enter the ordinary object path.
+- Audit 868 covers the former paid-container-with-unpaid-contents boundary with command canaries.
 
 ## Remaining follow-up
 
-- Paid boxes/containers with unpaid contents still need a command-level same-shop/leaving-shop audit because C distinguishes top-level `unpaid` from recursive `is_unpaid(container)`.
+- Paid boxes/containers with unpaid contents are covered by audit 868.
 - Obstruction/door "comes loose" kicks have a separate active `addtobill()` path and remain outside this slice.
 - Unpaid same-shop stacking interactions could use deeper canaries if future work starts changing floor-stack bill merging around kicked landings.
 

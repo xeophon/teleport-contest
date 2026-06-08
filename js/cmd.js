@@ -34614,12 +34614,19 @@ function kickFloorObjectSupported(obj) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj)) return false;
     const box = isBoxObject(obj);
+    const container = isTipContainerObject(obj);
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
     const contents = globContents(obj);
-    if ((!box && isTipContainerObject(obj)) || (!box && contents.length)) return false;
-    if (shopObjectOrContentsUnpaid(obj) && (!obj.unpaid || contents.length)
+    const unpaidContents = contents.some(child => shopObjectOrContentsUnpaid(child));
+    const paidContainerWithUnpaidContents = container && !obj.unpaid && unpaidContents;
+    if ((!box && container && !paidContainerWithUnpaidContents)
+        || (!box && contents.length && !paidContainerWithUnpaidContents)) return false;
+    const supportedTopLevelUnpaid = obj.unpaid && !contents.length;
+    if (shopObjectOrContentsUnpaid(obj)
+        && !supportedTopLevelUnpaid
+        && !paidContainerWithUnpaidContents
         && !fragileBreakKind)
         return false;
     if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
@@ -34840,9 +34847,7 @@ function chargeKickedObjectNormalFlightFromShop(obj, sx, sy, x, y, messages) {
     const shkp = kickedGoldSourceShopkeeper(sx, sy);
     if (!shkp) return null;
     if (shopObjectOrContentsUnpaid(obj)) {
-        const charged = convertUnpaidObjectToShopDebt(obj, { silent: false });
-        if (charged.message) messages.push(charged.message);
-        return charged;
+        return chargeKickedUnpaidObjectNormalFlightFromShop(obj, sx, sy, shkp, messages);
     }
     const wasNoCharge = !!obj.no_charge;
     const value = lostShopMerchandiseValueForObject({ ox: sx, oy: sy }, obj, shkp);
@@ -34865,6 +34870,34 @@ function chargeKickedObjectNormalFlightFromShop(obj, sx, sy, x, y, messages) {
         else if (remaining > 0) {
             const still = usedCredit ? 'still ' : '';
             messages.push(`You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)} for ${shopDebtObjectPronoun(obj)}!`);
+        }
+    }
+    return { charged: true, value, shkp, remaining };
+}
+
+function chargeKickedUnpaidObjectNormalFlightFromShop(obj, sx, sy, shkp, messages) {
+    const debtItems = collectObjectAndContentsShopDebtItems(obj, shkp);
+    const value = lostShopMerchandiseValueForObject({ ox: sx, oy: sy }, obj, shkp);
+    if (!(value > 0)) return { charged: false, value: 0, shkp };
+
+    const creditBefore = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    if (!peaceful) {
+        if (!game.u?.blind && cansee(shkp.mx, shkp.my))
+            messages.push(`${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`);
+        else if (!heroIsDeaf())
+            messages.push('You hear a scream, "Thief!"');
+    } else {
+        const usedCredit = creditBefore > Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+        if (usedCredit && shkp.credit > 0)
+            messages.push(`You have ${shkp.credit} ${shopCurrency(shkp.credit)} credit remaining.`);
+        else if (usedCredit && !remaining)
+            messages.push('You have no credit remaining.');
+        else if (remaining > 0) {
+            const still = usedCredit ? 'still ' : '';
+            const suffix = debtItems.length ? shopDebtContainerSuffix(obj, debtItems) : shopDebtObjectPronoun(obj);
+            messages.push(`You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)} for ${suffix}!`);
         }
     }
     return { charged: true, value, shkp, remaining };
@@ -35179,7 +35212,7 @@ async function kickFloorObjectToward(dir, x, y) {
             || heroProjectileSupportedWeaponObject(obj));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     const localBoxImpact = isBoxObject(obj);
-    const ordinarySameLevelFlight = !localBoxImpact && !fragileBreakKind && !targetMon;
+    const ordinarySameLevelFlight = !fragileBreakKind && !targetMon;
     if (!localBoxImpact && !gate && !canHandleMonsterImpact && !fragileBreakKind && !ordinarySameLevelFlight)
         return { handled: false };
 
@@ -35189,8 +35222,6 @@ async function kickFloorObjectToward(dir, x, y) {
         const boxImpact = applyKickedBoxImpact(obj, range, messages);
         if (boxImpact.handled)
             return { handled: true, messages, moved: false, trapResult: boxImpact.trapResult };
-        if (!gate && !canHandleMonsterImpact && !fragileBreakKind)
-            return { handled: true, messages, moved: false };
     }
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
