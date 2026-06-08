@@ -24,7 +24,7 @@ Extended focused command-path coverage in `test/shop-billing-helpers.test.mjs`:
 ## Remaining Gaps
 
 - Real `AD_STON` direct-melee passive consequences are covered separately in audit 777.
-- Stale wielded ordinary egg versus touch-petrifying targets remains a separate compact canary.
+- Stale ordinary egg versus touch-petrifying targets is covered separately in audit 778.
 
 ## Verification
 

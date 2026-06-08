@@ -48513,6 +48513,7 @@ function isPetrifyingEgg(item) {
 
 function isStaleEggItem(item) {
     if (!isEggItem(item)) return false;
+    if (item.staleEgg || item.oldEgg) return true;
     if (item.age == null) item.age = game.moves || 1;
     return (game.moves || 1) - item.age > 2 * MAX_EGG_HATCH_TIME;
 }
