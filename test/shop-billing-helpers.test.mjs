@@ -13549,6 +13549,20 @@ test('genocide pluralizes violet fungus with C suffix rule', async () => {
     assert.equal(game._genocided_monsters.includes('violet fungus'), true);
 });
 
+test('genocide pluralizes mumak with C one-off suffix', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31053, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('mumak');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all mumakil\./);
+    assert.doesNotMatch(message, /mumaks/);
+    assert.equal(game._genocided_monsters.includes('mumak'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

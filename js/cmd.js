@@ -31029,6 +31029,7 @@ function pluralizeMonsterName(name) {
     if (lower === 'elf') return 'elves';
     if (/fungus$/i.test(name)) return `${name.slice(0, -6)}fungi`;
     if (/culus$/i.test(name)) return `${name.slice(0, -5)}culi`;
+    if (/mumak$/i.test(name)) return `${name.slice(0, -5)}mumakil`;
     if (/rtex$/i.test(name)) return `${name.slice(0, -4)}rtices`;
     if (/ium$/i.test(name)) return `${name.slice(0, -3)}ia`;
     if (lower.endsWith('y')) return `${name.slice(0, -1)}ies`;
