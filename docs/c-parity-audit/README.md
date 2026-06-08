@@ -158,6 +158,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [750-direct-melee-xkilled-social-penalties-2026-06-08.md](750-direct-melee-xkilled-social-penalties-2026-06-08.md): direct hero melee tame-kill attribution, bounded luck, same-aligned unicorn guilt, and force-fight safe-pet bypass.
 - [751-direct-melee-lethal-peaceful-anger-2026-06-08.md](751-direct-melee-lethal-peaceful-anger-2026-06-08.md): direct hero melee lethal peaceful shopkeeper and watch anger fallout via C's `hmon()` guard snapshot.
 - [752-direct-melee-priest-ghod-hitsu-2026-06-08.md](752-direct-melee-priest-ghod-hitsu-2026-06-08.md): direct hero melee lethal priest `hmon()` wrapper-tail shrine retaliation gate, deity message, and Wisdom exercise.
+- [753-direct-melee-priest-wakeup-ghod-hitsu-2026-06-08.md](753-direct-melee-priest-wakeup-ghod-hitsu-2026-06-08.md): direct hero melee nonlethal peaceful priest wakeup anger, unconditional temple `ghod_hitsu()`, and wrapper-roll second retaliation.
 
 ## Cross-Cutting Themes
 

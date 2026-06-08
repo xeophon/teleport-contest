@@ -38,7 +38,7 @@ Focused regression coverage in `test/shop-billing-helpers.test.mjs` now asserts:
 ## Deferred Gaps
 
 - Full `buzz()` lightning physics remain a shared ray-work follow-up: reflection, collision, range RNG, flash blindness, shock resistance, inventory destruction, terrain, and monster interception are not modeled by this narrow helper.
-- Surviving peaceful priest hits still need the C `wakeup(mon, TRUE)` path: make the priest angry, run the unconditional temple `ghod_hitsu()`, then allow the wrapper `!rn2(2)` second retaliation.
+- Surviving peaceful priest hit wakeup/retaliation is covered by follow-up audit 753; the remaining priest work is in the full lightning ray and broader cleanup paths below.
 - Priest-specific `xkilled()` alignment/protection cleanup from `mon.c` remains separate from this `hmon()` wrapper-tail slice.
 - The C room-edge fallback for non-lined-up shrine lightning origins is deferred until room geometry and ray traversal are centralized.
 

@@ -75841,7 +75841,7 @@ test('direct hero melee lethal peaceful shopkeeper angers town watch by snapshot
     assert.equal(guard.angry, true);
 });
 
-function installDirectMeleeTemplePriest({ weaponId = 876812 } = {}) {
+function installDirectMeleeTemplePriest({ weaponId = 876812, priestHp = 1, priestMaxHp = 3 } = {}) {
     installStableNonShopFloorState();
     Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
     game.u.acurr.a[A_STR] = 10;
@@ -75853,8 +75853,8 @@ function installDirectMeleeTemplePriest({ weaponId = 876812 } = {}) {
     delete game._direct_melee_priest_lightning;
     const blade = wieldedWeapon(weaponId, 'dagger', 'd', 0);
     const priest = ordinaryThrowTarget('aligned cleric', 6, 5, {
-        mhp: 1,
-        mhpmax: 3,
+        mhp: priestHp,
+        mhpmax: priestMaxHp,
         msleeping: 0,
         mcanmove: true,
         mpeaceful: 1,
@@ -75913,6 +75913,63 @@ test('direct hero melee lethal temple priest requires shrine altar for ghod_hits
     assert.equal(game._pending_message, 'You kill the aligned cleric!');
     assert.equal(game.level.monsters.includes(priest), false);
     assert.equal(priest.dead, true);
+    assert.equal(game.u._aexe[A_WIS], 0);
+    assert.equal(game._direct_melee_priest_lightning, undefined);
+});
+
+test('direct hero melee nonlethal peaceful temple priest wakes angry and triggers ghod_hitsu', async () => {
+    const { priest } = installDirectMeleeTemplePriest({ weaponId: 876815, priestHp: 20, priestMaxHp: 20 });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 0, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the aligned cleric.  The aligned cleric gets angry!  Mitra\'s voice booms:  "How darest thou harm my servant!"');
+    assert.equal(game.level.monsters.includes(priest), true);
+    assert.equal(priest.dead, undefined);
+    assert.equal(priest.mpeaceful, 0);
+    assert.equal(priest.hostile, true);
+    assert.equal(priest.angry, true);
+    assert.equal(game.u.ualign.record, -5);
+    assert.equal(game.u.ualign.abuse, 5);
+    assert.equal(game.u._aexe[A_WIS], 0);
+    assert.deepEqual(game._direct_melee_priest_lightning, { x: 6, y: 6, dx: -1, dy: -1 });
+});
+
+test('direct hero melee nonlethal peaceful temple priest can trigger wakeup and wrapper ghod_hitsu', async () => {
+    const { priest } = installDirectMeleeTemplePriest({ weaponId: 876816, priestHp: 20, priestMaxHp: 20 });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the aligned cleric.  The aligned cleric gets angry!  Mitra\'s voice booms:  "How darest thou harm my servant!"  Mitra roars in anger:  "Thou shalt suffer!"');
+    assert.equal(game.level.monsters.includes(priest), true);
+    assert.equal(priest.dead, undefined);
+    assert.equal(priest.mpeaceful, 0);
+    assert.equal(priest.hostile, true);
+    assert.equal(priest.angry, true);
+    assert.equal(game.u.ualign.record, -5);
+    assert.equal(game.u.ualign.abuse, 5);
+    assert.equal(game.u._aexe[A_WIS], 0);
+    assert.deepEqual(game._direct_melee_priest_lightning, { x: 6, y: 6, dx: -1, dy: -1 });
+});
+
+test('direct hero melee nonlethal peaceful temple priest requires shrine for ghod_hitsu', async () => {
+    const { priest } = installDirectMeleeTemplePriest({ weaponId: 876817, priestHp: 20, priestMaxHp: 20 });
+    const altarLoc = game.level.at(priest.shrine.x, priest.shrine.y);
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 0, 0, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the aligned cleric.  The aligned cleric gets angry!');
+    assert.equal(game.level.monsters.includes(priest), true);
+    assert.equal(priest.dead, undefined);
+    assert.equal(priest.mpeaceful, 0);
+    assert.equal(priest.hostile, true);
+    assert.equal(priest.angry, true);
+    assert.equal(game.u.ualign.record, -5);
+    assert.equal(game.u.ualign.abuse, 5);
     assert.equal(game.u._aexe[A_WIS], 0);
     assert.equal(game._direct_melee_priest_lightning, undefined);
 });

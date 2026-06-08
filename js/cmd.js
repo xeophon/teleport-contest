@@ -22916,6 +22916,46 @@ function directMeleePriestRetaliation(messages, priest) {
     return true;
 }
 
+function directMeleePriestInTempleRoom(priest) {
+    const loc = game.level?.at?.(priest?.mx, priest?.my);
+    const room = levelRoomByRoomno(loc?.roomno || 0);
+    return !!room && room.rtype === TEMPLE;
+}
+
+function directMeleeAngerPeacefulPriest(priest, messages, { visible = false } = {}) {
+    if (!priest?.ispriest || !priest.mpeaceful) return false;
+    priest.msleeping = 0;
+    if (priest.meating !== undefined) priest.meating = 0;
+    clearDirectMeleeWaitStrategyMask(priest);
+    priest.mpeaceful = 0;
+    priest.hostile = true;
+    priest.angry = true;
+    if (game.u?.ualign) {
+        const coaligned = Number(game.u.ualign.type ?? A_NEUTRAL) === tipHatPriestAlign(priest);
+        game.u.ualign.record = (game.u.ualign.record || 0) + (coaligned ? -5 : 2);
+        if (coaligned) game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 5;
+    }
+    if (visible) messages.push(`${fireScrollMonsterName(priest)} gets angry!`);
+    if (directMeleePriestInTempleRoom(priest))
+        directMeleePriestRetaliation(messages, priest);
+    return true;
+}
+
+function directMeleeNonlethalHmonTail(mon, messages, preHitState, {
+    visible = false,
+    angerTownWatch = false,
+    silentGuards = false,
+} = {}) {
+    if (!mon) return false;
+    if (preHitState?.mpeaceful && mon.ispriest && mon.mpeaceful)
+        directMeleeAngerPeacefulPriest(mon, messages, { visible });
+    if (mon.ispriest && !rn2(2))
+        directMeleePriestRetaliation(messages, mon);
+    if (angerTownWatch)
+        directMeleeAngerTownWatch(messages, { silent: silentGuards });
+    return true;
+}
+
 function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
     if (!killAccessible || !treasureDrop) return;
     if (corpseData.noCorpse || corpseData !== data) return;
@@ -54030,6 +54070,7 @@ async function moveHero(dx, dy) {
         let killingAttackWeapon = null;
         let killedByNormalMelee = false;
         let directMeleeHit = false;
+        let directMeleeNonlethalTailApplied = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
             const attackWeapon = attackWeapons[attackIndex];
             const weaponName = attackWeapon?.kind || attackWeapon?.name || (typeof attackWeapon?.otyp === 'string' ? attackWeapon.otyp : '');
@@ -54175,6 +54216,14 @@ async function moveHero(dx, dy) {
             const hitPunctuation = game.flags?.verbose === false || swallowedMove ? '.' : damage > 4 ? '!' : '.';
             messages.push(`You hit ${hitPhrase}${hitPunctuation}`);
             applyConfuseMonsterOnHit(mon, messages, targetPhrase);
+            if (directMeleeHit && (mon.ispriest || angerTownWatchAfterHit)) {
+                directMeleeNonlethalHmonTail(mon, messages, directMeleePreHitState, {
+                    visible: targetSpotted,
+                    angerTownWatch: angerTownWatchAfterHit,
+                    silentGuards: heroIsDeaf(),
+                });
+                directMeleeNonlethalTailApplied = true;
+            }
             let directPassiveObjectApplied = false;
             if (attackIndex === 0) {
                 if (attackWeapon && damage > 1 && !twoWeaponActive) {
@@ -54239,8 +54288,12 @@ async function moveHero(dx, dy) {
                     mon._distfleeck_done_after_anger = 1;
                 }
             }
-            if (directMeleeHit && angerTownWatchAfterHit)
-                directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() });
+            if (directMeleeHit && !directMeleeNonlethalTailApplied && (mon.ispriest || angerTownWatchAfterHit))
+                directMeleeNonlethalHmonTail(mon, messages, directMeleePreHitState, {
+                    visible: targetSpotted,
+                    angerTownWatch: angerTownWatchAfterHit,
+                    silentGuards: heroIsDeaf(),
+                });
             const potionCallPrompt = game._command_mode === 'callPotionAfterMore';
             await setMessage(messages.join('  '), potionCallPrompt || peacefulShopkeeper || wokeByHit);
             if (continuePeacefulShopkeeperTurn) {
