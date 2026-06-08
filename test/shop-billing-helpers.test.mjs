@@ -76314,6 +76314,109 @@ test('direct hero melee current quest leader bystander can gasp then shrug', asy
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee current quest leader bystander angers for role guardian target', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876859,
+        name: 'apprentice',
+        dataExtra: {
+            name: 'apprentice',
+            mlevel: 5,
+            mlet: '@',
+            humanoid: true,
+            msound: 'MS_GUARDIAN',
+            guardian: true,
+            maligntyp: 0,
+        },
+    });
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    const bystander = ordinaryThrowTarget('Neferet the Green', 5, 6, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: {
+            name: 'Neferet the Green',
+            mlevel: 20,
+            mlet: '@',
+            humanoid: true,
+            msound: 'MS_LEADER',
+            unique: true,
+            properName: true,
+            maligntyp: 0,
+        },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the apprentice.  The apprentice gets angry!  Neferet the Green gasps.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 0);
+    assert.equal(bystander.hostile, true);
+    assert.equal(bystander.angry, true);
+    assert.equal(bystander.mstrategy, 0);
+    assert.equal(game.u.ualign.record, -2);
+    assert.equal(game.u.ualign.abuse, 2);
+});
+
+test('direct hero melee deaf quest leader bystander angers silently for role guardian target', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876860,
+        name: 'apprentice',
+        dataExtra: {
+            name: 'apprentice',
+            mlevel: 5,
+            mlet: '@',
+            humanoid: true,
+            msound: 'MS_GUARDIAN',
+            guardian: true,
+            maligntyp: 0,
+        },
+    });
+    game.urole = { ...(game.urole || {}), name: { m: 'Wizard', f: 'Wizard' } };
+    game.u._statusSuffix = ' Deaf';
+    const bystander = ordinaryThrowTarget('Neferet the Green', 5, 6, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: {
+            name: 'Neferet the Green',
+            mlevel: 20,
+            mlet: '@',
+            humanoid: true,
+            msound: 'MS_LEADER',
+            unique: true,
+            properName: true,
+            maligntyp: 0,
+        },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the apprentice.  The apprentice gets angry!  Neferet the Green gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 0);
+    assert.equal(bystander.hostile, true);
+    assert.equal(bystander.angry, true);
+    assert.equal(bystander.mstrategy, 0);
+    assert.equal(game.u.ualign.record, -2);
+    assert.equal(game.u.ualign.abuse, 2);
+});
+
 test('direct hero melee shopkeeper bystander can gasp then shrug', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876852 });
     const bystander = ordinaryThrowTarget('shopkeeper', 5, 6, {

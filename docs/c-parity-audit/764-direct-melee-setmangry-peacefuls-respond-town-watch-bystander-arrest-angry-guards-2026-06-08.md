@@ -15,7 +15,7 @@ Covered behavior:
 - a Deaf hero still receives the arrest `verbalize()` text, but the `angry_guards()` feedback is silent while the guard-state mutation still happens;
 - the watch branch consumes no `peacefuls_respond()` gasp, flee, or timer RNG.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, tame bystander behavior, or current quest-leader guardian-target anger. The nonhumanoid same-species response branch is covered by audit 765.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or tame bystander behavior. The nonhumanoid same-species response branch is covered by audit 765, and current quest-leader guardian-target anger is covered by audit 766.
 
 C anchors:
 
@@ -35,7 +35,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 
 ## Deferred Gaps
 
-- Current quest-leader anger when the attacked target is the role guardian is still deferred.
+- Current quest-leader anger when the attacked target is the role guardian is covered by audit 766.
 - Tame humanoid bystanders, existing-fleeing wording outside the nonhumanoid same-species branch, and all `flags.verbose` branches remain outside this slice. Nonhumanoid same-species growl/flee behavior and its local `monflee()` timer are covered by audit 765.
 - The local `angry_guards()` helper preserves the current JS hostile/angry fields expected by existing tests, while broader C `canspotmon()` sensory parity remains display/sensing work.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.

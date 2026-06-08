@@ -35,7 +35,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 ## Deferred Gaps
 
 - Town watch arrest and `angry_guards()` are covered by audit 764.
-- Current quest-leader anger when the attacked target is the role guardian is still deferred.
+- Current quest-leader anger when the attacked target is the role guardian is covered by audit 766.
 - Tame humanoid bystanders, existing-fleeing wording outside the nonhumanoid same-species branch, and all `flags.verbose` branches remain outside this slice. Nonhumanoid same-species growl/flee behavior and its local `monflee()` timer are covered by audit 765.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.

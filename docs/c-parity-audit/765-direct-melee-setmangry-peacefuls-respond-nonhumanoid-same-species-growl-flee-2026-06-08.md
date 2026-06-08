@@ -15,7 +15,7 @@ Covered behavior:
 - a silent same-species bystander can still reuse the attacked target's prior growl message classification and print `And then starts to flee.`, matching C's `iflags.last_msg == PLNMSG_GROWL` check after a silent `growl()` return;
 - bystanders stay peaceful and do not get hostile/angry fields or additional alignment penalties.
 
-This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, current quest-leader guardian-target anger, or broader tame/humanoid bystander edge cases.
+This remains local to ordinary direct melee survivor hits. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, monster-moving `setmangry()` calls, or broader tame/humanoid bystander edge cases. Current quest-leader guardian-target anger is covered by audit 766.
 
 C anchors:
 
@@ -37,7 +37,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 
 ## Deferred Gaps
 
-- Current quest-leader anger when the attacked target is the role guardian is still deferred.
+- Current quest-leader anger when the attacked target is the role guardian is covered by audit 766.
 - Tame humanoid bystanders, existing-fleeing wording variants, hallucinated growl verb tables, vrock gas-cloud side effects, gremlin light artifacts, and all `flags.verbose` branches remain outside this slice.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.
