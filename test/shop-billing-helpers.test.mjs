@@ -13712,6 +13712,78 @@ test('blessed genocide refuses C non-G_GENO angel class', async () => {
         assert.notEqual(game._genocided_monsters?.includes(name), true);
 });
 
+test('genocide refuses C non-G_GENO elemental', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31076, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('air elemental');
+
+    const message = game._pending_message || '';
+    assert.match(message, /A thunderous voice booms through the caverns:/);
+    assert.match(message, /"No, mortal!  That will not be done\."/);
+    assert.doesNotMatch(message, /Wiped out all air elementals/);
+    assert.equal(game._command_mode, 'genocideText');
+    assert.notEqual(game._genocided_monsters?.includes('air elemental'), true);
+});
+
+test('genocide refuses C non-G_GENO golem', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31077, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('stone golem');
+
+    const message = game._pending_message || '';
+    assert.match(message, /A thunderous voice booms through the caverns:/);
+    assert.match(message, /"No, mortal!  That will not be done\."/);
+    assert.doesNotMatch(message, /Wiped out all stone golems/);
+    assert.equal(game._command_mode, 'genocideText');
+    assert.notEqual(game._genocided_monsters?.includes('stone golem'), true);
+});
+
+test('blessed genocide skips C non-G_GENO elemental class members', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31078, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('E');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all stalkers\./);
+    assert.doesNotMatch(message, /You aren't permitted to genocide such monsters\./);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('stalker'), true);
+    for (const name of ['air elemental', 'fire elemental', 'earth elemental', 'water elemental']) {
+        assert.match(message, new RegExp(`You aren't permitted to genocide ${name}s\\.`));
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+    }
+});
+
+test('blessed genocide refuses C non-G_GENO golem class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31079, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse("'");
+
+    const message = game._pending_message || '';
+    assert.match(message, /You aren't permitted to genocide such monsters\./);
+    assert.match(message, /What class of monsters do you want to genocide\?/);
+    assert.doesNotMatch(message, /Wiped out all/);
+    assert.equal(game._command_mode, 'genocideText');
+    for (const name of [
+        'straw golem', 'paper golem', 'rope golem', 'gold golem',
+        'leather golem', 'wood golem', 'flesh golem', 'clay golem',
+        'stone golem', 'glass golem', 'iron golem',
+    ])
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

@@ -31006,7 +31006,13 @@ const GENOCIDE_EXTRA_MONSTER_NAMES = [
     'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
     'electric eel', 'kraken', 'giant', 'minotaur', 'water troll',
 ];
-const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set(['couatl', 'aleax', 'angel', 'ki-rin', 'archon']);
+const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
+    'couatl', 'aleax', 'angel', 'ki-rin', 'archon',
+    'air elemental', 'fire elemental', 'earth elemental', 'water elemental',
+    'straw golem', 'paper golem', 'rope golem', 'gold golem',
+    'leather golem', 'wood golem', 'flesh golem', 'clay golem',
+    'stone golem', 'glass golem', 'iron golem',
+]);
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 
@@ -31517,7 +31523,11 @@ async function finishGenocideInput(raw) {
             return;
         }
         let wiped = 0;
-        for (const data of eligibleMembers) {
+        for (const data of members) {
+            if (isMonsterForbiddenForGenocideName(data.name)) {
+                messages.push(`You aren't permitted to genocide ${pluralizeMonsterName(data.name)}.`);
+                continue;
+            }
             if (isMonsterGenocidedName(data.name) || data.unique || data.nemesis) continue;
             genocideMonsterType(data, messages, { classMode: true });
             wiped++;
