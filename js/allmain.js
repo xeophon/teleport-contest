@@ -8763,6 +8763,7 @@ export async function processMonsterTurns() {
                                         && monsterThrownObjectIsPoisonable(thrownMissile));
                                     const hitRoll = rnd(20);
                                     const missed = (game.u?.uac ?? 10) + hitv <= hitRoll;
+                                    const physicalLethalHit = !missed && dartDamage >= (game.u?.uhp || 0);
                                     const deferHeroHit = throwerVisible || (!missed && poisonedHeroHit);
                                     let resultMessage = game.u?.blind || game.flags?.verbose === false
                                         ? 'You are hit.'
@@ -8777,7 +8778,22 @@ export async function processMonsterTurns() {
                                     if (throwerVisible) game._topline_after_more = resultMessage;
                                     else addToplineMessage(resultMessage);
                                     if (!missed) {
-                                        if (deferHeroHit) {
+                                        if (physicalLethalHit) {
+                                            game._lethal_arrow_after_topline_more = {
+                                                damage: dartDamage,
+                                                holdStatusHp: (game.u?.uhp || 0) - dartDamage === -1,
+                                                currentMove: true,
+                                                deathCleanupThrownObject: thrownMissile,
+                                                deathCleanupGlyph: thrownMissile.glyph || ')',
+                                                deathCleanupColor: CLR_CYAN,
+                                                deathCause: `killed by ${dartArticle} ${dartKillerName}`,
+                                            };
+                                            game._death_cause = `killed by ${dartArticle} ${dartKillerName}`;
+                                            if (!throwerVisible) {
+                                                game._message_more = 1;
+                                                game._keep_pending_message = 1;
+                                            }
+                                        } else if (deferHeroHit) {
                                             game._damage_after_topline_more = (game._damage_after_topline_more || 0) + dartDamage;
                                             game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                                             if (poisonedHeroHit) {
@@ -8797,12 +8813,14 @@ export async function processMonsterTurns() {
                                     } else {
                                         rn2(5);
                                     }
-                                    finishMonsterThrownHeroLanding(thrownMissile, {
-                                        glyph: ')',
-                                        color: CLR_CYAN,
-                                        ohit: !missed,
-                                        afterMore: missed ? throwerVisible : deferHeroHit,
-                                    });
+                                    if (!physicalLethalHit) {
+                                        finishMonsterThrownHeroLanding(thrownMissile, {
+                                            glyph: ')',
+                                            color: CLR_CYAN,
+                                            ohit: !missed,
+                                            afterMore: missed ? throwerVisible : deferHeroHit,
+                                        });
+                                    }
                                 }
                             }
                             if (!finishDartThrowAction()) return false;

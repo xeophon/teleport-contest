@@ -55939,6 +55939,74 @@ test('production visible poisoned kobold dart catch skips poison effects', async
     assert.equal(caught.quan, 1);
 });
 
+test('production visible lethal kobold dart uses projectile death cleanup without drop-throw', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        heroHp: 2,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a dart\./);
+    assert.equal(game.u.uhp, 2, rawRng.join(', '));
+    assert.equal(game._death_cause, 'killed by a dart');
+    assert.ok(game._deferred_lethal_attack_after_more, rawRng.join(', '));
+    assert.equal(game._monster_throw_after_more ?? null, null);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === dart.id && !obj.transientProjectile), false);
+
+    assert.ok(rawRng.includes('rnd(3)=2'), rawRng.join(', '));
+    assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+
+    await rhack('\x1b');
+    resetInputState();
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._pending_message, 'You die...');
+    assert.equal(game.u.uhp, 0);
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, getRngLog().join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'dart');
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(landed._deathCleanupThrownObject, true);
+    assert.equal(getRngLog().some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        getRngLog().join(', '));
+});
+
+test('production unseen lethal kobold dart uses deferred death cleanup after hit more', async () => {
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroHp: 2,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /You are hit\./);
+    assert.equal(game._death_cause, 'killed by a dart');
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._pending_message, 'You die...');
+    assert.equal(game.u.uhp, 0, rawRng.join(', '));
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, getRngLog().join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'dart');
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(landed._deathCleanupThrownObject, true);
+});
+
 test('production visible kobold dart catch retains split dart in inventory', async () => {
     const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
         seed: 1,

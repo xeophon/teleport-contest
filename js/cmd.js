@@ -38962,6 +38962,15 @@ export function landMonsterThrownObject(missile, x, y, {
     };
 }
 
+function promoteLethalProjectileAfterMore() {
+    if (!game._lethal_arrow_after_topline_more) return false;
+    const lethalArrow = game._lethal_arrow_after_topline_more;
+    game._deferred_lethal_attack_after_more = lethalArrow;
+    game._lethal_arrow_after_topline_more = null;
+    game._death_cause = lethalArrow.deathCause || game._death_cause || 'killed by an arrow';
+    return true;
+}
+
 // C done_object_cleanup() salvages gt.thrownobj for bones without drop_throw().
 function deathCleanupThrownObjectLandingSpot() {
     const ux = game.u?.ux || 0;
@@ -58037,6 +58046,7 @@ export async function rhack(_cmd) {
                 game._keep_pending_message = 1;
                 return;
             }
+            if (!game._topline_after_more) promoteLethalProjectileAfterMore();
             const deferredAttackAfterMore = game._deferred_attack_damage_after_more || game._deferred_lethal_attack_after_more;
             if (deferredAttackAfterMore) {
                 const attack = deferredAttackAfterMore;
@@ -58203,11 +58213,7 @@ export async function rhack(_cmd) {
                             game._cold_destroy_after_topline_more = null;
                             if (coldLevel > rn2(20)) rn2(5);
                         }
-                if (game._lethal_arrow_after_topline_more) {
-                    const lethalArrow = game._lethal_arrow_after_topline_more;
-                    game._deferred_lethal_attack_after_more = lethalArrow;
-                    game._lethal_arrow_after_topline_more = null;
-                    game._death_cause = lethalArrow.deathCause || game._death_cause || 'killed by an arrow';
+                if (promoteLethalProjectileAfterMore()) {
                     keepMore = true;
                 }
 		                if (game._damage_after_topline_more) {
