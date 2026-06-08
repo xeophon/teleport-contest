@@ -75974,6 +75974,78 @@ test('direct hero melee nonlethal peaceful temple priest requires shrine for gho
     assert.equal(game._direct_melee_priest_lightning, undefined);
 });
 
+function installDirectMeleePeacefulSurvivor({
+    weaponId = 876818,
+    name = 'goblin',
+    monsterExtra = {},
+    dataExtra = {},
+} = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = wieldedWeapon(weaponId, 'dagger', 'd', 0);
+    const mon = ordinaryThrowTarget(name, 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 0,
+        meating: 3,
+        mcanmove: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        data: { name, mlevel: 1, mlet: 'o', humanoid: true, maligntyp: -1, ...dataExtra },
+        ...monsterExtra,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [mon];
+    game._force_fight_target = mon;
+    markSquareVisible(6, 5);
+    return { mon };
+}
+
+test('direct hero melee surviving peaceful non-priest wakes angry', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor();
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin gets angry!');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee surviving tame target preserves peacefulness', async () => {
+    const { mon: dog } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876819,
+        name: 'little dog',
+        monsterExtra: { mtame: 5, pet: true },
+        dataExtra: { mlet: 'd', humanoid: false, mmove: 18, maligntyp: 0 },
+    });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit the little dog\./);
+    assert.doesNotMatch(game._pending_message, /gets angry/);
+    assert.equal(game.level.monsters.includes(dog), true);
+    assert.equal(dog.dead, undefined);
+    assert.equal(dog.mpeaceful, 1);
+    assert.equal(dog.hostile, undefined);
+    assert.equal(dog.angry, undefined);
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(dog.meating, 0);
+    assert.equal(game.u.ualign.record, 0);
+    assert.equal(game.u.ualign.abuse, 0);
+});
+
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
     const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
 

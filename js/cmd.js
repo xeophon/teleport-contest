@@ -22922,33 +22922,77 @@ function directMeleePriestInTempleRoom(priest) {
     return !!room && room.rtype === TEMPLE;
 }
 
-function directMeleeAngerPeacefulPriest(priest, messages, { visible = false } = {}) {
-    if (!priest?.ispriest || !priest.mpeaceful) return false;
-    priest.msleeping = 0;
-    if (priest.meating !== undefined) priest.meating = 0;
-    clearDirectMeleeWaitStrategyMask(priest);
-    priest.mpeaceful = 0;
-    priest.hostile = true;
-    priest.angry = true;
+function directMeleeGrowlVerb(mon) {
+    const sound = String(mon?.data?.msound || mon?.msound || '').toLowerCase();
+    if (sound.includes('hiss') || sound.includes('mew')) return 'hisses';
+    if (sound.includes('roar')) return 'roars';
+    if (sound.includes('bellow')) return 'bellows';
+    if (sound.includes('buzz')) return 'buzzes';
+    if (sound.includes('squawk')) return 'screeches';
+    if (sound.includes('sq') || sound.includes('sque')) return 'squeals';
+    if (sound.includes('neigh')) return 'neighs';
+    if (sound.includes('wail')) return 'wails';
+    if (sound.includes('groan')) return 'groans';
+    if (sound.includes('moo')) return 'lows';
+    if (sound.includes('silent')) return '';
+    return 'growls';
+}
+
+function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}) {
+    if (!mon?.mpeaceful) return false;
+    mon.msleeping = 0;
+    if (mon.meating !== undefined) mon.meating = 0;
+    clearDirectMeleeWaitStrategyMask(mon);
+    if (mon.mtame || mon.pet) return false;
+    mon.mpeaceful = 0;
+    mon.hostile = true;
+    mon.angry = true;
     if (game.u?.ualign) {
-        const coaligned = Number(game.u.ualign.type ?? A_NEUTRAL) === tipHatPriestAlign(priest);
-        game.u.ualign.record = (game.u.ualign.record || 0) + (coaligned ? -5 : 2);
-        if (coaligned) game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 5;
+        if (mon.ispriest) {
+            const coaligned = Number(game.u.ualign.type ?? A_NEUTRAL) === tipHatPriestAlign(mon);
+            game.u.ualign.record = (game.u.ualign.record || 0) + (coaligned ? -5 : 2);
+            if (coaligned) game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 5;
+        } else {
+            game.u.ualign.record = (game.u.ualign.record || 0) - 1;
+            game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 1;
+        }
     }
-    if (visible) messages.push(`${fireScrollMonsterName(priest)} gets angry!`);
-    if (directMeleePriestInTempleRoom(priest))
-        directMeleePriestRetaliation(messages, priest);
+    if (visible) {
+        if (mon.data?.humanoid || mon.isshk || mon.isgd || mon.ispriest) {
+            messages.push(`${fireScrollMonsterName(mon)} gets angry!`);
+        } else {
+            const verb = directMeleeGrowlVerb(mon);
+            if (verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+        }
+    }
     return true;
 }
 
-function directMeleeNonlethalHmonTail(mon, messages, preHitState, {
+function directMeleeAngerPeacefulPriest(priest, messages, { visible = false } = {}) {
+    if (!priest?.ispriest) return false;
+    const angered = directMeleeAngerPeacefulMonster(priest, messages, { visible });
+    if (angered && directMeleePriestInTempleRoom(priest))
+        directMeleePriestRetaliation(messages, priest);
+    return angered;
+}
+
+function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
+    ordinaryPeaceful = false,
     visible = false,
+} = {}) {
+    if (!mon) return false;
+    if (preHitState?.mpeaceful && mon.mpeaceful) {
+        if (mon.ispriest) directMeleeAngerPeacefulPriest(mon, messages, { visible });
+        else if (ordinaryPeaceful) directMeleeAngerPeacefulMonster(mon, messages, { visible });
+    }
+    return true;
+}
+
+function directMeleeNonlethalWrapperTail(mon, messages, {
     angerTownWatch = false,
     silentGuards = false,
 } = {}) {
     if (!mon) return false;
-    if (preHitState?.mpeaceful && mon.ispriest && mon.mpeaceful)
-        directMeleeAngerPeacefulPriest(mon, messages, { visible });
     if (mon.ispriest && !rn2(2))
         directMeleePriestRetaliation(messages, mon);
     if (angerTownWatch)
@@ -54023,9 +54067,11 @@ async function moveHero(dx, dy) {
         if (!swallowedMove) wipe_engr_at(oldx, oldy, 3, false);
         const strengthDamageBonus = str < 6 ? -1 : str < 16 ? 0 : str < 18 ? 1 : str === 18 ? 2
             : str <= 93 ? 3 : str <= 108 ? 4 : str < 118 ? 5 : 6;
-        const messages = game._hero_melee_prefix_messages
+        const directMeleePrefixMessages = game._hero_melee_prefix_messages
             ? [...game._hero_melee_prefix_messages]
-            : [];
+            : null;
+        const directMeleeFromSpecialApply = !!directMeleePrefixMessages?.length;
+        const messages = directMeleePrefixMessages ? [...directMeleePrefixMessages] : [];
         game._hero_melee_prefix_messages = null;
         if (caitiffAttack) {
             messages.push('You caitiff!');
@@ -54070,7 +54116,9 @@ async function moveHero(dx, dy) {
         let killingAttackWeapon = null;
         let killedByNormalMelee = false;
         let directMeleeHit = false;
-        let directMeleeNonlethalTailApplied = false;
+        let directMeleeOrdinaryPeacefulWakeupAllowed = false;
+        let directMeleeNonlethalWakeupApplied = false;
+        let directMeleeNonlethalWrapperApplied = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
             const attackWeapon = attackWeapons[attackIndex];
             const weaponName = attackWeapon?.kind || attackWeapon?.name || (typeof attackWeapon?.otyp === 'string' ? attackWeapon.otyp : '');
@@ -54151,6 +54199,8 @@ async function moveHero(dx, dy) {
                 if (killed) break;
                 continue;
             }
+            if (!directMeleeFromSpecialApply && !directMeleePreHitState?.msleeping)
+                directMeleeOrdinaryPeacefulWakeupAllowed = true;
             if (attackWeapon && !game._chronicle_first_weapon_hit) {
                 game._chronicle_entries ??= [];
                 game._chronicle_entries.push({ turn: game.moves || 1, text: `hit with a wielded weapon (${weaponName || 'weapon'}) for the first time` });
@@ -54216,19 +54266,28 @@ async function moveHero(dx, dy) {
             const hitPunctuation = game.flags?.verbose === false || swallowedMove ? '.' : damage > 4 ? '!' : '.';
             messages.push(`You hit ${hitPhrase}${hitPunctuation}`);
             applyConfuseMonsterOnHit(mon, messages, targetPhrase);
-            if (directMeleeHit && (mon.ispriest || angerTownWatchAfterHit)) {
-                directMeleeNonlethalHmonTail(mon, messages, directMeleePreHitState, {
+            if (directMeleeHit
+                && ((directMeleePreHitState?.mpeaceful
+                    && (mon.ispriest || directMeleeOrdinaryPeacefulWakeupAllowed))
+                    || mon.ispriest || angerTownWatchAfterHit)) {
+                directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
+                    ordinaryPeaceful: directMeleeOrdinaryPeacefulWakeupAllowed,
                     visible: targetSpotted,
-                    angerTownWatch: angerTownWatchAfterHit,
-                    silentGuards: heroIsDeaf(),
                 });
-                directMeleeNonlethalTailApplied = true;
+                directMeleeNonlethalWakeupApplied = true;
             }
             let directPassiveObjectApplied = false;
             if (attackIndex === 0) {
                 if (attackWeapon && damage > 1 && !twoWeaponActive) {
                     rn2(3);
                     rn2(6);
+                }
+                if (directMeleeHit && (mon.ispriest || angerTownWatchAfterHit)) {
+                    directMeleeNonlethalWrapperTail(mon, messages, {
+                        angerTownWatch: angerTownWatchAfterHit,
+                        silentGuards: heroIsDeaf(),
+                    });
+                    directMeleeNonlethalWrapperApplied = true;
                 }
 	                if (!deferSleepingTwoWeapon) {
 	                    const fleeRoll = rn2(25);
@@ -54280,7 +54339,7 @@ async function moveHero(dx, dy) {
                     processTime: true,
                 });
             }
-            if (peacefulShopkeeper) {
+            if (peacefulShopkeeper && mon.mpeaceful) {
                 mon.mpeaceful = 0;
                 messages.push(`${name} gets angry!`);
                 if (!continuePeacefulShopkeeperTurn) {
@@ -54288,9 +54347,16 @@ async function moveHero(dx, dy) {
                     mon._distfleeck_done_after_anger = 1;
                 }
             }
-            if (directMeleeHit && !directMeleeNonlethalTailApplied && (mon.ispriest || angerTownWatchAfterHit))
-                directMeleeNonlethalHmonTail(mon, messages, directMeleePreHitState, {
+            if (directMeleeHit && !directMeleeNonlethalWakeupApplied
+                && ((directMeleePreHitState?.mpeaceful
+                    && (mon.ispriest || directMeleeOrdinaryPeacefulWakeupAllowed))
+                    || mon.ispriest || angerTownWatchAfterHit))
+                directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
+                    ordinaryPeaceful: directMeleeOrdinaryPeacefulWakeupAllowed,
                     visible: targetSpotted,
+                });
+            if (directMeleeHit && !directMeleeNonlethalWrapperApplied && (mon.ispriest || angerTownWatchAfterHit))
+                directMeleeNonlethalWrapperTail(mon, messages, {
                     angerTownWatch: angerTownWatchAfterHit,
                     silentGuards: heroIsDeaf(),
                 });
