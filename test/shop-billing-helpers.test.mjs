@@ -77642,6 +77642,40 @@ test('direct hero melee against acid passive can corrode wielded weapon', async 
     assert.match(log[log.length - 1], /^rn2\(3\)=/);
 });
 
+test('direct hero melee acid-passive jelly fallback corrodes wielded weapon', async () => {
+    for (const [index, name] of ['spotted jelly', 'ochre jelly'].entries()) {
+        installNonShopFloorState();
+        installCoreRngValues([0, 0, 0, 0, 0]);
+        game.flags.verbose = false;
+        game.u.acurr.a[A_DEX] = 25;
+        const blade = wieldedWeapon(876760 + index, 'dagger', 'd', 0);
+        const target = ordinaryThrowTarget(name, 6, 5, {
+            m_lev: 5 + index,
+            mhp: 50,
+            mhpmax: 50,
+            msleeping: 0,
+            mpeaceful: false,
+            data: { name, mlevel: 5 + index, mac: 10 },
+        });
+        game.inventory = [blade];
+        game.level.monsters = [target];
+        markSquareVisible(6, 5);
+        enableRngLog({ reset: true });
+
+        await rhack('l');
+
+        assert.match(game._pending_message, /You hit it\./, name);
+        assert.match(game._pending_message, /Your dagger corrodes!/, name);
+        assert.equal(blade.oeroded2, 1, name);
+        assert.match(blade.line, /corroded \+0 dagger/, name);
+        assert.equal(target.mhp < 50, true, name);
+        const log = getRngLog();
+        const passiveGate = log.lastIndexOf('rn2(6)=0');
+        assert.equal(passiveGate > -1 && passiveGate < log.length - 1, true, name);
+        assert.match(log[log.length - 1], /^rn2\(3\)=/, name);
+    }
+});
+
 test('direct hero melee against fire passive can burn flammable wielded weapon', async () => {
     const { blade, target } = installDirectPassiveObjectMeleeState({
         seed: 8,

@@ -38686,6 +38686,8 @@ function shouldMulchMonsterThrownMissile(obj) {
 
 const MONSTER_PASSIVE_OBJECT_ATTACK_FALLBACKS = new Map([
     ['acid blob', 'acid'],
+    ['spotted jelly', 'acid'],
+    ['ochre jelly', 'acid'],
     ['green mold', 'acid'],
     ['fire elemental', 'fire'],
     ['fire vortex', 'fire'],
