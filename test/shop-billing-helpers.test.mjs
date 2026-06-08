@@ -13507,6 +13507,20 @@ test('genociding current polyself form rehumanizes instead of ignoring form', as
     assert.equal(game.u.uac, 7);
 });
 
+test('genocide pluralizes homunculus with C one-off suffix', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31050, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('homunculus');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all homunculi\./);
+    assert.doesNotMatch(message, /homunculuses/);
+    assert.equal(game._genocided_monsters.includes('homunculus'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };
