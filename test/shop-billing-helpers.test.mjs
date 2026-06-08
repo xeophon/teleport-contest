@@ -75841,6 +75841,82 @@ test('direct hero melee lethal peaceful shopkeeper angers town watch by snapshot
     assert.equal(guard.angry, true);
 });
 
+function installDirectMeleeTemplePriest({ weaponId = 876812 } = {}) {
+    installStableNonShopFloorState();
+    Object.assign(game.u, { ulevel: 20, uluck: 0, uhitinc: 30, udaminc: 1 });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.acurr.a[A_WIS] = 10;
+    game.u._aexe = Array(A_MAX).fill(0);
+    game._startup_role = 'Barbarian';
+    game.urole = { name: { m: 'Barbarian' } };
+    delete game._direct_melee_priest_lightning;
+    const blade = wieldedWeapon(weaponId, 'dagger', 'd', 0);
+    const priest = ordinaryThrowTarget('aligned cleric', 6, 5, {
+        mhp: 1,
+        mhpmax: 3,
+        msleeping: 0,
+        mcanmove: true,
+        mpeaceful: 1,
+        ispriest: true,
+        mcloned: true,
+        data: { name: 'aligned cleric', mlevel: 12, mlet: '@', humanoid: true, priest: true, maligntyp: 0, noCorpse: true },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [priest];
+    game.level.rooms = [{ rtype: TEMPLE, roomnoidx: 0 }];
+    installTipPriestTemple(priest, { shrineAlign: A_LAWFUL, heroAlign: A_LAWFUL });
+    const heroLoc = game.level.at(5, 5);
+    heroLoc.roomno = ROOMOFFSET;
+    heroLoc.typ = ROOM;
+    game._force_fight_target = priest;
+    markSquareVisible(6, 5);
+    markSquareVisible(6, 6);
+    return { priest };
+}
+
+test('direct hero melee lethal temple priest can trigger ghod_hitsu tail', async () => {
+    const { priest } = installDirectMeleeTemplePriest();
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You kill the aligned cleric!  Mitra\'s voice booms:  "How darest thou harm my servant!"');
+    assert.equal(game.level.monsters.includes(priest), false);
+    assert.equal(priest.dead, true);
+    assert.equal(game.u._aexe[A_WIS], -1);
+    assert.deepEqual(game._direct_melee_priest_lightning, { x: 6, y: 6, dx: -1, dy: -1 });
+});
+
+test('direct hero melee lethal temple priest respects ghod_hitsu wrapper roll', async () => {
+    const { priest } = installDirectMeleeTemplePriest({ weaponId: 876813 });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You kill the aligned cleric!');
+    assert.equal(game.level.monsters.includes(priest), false);
+    assert.equal(priest.dead, true);
+    assert.equal(game.u._aexe[A_WIS], 0);
+    assert.equal(game._direct_melee_priest_lightning, undefined);
+});
+
+test('direct hero melee lethal temple priest requires shrine altar for ghod_hitsu tail', async () => {
+    const { priest } = installDirectMeleeTemplePriest({ weaponId: 876814 });
+    const altarLoc = game.level.at(priest.shrine.x, priest.shrine.y);
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    installCoreRngValues([0, 0, 0, 1, 1, 0, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You kill the aligned cleric!');
+    assert.equal(game.level.monsters.includes(priest), false);
+    assert.equal(priest.dead, true);
+    assert.equal(game.u._aexe[A_WIS], 0);
+    assert.equal(game._direct_melee_priest_lightning, undefined);
+});
+
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {
     const { shkp, blade } = installDirectDisenchanterMeleeState({ seed: 1, spe: 2 });
 

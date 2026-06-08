@@ -157,6 +157,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [749-direct-melee-monster-lifesaving-2026-06-08.md](749-direct-melee-monster-lifesaving-2026-06-08.md): direct hero melee monster life saving, shifted-vampire revival, lethal hit-message suppression, and survivor cleanup bypass.
 - [750-direct-melee-xkilled-social-penalties-2026-06-08.md](750-direct-melee-xkilled-social-penalties-2026-06-08.md): direct hero melee tame-kill attribution, bounded luck, same-aligned unicorn guilt, and force-fight safe-pet bypass.
 - [751-direct-melee-lethal-peaceful-anger-2026-06-08.md](751-direct-melee-lethal-peaceful-anger-2026-06-08.md): direct hero melee lethal peaceful shopkeeper and watch anger fallout via C's `hmon()` guard snapshot.
+- [752-direct-melee-priest-ghod-hitsu-2026-06-08.md](752-direct-melee-priest-ghod-hitsu-2026-06-08.md): direct hero melee lethal priest `hmon()` wrapper-tail shrine retaliation gate, deity message, and Wisdom exercise.
 
 ## Cross-Cutting Themes
 

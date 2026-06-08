@@ -22862,6 +22862,60 @@ function directMeleeAngerTownWatch(messages, { silent = false } = {}) {
     return true;
 }
 
+function directMeleeLineAligned(x1, y1, x2, y2) {
+    const dx = Math.abs((x1 || 0) - (x2 || 0));
+    const dy = Math.abs((y1 || 0) - (y2 || 0));
+    return dx === 0 || dy === 0 || dx === dy;
+}
+
+function directMeleePriestHasShrine(priest) {
+    const shrine = priest?.shrine;
+    const loc = shrine ? game.level?.at?.(shrine.x, shrine.y) : null;
+    if (!priest?.ispriest || !shrine || loc?.typ !== ALTAR) return false;
+    const mask = altarMask(loc);
+    if (!(mask & AM_SHRINE)) return false;
+    return shrine.align === Amask2align(mask & ~AM_SHRINE);
+}
+
+function directMeleePriestRetaliationGod(priest) {
+    if (priest?.shrine?.god) return priest.shrine.god;
+    const role = heroRoleName();
+    const pantheonRole = role === 'Priest' ? game._pantheon_role || 'Barbarian' : role || game._startup_role || 'Barbarian';
+    const gods = GODS_BY_ROLE[pantheonRole] || GODS_BY_ROLE.Barbarian;
+    const align = priest?.shrine?.align ?? game.u?.ualign?.type ?? A_NEUTRAL;
+    return gods[align > 0 ? 0 : align < 0 ? 2 : 1] || 'your god';
+}
+
+function directMeleePriestRetaliation(messages, priest) {
+    if (!priest?.ispriest || !directMeleePriestHasShrine(priest)) return false;
+    const heroLoc = game.level?.at?.(game.u?.ux, game.u?.uy);
+    const room = levelRoomByRoomno(heroLoc?.roomno || 0);
+    if (!room || room.rtype !== TEMPLE || heroLoc.roomno !== priest.shrine.room) return false;
+    const x = priest.shrine.x;
+    const y = priest.shrine.y;
+    if (!directMeleeLineAligned(game.u?.ux, game.u?.uy, x, y)) return false;
+
+    const god = directMeleePriestRetaliationGod(priest);
+    switch (rn2(3)) {
+    case 0:
+        messages.push(`${god} roars in anger:  "Thou shalt suffer!"`);
+        break;
+    case 1:
+        messages.push(`${possessiveName(god)} voice booms:  "How darest thou harm my servant!"`);
+        break;
+    default:
+        messages.push(`${god} roars:  "Thou dost profane my shrine!"`);
+        break;
+    }
+    game._direct_melee_priest_lightning = {
+        x, y,
+        dx: Math.sign((game.u?.ux || 0) - x),
+        dy: Math.sign((game.u?.uy || 0) - y),
+    };
+    exerciseAttribute(A_WIS, false);
+    return true;
+}
+
 function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
     if (!killAccessible || !treasureDrop) return;
     if (corpseData.noCorpse || corpseData !== data) return;
@@ -54282,6 +54336,8 @@ async function moveHero(dx, dy) {
         if (messages.length !== messageCountBeforeLuck)
             await setMessage(messages.join('  '), potionCallPrompt || (killedPet && messages.length > 1));
         if (await applyHeroKillLiveExperience(mon, messages))
+            await setMessage(messages.join('  '));
+        if (directMeleeHit && mon.ispriest && !rn2(2) && directMeleePriestRetaliation(messages, mon))
             await setMessage(messages.join('  '));
         if (directMeleeHit && angerTownWatchAfterHit && directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() }))
             await setMessage(messages.join('  '));
