@@ -25011,10 +25011,12 @@ function transformMeleeEggStackToRocks(egg) {
     Object.assign(egg, object_display(egg));
 }
 
-function applyThrownEggNominalDamage(mon, messages) {
+function applyThrownEggNominalDamage(mon, messages, { wakeTarget = true } = {}) {
     if (!mon || mon.dead) return;
-    mon.msleeping = 0;
-    if (!mon.pet) mon.mpeaceful = false;
+    if (wakeTarget) {
+        mon.msleeping = 0;
+        if (!mon.pet) mon.mpeaceful = false;
+    }
     mon.mhp = (mon.mhp || 1) - 1;
     if ((mon.mhp || 0) <= 0) killMonsterFromPotionHit(mon, messages);
 }
@@ -25070,7 +25072,7 @@ function petrifyMonsterFromThrownEgg(mon, messages) {
     return true;
 }
 
-function heroThrownPetrifyingEggHitMonster(egg, mon) {
+function heroThrownPetrifyingEggHitMonster(egg, mon, options = {}) {
     const messages = [];
     const count = Math.max(1, Math.trunc(Number(egg?.quan || 1)));
     const plural = count === 1 ? '' : 's';
@@ -25078,7 +25080,7 @@ function heroThrownPetrifyingEggHitMonster(egg, mon) {
     egg.known = true;
     markObjectShopBillUsedUp(egg);
     if (!petrifyMonsterFromThrownEgg(mon, messages))
-        applyThrownEggNominalDamage(mon, messages);
+        applyThrownEggNominalDamage(mon, messages, options);
     return messages;
 }
 
@@ -25103,12 +25105,14 @@ function heroThrownEggHitMonster(egg, mon) {
 function heroMeleeEggHitMonster(egg, mon) {
     applyThrownEggLuckPenalty(egg);
     if (isTouchPetrifyingEgg(egg)) return {
-        messages: heroThrownPetrifyingEggHitMonster(egg, mon),
+        messages: heroThrownPetrifyingEggHitMonster(egg, mon, { wakeTarget: false }),
         consumed: true,
+        wakeupTail: true,
     };
     if (isPyroliskEgg(egg)) return {
         messages: heroThrownPyroliskEggHitMonster(egg, mon),
         consumed: true,
+        wakeupTail: false,
     };
     const messages = [];
     const targetName = thrownEggTargetName(mon);
@@ -25118,13 +25122,13 @@ function heroMeleeEggHitMonster(egg, mon) {
     if (monsterTouchPetrifies(mon) && !isStaleEggItem(egg)) {
         messages.push(`The egg${plural} ${count === 1 ? "isn't" : "aren't"} alive any more...`);
         transformMeleeEggStackToRocks(egg);
-        applyThrownEggNominalDamage(mon, messages);
-        return { messages, consumed: false };
+        applyThrownEggNominalDamage(mon, messages, { wakeTarget: false });
+        return { messages, consumed: false, wakeupTail: true };
     }
     messages.push('Splat!');
     markObjectShopBillUsedUp(egg);
-    applyThrownEggNominalDamage(mon, messages);
-    return { messages, consumed: true };
+    applyThrownEggNominalDamage(mon, messages, { wakeTarget: false });
+    return { messages, consumed: true, wakeupTail: true };
 }
 
 function heroThrownOrdinaryEggHitMonster(egg, mon) {
@@ -54667,6 +54671,15 @@ async function moveHero(dx, dy) {
                 if (eggMessages.more) messages.more = true;
                 if (eggMessages.lifeSaving || eggMessages.fatal) break;
                 if (killed) break;
+                if (eggHit.wakeupTail !== false) {
+                    directMeleeNonlethalWakeupTail(mon, messages, attackPreHitState, {
+                        ordinaryMelee: !directMeleeFromSpecialApply,
+                        forcefight: directMeleeForcefight,
+                        visible: targetSpotted,
+                        wakeMessage: false,
+                    });
+                    directMeleeNonlethalWakeupApplied = true;
+                }
                 continue;
             }
             const deferAttackSleepingWakeTail = attackIndex === 0 && wokeFromSleep && !twoWeaponActive

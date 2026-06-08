@@ -75402,6 +75402,51 @@ test('wielded egg bash routes through egg hmon path', async () => {
     assert.equal(game._chronicle_first_weapon_hit || 0, 0);
 });
 
+test('wielded egg bash survivor still runs melee wakeup anger tail', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    game.u.ulevel = 20;
+    game.u.uhitinc = 30;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    const eggItem = { ...egg(876083, 'e'), otyp: EGG, wielded: true };
+    eggItem.line = 'e - an egg (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 0,
+        meating: 3,
+        mstrategy: 'waitforu',
+        mpeaceful: true,
+        data: { name: 'goblin', mlevel: 1, mlet: 'o', humanoid: true, maligntyp: -1 },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin];
+    game._force_fight_target = goblin;
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin with an egg.  Splat!  The goblin gets angry!');
+    assert.equal(goblin.mhp, 29);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.hostile, true);
+    assert.equal(goblin.angry, true);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    assert.equal(game._chronicle_first_weapon_hit || 0, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
+});
+
 test('wielded egg stack bash consumes the whole stack as used-up eggs', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
