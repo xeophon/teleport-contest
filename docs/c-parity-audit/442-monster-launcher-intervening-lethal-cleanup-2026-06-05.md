@@ -48,6 +48,6 @@ The covered behavior is state-driven and does not depend on replay, seed, map, p
 
 ## Remaining Gaps
 
-- Intervening monster blinding, egg, acid-venom, mimic-reveal, and broader passive side effects remain separate source-backed slices.
+- Launcher-arrow intervening passive-object ordering is covered in audit 780; intervening monster blinding, egg, acid-venom, mimic-reveal, and other side effects remain separate source-backed slices.
 - Monster-vs-monster aimed shooter-level and artifact-launcher bonuses remain separate from hero-directed launcher shots.
 - Vampire-shifter revival and broader `mondead()` special cases remain separate from this narrow launcher-arrow intervening cleanup.

@@ -6924,6 +6924,7 @@ export async function processMonsterTurns() {
                                     x: target.mx,
                                     y: target.my,
                                     ohit: true,
+                                    passiveTarget: target.dead ? null : target,
                                 };
                             } else {
                                 game._arrow_mulch_after_topline_more = 1;

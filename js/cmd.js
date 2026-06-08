@@ -40094,7 +40094,9 @@ function wishedDamageProfile(item) {
     const flammableArmor = armor && FIRE_FLAMMABLE_ARMOR_KINDS.has(kind);
     const nonflammableArmor = armor && FIRE_NONFLAMMABLE_ARMOR_KINDS.has(kind);
     const copperLike = /\b(?:copper|bronze)\b/.test(kind);
+    const rustproneProjectile = /^(?:arrow|orcish arrow|crude arrow|ya|bamboo arrow|crossbow bolt)$/.test(kind);
     const ironLike = !flammableArmor && !excludedMetal && !glassArmor && !copperLike && !dragonHide && (ballOrChain || kind.includes('iron')
+        || rustproneProjectile
         || IRON_POLEARM_KINDS.has(kind)
         || /\b(?:plate mail|splint mail|banded mail|ring mail|chain mail|scale mail|large shield|roundshield|gauntlets|helm|helmet|dented pot|shoes|sword|saber|dagger|knife|axe|mace|hammer|flail|morning star|pick-axe|mattock|spear|trident|lance|polearm|dart|shuriken|throwing star)\b/.test(kind));
     const flammableLike = flammableArmor || (!nonflammableArmor && !glassArmor && !ironLike && !copperLike && !excludedMetal
@@ -58280,6 +58282,7 @@ export async function rhack(_cmd) {
                         color: arrowDrop.color ?? CLR_CYAN,
                         messages: floorMessages,
                         ohit: !!arrowDrop.ohit,
+                        passiveTarget: arrowDrop.passiveTarget || null,
                     });
                     appendToplineAfterMoreMessages(floorMessages);
                 }

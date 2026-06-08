@@ -53265,6 +53265,7 @@ async function runMonsterLauncherArrowLanding({
     heroPoisonResistance = false,
     levelCells = [],
     extraMonsters = [],
+    initialObjects = [],
 } = {}) {
     installNonShopFloorState();
     resetInputState();
@@ -53302,6 +53303,7 @@ async function runMonsterLauncherArrowLanding({
     }
     for (let x = 5; x <= 10; x++) markSquareVisible(x, 5);
     for (const [x, y] of levelCells) markSquareVisible(x, y);
+    game.level.objects = [...initialObjects];
     const bow = {
         id: 874357,
         cls: 'weapon',
@@ -55871,6 +55873,114 @@ test('production monster launcher arrow can hit intervening monster before hero'
     assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
     assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /Clonk!/.test(message)), false);
+});
+
+test('production monster launcher arrow hits and rusts intervening rust monster object before stacking', async () => {
+    const cleanStack = {
+        id: 874510,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'arrow',
+        actualKind: 'arrow',
+        plural: 'arrows',
+        quan: 1,
+        spe: 0,
+        ox: 8,
+        oy: 5,
+    };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 2,
+        uac: 100,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(messages, /arrow hits the rust monster|It is hit/);
+    assert.match(messages, /The arrow rusts!/);
+    assert.doesNotMatch(messages, /Clonk|You are hit/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === arrow.id);
+    assert.ok(landed, rng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded, 1);
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.deepEqual(rng, ['rn2(5)=3', 'rn2(5)=2', 'rnd(20)=9', 'rnd(6)=4', 'rn2(3)=0']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
+test('production monster launcher arrow hit on intervening rust monster can mulch before passive rust', async () => {
+    const cleanStack = {
+        id: 874511,
+        cls: 'weapon',
+        glyph: ')',
+        kind: 'arrow',
+        actualKind: 'arrow',
+        plural: 'arrows',
+        quan: 1,
+        spe: 0,
+        ox: 8,
+        oy: 5,
+    };
+    const rustMonster = passiveObjectTarget('rust monster', 'rust', 8, 5, {
+        ac: 13,
+        mac: 13,
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    const { arrow, thrower, rng, preNhgetchMessages } = await runMonsterLauncherArrowLanding({
+        seed: 1,
+        uac: 100,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        extraMonsters: [rustMonster],
+        initialObjects: [cleanStack],
+    });
+    const messages = [
+        game._pending_message,
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+
+    assert.match(messages, /arrow hits the rust monster|It is hit/);
+    assert.doesNotMatch(messages, /rusts|Clonk|You are hit/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(rustMonster.mhp < 20, true, rng.join(', '));
+    assert.equal(rustMonster.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === arrow.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game.level.objects.some(obj => obj.id === arrow.id), false);
+    assert.equal(cleanStack.oeroded || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 1);
+
+    assertNoSingletonLauncherMultishotRng(rng);
+    assert.ok(rng.some(entry => entry.startsWith('rn2(3)=') && entry !== 'rn2(3)=0'), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(100)=')), rng.join(', '));
 });
 
 test('production monster blessed launcher arrow intervening hit damages blessing-hating monster', async () => {
