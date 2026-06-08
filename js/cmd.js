@@ -19031,7 +19031,7 @@ function healingPotionHitMonster(potion, mon, kind, messages) {
     return false;
 }
 
-function sicknessPotionHitMonster(mon, messages) {
+function sicknessPotionHitMonster(mon, messages, { yourFault = true } = {}) {
     if (monsterIsPestilence(mon)) {
         const maxHp = Math.max(1, mon.mhpmax || mon.mhp || 1);
         if ((mon.mhp || 0) < maxHp) {
@@ -19045,7 +19045,7 @@ function sicknessPotionHitMonster(mon, messages) {
     if (monsterResistsSicknessPotion(mon)) {
         if (monsterCanBeSeenForPotionEffect(mon))
             messages.push(`${potionHitMonsterName(mon)} looks unharmed.`);
-        return true;
+        return !!yourFault;
     }
 
     if ((mon.mhp || 0) > 2) {
@@ -19053,7 +19053,7 @@ function sicknessPotionHitMonster(mon, messages) {
         if (monsterCanBeSeenForPotionEffect(mon))
             messages.push(`${potionHitMonsterName(mon)} looks rather ill.`);
     }
-    return true;
+    return !!yourFault;
 }
 
 function acidPotionHitMonster(potion, mon, messages, { yourFault = true } = {}) {
@@ -19681,7 +19681,7 @@ export function heroThrownPotionHitMonster(potion, mon, { yourFault = true, allo
     } else if (kind === 'invisibility') {
         angerMon = invisibilityPotionHitMonster(potion, mon, messages);
     } else if (kind === 'sickness') {
-        angerMon = sicknessPotionHitMonster(mon, messages);
+        angerMon = sicknessPotionHitMonster(mon, messages, { yourFault });
     } else if (kind === 'acid') {
         angerMon = acidPotionHitMonster(potion, mon, messages, { yourFault });
     } else if (kind === 'polymorph') {

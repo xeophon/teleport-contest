@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns, processPickLockOccupation, __allmainTestHooks as allmain } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, heroThrownPotionHitMonster, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, recordVanquished, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, heroThrownPotionHitMonster, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, monsterThrownPotionHitMonster, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, recordVanquished, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
@@ -89194,6 +89194,24 @@ test('hero-thrown sickness potion makes ordinary monsters ill and angry', async 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)',
     ]);
+});
+
+test('monster-thrown sickness potion makes ordinary monsters ill without angering them', () => {
+    installNonShopFloorState();
+    initRng(2);
+    const potion = sicknessPotion(8811, 's', 1, { dknown: false });
+    const goblin = ordinaryThrowTarget('goblin', 7, 5);
+    game.level.monsters = [goblin];
+    markSquareVisible(goblin.mx, goblin.my);
+
+    const messages = monsterThrownPotionHitMonster(potion, goblin).join('\n');
+
+    assert.match(messages, /crashes on the goblin's head and breaks into shards\./);
+    assert.match(messages, /potion(?: of sickness)? evaporates\./);
+    assert.match(messages, /The goblin looks rather ill\./);
+    assert.equal(goblin.mhp, 2);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, true);
 });
 
 test('hero-thrown sickness potion leaves resistant monsters unharmed but angry', async () => {
