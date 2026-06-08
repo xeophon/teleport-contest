@@ -53136,6 +53136,8 @@ async function runMonsterDartHitLanding({
     heroBlind = true,
     heroDeaf = false,
     heroDex = 10,
+    heroHp = 20,
+    heroPoisonResistance = false,
     uac = 10,
     halfPhysicalDamage = false,
     heroPolyselfForm = null,
@@ -53164,8 +53166,9 @@ async function runMonsterDartHitLanding({
         blind: heroBlind,
         _statusSuffix: heroDeaf ? ' Deaf' : '',
         _deafTimeout: heroDeaf ? 5 : 0,
-        uhp: 20,
-        uhpmax: 20,
+        poisonResistance: heroPoisonResistance,
+        uhp: heroHp,
+        uhpmax: heroHp,
         uac,
         halfPhysicalDamage,
         _polyself_form: heroPolyselfForm,
@@ -55796,6 +55799,144 @@ test('production visible kobold dart large polyself uses large target die and hi
     assert.equal(rawRng.slice(catchIndex + 1).some(entry => entry.startsWith('rnd(3)=')), false,
         rawRng.join(', '));
     assert.ok(rawRng.includes('rnd(20)=12'), rawRng.join(', '));
+});
+
+test('production visible poisoned kobold dart hit respects poison resistance', async () => {
+    const projectile = { ...dartStack(874508, 'd', 1, { opoisoned: true }), letter: undefined, line: undefined, spe: 0 };
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        heroPoisonResistance: true,
+        projectile,
+    });
+    const messages = [
+        collectMonsterThrowMessages(preNhgetchMessages),
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('  ');
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a poisoned dart\./);
+    assert.match(messages, /The poison doesn't seem to affect you\./);
+    assert.doesNotMatch(messages, /dart was poisoned/i);
+    assert.equal(game.u.uhp, 18, rawRng.join(', '));
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.opoisoned, true);
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(30)=') || entry.startsWith('rnd(6)=')
+        || entry.startsWith('d(4,6)=')), false, rawRng.join(', '));
+});
+
+test('production visible poisoned kobold dart hit applies thrown-weapon poison before landing', async () => {
+    const projectile = { ...dartStack(874509, 'd', 1, { opoisoned: true }), letter: undefined, line: undefined, spe: 0 };
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        heroHp: 40,
+        projectile,
+    });
+    const messages = [
+        collectMonsterThrowMessages(preNhgetchMessages),
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('  ');
+    const damageIndex = rawRng.findIndex(entry => entry.startsWith('rnd(3)='));
+    const hitIndex = rawRng.indexOf('rnd(20)=12');
+    const poisonRollIndex = rawRng.findIndex((entry, index) =>
+        index > hitIndex && entry.startsWith('rn2(30)='));
+    const mulchIndex = rawRng.findIndex((entry, index) =>
+        index > hitIndex && entry.startsWith('rn2(3)='));
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a poisoned dart\./);
+    assert.doesNotMatch(messages, /dart was poisoned/i);
+    assert.notEqual(damageIndex, -1, rawRng.join(', '));
+    assert.notEqual(hitIndex, -1, rawRng.join(', '));
+    assert.notEqual(poisonRollIndex, -1, rawRng.join(', '));
+    assert.notEqual(mulchIndex, -1, rawRng.join(', '));
+    assert.ok(hitIndex < poisonRollIndex && poisonRollIndex < mulchIndex, rawRng.join(', '));
+
+    const baseDamage = Number(rawRng[damageIndex].split('=')[1]);
+    const poisonRoll = Number(rawRng[poisonRollIndex].split('=')[1]);
+    let expectedHp = 40 - baseDamage;
+    if (poisonRoll === 0) {
+        const severeIndex = rawRng.findIndex((entry, index) =>
+            index > poisonRollIndex && entry.startsWith('d(4,6)='));
+        assert.notEqual(severeIndex, -1, rawRng.join(', '));
+        expectedHp -= 6 + Number(rawRng[severeIndex].split('=')[1]);
+        assert.match(messages, /You feel very sick!.*You feel weaker!/);
+        assert.equal(game.u.acurr.a[A_CON], 9, rawRng.join(', '));
+        assert.equal(game.u.acurr.a[A_STR], 7, rawRng.join(', '));
+    } else if (poisonRoll > 5) {
+        const poisonDamageIndex = rawRng.findIndex((entry, index) =>
+            index > poisonRollIndex && entry.startsWith('rnd(6)='));
+        assert.notEqual(poisonDamageIndex, -1, rawRng.join(', '));
+        expectedHp -= Number(rawRng[poisonDamageIndex].split('=')[1]);
+        assert.doesNotMatch(messages, /You feel weaker|The poison was deadly/);
+        assert.equal(game.u.acurr.a[A_CON], 10, rawRng.join(', '));
+        assert.equal(game.u.acurr.a[A_STR], 10, rawRng.join(', '));
+    } else {
+        assert.equal(rawRng.some((entry, index) =>
+            index > poisonRollIndex && (entry.startsWith('rnd(6)=') || entry.startsWith('d(4,6)='))), false,
+            rawRng.join(', '));
+        expectedHp = 40 - baseDamage;
+        assert.match(messages, /You feel weaker!/);
+        assert.equal(game.u.acurr.a[A_CON], 10, rawRng.join(', '));
+        assert.equal(game.u.acurr.a[A_STR], 9, rawRng.join(', '));
+    }
+    assert.equal(game.u.uhp, expectedHp, rawRng.join(', '));
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.opoisoned, true);
+});
+
+test('production visible poisoned kobold dart miss skips poison effects', async () => {
+    const projectile = { ...dartStack(874510, 'd', 1, { opoisoned: true }), letter: undefined, line: undefined, spe: 0 };
+    const { dart, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        uac: 0,
+        projectile,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /A poisoned dart misses you\./);
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(30)=') || entry.startsWith('rnd(6)=')
+        || entry.startsWith('d(4,6)=')), false, rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(3)=')), false, rawRng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.opoisoned, true);
+});
+
+test('production visible poisoned kobold dart catch skips poison effects', async () => {
+    const projectile = { ...dartStack(874511, 'd', 2, { opoisoned: true }), letter: undefined, line: undefined, spe: 0 };
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 1,
+        heroBlind: false,
+        heroDex: 100,
+        projectile,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /You catch the dart!/);
+    assertCaughtSplitThrownObject(dart, thrower, 'dart');
+    assert.equal(game.u.uhp, 20, rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(30)=') || entry.startsWith('rnd(3)=')
+        || entry.startsWith('rnd(20)=') || entry.startsWith('rn2(3)=')), false, rawRng.join(', '));
+    const caught = game.inventory.find(obj => obj.kind === 'dart' && obj.opoisoned);
+    assert.ok(caught, rawRng.join(', '));
+    assert.equal(caught.quan, 1);
 });
 
 test('production visible kobold dart catch retains split dart in inventory', async () => {

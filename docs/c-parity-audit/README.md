@@ -204,6 +204,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [796-monster-thrown-dart-misfire-terrain-2026-06-08.md](796-monster-thrown-dart-misfire-terrain-2026-06-08.md): cursed or greased monster-thrown darts now use C's post-extraction slip gate, redirected vectors, zero-vector drops, and sink/wall/forced-bars terrain stops.
 - [797-monster-thrown-dart-ordinary-terrain-2026-06-08.md](797-monster-thrown-dart-ordinary-terrain-2026-06-08.md): ordinary monster-thrown darts now cover C-shaped preflight closed-door stops, visible sink drops, and post-step next-square terrain stops in the production kobold dart path.
 - [798-monster-thrown-dart-hero-thitu-2026-06-08.md](798-monster-thrown-dart-hero-thitu-2026-06-08.md): clean monster-thrown dart hero delivery now uses C's `thitu()` armor-class/range hit test, near-miss wording, big-polyself hit and damage adjustments, half-physical damage, and miss landing without hit-only mulch.
+- [799-monster-thrown-dart-hero-poison-2026-06-08.md](799-monster-thrown-dart-hero-poison-2026-06-08.md): successful poisoned monster-thrown dart hero hits now use poisoned object naming, thrown-weapon poison effects, resistance/no-extra-message handling, poison-before-landing ordering, and surviving poisoned dart retention.
 
 ## Cross-Cutting Themes
 

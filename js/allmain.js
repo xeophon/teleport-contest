@@ -8756,24 +8756,40 @@ export async function processMonsterTurns() {
                                     dartDamage = maybeHalfPhysicalDamage(dartDamage);
                                     const hitv = Math.max(-4, 3 - throwRange) + 8 + missileSpe
                                         + heroPolyselfMonsterThrownHitBonus();
+                                    const dartKind = monsterLauncherProjectileKind(thrownMissile);
+                                    const dartArticle = articleFor(dartKind);
+                                    const dartKillerName = monsterLauncherProjectileKillerName(thrownMissile);
+                                    const poisonedHeroHit = !!(thrownMissile.opoisoned
+                                        && monsterThrownObjectIsPoisonable(thrownMissile));
                                     const hitRoll = rnd(20);
                                     const missed = (game.u?.uac ?? 10) + hitv <= hitRoll;
+                                    const deferHeroHit = throwerVisible || (!missed && poisonedHeroHit);
                                     let resultMessage = game.u?.blind || game.flags?.verbose === false
                                         ? 'You are hit.'
-                                        : `You are hit by a dart${dartDamage > 4 ? '!' : '.'}`;
+                                        : `You are hit by ${dartArticle} ${dartKind}${dartDamage > 4 ? '!' : '.'}`;
                                     if (missed) {
                                         resultMessage = game.u?.blind || game.flags?.verbose === false
                                             ? 'It misses.'
                                             : (game.u?.uac ?? 10) + hitv <= hitRoll - 2
-                                                ? 'A dart misses you.'
-                                                : 'You are almost hit by a dart.';
+                                                ? `${dartArticle[0].toUpperCase()}${dartArticle.slice(1)} ${dartKind} misses you.`
+                                                : `You are almost hit by ${dartArticle} ${dartKind}.`;
                                     }
                                     if (throwerVisible) game._topline_after_more = resultMessage;
                                     else addToplineMessage(resultMessage);
                                     if (!missed) {
-                                        if (throwerVisible) {
+                                        if (deferHeroHit) {
                                             game._damage_after_topline_more = (game._damage_after_topline_more || 0) + dartDamage;
                                             game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
+                                            if (poisonedHeroHit) {
+                                                game._poisoned_projectile_after_topline_more = {
+                                                    reason: dartKind,
+                                                    killer: `${articleFor(dartKillerName)} ${dartKillerName}`,
+                                                };
+                                                if (!throwerVisible) {
+                                                    game._message_more = 1;
+                                                    game._keep_pending_message = 1;
+                                                }
+                                            }
                                         } else {
                                             game.u.uhp = Math.max(0, (game.u?.uhp || 0) - dartDamage);
                                             exerciseAttribute(A_STR, false);
@@ -8785,7 +8801,7 @@ export async function processMonsterTurns() {
                                         glyph: ')',
                                         color: CLR_CYAN,
                                         ohit: !missed,
-                                        afterMore: throwerVisible,
+                                        afterMore: missed ? throwerVisible : deferHeroHit,
                                     });
                                 }
                             }
