@@ -34664,6 +34664,8 @@ function kickFloorObjectRange(obj, x, y, dir) {
     const nextY = y + dir.dy;
     const nextLoc = game.level?.at?.(nextX, nextY);
     const closedDoor = nextLoc?.typ === DOOR && (nextLoc.doormask & (D_CLOSED | D_LOCKED));
+    const artifact = String(obj?.artifact || obj?.oartifact || obj?.artifactName || '').toLowerCase().replace(/^the /, '');
+    if (artifact === 'mjollnir') range = 1;
     if (!isok(nextX, nextY) || !nextLoc || !ZAP_POS(nextLoc.typ) || closedDoor) range = 1;
     return range;
 }
@@ -34761,6 +34763,30 @@ function splitKickedFloorObjectForFlight(obj) {
     return kicked;
 }
 
+function kickedSameLevelFlightStop(obj, x, y, dir, range) {
+    let landX = x;
+    let landY = y;
+    for (let remaining = range - 1; remaining > 0; remaining--) {
+        const nx = landX + dir.dx;
+        const ny = landY + dir.dy;
+        if (!isok(nx, ny)) break;
+        const mon = (game.level?.monsters || []).find(candidate =>
+            candidate && !candidate.dead && candidate.mx === nx && candidate.my === ny
+            && (candidate.mhp == null || candidate.mhp > 0));
+        if (mon) break;
+        const loc = game.level?.at?.(nx, ny);
+        const typ = loc?.typ ?? STONE;
+        const closedDoor = typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+        const gate = remoteProjectileDownGateAt(obj, nx, ny);
+        if (gate) return { x: nx, y: ny, gate };
+        if (!loc || !ZAP_POS(typ) || closedDoor) break;
+        landX = nx;
+        landY = ny;
+        if (IS_POOL(typ) || IS_LAVA(typ) || typ === SINK) break;
+    }
+    return { x: landX, y: landY, gate: null };
+}
+
 async function breakKickedFragileFloorObject(obj, x, y, messages) {
     const preflightBreakKind = kickedFragilePreflightBreakKind(obj);
     if (!preflightBreakKind) return false;
@@ -34837,7 +34863,9 @@ async function kickFloorObjectToward(dir, x, y) {
             || heroProjectileSupportedWeaponObject(obj));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     const localBoxImpact = isBoxObject(obj);
-    if (!localBoxImpact && !gate && !canHandleMonsterImpact && !fragileBreakKind) return { handled: false };
+    const ordinarySameLevelFlight = !localBoxImpact && !fragileBreakKind && !targetMon;
+    if (!localBoxImpact && !gate && !canHandleMonsterImpact && !fragileBreakKind && !ordinarySameLevelFlight)
+        return { handled: false };
 
     const range = kickFloorObjectRange(obj, x, y, dir);
     const messages = [`You kick ${floorObjectArticleName(obj)}.`];
@@ -34858,7 +34886,8 @@ async function kickFloorObjectToward(dir, x, y) {
         }
         return { handled: true, messages, moved: false };
     }
-    if (!gate && !canHandleMonsterImpact) return { handled: true, messages, moved: false };
+    if (!gate && !canHandleMonsterImpact && !ordinarySameLevelFlight)
+        return { handled: true, messages, moved: false };
 
     obj = splitKickedFloorObjectForFlight(obj);
     let monsterImpact = { handled: false };
@@ -34876,6 +34905,24 @@ async function kickFloorObjectToward(dir, x, y) {
             placeKickedFloorObject(obj, landX, landY, messages, { ohit: !!monsterImpact.hit, passiveTarget: targetMon });
         return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
     }
+    if (ordinarySameLevelFlight) {
+        const flight = kickedSameLevelFlightStop(obj, x, y, dir, range);
+        removeFloorObject(obj);
+        newsym(x, y);
+        obj.ox = flight.x;
+        obj.oy = flight.y;
+        if (flight.gate) {
+            const shipped = maybeShipRemoteProjectileObject(obj, flight.x, flight.y, messages, {
+                shopFloorObj: !!shopkeeperForCostlySpot(x, y),
+            });
+            if (!shipped.handled)
+                placeKickedFloorObject(obj, flight.x, flight.y, messages);
+            return { handled: true, messages, moved: true, shipObject: shipped };
+        }
+        placeKickedFloorObject(obj, flight.x, flight.y, messages);
+        return { handled: true, messages, moved: true };
+    }
+
     if (!gate) return { handled: false };
 
     removeFloorObject(obj);

@@ -44701,6 +44701,124 @@ test('command kicked shop-floor ordinary object through seen remote hole charges
     assert.equal(shkp.billct, 0);
 });
 
+test('command kick ordinary floor object flies across same-level open terrain', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512085), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kick ordinary floor object stops before blocked same-level terrain', async () => {
+    installStableNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    game.level.at(8, 5).typ = STONE;
+    const blade = { ...dagger(512086), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 7);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kick ordinary same-level floor object stacks at landing square', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512089), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    const pile = { ...dagger(512090), letter: undefined, line: undefined, ox: 14, oy: 5, quan: 2 };
+    game.level.objects = [blade, pile];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], blade);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(blade.quan, 3);
+    assert.equal(pile.quan, 0);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('command kick low-range ordinary floor object thumps in place', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 2;
+    const blade = { ...dagger(512087), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 6);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.  Thump!');
+    assert.doesNotMatch(game._pending_message, /empty space|Ouch|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+});
+
+test('command kick Mjollnir floor object is forced to low range', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const hammer = {
+        ...dagger(512088),
+        kind: 'war hammer',
+        actualKind: 'war hammer',
+        artifact: 'Mjollnir',
+        letter: undefined,
+        line: undefined,
+        ox: 6,
+        oy: 5,
+    };
+    game.level.objects = [hammer];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(hammer), true);
+    assert.equal(hammer.ox, 6);
+    assert.equal(hammer.oy, 5);
+    assert.match(game._pending_message, /^You kick .*\.  Thump!$/);
+    assert.doesNotMatch(game._pending_message, /empty space|Ouch|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
+});
+
 test('command kick ordinary floor object in unseen web reveals trap and refuses movement', async () => {
     installNonShopFloorState();
     initRng(1);
