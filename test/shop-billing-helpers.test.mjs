@@ -13521,6 +13521,20 @@ test('genocide pluralizes homunculus with C one-off suffix', async () => {
     assert.equal(game._genocided_monsters.includes('homunculus'), true);
 });
 
+test('genocide pluralizes baluchitherium with C ium suffix', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31051, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('baluchitherium');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all baluchitheria\./);
+    assert.doesNotMatch(message, /baluchitheriums/);
+    assert.equal(game._genocided_monsters.includes('baluchitherium'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };
