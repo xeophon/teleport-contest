@@ -56612,6 +56612,155 @@ test('production monster cockatrice egg forced iron bars resisted break lands in
         || entry.startsWith('rnd(20)=')), false, rng.join(', '));
 });
 
+test('production monster cockatrice egg aimed shot drops onto visible sink before hero', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1],
+        throwerX: 9,
+        levelCells: [[7, 5, { typ: SINK }]],
+        uac: 20,
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'egg');
+    assert.equal(landed.corpsenm?.name, 'cockatrice');
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /The cockatrice egg drops onto the sink\./);
+    assert.doesNotMatch(messages, /You catch|You are hit|misses you|Splat|Flapp/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)']);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(7)=') || entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
+test('production monster greased cockatrice egg redirected slip drops onto visible sink', async () => {
+    const eggProjectile = {
+        ...egg(878151, 'e'),
+        letter: undefined,
+        line: undefined,
+        corpsenm: { name: 'cockatrice', touchPetrifies: true },
+        known: true,
+        greased: true,
+    };
+    const { thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 0, 2, 1, 2],
+        throwerX: 9,
+        eggItem: eggProjectile,
+        levelCells: [[10, 5, { typ: SINK }]],
+        uac: 20,
+    });
+    const messages = [
+        ...preNhgetchMessages,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].join('\n');
+    const landed = game.level.objects.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(landed);
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /The cockatrice egg slips as the soldier throws it!/);
+    assert.match(messages, /The cockatrice egg drops onto the sink\./);
+    assert.doesNotMatch(messages, /You catch|You are hit|misses you|Splat|Flapp/);
+    assert.deepEqual(rng, [
+        'rn2(5)=1', 'rn2(5)=1', 'rn2(7)=0', 'rn2(3)=2',
+        'rn2(3)=1', 'rn2(5)=2', 'rn2(5)=0',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
+test('production monster greased cockatrice egg redirected slip stops before ordinary wall', async () => {
+    const eggProjectile = {
+        ...egg(878152, 'e'),
+        letter: undefined,
+        line: undefined,
+        corpsenm: { name: 'cockatrice', touchPetrifies: true },
+        known: true,
+        greased: true,
+    };
+    const { thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 0, 2, 1, 2],
+        throwerX: 9,
+        eggItem: eggProjectile,
+        levelCells: [[11, 5, { typ: STONE }]],
+        uac: 20,
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(landed);
+    assert.equal(landed.ox, 10);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /The cockatrice egg slips as the soldier throws it!/);
+    assert.doesNotMatch(messages, /drops onto the sink|You catch|You are hit|misses you|Splat|Flapp/);
+    assert.deepEqual(rng, [
+        'rn2(5)=1', 'rn2(5)=1', 'rn2(7)=0', 'rn2(3)=2',
+        'rn2(3)=1', 'rn2(5)=2', 'rn2(5)=0',
+    ]);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
+test('production monster cursed cockatrice egg zero-vector slip lands at thrower', async () => {
+    const eggProjectile = {
+        ...egg(878153, 'e'),
+        letter: undefined,
+        line: undefined,
+        corpsenm: { name: 'cockatrice', touchPetrifies: true },
+        known: true,
+        cursed: true,
+    };
+    const { thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 0, 1, 1],
+        throwerX: 9,
+        eggItem: eggProjectile,
+        uac: 20,
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(landed);
+    assert.equal(landed.ox, thrower.mx);
+    assert.equal(landed.oy, thrower.my);
+    assert.equal(landed.cursed, true);
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /The cockatrice egg slips as the soldier throws it!/);
+    assert.doesNotMatch(messages, /drops onto the sink|You catch|You are hit|misses you|Splat|Flapp/);
+    assert.deepEqual(rng, ['rn2(5)=1', 'rn2(5)=1', 'rn2(7)=0', 'rn2(3)=1', 'rn2(3)=1']);
+    assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')
+        || entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
 test('production Kop cream pie catch adds the thrown pie to inventory', async () => {
     const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
         seed: 8,

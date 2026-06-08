@@ -40,4 +40,4 @@ Implemented the next production monster-thrown petrifying egg `munstone()` tin/o
 
 ## Remaining Gaps
 
-- Cursed/greased monster-thrown egg misfire and sink/ordinary wall stop handling remain separate projectile slices.
+- Cursed/greased monster-thrown egg misfire and sink/ordinary wall stop handling are covered in audit 789.
