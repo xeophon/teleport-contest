@@ -7472,6 +7472,7 @@ export async function processMonsterTurns() {
                                         deathCleanupThrownObject: thrownMissile,
                                         deathCleanupGlyph: thrownMissile.glyph || ')',
                                         deathCause: `killed by ${projectileArticle} ${projectileKind}`,
+                                        clearDeathMetadataAfterLifeSaving: true,
                                     };
                                     game._death_cause = `killed by ${projectileArticle} ${projectileKind}`;
                                 } else {
@@ -8787,6 +8788,7 @@ export async function processMonsterTurns() {
                                                 deathCleanupGlyph: thrownMissile.glyph || ')',
                                                 deathCleanupColor: CLR_CYAN,
                                                 deathCause: `killed by ${dartArticle} ${dartKillerName}`,
+                                                clearDeathMetadataAfterLifeSaving: true,
                                                 lifeSavingContinuation: {
                                                     exerciseStrength: true,
                                                     poison: poisonedHeroHit ? {

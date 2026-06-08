@@ -39068,6 +39068,15 @@ function appendToplineAfterMoreMessages(messages) {
     return queued;
 }
 
+function clearLifeSavedDeathState() {
+    game._death_cause = '';
+    game._death_bones_body = '';
+    game._death_current_move = 0;
+    game._death_status_hp_before_zero = null;
+    game._death_taker = '';
+    game._death_moves = 0;
+}
+
 function applyHeroPoisonedProjectileAfterMore(effect, options = {}) {
     const reason = String(effect?.reason || 'poisoned arrow');
     const messages = [];
@@ -56564,10 +56573,7 @@ export async function rhack(_cmd) {
                     game.u._stonedKiller = '';
                 }
                 removeHeroStatusSuffix('Stone');
-                game._death_cause = '';
-                game._death_bones_body = '';
-                game._death_current_move = 0;
-                game._death_status_hp_before_zero = null;
+                clearLifeSavedDeathState();
                 clearUnsafePetrifyingCorpseWieldAfterLifeSaving();
             }
             if (game._life_saving_refresh_con && game.u?.acurr?.a)
@@ -58095,6 +58101,7 @@ export async function rhack(_cmd) {
                     game._life_saving_refresh_con = 1;
                     if (game.u) game.u.uhp = 0;
                     const continuationMessages = continueLethalAttackAfterLifeSaving(attack);
+                    if (attack.clearDeathMetadataAfterLifeSaving) clearLifeSavedDeathState();
                     game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                     game._command_mode = 'lifeSavingMore';
                     const lifeSavingMessage = [

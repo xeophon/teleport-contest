@@ -56013,6 +56013,10 @@ test('production visible lethal kobold dart life saving resumes normal landing',
 
     assert.equal(game._command_mode, 'lifeSavingMore');
     assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
     assert.equal(game.inventory.includes(amulet), false);
     assert.equal(game.u.uhp, 0);
     assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
@@ -56038,6 +56042,10 @@ test('production visible lethal kobold dart life saving resumes normal landing',
     assert.equal(game._command_mode || null, null);
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
     assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('production visible poisoned lethal kobold dart life saving limits poison to strength loss', async () => {
@@ -56080,6 +56088,10 @@ test('production visible poisoned lethal kobold dart life saving limits poison t
     assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
     assert.match(game._pending_message, /You feel weaker!/);
     assert.doesNotMatch(game._pending_message, /was poisoned/i);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
     assert.equal(game.inventory.includes(amulet), false);
     assert.equal(game.u.uhp, 0);
     assert.equal(game.u.acurr.a[A_STR], 9);
@@ -56113,6 +56125,10 @@ test('production visible poisoned lethal kobold dart life saving limits poison t
     assert.equal(game.u.uhp, game.u.uhpmax);
     assert.equal(game.u.acurr.a[A_STR], 9);
     assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
 test('production unseen lethal kobold dart uses deferred death cleanup after hit more', async () => {
