@@ -31866,7 +31866,7 @@ function erodeDirectMeleePassiveObject(item, type, messages) {
         return { handled: true, damaged: false, greased: true };
     }
 
-    if (item.oerodeproof || item.rustproof) {
+    if (item.oerodeproof || (type === 'rust' && item.rustproof)) {
         if (!item.rknown && game.flags?.verbose !== false && Array.isArray(messages))
             messages.push(`Somehow, your ${name} ${rustTrapNameVerb(name, 'is', 'are')} not affected by the ${spec.bythe}.`);
         item.rknown = true;
@@ -38834,7 +38834,7 @@ function erodeMonsterThrownPassiveObject(obj, type, messages) {
     }
     if (!profile.erosionMatters || (erosion.field === 'oeroded' ? profile.primaryWord : profile.secondaryWord) !== erosion.word)
         return { handled: !!erosion, damaged: false };
-    if (obj.oerodeproof || obj.rustproof) {
+    if (obj.oerodeproof || (type === 'rust' && obj.rustproof)) {
         const name = floorObjectBaseName(obj);
         if (!obj.rknown && game.flags?.verbose !== false && floorObjectVisible(obj.ox, obj.oy)
             && Array.isArray(messages))
@@ -58185,21 +58185,6 @@ export async function rhack(_cmd) {
 	                    rn2(6);
 	                    game._monster_hit_effects_after_more--;
 	                }
-                if (game._monster_throw_after_more) {
-                    const thrown = game._monster_throw_after_more;
-                    game._monster_throw_after_more = null;
-                    const landingX = thrown.x ?? (thrown.hitPet ? thrown.hitPet.mx : game.u?.ux || 0);
-                    const landingY = thrown.y ?? (thrown.hitPet ? thrown.hitPet.my : game.u?.uy || 0);
-                    const floorMessages = [];
-                    landMonsterThrownObject(thrown.missile, landingX, landingY, {
-                        glyph: thrown.glyph || ')',
-                        color: thrown.color ?? (thrown.hitPet ? NO_COLOR : CLR_CYAN),
-                        messages: floorMessages,
-                        ohit: !!thrown.ohit,
-                        passiveTarget: thrown.passiveTarget || thrown.hitPet || null,
-                    });
-                    appendToplineAfterMoreMessages(floorMessages);
-                }
                         if (game._cold_effect_after_topline_more) {
                             const cold = game._cold_effect_after_topline_more;
                             game._cold_effect_after_topline_more = null;
@@ -58259,6 +58244,7 @@ export async function rhack(_cmd) {
                         keepMore = true;
                     if (poisonResult.dead) {
                         game._exercise_after_topline_more = 0;
+                        game._monster_throw_after_more = null;
                         game._arrow_drop_throw_after_topline_more = null;
                         game._arrow_mulch_after_topline_more = 0;
                     }
@@ -58303,6 +58289,21 @@ export async function rhack(_cmd) {
 			                    rn2(2);
 			                    game._exercise_after_topline_more--;
 			                }
+                if (game._monster_throw_after_more) {
+                    const thrown = game._monster_throw_after_more;
+                    game._monster_throw_after_more = null;
+                    const landingX = thrown.x ?? (thrown.hitPet ? thrown.hitPet.mx : game.u?.ux || 0);
+                    const landingY = thrown.y ?? (thrown.hitPet ? thrown.hitPet.my : game.u?.uy || 0);
+                    const floorMessages = [];
+                    landMonsterThrownObject(thrown.missile, landingX, landingY, {
+                        glyph: thrown.glyph || ')',
+                        color: thrown.color ?? (thrown.hitPet ? NO_COLOR : CLR_CYAN),
+                        messages: floorMessages,
+                        ohit: !!thrown.ohit,
+                        passiveTarget: thrown.passiveTarget || thrown.hitPet || null,
+                    });
+                    appendToplineAfterMoreMessages(floorMessages);
+                }
                 if (game._arrow_drop_throw_after_topline_more) {
                     const arrowDrop = game._arrow_drop_throw_after_topline_more;
                     game._arrow_drop_throw_after_topline_more = null;

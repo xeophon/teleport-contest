@@ -2559,6 +2559,35 @@ function addMonsterThrownFloorMessages(messages, afterMore = false) {
     }
 }
 
+function finishMonsterThrownHeroLanding(missile, {
+    glyph = missile?.glyph || ')',
+    color = missile?.color ?? CLR_CYAN,
+    ohit = false,
+    afterMore = false,
+} = {}) {
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    if (afterMore) {
+        game._monster_throw_after_more = {
+            missile,
+            x,
+            y,
+            glyph,
+            color,
+            ohit: !!ohit,
+        };
+        return;
+    }
+    const floorMessages = [];
+    landMonsterThrownObject(missile, x, y, {
+        glyph,
+        color,
+        messages: floorMessages,
+        ohit: !!ohit,
+    });
+    addMonsterThrownFloorMessages(floorMessages);
+}
+
 function monsterThrownPotionIsAcid(potion) {
     const kind = String(potion?.actualKind || potion?.kind || '').toLowerCase();
     return potion?.otyp === POT_ACID || kind === 'acid' || kind === 'potion of acid';
@@ -6521,14 +6550,12 @@ export async function processMonsterTurns() {
                                         game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                                     }
                                     if (missed) rn2(5);
-                                    const floorMessages = [];
-                                    landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                    finishMonsterThrownHeroLanding(thrownMissile, {
                                         glyph: thrownMissile.glyph || '*',
                                         color: thrownMissile.color ?? NO_COLOR,
-                                        messages: floorMessages,
                                         ohit: !missed,
+                                        afterMore: throwerVisible && !deferPrayerProjectile,
                                     });
-                                    addMonsterThrownFloorMessages(floorMessages, throwerVisible && !deferPrayerProjectile);
                                 }
                             }
                             game._search_pending_count = 0;
@@ -7106,14 +7133,12 @@ export async function processMonsterTurns() {
                                 game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                             }
                             rn2(5);
-                            const floorMessages = [];
-                            landMonsterThrownObject(thrownBoulder, game.u?.ux || 0, game.u?.uy || 0, {
+                            finishMonsterThrownHeroLanding(thrownBoulder, {
                                 glyph: '`',
                                 color: NO_COLOR,
-                                messages: floorMessages,
                                 ohit: !missed,
+                                afterMore: throwerVisible,
                             });
-                            addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         }
                         game._search_pending_count = 0;
                         game._run_steps_remaining = 0;
@@ -7766,14 +7791,12 @@ export async function processMonsterTurns() {
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                                 }
                                 rn2(5);
-                                const floorMessages = [];
-                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                finishMonsterThrownHeroLanding(thrownMissile, {
                                     glyph: ')',
                                     color: thrownMissile.color ?? CLR_CYAN,
-                                    messages: floorMessages,
                                     ohit: !missed,
+                                    afterMore: throwerVisible,
                                 });
-                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                             }
                         }
                         game._search_pending_count = 0;
@@ -7910,14 +7933,12 @@ export async function processMonsterTurns() {
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                                 }
                                 rn2(5);
-                                const floorMessages = [];
-                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                finishMonsterThrownHeroLanding(thrownMissile, {
                                     glyph: ')',
                                     color: thrownMissile.color ?? CLR_CYAN,
-                                    messages: floorMessages,
                                     ohit: !missed,
+                                    afterMore: throwerVisible,
                                 });
-                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                             }
                         }
                         game._search_pending_count = 0;
@@ -8050,14 +8071,12 @@ export async function processMonsterTurns() {
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                                 }
                                 rn2(5);
-                                const floorMessages = [];
-                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                finishMonsterThrownHeroLanding(thrownMissile, {
                                     glyph: ')',
                                     color: CLR_CYAN,
-                                    messages: floorMessages,
                                     ohit: !missed,
+                                    afterMore: throwerVisible,
                                 });
-                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                             }
                         }
                         game._search_pending_count = 0;
@@ -8364,14 +8383,11 @@ export async function processMonsterTurns() {
                                 });
                                 addMonsterThrownFloorMessages(floorMessages);
                             } else if (!crudeDaggerCaught) {
-                                const floorMessages = [];
-                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                finishMonsterThrownHeroLanding(thrownMissile, {
                                     glyph: ')',
                                     color: CLR_CYAN,
-                                    messages: floorMessages,
                                     ohit: crudeDaggerOhit,
                                 });
-                                addMonsterThrownFloorMessages(floorMessages);
                             }
                             game._search_pending_count = 0;
                             game._counted_repeat_interruptible = 0;
@@ -8489,14 +8505,12 @@ export async function processMonsterTurns() {
                                     game._exercise_after_topline_more = (game._exercise_after_topline_more || 0) + 1;
                                 }
                                 rn2(5);
-                                const floorMessages = [];
-                                landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
+                                finishMonsterThrownHeroLanding(thrownMissile, {
                                     glyph: ')',
                                     color: CLR_CYAN,
-                                    messages: floorMessages,
                                     ohit: !missed,
+                                    afterMore: throwerVisible,
                                 });
-                                addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                             }
                         }
                         game._search_pending_count = 0;
