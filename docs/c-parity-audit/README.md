@@ -181,6 +181,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [773-direct-melee-egg-bash-survivor-wakeup-2026-06-08.md](773-direct-melee-egg-bash-survivor-wakeup-2026-06-08.md): direct hero melee wielded egg bash survivor `wakeup(TRUE)` anger tail while preserving thrown-egg wake behavior.
 - [774-direct-melee-egg-bash-sleeping-wakeup-message-2026-06-08.md](774-direct-melee-egg-bash-sleeping-wakeup-message-2026-06-08.md): direct hero melee wielded egg bash sleeping survivor visible wake message and deferred growl/nearby-wakeup/anger tail.
 - [775-direct-melee-egg-bash-low-hp-passive-tail-2026-06-08.md](775-direct-melee-egg-bash-low-hp-passive-tail-2026-06-08.md): direct hero melee wielded ordinary egg bash low-HP survivor flee and consumed-before-passive-object tail ordering.
+- [776-live-egg-rock-transform-passive-tail-2026-06-08.md](776-live-egg-rock-transform-passive-tail-2026-06-08.md): fresh ordinary egg-to-rock metadata cleanup plus direct melee low-HP/passive-object tail ordering.
 
 ## Cross-Cutting Themes
 

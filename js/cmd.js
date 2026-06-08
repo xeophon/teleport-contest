@@ -24988,6 +24988,7 @@ function placeThrownEggPetrifiedRock(egg, mon) {
         plural: 'rocks',
         quan: 1,
         spe: 0,
+        owt: 10,
         known: false,
         dknown: false,
         bknown: false,
@@ -24995,6 +24996,9 @@ function placeThrownEggPetrifiedRock(egg, mon) {
         oy: mon.my,
         color: CLR_GRAY,
     });
+    delete egg.artifact;
+    delete egg.oartifact;
+    delete egg.artifactShort;
     delete egg.corpsenm;
     delete egg.eggKnown;
     delete egg.line;
@@ -25014,11 +25018,15 @@ function transformMeleeEggStackToRocks(egg) {
         singular: 'rock',
         plural: 'rocks',
         spe: 0,
+        owt: 10,
         known: false,
         dknown: false,
         bknown: false,
         color: CLR_GRAY,
     });
+    delete egg.artifact;
+    delete egg.oartifact;
+    delete egg.artifactShort;
     delete egg.corpsenm;
     delete egg.eggKnown;
     Object.assign(egg, object_display(egg));

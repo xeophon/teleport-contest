@@ -61647,6 +61647,13 @@ test('hero-thrown live ordinary egg hitting cockatrice becomes rock', async () =
         _egg_hatch_seq: 3,
         _egg_hatch_consumed: true,
         age: game.moves || 1,
+        artifact: 'The Oval Stone',
+        oartifact: 'The Oval Stone',
+        artifactShort: 'Oval Stone',
+        owt: 1,
+        known: true,
+        dknown: true,
+        bknown: true,
     };
     const cockatrice = ordinaryThrowTarget('cockatrice', 7, 5, {
         data: { name: 'cockatrice', mlevel: 5, touchPetrifies: true },
@@ -61658,7 +61665,7 @@ test('hero-thrown live ordinary egg hitting cockatrice becomes rock', async () =
     await rhack('e');
     await rhack('l');
 
-    assert.match(game._pending_message, /You hit the cockatrice with an egg\./);
+    assert.match(game._pending_message, /You hit the cockatrice with the newt egg\./);
     assert.match(game._pending_message, /The egg isn't alive any more\.\.\./);
     assert.doesNotMatch(game._pending_message, /Splat!|misses|top of your head/);
     assert.equal(game.inventory.includes(eggItem), false);
@@ -61666,6 +61673,14 @@ test('hero-thrown live ordinary egg hitting cockatrice becomes rock', async () =
     const rock = game.level.objects[0];
     assert.equal(rock.otyp, ROCK);
     assert.equal(rock.kind, 'rock');
+    assert.equal(rock.actualKind, 'rock');
+    assert.equal(rock.owt, 10);
+    assert.equal(rock.known, false);
+    assert.equal(rock.dknown, false);
+    assert.equal(rock.bknown, false);
+    assert.equal(rock.artifact, undefined);
+    assert.equal(rock.oartifact, undefined);
+    assert.equal(rock.artifactShort, undefined);
     assert.equal(rock.ox, 7);
     assert.equal(rock.oy, 5);
     assert.equal(rock.eggHatchTurn, undefined);
@@ -75642,6 +75657,13 @@ test('wielded live egg bash against cockatrice transforms in inventory', async (
         _egg_hatch_seq: 3,
         _egg_hatch_consumed: true,
         age: game.moves || 1,
+        artifact: 'The Oval Stone',
+        oartifact: 'The Oval Stone',
+        artifactShort: 'Oval Stone',
+        owt: 1,
+        known: true,
+        dknown: true,
+        bknown: true,
     };
     eggItem.line = 'e - an egg (wielded)';
     const cockatrice = ordinaryThrowTarget('cockatrice', 6, 5, {
@@ -75656,21 +75678,80 @@ test('wielded live egg bash against cockatrice transforms in inventory', async (
 
     await rhack('l');
 
-    assert.match(game._pending_message, /You hit the cockatrice with an egg\./);
+    assert.match(game._pending_message, /You hit the cockatrice with the newt egg\./);
     assert.match(game._pending_message, /The egg isn't alive any more\.\.\./);
     assert.doesNotMatch(game._pending_message, /Splat!|misses|top of your head/);
     assert.equal(game.inventory[0], eggItem);
     assert.equal(game.level.objects.length, 0);
     assert.equal(eggItem.otyp, ROCK);
     assert.equal(eggItem.kind, 'rock');
+    assert.equal(eggItem.actualKind, 'rock');
     assert.equal(eggItem.wielded, true);
     assert.equal(eggItem.line, 'e - a rock (wielded)');
+    assert.equal(eggItem.owt, 10);
+    assert.equal(eggItem.known, false);
+    assert.equal(eggItem.dknown, false);
+    assert.equal(eggItem.bknown, false);
+    assert.equal(eggItem.artifact, undefined);
+    assert.equal(eggItem.oartifact, undefined);
+    assert.equal(eggItem.artifactShort, undefined);
     assert.equal(eggItem.eggHatchTurn, undefined);
     assert.equal(eggItem._egg_hatch_seq, undefined);
     assert.equal(eggItem._egg_hatch_consumed, undefined);
     assert.equal(eggItem.corpsenm, undefined);
     assert.equal(cockatrice.mhp, 4);
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
+});
+
+test('wielded live ordinary egg transform runs low-HP tail before passive object tail', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    installCoreRngValues(Array(40).fill(0));
+    game.u.ulevel = 20;
+    game.u.uhitinc = 30;
+    game.u.acurr.a[A_DEX] = 25;
+    const eggItem = {
+        ...egg(876087, 'e'),
+        otyp: EGG,
+        wielded: true,
+        corpsenm: { name: 'newt' },
+        eggHatchTurn: (game.moves || 1) + 50,
+        _egg_hatch_seq: 4,
+        _egg_hatch_consumed: true,
+        age: game.moves || 1,
+    };
+    eggItem.line = 'e - an egg (wielded)';
+    const cockatrice = passiveObjectTarget('cockatrice', 'acid', 6, 5, {
+        mhp: 11,
+        mhpmax: 30,
+        msleeping: 0,
+        mpeaceful: false,
+        data: { name: 'cockatrice', mlevel: 5, mac: 10, touchPetrifies: true },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [cockatrice];
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        "You hit the cockatrice with an egg.  The egg isn't alive any more...");
+    assert.equal(cockatrice.mhp, 10);
+    assert.equal(cockatrice.mflee, 1);
+    assert.equal(cockatrice.mfleetim, 1);
+    assert.equal(game.inventory[0], eggItem);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(eggItem.otyp, ROCK);
+    assert.equal(eggItem.kind, 'rock');
+    assert.equal(eggItem.actualKind, 'rock');
+    assert.equal(eggItem.wielded, true);
+    assert.equal(eggItem.line, 'e - a rock (wielded)');
+    assert.doesNotMatch(game._pending_message, /Splat!|corrodes|rusts|smoulders|less effective/);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(25)'), [0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(100)'), [1]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), [0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0, 0]);
 });
 
 function installDirectDisenchanterMeleeState({
