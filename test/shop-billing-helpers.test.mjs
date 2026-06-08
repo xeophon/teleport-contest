@@ -13784,6 +13784,84 @@ test('blessed genocide refuses C non-G_GENO golem class', async () => {
         assert.notEqual(game._genocided_monsters?.includes(name), true);
 });
 
+test('genocide refuses remaining generated C non-G_GENO common monsters', async () => {
+    const names = [
+        'titan', 'wererat', 'werejackal', 'werewolf',
+        'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
+        'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
+        'salamander',
+    ];
+
+    for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31080 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(name);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+    }
+});
+
+test('blessed genocide skips C non-G_GENO titan in giant class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31095, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('H');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all stone giants\./);
+    assert.match(message, /You aren't permitted to genocide titans\./);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('stone giant'), true);
+    assert.notEqual(game._genocided_monsters?.includes('titan'), true);
+});
+
+test('blessed genocide refuses generated C non-G_GENO demon class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31096, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('&');
+
+    const message = game._pending_message || '';
+    assert.match(message, /You aren't permitted to genocide such monsters\./);
+    assert.match(message, /What class of monsters do you want to genocide\?/);
+    assert.doesNotMatch(message, /Wiped out all/);
+    assert.equal(game._command_mode, 'genocideText');
+    for (const name of [
+        'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
+        'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
+    ])
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+});
+
+test('blessed genocide skips C non-G_GENO salamander in lizard class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31097, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse(':');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all newts\./);
+    assert.match(message, /You aren't permitted to genocide salamanders\./);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('newt'), true);
+    assert.notEqual(game._genocided_monsters?.includes('salamander'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

@@ -31012,6 +31012,10 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'straw golem', 'paper golem', 'rope golem', 'gold golem',
     'leather golem', 'wood golem', 'flesh golem', 'clay golem',
     'stone golem', 'glass golem', 'iron golem',
+    'titan', 'wererat', 'werejackal', 'werewolf',
+    'amorous demon', 'marilith', 'vrock', 'hezrou', 'bone devil',
+    'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
+    'salamander',
 ]);
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
