@@ -34618,7 +34618,7 @@ function kickFloorObjectSupported(obj, x, y, options = {}) {
     if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
     if ((!isBoxObject(obj) && isTipContainerObject(obj)) || globContents(obj).length) return false;
     const shopFloorGate = !!options.shopFloorGate;
-    if ((shopObjectOrContentsUnpaid(obj) || (shopkeeperForCostlySpot(x, y) && !shopFloorGate))
+    if ((shopObjectOrContentsUnpaid(obj) || (shopkeeperForCostlySpot(x, y) && !shopFloorGate && !shopBillableGold(obj)))
         && !fragileBreakKind)
         return false;
     if (impactDropBreakKind(obj) && !fragileBreakKind) return false;
@@ -34784,6 +34784,51 @@ const FLYING_COIN_MESSAGES = [
     'send coins flying in all directions',
 ];
 
+function shopCreditSnapshot(shkp) {
+    return {
+        credit: Math.max(0, Math.trunc(Number(shkp?.credit || 0))),
+        debit: Math.max(0, Math.trunc(Number(shkp?.debit || 0))),
+        loan: Math.max(0, Math.trunc(Number(shkp?.loan || 0))),
+    };
+}
+
+function shopCreditReportDeltaMessage(before, shkp) {
+    if (!before || !shkp) return '';
+    const after = shopCreditSnapshot(shkp);
+    let amount = 0;
+    let label = 'debt has increased';
+    if (after.credit < before.credit) {
+        amount = before.credit - after.credit;
+        label = 'credit has been reduced';
+    } else if (after.debit > before.debit) {
+        amount = after.debit - before.debit;
+    } else if (after.loan > before.loan) {
+        amount = after.loan - before.loan;
+    }
+    return amount ? `Your ${label} by ${amount} ${shopCurrency(amount)}.` : '';
+}
+
+function kickedGoldSourceShopkeeper(x, y) {
+    const shkp = shopkeeperForCostlySpot(x, y);
+    return shopkeeperInHisShop(shkp) ? shkp : null;
+}
+
+function kickedGoldNormalFlightLeavesShop(sx, sy, x, y) {
+    const sourceRoom = game.level?.at?.(sx, sy)?.roomno || 0;
+    const landingRoom = game.level?.at?.(x, y)?.roomno || 0;
+    return !shopkeeperForCostlySpot(x, y) || sourceRoom !== landingRoom;
+}
+
+function chargeKickedGoldNormalFlightFromShop(obj, sx, sy, x, y, messages) {
+    if (!shopBillableGold(obj) || !kickedGoldNormalFlightLeavesShop(sx, sy, x, y)) return null;
+    const shkp = kickedGoldSourceShopkeeper(sx, sy);
+    if (!shkp) return null;
+    const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+    const charged = costlyGoldToShopkeeper(shkp, quantity);
+    messages.push(...costlyGoldMessages(charged));
+    return charged;
+}
+
 function splitKickedGoldScatterStack(obj) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     if (!obj || quantity <= 1) return obj;
@@ -34839,21 +34884,35 @@ function kickedGoldScatterLanding(obj, sx, sy, blastForce, messages) {
 
 function scatterKickedGoldStack(obj, sx, sy, blastForce, messages) {
     if (!obj || !game.level) return [];
+    const sourceShkp = kickedGoldSourceShopkeeper(sx, sy);
+    const chargeLostGold = !!sourceShkp && !!heroShopkeeper();
+    const beforeCredit = chargeLostGold ? shopCreditSnapshot(sourceShkp) : null;
+    let lostGold = false;
     removeFloorObject(obj);
     const scattered = [];
     while (obj) {
         const piece = splitKickedGoldScatterStack(obj);
         if (piece === obj) obj = null;
+        const pieceQuantity = Math.max(1, Math.trunc(Number(piece?.quan || 1)));
         const landing = kickedGoldScatterLanding(piece, sx, sy, blastForce, messages);
         if (!landing.placed && !landing.consumed) {
-            placeObjectOnFloorWithEffects(piece, landing.x, landing.y, messages, 'land', {
+            const placed = placeObjectOnFloorWithEffects(piece, landing.x, landing.y, messages, 'land', {
                 stack: true,
                 usedUpShopBillOnDestroy: true,
             });
+            if (placed && chargeLostGold && (landing.x !== sx || landing.y !== sy)
+                && !shopkeeperForCostlySpot(landing.x, landing.y)) {
+                costlyGoldToShopkeeper(sourceShkp, pieceQuantity);
+                lostGold = true;
+            }
         }
         if (!landing.consumed) scattered.push(piece);
     }
     newsym(sx, sy);
+    if (lostGold) {
+        const report = shopCreditReportDeltaMessage(beforeCredit, sourceShkp);
+        if (report) messages.push(report);
+    }
     return scattered;
 }
 
@@ -35069,10 +35128,13 @@ async function kickFloorObjectToward(dir, x, y) {
             const shipped = maybeShipRemoteProjectileObject(obj, flight.x, flight.y, messages, {
                 shopFloorObj: !!shopkeeperForCostlySpot(x, y),
             });
-            if (!shipped.handled)
+            if (!shipped.handled) {
+                chargeKickedGoldNormalFlightFromShop(obj, x, y, flight.x, flight.y, messages);
                 placeKickedFloorObject(obj, flight.x, flight.y, messages);
+            }
             return { handled: true, messages, moved: true, shipObject: shipped };
         }
+        chargeKickedGoldNormalFlightFromShop(obj, x, y, flight.x, flight.y, messages);
         placeKickedFloorObject(obj, flight.x, flight.y, messages);
         return { handled: true, messages, moved: true };
     }

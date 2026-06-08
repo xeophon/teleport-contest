@@ -44823,6 +44823,115 @@ test('command kicked multi gold stack scatters into random sub-stacks', async ()
     ]);
 });
 
+test('command kicked shop-floor gold stack scatter bills pieces leaving shop', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    game.level.at = (x, y) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const coins = { ...goldPieces(512103, 7), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coins];
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        1, 0, 0,
+        2, 0, 4, 0,
+        1, 0, 2, 0,
+        0, 0, 6, 0,
+        3, 0,
+    ]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const floorGold = game.level.objects.filter(obj => obj.otyp === 466 || obj.cls === 'coin');
+    const bySpot = new Map(floorGold.map(obj => [`${obj.ox},${obj.oy}`, obj.quan]));
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.deepEqual([...bySpot.entries()].sort(), [
+        ['6,4', 2],
+        ['6,6', 1],
+        ['7,4', 1],
+        ['7,5', 3],
+    ]);
+    assert.equal(shkp.credit || 0, 0);
+    assert.equal(shkp.debit, 4);
+    assert.equal(shkp.loan, 4);
+    assert.equal(game._pending_message,
+        'You kick 7 gold pieces.  Thwwpingg!  You scatter the coins!  Your debt has increased by 4 zorkmids.');
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(20)',
+        'rn2(3)',
+        'rnd(3)',
+        'rnd(6)',
+        'rnd(2)',
+        'rn2(8)',
+        'rnd(1)',
+        'rnd(3)',
+        'rnd(2)',
+        'rn2(8)',
+        'rnd(1)',
+        'rnd(1)',
+        'rnd(2)',
+        'rn2(8)',
+        'rnd(1)',
+        'rn2(8)',
+        'rnd(1)',
+    ]);
+});
+
+test('command kicked shop-floor gold stack scatter credit report uses C snapshot wording', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 }, credit: 3 });
+    game.level.at = (x, y) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const coins = { ...goldPieces(512104, 7), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coins];
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        1, 0, 0,
+        2, 0, 4, 0,
+        1, 0, 2, 0,
+        0, 0, 6, 0,
+        3, 0,
+    ]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(shkp.credit, 0);
+    assert.equal(shkp.debit, 1);
+    assert.equal(shkp.loan, 1);
+    assert.equal(game._pending_message,
+        'You kick 7 gold pieces.  Thwwpingg!  You scatter the coins!  Your credit has been reduced by 3 zorkmids.');
+    assert.doesNotMatch(game._pending_message, /debt|owe/);
+});
+
+test('command kicked shop-floor single gold piece leaving shop charges source square', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    game.level.at = (x, y) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const coin = { ...goldPieces(512105, 1), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coin];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], coin);
+    assert.equal(coin.ox, 14);
+    assert.equal(coin.oy, 5);
+    assert.equal(shkp.debit, 1);
+    assert.equal(shkp.loan, 1);
+    assert.equal(game._pending_message, 'You kick gold piece.  You owe Izchak 1 zorkmid.');
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('command kicked small multi gold stack rare no-scatter falls through to flight', async () => {
     installNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
@@ -44844,6 +44953,33 @@ test('command kicked small multi gold stack rare no-scatter falls through to fli
     assert.equal(coins.oy, 5);
     assert.equal(game._pending_message, 'You kick 7 gold pieces.');
     assert.doesNotMatch(game._pending_message, /Thwwpingg|scatter|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0']);
+});
+
+test('command kicked shop-floor small gold stack rare no-scatter charges whole flight', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    game.level.at = (x, y) => ({ roomno: x <= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true });
+    game.u.acurr.a[A_STR] = 18;
+    const coins = { ...goldPieces(512106, 7), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coins];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], coins);
+    assert.equal(coins.quan, 7);
+    assert.equal(coins.ox, 14);
+    assert.equal(coins.oy, 5);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(game._pending_message, 'You kick 7 gold pieces.  You owe Izchak 7 zorkmids.');
     assert.deepEqual(getRngLog(), ['rn2(20)=0']);
 });
 
