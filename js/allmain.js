@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -6828,6 +6828,7 @@ export async function processMonsterTurns() {
                             const floorMessages = [];
                             const breakKind = projectileTopLevelBreakKind(thrownMissile);
                             if (breakKind) projectileTopLevelBreakMessage(thrownMissile, breakKind, floorMessages);
+                            else if (!heroIsDeafForMonsterNoise()) floorMessages.push('Flapp!');
                             landMonsterThrownObject(thrownMissile, eggTerrainStop.x, eggTerrainStop.y, {
                                 glyph: '%',
                                 color: CLR_WHITE,
@@ -6862,7 +6863,6 @@ export async function processMonsterTurns() {
                                 && rn2(Math.max(1, catchChance)) === 0;
                             if (caught) {
                                 const catchResult = holdCaughtThrownObject(thrownMissile, {
-                                    catchName: 'egg',
                                     glyph: '%',
                                     color: CLR_WHITE,
                                 });
@@ -6881,10 +6881,12 @@ export async function processMonsterTurns() {
                                             ? `${eggNameCap} misses you.`
                                             : `You are almost hit by ${eggName}.`;
                                 } else {
-                                    startHeroMonsterThrownEggStoning(thrownMissile);
+                                    const polyselfMessage = startHeroMonsterThrownEggStoning(thrownMissile);
+                                    if (polyselfMessage) resultMessage = `${resultMessage}  ${polyselfMessage}`;
                                 }
                                 if (throwerVisible) game._topline_after_more = resultMessage;
                                 else addToplineMessage(resultMessage);
+                                if (missed) rn2(5);
                                 const floorMessages = [];
                                 landMonsterThrownObject(thrownMissile, game.u?.ux || 0, game.u?.uy || 0, {
                                     glyph: '%',
@@ -9168,7 +9170,9 @@ async function finishMonsterTurnTail() {
         if (!game.u._stonedTimeout) {
             const killer = game.u._stonedKiller || 'cockatrice egg';
             game.u.uhp = 0;
-            game._death_cause = `petrified by ${articleFor(killer)} ${killer}`;
+            game._death_cause = killer === 'petrification'
+                ? 'killed by petrification'
+                : `petrified by ${articleFor(killer)} ${killer}`;
             game._death_current_move = 1;
             if (consumeLifeSavingAmulet({ clearStoning: true })) {
                 armHeroLifeSavingMore();
@@ -9938,16 +9942,17 @@ function petrifyMonsterFromMonsterThrownEgg(target, visible, { afterMore = false
 }
 
 function startHeroMonsterThrownEggStoning(item) {
-    if (!game.u || !isMonsterThrownPetrifyingEgg(item)) return false;
+    if (!game.u || !isMonsterThrownPetrifyingEgg(item)) return '';
     const form = game.u?._polyself_form || {};
     if (game.u.stoneResistance || form.stoneResistance || String(form.name || '').toLowerCase() === 'stone golem')
-        return false;
-    if (game.u._stonedTimeout) return false;
-    const species = monsterThrownEggSpeciesName(item) || 'cockatrice';
+        return '';
+    if (game.u._stonedTimeout) return '';
+    const polyselfMessage = maybeTurnPolyselfIntoStoneGolem();
+    if (polyselfMessage) return polyselfMessage;
     game.u._stonedTimeout = 5;
-    game.u._stonedKiller = `${species} egg`;
+    game.u._stonedKiller = 'petrification';
     addHeroStatusSuffix('Stone');
-    return true;
+    return '';
 }
 
 function heroCanBeCreamedByMonsterPie() {

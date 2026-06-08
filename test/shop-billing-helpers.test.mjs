@@ -53311,9 +53311,12 @@ async function runMonsterKopCreamPieLanding({
 
 async function runMonsterPetrifyingEggThrow({
     seed = 8,
+    coreRngValues = null,
     heroBlind = false,
+    heroFumbling = false,
     heroDex = 10,
     uac = 20,
+    heroOverrides = {},
     levelCells = [],
     throwerX = 9,
     monsterName = 'soldier',
@@ -53326,6 +53329,7 @@ async function runMonsterPetrifyingEggThrow({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    if (coreRngValues) installCoreRngValues(coreRngValues);
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -53333,13 +53337,16 @@ async function runMonsterPetrifyingEggThrow({
         ux0: 5,
         uy0: 5,
         blind: heroBlind,
+        fumbling: heroFumbling,
         _statusSuffix: heroBlind ? ' Blind' : '',
         uhp: 20,
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
         acurr: { a: [10, 10, 10, heroDex, 10, 10] },
+        ...heroOverrides,
     });
+    game.flags.verbose = true;
     game.moves = 1;
     game.context = {};
     if (levelCells.length) {
@@ -55857,6 +55864,173 @@ test('production monster cockatrice egg petrifies intervening monster before her
     assert.doesNotMatch(messages, /You are hit|misses you|Clonk!/);
     assert.ok(rngNames.includes('rnd(20)'), rng.join(', '));
     assert.equal(rngNames.includes('rn2(100)'), false, rng.join(', '));
+});
+
+test('production monster cockatrice egg catch uses known species name', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        heroDex: 99,
+        uac: 20,
+    });
+    const caught = game.inventory.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(caught);
+    assert.equal(caught.kind, 'egg');
+    assert.equal(caught.corpsenm?.name, 'cockatrice');
+    assert.equal(caught.line, 'a - a cockatrice egg');
+
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(1)']);
+    assert.equal(preNhgetchMessages.some(message => /You catch the cockatrice egg!/.test(message)), true,
+        preNhgetchMessages.join('\n'));
+});
+
+test('production monster cockatrice egg hit starts hero stoning and deletes egg', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1, 1, 0],
+        heroFumbling: true,
+        heroDex: 10,
+        uac: 20,
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout, 5);
+    assert.equal(game.u._stonedKiller, 'petrification');
+    assert.match(game.u._statusSuffix || '', /Stone/);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /You are hit by a cockatrice egg\./);
+    assert.doesNotMatch(messages, /You catch|misses you|Splat|Flapp/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)']);
+});
+
+test('production monster cockatrice egg hit turns golem polyself into stone golem', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1, 1, 0, 7, 123],
+        heroFumbling: true,
+        heroDex: 10,
+        uac: 20,
+        heroOverrides: {
+            _polyself_base: {
+                uhp: 20,
+                uhpmax: 20,
+                uen: 5,
+                uenmax: 5,
+                uac: 10,
+                ulevel: 1,
+                blind: false,
+                _blindTimeout: 0,
+                _blindAfterStatus: 0,
+                uhpinc: [20],
+                ueninc: [5],
+            },
+            _polyself_form: { name: 'flesh golem', mlet: "'", glyph: "'", mac: 9, mlevel: 9, mmove: 8 },
+        },
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(game.u._stonedKiller || '', '');
+    assert.equal(game.u._polyself_form?.name, 'stone golem');
+    assert.equal(game.u.stoneResistance || false, false);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+
+    assert.match(messages, /You are hit by a cockatrice egg\./);
+    assert.match(messages, /You turn into a stone golem!/);
+    assert.doesNotMatch(messages, /Stone/);
+    assert.deepEqual(rng.map(rngCallName), [
+        'rn2(5)', 'rn2(25)', 'rn2(5)', 'rn2(25)', 'rn2(25)',
+        'rn2(5)', 'rn2(5)', 'rnd(20)', 'rn2(19)', 'rn2(500)',
+    ]);
+});
+
+test('production monster cockatrice egg miss lands intact on hero square', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 1, 1, 19, 3],
+        heroFumbling: true,
+        heroDex: 10,
+        uac: 10,
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(landed);
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'egg');
+    assert.equal(landed.corpsenm?.name, 'cockatrice');
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /A cockatrice egg misses you\./);
+    assert.doesNotMatch(messages, /You catch|You are hit|Splat|Flapp/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)', 'rn2(5)']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(100)=')), false, rng.join(', '));
+});
+
+test('production monster cockatrice egg forced iron bars hit splats before hero', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 0, 50],
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        uac: 20,
+    });
+    const messages = preNhgetchMessages.join('\n');
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.equal(game.level.objects.some(obj => obj.id === eggProjectile.id), false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /Splat!/);
+    assert.doesNotMatch(messages, /You catch|You are hit|misses you|Flapp/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(100)']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(1)=')
+        || entry.startsWith('rnd(20)=')), false, rng.join(', '));
+});
+
+test('production monster cockatrice egg forced iron bars resisted break lands intact before hero', async () => {
+    const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        seed: 8,
+        coreRngValues: [1, 1, 0, 0],
+        throwerX: 9,
+        levelCells: [[6, 5, { typ: IRONBARS }]],
+        uac: 20,
+    });
+    const messages = preNhgetchMessages.join('\n');
+    const landed = game.level.objects.find(obj => obj.id === eggProjectile.id);
+
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u._stonedTimeout || 0, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === eggProjectile.id), false);
+    assert.ok(landed);
+    assert.equal(landed.ox, 7);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.kind, 'egg');
+    assert.equal(landed.corpsenm?.name, 'cockatrice');
+    assert.equal(landed.transientProjectile, false);
+
+    assert.match(messages, /throws a cockatrice egg!/);
+    assert.match(messages, /Flapp!/);
+    assert.doesNotMatch(messages, /You catch|You are hit|misses you|Splat/);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(100)']);
+    assert.equal(rng.some(entry => entry.startsWith('rn2(1)=')
+        || entry.startsWith('rnd(20)=')), false, rng.join(', '));
 });
 
 test('production Kop cream pie catch adds the thrown pie to inventory', async () => {
