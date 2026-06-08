@@ -9,7 +9,7 @@ import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, vie
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d } from './rng.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, isok } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES } from './monster_data.js';
@@ -54,6 +54,8 @@ const RACE_CANONICAL = new Map(Object.keys(RACE_STATE).map(name => [name.toLower
 const ALIGN_CANONICAL = new Map(Object.keys(ALIGN_TYPE).map(name => [name.toLowerCase(), name]));
 const GENDER_CANONICAL = new Map(['male', 'female'].map(name => [name, name]));
 const EGG = 10001;
+const TIN = 10004;
+const GLOB_OF_GREEN_SLIME = 10182;
 const LUMP_OF_ROYAL_JELLY = 10089;
 const MEAT_RING = 10164;
 const MEATBALL = 11012;
@@ -9922,9 +9924,160 @@ function monsterThrownEggHitName(item) {
     return species ? `${articleFor(species)} ${species} egg` : 'an egg';
 }
 
+function monsterCanUseMunstone(mon) {
+    if (!mon || monsterResistsStoning(mon)) return false;
+    return !(mon.meating || mon.mfrozen || mon.mcanmove === false);
+}
+
+function monsterAcidResistant(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || '').toLowerCase();
+    return !!(data.acidResistance || data.resistsAcid || name === 'acid blob'
+        || name === 'yellow dragon' || name === 'baby yellow dragon');
+}
+
+function monsterSlimeproof(mon) {
+    const data = mon?.data || {};
+    const name = String(data.name || '').toLowerCase();
+    return name === 'green slime' || !!(data.flaming || data.noncorporeal || data.slimeproof);
+}
+
+function monsterCanOpenTin(mon) {
+    const data = mon?.data || {};
+    if (data.animal) return false;
+    return (mon?.minvent || []).some(item => {
+        const kind = String(item.kind || item.actualKind || '').toLowerCase();
+        return item.kind === 'tin opener' || kind.includes('tin opener')
+            || kind.includes('dagger') || kind.includes('knife');
+    });
+}
+
+function monsterMunstoneFoodSpecies(item) {
+    return String(item?.corpsenm?.name || item?.corpsenm || '').toLowerCase();
+}
+
+function monsterMunstoneItemIsCorpse(item) {
+    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    return item?.otyp === CORPSE || item?.otyp === 'corpse' || /\bcorpse$/.test(kind);
+}
+
+function monsterMunstoneItemIsTin(item) {
+    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    return item?.otyp === TIN || kind === 'tin';
+}
+
+function monsterMunstoneItemIsAcidPotion(item) {
+    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    return item?.otyp === POT_ACID || item?.potionIndex === 23 || kind === 'acid' || kind === 'potion of acid';
+}
+
+function monsterMunstoneItemIsGreenSlimeGlob(item) {
+    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    return item?.otyp === GLOB_OF_GREEN_SLIME || item?.globby && /\bgreen slime\b/.test(kind);
+}
+
+function monsterMunstoneItemIsAcidicFood(item) {
+    const species = monsterMunstoneFoodSpecies(item);
+    return !!(item?.corpsenm?.acidic || species === 'acid blob');
+}
+
+function monsterMunstoneCureKind(mon, item, tinok) {
+    if (monsterMunstoneItemIsAcidPotion(item)) return { type: 'potion', acid: true, tinned: false, lizard: false };
+    if (monsterMunstoneItemIsGreenSlimeGlob(item))
+        return monsterSlimeproof(mon) ? { type: 'food', acid: false, tinned: false, lizard: false } : null;
+    const tinned = monsterMunstoneItemIsTin(item);
+    if (!monsterMunstoneItemIsCorpse(item) && (!tinned || !tinok)) return null;
+    const species = monsterMunstoneFoodSpecies(item);
+    if (!species) return null;
+    const lizard = species === 'lizard';
+    if (!lizard && !monsterMunstoneItemIsAcidicFood(item)) return null;
+    return { type: tinned ? 'tin' : 'food', acid: !lizard, tinned, lizard };
+}
+
+function monsterMunstoneConsumeMessage(mon, item, cure, visible) {
+    const action = cure.type === 'potion'
+        ? 'quaffs'
+        : cure.type === 'tin' ? 'opens and eats the contents of' : 'eats';
+    if (!visible) return action === 'quaffs' ? 'You hear drinking.' : 'You hear chewing.';
+    let name = '';
+    if (monsterMunstoneItemIsCorpse(item)) {
+        const species = monsterMunstoneFoodSpecies(item);
+        name = species ? `${species} corpse` : 'corpse';
+    } else if (monsterMunstoneItemIsTin(item)) {
+        name = 'tin';
+    } else if (monsterMunstoneItemIsGreenSlimeGlob(item)) {
+        name = 'glob of green slime';
+    } else {
+        name = pickupObjectName({ ...item, quan: 1, letter: undefined, line: undefined });
+    }
+    return `${monsterDisplayName(mon)} ${action} ${articleFor(name)} ${name}.`;
+}
+
+function consumeMonsterMunstoneItem(mon, item) {
+    if ((item.quan || 1) > 1) {
+        item.quan--;
+    } else {
+        mon.minvent = (mon.minvent || []).filter(obj => obj !== item);
+        if (mon.missile === item) mon.missile = null;
+        if (mon.mw === item) mon.mw = null;
+    }
+}
+
+function adjustMonsterPetrificationSpeed(mon, messages, visible) {
+    if (!mon?.data || mon.data.mmove === 0 || mon.data.mmove === false) return;
+    if (mon.permspeed === 'fast') mon.permspeed = 0;
+    if (mon.mspeed === 'fast') mon.mspeed = 0;
+    if (visible) messages.push(`${monsterDisplayName(mon)} is slowing down.`);
+}
+
+function monsterMunstone(mon, messages, visible) {
+    if (!monsterCanUseMunstone(mon)) return false;
+    if (Number.isInteger(mon.mstrategy)) mon.mstrategy &= ~STRAT_WAITFORU;
+    else if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
+    mon.waiting = false;
+
+    const tinok = monsterCanOpenTin(mon);
+    const cureItem = (mon.minvent || [])
+        .map(item => ({ item, cure: monsterMunstoneCureKind(mon, item, tinok) }))
+        .find(entry => entry.cure);
+    if (!cureItem) return false;
+
+    adjustMonsterPetrificationSpeed(mon, messages, visible);
+    messages.push(monsterMunstoneConsumeMessage(mon, cureItem.item, cureItem.cure, visible));
+    consumeMonsterMunstoneItem(mon, cureItem.item);
+    if (cureItem.cure.acid && !cureItem.cure.tinned && !monsterAcidResistant(mon)) {
+        mon.mhp = Math.max(0, (mon.mhp || 1) - rnd(15));
+        if (visible) messages.push(`${monsterDisplayName(mon)} has a very bad case of stomach acid.`);
+        if ((mon.mhp || 0) <= 0) {
+            messages.push(`${monsterDisplayName(mon)} dies!`);
+            game.level.monsters = (game.level.monsters || []).filter(other => other !== mon);
+            mon.dead = true;
+            mon.movement = 0;
+            return true;
+        }
+    }
+    if (visible) messages.push(`${monsterDisplayName(mon)} seems limber!`);
+    if (cureItem.cure.lizard && (mon.mconf || mon.mstun)) {
+        mon.mconf = 0;
+        mon.mstun = 0;
+        if (visible && !(mon.data?.bat || mon.data?.name === 'stalker'))
+            messages.push(`${monsterDisplayName(mon)} seems steadier now.`);
+    }
+    mon.movement = (mon.movement || 0) - NORMAL_SPEED;
+    mon.mlstmv = game.moves || 0;
+    return true;
+}
+
 function petrifyMonsterFromMonsterThrownEgg(target, visible, { afterMore = false } = {}) {
     const messages = [];
     if (monsterResistsStoning(target)) return false;
+    if (monsterMunstone(target, messages, visible)) {
+        for (const message of messages) {
+            if (afterMore) appendAfterMoreMessage(message);
+            else addToplineMessage(message);
+        }
+        return true;
+    }
     if (monsterPolyWhenStoned(target) && stoneGolemPolymorphMonster(target, messages, visible)) {
         for (const message of messages) {
             if (afterMore) appendAfterMoreMessage(message);
@@ -9932,7 +10085,8 @@ function petrifyMonsterFromMonsterThrownEgg(target, visible, { afterMore = false
         }
         return true;
     }
-    if (visible) messages.push(`${monsterDisplayName(target)} turns to stone!`);
+    adjustMonsterPetrificationSpeed(target, messages, visible);
+    if (visible) messages.push(`${monsterDisplayName(target)} turns to stone.`);
     stoneMonster(target, messages, { awardExperience: false });
     for (const message of messages) {
         if (afterMore) appendAfterMoreMessage(message);

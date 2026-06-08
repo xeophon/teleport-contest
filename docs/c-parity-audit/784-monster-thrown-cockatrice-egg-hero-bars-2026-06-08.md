@@ -51,4 +51,4 @@ Implemented the remaining production monster-thrown petrifying egg hero delivery
 ## Remaining Gaps
 
 - Cursed/greased monster-thrown egg misfire and sink/ordinary wall stop handling remain separate projectile slices.
-- Monster-thrown egg `munstone()` cure and tiny-monster no-statue fallout remain untested beyond the current production stoning canary.
+- Monster-thrown egg lizard-corpse `munstone()` cure and tiny-monster rock/statue fallout are covered in audit 785; acid potion, tin, and glob cure rows remain separate.
