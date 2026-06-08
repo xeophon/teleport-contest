@@ -13746,6 +13746,49 @@ test('genocide accepts C alternate monster spellings', async () => {
     }
 });
 
+test('genocide accepts C monster-name prefixes with trailing object text', async () => {
+    const cases = [
+        ['newt corpse', 'newt', /Wiped out all newts\./],
+        ['ettin zombie corpse', 'ettin zombie', /Wiped out all ettin zombies\./],
+        ['grid bugs corpse', 'grid bug', /Wiped out all grid bugs\./],
+        ["grid bug's corpse", 'grid bug', /Wiped out all grid bugs\./],
+        ['grey dragon corpse', 'gray dragon', /Wiped out all gray dragons\./],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, markedName, expected] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31250 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, expected);
+        assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+        assert.equal(game._command_mode || null, null);
+        assert.equal(game._genocided_monsters.includes(markedName), true);
+        if (input === 'ettin zombie corpse')
+            assert.notEqual(game._genocided_monsters?.includes('ettin'), true);
+    }
+});
+
+test('genocide rejects C alternate-spelling plural suffixes', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31255, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('grey dragons');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Such creatures do not exist in this world\./);
+    assert.doesNotMatch(message, /Wiped out all gray dragons/);
+    assert.equal(game._command_mode, 'genocideText');
+    assert.notEqual(game._genocided_monsters?.includes('gray dragon'), true);
+});
+
 test('genocide resolves C amorous demon aliases before G_GENO refusal', async () => {
     const cases = ['incubus', 'succubus', 'incubi', 'succubi'];
     for (let i = 0; i < cases.length; i++) {

@@ -31063,6 +31063,42 @@ function normalizeGenocideName(name) {
     return lower;
 }
 
+function normalizeGenocidePrefixInput(name) {
+    let lower = String(name || '').trim().toLowerCase();
+    lower = lower.replace(/^['"]|['"]$/g, '').replace(/^(?:a|an|the) /, '').replace(/\s+/g, ' ');
+    const vortices = lower.indexOf('vortices');
+    if (vortices !== -1)
+        lower = `${lower.slice(0, vortices + 4)}ex`;
+    else if (lower.length > 3 && lower.endsWith('ies')
+        && (lower.length < 7 || !lower.endsWith('zombies')))
+        lower = `${lower.slice(0, -3)}y`;
+    else if (lower.length > 3 && lower.endsWith('ves'))
+        lower = `${lower.slice(0, -3)}f`;
+    return lower;
+}
+
+function cAlternateNameRemainderMatches(remainder) {
+    return !remainder || remainder[0] === ' ' || remainder[0] === "'";
+}
+
+function cCanonicalNameRemainderMatches(remainder) {
+    return !remainder
+        || remainder[0] === ' '
+        || remainder === 's'
+        || remainder.startsWith('s ')
+        || remainder === "'"
+        || remainder.startsWith("' ")
+        || remainder === "'s"
+        || remainder.startsWith("'s ")
+        || remainder === 'es'
+        || remainder.startsWith('es ');
+}
+
+function cNamePrefixMatches(input, candidate, remainderMatches) {
+    if (!input || !candidate || !input.startsWith(candidate)) return false;
+    return remainderMatches(input.slice(candidate.length));
+}
+
 function pluralizeMonsterName(name) {
     const lower = String(name || '').toLowerCase();
     if (isCAsIsMonsterPlural(name)) return name;
@@ -31105,8 +31141,35 @@ function genocideMonsterCatalog() {
 function genocideMonsterByName(name) {
     const wanted = normalizeGenocideName(name);
     if (!wanted) return null;
-    const aliasedWanted = C_GENOCIDE_NAME_ALIASES.get(wanted) || wanted;
-    for (const data of genocideMonsterCatalog()) {
+    const catalog = genocideMonsterCatalog();
+    const dataByNormalizedName = new Map(catalog.map(data => [normalizeGenocideName(data.name), data]));
+    const prefixWanted = normalizeGenocidePrefixInput(name);
+    for (const [alias, target] of C_GENOCIDE_NAME_ALIASES.entries()) {
+        if (!cNamePrefixMatches(prefixWanted, alias, cAlternateNameRemainderMatches)) continue;
+        const data = dataByNormalizedName.get(normalizeGenocideName(target));
+        if (data) return data;
+    }
+    let bestMatch = null;
+    let bestLength = 0;
+    for (const data of catalog) {
+        const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
+        const canonicalCandidates = [
+            data.name,
+            data.name?.replace(/-/g, ' '),
+            genderNames?.male,
+            genderNames?.male?.replace(/-/g, ' '),
+            genderNames?.female,
+            genderNames?.female?.replace(/-/g, ' '),
+        ].filter(Boolean).map(normalizeGenocidePrefixInput);
+        for (const candidate of canonicalCandidates) {
+            if (candidate.length <= bestLength) continue;
+            if (!cNamePrefixMatches(prefixWanted, candidate, cCanonicalNameRemainderMatches)) continue;
+            bestMatch = data;
+            bestLength = candidate.length;
+        }
+    }
+    if (bestMatch) return bestMatch;
+    for (const data of catalog) {
         const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
         const candidates = [
             data.name,
@@ -31121,7 +31184,7 @@ function genocideMonsterByName(name) {
             genderNames?.male === 'incubus' ? 'incubi' : null,
             genderNames?.female === 'succubus' ? 'succubi' : null,
         ].filter(Boolean).map(normalizeGenocideName);
-        if (candidates.includes(wanted) || candidates.includes(aliasedWanted)) return data;
+        if (candidates.includes(wanted)) return data;
     }
     return null;
 }
