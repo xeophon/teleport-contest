@@ -76022,6 +76022,78 @@ test('direct hero melee surviving peaceful non-priest wakes angry', async () => 
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee sleeping peaceful humanoid wakes screams then angers', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876820,
+        monsterExtra: { msleeping: 1 },
+        dataExtra: { msound: 'MS_ORC' },
+    });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin wakes up!  The goblin screams!  The goblin gets angry!');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl text', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876821,
+        name: 'acid blob',
+        monsterExtra: { msleeping: 1 },
+        dataExtra: { mlet: 'blob', humanoid: false, msound: 'MS_SILENT' },
+    });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the acid blob.  The acid blob wakes up!');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee sleeping hostile survivor wakes and growls without anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876822,
+        name: 'gecko',
+        monsterExtra: { msleeping: 1, mpeaceful: 0, hostile: true },
+        dataExtra: { mlet: 'lizard', humanoid: false, msound: 'MS_SQEEK' },
+    });
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the gecko.  The gecko wakes up!  The gecko squeals!');
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.u.ualign.record, 0);
+    assert.equal(game.u.ualign.abuse, 0);
+});
+
 test('direct hero melee surviving tame target preserves peacefulness', async () => {
     const { mon: dog } = installDirectMeleePeacefulSurvivor({
         weaponId: 876819,

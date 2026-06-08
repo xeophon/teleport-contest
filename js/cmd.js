@@ -22924,6 +22924,7 @@ function directMeleePriestInTempleRoom(priest) {
 
 function directMeleeGrowlVerb(mon) {
     const sound = String(mon?.data?.msound || mon?.msound || '').toLowerCase();
+    if (!sound) return 'growls';
     if (sound.includes('hiss') || sound.includes('mew')) return 'hisses';
     if (sound.includes('roar')) return 'roars';
     if (sound.includes('bellow')) return 'bellows';
@@ -22935,7 +22936,7 @@ function directMeleeGrowlVerb(mon) {
     if (sound.includes('groan')) return 'groans';
     if (sound.includes('moo')) return 'lows';
     if (sound.includes('silent')) return '';
-    return 'growls';
+    return 'screams';
 }
 
 function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}) {
@@ -22977,13 +22978,25 @@ function directMeleeAngerPeacefulPriest(priest, messages, { visible = false } = 
 }
 
 function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
-    ordinaryPeaceful = false,
+    ordinaryMelee = false,
     visible = false,
 } = {}) {
     if (!mon) return false;
+    if (ordinaryMelee) {
+        if (preHitState?.msleeping) {
+            if (visible) messages.push(`${fireScrollMonsterName(mon)} wakes up!`);
+            mon.msleeping = 0;
+            if (mon.meating !== undefined) mon.meating = 0;
+            const verb = directMeleeGrowlVerb(mon);
+            if (visible && verb) messages.push(`${fireScrollMonsterName(mon)} ${verb}!`);
+        } else if (mon.meating !== undefined) {
+            mon.meating = 0;
+        }
+        clearDirectMeleeWaitStrategyMask(mon);
+    }
     if (preHitState?.mpeaceful && mon.mpeaceful) {
         if (mon.ispriest) directMeleeAngerPeacefulPriest(mon, messages, { visible });
-        else if (ordinaryPeaceful) directMeleeAngerPeacefulMonster(mon, messages, { visible });
+        else if (ordinaryMelee) directMeleeAngerPeacefulMonster(mon, messages, { visible });
     }
     return true;
 }
@@ -54116,7 +54129,7 @@ async function moveHero(dx, dy) {
         let killingAttackWeapon = null;
         let killedByNormalMelee = false;
         let directMeleeHit = false;
-        let directMeleeOrdinaryPeacefulWakeupAllowed = false;
+        let directMeleeOrdinaryWakeupAllowed = false;
         let directMeleeNonlethalWakeupApplied = false;
         let directMeleeNonlethalWrapperApplied = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
@@ -54199,8 +54212,8 @@ async function moveHero(dx, dy) {
                 if (killed) break;
                 continue;
             }
-            if (!directMeleeFromSpecialApply && !directMeleePreHitState?.msleeping)
-                directMeleeOrdinaryPeacefulWakeupAllowed = true;
+            if (!directMeleeFromSpecialApply && !deferSleepingTwoWeapon)
+                directMeleeOrdinaryWakeupAllowed = true;
             if (attackWeapon && !game._chronicle_first_weapon_hit) {
                 game._chronicle_entries ??= [];
                 game._chronicle_entries.push({ turn: game.moves || 1, text: `hit with a wielded weapon (${weaponName || 'weapon'}) for the first time` });
@@ -54267,13 +54280,15 @@ async function moveHero(dx, dy) {
             messages.push(`You hit ${hitPhrase}${hitPunctuation}`);
             applyConfuseMonsterOnHit(mon, messages, targetPhrase);
             if (directMeleeHit
-                && ((directMeleePreHitState?.mpeaceful
-                    && (mon.ispriest || directMeleeOrdinaryPeacefulWakeupAllowed))
+                && (((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
+                    && (mon.ispriest || directMeleeOrdinaryWakeupAllowed))
                     || mon.ispriest || angerTownWatchAfterHit)) {
                 directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
-                    ordinaryPeaceful: directMeleeOrdinaryPeacefulWakeupAllowed,
+                    ordinaryMelee: directMeleeOrdinaryWakeupAllowed,
                     visible: targetSpotted,
                 });
+                if (directMeleePreHitState?.msleeping && directMeleeOrdinaryWakeupAllowed)
+                    wokeByHit = false;
                 directMeleeNonlethalWakeupApplied = true;
             }
             let directPassiveObjectApplied = false;
@@ -54348,11 +54363,11 @@ async function moveHero(dx, dy) {
                 }
             }
             if (directMeleeHit && !directMeleeNonlethalWakeupApplied
-                && ((directMeleePreHitState?.mpeaceful
-                    && (mon.ispriest || directMeleeOrdinaryPeacefulWakeupAllowed))
+                && (((directMeleePreHitState?.mpeaceful || directMeleePreHitState?.msleeping)
+                    && (mon.ispriest || directMeleeOrdinaryWakeupAllowed))
                     || mon.ispriest || angerTownWatchAfterHit))
                 directMeleeNonlethalWakeupTail(mon, messages, directMeleePreHitState, {
-                    ordinaryPeaceful: directMeleeOrdinaryPeacefulWakeupAllowed,
+                    ordinaryMelee: directMeleeOrdinaryWakeupAllowed,
                     visible: targetSpotted,
                 });
             if (directMeleeHit && !directMeleeNonlethalWrapperApplied && (mon.ispriest || angerTownWatchAfterHit))
