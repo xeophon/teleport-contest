@@ -34613,10 +34613,11 @@ function trappedKickedFloorObjectRefusal(obj, x, y) {
 function kickFloorObjectSupported(obj, x, y, options = {}) {
     if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
     if (isBoulderObject(obj)) return false;
+    const box = isBoxObject(obj);
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
-    if ((!isBoxObject(obj) && isTipContainerObject(obj)) || globContents(obj).length) return false;
+    if ((!box && isTipContainerObject(obj)) || (!box && globContents(obj).length)) return false;
     const shopFloorGate = !!options.shopFloorGate;
     if ((shopObjectOrContentsUnpaid(obj) || (shopkeeperForCostlySpot(x, y) && !shopFloorGate && !shopBillableGold(obj)))
         && !fragileBreakKind)
@@ -34698,6 +34699,7 @@ function applyKickedBoxImpact(box, range, messages) {
     if (!isBoxObject(box)) return { handled: false };
     const hadTrap = !!box.otrapped;
     if (range < 2) messages.push('THUD!');
+    projectileContainerImpactDmg(box, box.ox, box.oy, { messages, fromInventory: false });
 
     if (box.locked || box.olocked) {
         if (!rn2(5) || (heroUsesMartialKickRangeBonus() && !rn2(2))) {

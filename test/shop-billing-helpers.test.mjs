@@ -45638,6 +45638,75 @@ test('command kicked box down stairs queues migration after local lid roll fails
     assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rn2(3)=0', 'rn2(100)=42']);
 });
 
+test('command kicked non-empty box damages contents before down-stair migration', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.u.acurr.a[A_STR] = 25;
+    const box = shopFloorContainer(512121, 6, 5);
+    const potion = putObjectInContainer(box, oilPotion(512122));
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+    installCoreRngValues([50, 1, 0, 42]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(queued.includes(box), true);
+    assert.equal(box.contents.includes(potion), false);
+    assert.equal(box._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.match(game._pending_message, /You kick a large box\./);
+    assert.match(game._pending_message, /You hear a muffled shatter\./);
+    assert.match(game._pending_message, /A large box falls down the stairs\./);
+    assert.ok(game._pending_message.indexOf('muffled shatter') < game._pending_message.indexOf('falls down the stairs'));
+    assert.deepEqual(getRngLog(), [
+        'rn2(100)=50',
+        'rn2(3)=1',
+        'rn2(3)=0',
+        'rn2(100)=42',
+    ]);
+});
+
+test('command kicked box no-drop at occupied down stairs impacts pile before continuing', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    game.u.acurr.a[A_STR] = 25;
+    const box = shopFloorContainer(512123, 6, 5);
+    const ration = { ...foodRation(512124), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [box, ration];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1, 0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.level.objects.includes(ration), false);
+    assert.equal(queued.includes(box), false);
+    assert.equal(queued.includes(ration), true);
+    assert.equal(box.ox > 7, true);
+    assert.equal(box.oy, 5);
+    assert.match(game._pending_message, /You kick a large box\./);
+    assert.match(game._pending_message, /A large box hits another object\./);
+    assert.match(game._pending_message, /From the impact, the other object falls\./);
+    assert.doesNotMatch(game._pending_message, /large box falls down the stairs|THUD|lid slams/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rn2(3)=1', 'rn2(3)=0']);
+});
+
 test('command kicked shop-floor box no-drop at non-shop stairs charges final flight', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
