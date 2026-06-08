@@ -31282,10 +31282,17 @@ function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scro
     if (!classMode) revertHeroVampshifterForGenocide(name, messages);
     markMonsterGenocided(name);
     game._chronicle_genocide_count = (game._chronicle_genocide_count || 0) + 1;
-    messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
-    killDeadSpeciesEggHatchTimers(game);
-    killGenocidedMonsters(messages);
-    killDeadSpeciesEggHatchTimers(game);
+    if (classMode) {
+        killDeadSpeciesEggHatchTimers(game);
+        killGenocidedMonsters(messages);
+        killDeadSpeciesEggHatchTimers(game);
+        messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
+    } else {
+        messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
+        killDeadSpeciesEggHatchTimers(game);
+        killGenocidedMonsters(messages);
+        killDeadSpeciesEggHatchTimers(game);
+    }
     if (classMode) revertHeroVampshifterForGenocide(name, messages);
     if (killPlayer) {
         if (game.u?._polyself_form && !isCurrentPolyselfGenocideTarget(name))

@@ -13681,6 +13681,7 @@ test('genocide cleanup reshapes shifted monster when current form is wiped out',
     assert.equal(game.level.objects.includes(loot), false);
     assert.match(message, /Wiped out all goblins\./);
     assert.match(message, /The goblin turns into/);
+    assert.equal(message.indexOf('Wiped out all goblins.') < message.indexOf('The goblin turns into'), true);
 });
 
 test('genocide cleanup removes shifted monster when base form is wiped out', async () => {
@@ -13743,6 +13744,29 @@ test('genocide cleanup removes shifted vampire when base form is wiped out', asy
     assert.equal(loot.oy, 5);
     assert.match(message, /Wiped out all vampires\./);
     assert.doesNotMatch(message, /turns into|rises as/);
+});
+
+test('class genocide cleanup reshapes visible shifted monster before species wipeout', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    markHeroNeighborhoodVisible();
+    const { monster, loot } = shiftedDoppelgangerAsGoblin(30943);
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30945, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('goblin');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), true);
+    assert.notEqual(monster.data?.name, 'goblin');
+    assert.equal(monster.chamBase, 'doppelganger');
+    assert.equal(monster.minvent?.includes(loot), true);
+    assert.equal(game.level.objects.includes(loot), false);
+    assert.match(message, /The goblin turns into/);
+    assert.match(message, /Wiped out all goblins\./);
+    assert.equal(message.indexOf('The goblin turns into') < message.indexOf('Wiped out all goblins.'), true);
 });
 
 test('genocide cleanup uses saved-level terrain for shifted vampire fallback', async () => {
