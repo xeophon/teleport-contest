@@ -13661,6 +13661,16 @@ function shiftedVampireLeaderBatMonster(id = 30940) {
     return { monster, loot };
 }
 
+function steamVortexMonster(id = 30961, extra = {}) {
+    return ordinaryThrowTarget('steam vortex', 6, 5, {
+        mhp: 9,
+        mhpmax: 9,
+        m_lev: 7,
+        data: { name: 'steam vortex', mlevel: 7, hpLevel: 9, mlet: 'v', glyph: 'v', mmove: 22, noCorpse: true },
+        ...extra,
+    });
+}
+
 function currentGenocideCleanupExperience() {
     game._known_object_score_types ??= new Set((game._discoveries || [])
         .filter(item => item.known !== false)
@@ -13842,6 +13852,71 @@ test('genocide cleanup consumes monster life saving before current-form removal'
     assert.equal(game._vanquished_counts?.goblin, 1);
     assert.equal(game._vanquished_total, 1);
     assertGenocideCleanupExperienceUnchanged(experienceBefore);
+});
+
+test('genocide cleanup creates harmless gas cloud for removed steam vortex', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    game.level.regions = [];
+    const monster = steamVortexMonster(30961);
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30962, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('steam vortex');
+
+    const regions = game.level.regions || [];
+    const region = regions[0];
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(game._vanquished_counts?.['steam vortex'], 1);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
+    assert.equal(regions.length, 1);
+    assert.equal(region?.type, 'gas_cloud');
+    assert.equal(region.damage, 0);
+    assert.equal(region.visible, true);
+    assert.equal(region.coords.some(coord => coord.x === 6 && coord.y === 5), true);
+    assert.equal(region.coords.length >= 5, true);
+    assert.equal(region.coords.length <= 14, true);
+    assert.equal(Number.isInteger(region.ttl), true);
+    assert.equal(region.ttl > 0, true);
+});
+
+test('genocide cleanup creates steam cloud before shifted true-form death count', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    game.level.regions = [];
+    const monster = steamVortexMonster(30963, { chamBase: 'doppelganger' });
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30964, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('doppelganger');
+
+    const regions = game.level.regions || [];
+    const region = regions[0];
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(monster.data?.name, 'doppelganger');
+    assert.equal(monster.chamBase, undefined);
+    assert.equal(game._vanquished_counts?.doppelganger, 1);
+    assert.equal(game._vanquished_counts?.['steam vortex'] || 0, 0);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
+    assert.equal(regions.length, 1);
+    assert.equal(region?.type, 'gas_cloud');
+    assert.equal(region.damage, 0);
+    assert.equal(region.visible, true);
+    assert.equal(region.coords.some(coord => coord.x === 6 && coord.y === 5), true);
+    assert.equal(region.coords.length >= 5, true);
+    assert.equal(region.coords.length <= 14, true);
 });
 
 test('genocide cleanup reshapes shifted vampire when visible form is wiped out', async () => {

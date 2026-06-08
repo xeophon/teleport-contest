@@ -31163,6 +31163,8 @@ function killGenocidedMonsters(messages = []) {
                 if (activeLevel) newsym(mon.mx, mon.my);
                 continue;
             }
+            if (activeLevel && name === 'steam vortex')
+                createGasCloud(mon.mx, mon.my, rn2(10) + 5, 0);
             restoreGenocideMonsterTrueFormForDeath(mon);
             recordVanquished(mon, false);
             if (activeLevel) dropMonsterInventory(mon);
