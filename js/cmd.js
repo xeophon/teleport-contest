@@ -38975,6 +38975,12 @@ function continueLethalAttackAfterLifeSaving(attack) {
     const continuation = attack?.lifeSavingContinuation || {};
     const messages = [];
     if (continuation.exerciseStrength) exerciseAttribute(A_STR, false);
+    if (continuation.poison) {
+        const poisonResult = applyHeroPoisonedProjectileAfterMore(continuation.poison, {
+            appendMessages: false,
+        });
+        messages.push(...(poisonResult.messages || []));
+    }
     const thrown = continuation.monsterThrow;
     if (thrown?.missile) {
         const floorMessages = [];
@@ -39062,19 +39068,25 @@ function appendToplineAfterMoreMessages(messages) {
     return queued;
 }
 
-function applyHeroPoisonedProjectileAfterMore(effect) {
+function applyHeroPoisonedProjectileAfterMore(effect, options = {}) {
     const reason = String(effect?.reason || 'poisoned arrow');
     const messages = [];
+    const appendMessages = options.appendMessages !== false;
+    const finishMessages = () => appendMessages
+        ? appendToplineAfterMoreMessages(messages)
+        : messages.length > 0;
     if (!/poison/i.test(reason)) {
         const plural = /s$/i.test(reason);
         messages.push(`${/^[A-Z]/.test(reason) ? '' : 'The '}${reason} ${plural ? 'were' : 'was'} poisoned!`);
     }
     if (heroHasPoisonResistance()) {
         messages.push("The poison doesn't seem to affect you.");
-        return { dead: false, more: appendToplineAfterMoreMessages(messages) };
+        return { dead: false, more: finishMessages(), messages };
     }
 
-    const roll = rn2(30);
+    const fatal = effect?.fatal != null && Number.isFinite(Number(effect.fatal))
+        ? Number(effect.fatal) : 10;
+    const roll = fatal ? rn2(fatal + 20) : 1;
     let dead = false;
     if (roll === 0) {
         const loss = 6 + d(4, 6);
@@ -39103,12 +39115,12 @@ function applyHeroPoisonedProjectileAfterMore(effect) {
         if (game.u?.acurr?.a) game.u.acurr.a[A_STR] = Math.max(3, (game.u.acurr.a[A_STR] ?? 10) - 1);
         messages.push('You feel weaker!');
     }
-    const more = appendToplineAfterMoreMessages(messages);
+    const more = finishMessages();
     if (dead) {
         game._death_cause = `poisoned by ${String(effect?.killer || reason)}`;
         game._queued_message_after_more ||= 'You die...';
     }
-    return { dead, more: more || dead };
+    return { dead, more: more || dead, messages };
 }
 
 function earthTargetIsSolid(target) {

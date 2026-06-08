@@ -56040,6 +56040,81 @@ test('production visible lethal kobold dart life saving resumes normal landing',
     assert.equal(game.u.uhp, game.u.uhpmax);
 });
 
+test('production visible poisoned lethal kobold dart life saving limits poison to strength loss', async () => {
+    const projectile = { ...dartStack(874512, 'd', 1, { opoisoned: true }), letter: undefined, line: undefined, spe: 0 };
+    const amulet = {
+        id: 874358,
+        letter: 'a',
+        cls: 'amulet',
+        glyph: '"',
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        quan: 1,
+        worn: true,
+        line: 'a - an amulet of life saving (being worn)',
+    };
+    const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        seed: 8,
+        heroBlind: false,
+        heroHp: 2,
+        heroInventory: [amulet],
+        projectile,
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /throws a dart!/);
+    assert.match(messages, /You are hit by a poisoned dart\./);
+    assert.equal(game.u.uhp, 2, rawRng.join(', '));
+    assert.ok(game._deferred_lethal_attack_after_more, rawRng.join(', '));
+
+    const rngBeforeLifeSaving = rawRng.length;
+    await rhack('\x1b');
+    resetInputState();
+
+    const lifeSavingRng = getRngLog().slice(rngBeforeLifeSaving);
+    const lifeSavingIndex = lifeSavingRng.findIndex(entry => entry.startsWith('rn2(19)='));
+    const exerciseIndex = lifeSavingRng.findIndex(entry => entry.startsWith('rn2(2)='));
+    const mulchIndex = lifeSavingRng.findIndex(entry => entry.startsWith('rn2(3)='));
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.match(game._pending_message, /You feel weaker!/);
+    assert.doesNotMatch(game._pending_message, /was poisoned/i);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.acurr.a[A_STR], 9);
+    assert.equal(game.u.acurr.a[A_CON], 10);
+    assert.equal(thrower.minvent.some(obj => obj.id === dart.id), false);
+    assert.equal(thrower.missile, null);
+    assert.equal(game._deferred_lethal_attack_after_more ?? null, null);
+    assert.equal(game._monster_throw_after_more ?? null, null);
+    assert.notEqual(lifeSavingIndex, -1, lifeSavingRng.join(', '));
+    assert.notEqual(exerciseIndex, -1, lifeSavingRng.join(', '));
+    assert.notEqual(mulchIndex, -1, lifeSavingRng.join(', '));
+    assert.ok(lifeSavingIndex < exerciseIndex && exerciseIndex < mulchIndex, lifeSavingRng.join(', '));
+    assert.equal(lifeSavingRng.some(entry => entry.startsWith('rn2(30)=') || entry.startsWith('rnd(6)=')
+        || entry.startsWith('d(4,6)=')), false, lifeSavingRng.join(', '));
+
+    const landed = game.level.objects.find(obj => obj.id === dart.id);
+    assert.ok(landed, getRngLog().join(', '));
+    assert.equal(landed.ox, 5);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.kind, 'dart');
+    assert.equal(landed.opoisoned, true);
+    assert.equal(landed.transientProjectile, false);
+    assert.equal(landed._deathCleanupThrownObject || false, false);
+
+    await rhack(' ');
+    resetInputState();
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game.u.acurr.a[A_STR], 9);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+});
+
 test('production unseen lethal kobold dart uses deferred death cleanup after hit more', async () => {
     const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
         seed: 8,

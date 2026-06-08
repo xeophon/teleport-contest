@@ -8789,6 +8789,11 @@ export async function processMonsterTurns() {
                                                 deathCause: `killed by ${dartArticle} ${dartKillerName}`,
                                                 lifeSavingContinuation: {
                                                     exerciseStrength: true,
+                                                    poison: poisonedHeroHit ? {
+                                                        reason: dartKind,
+                                                        killer: `${articleFor(dartKillerName)} ${dartKillerName}`,
+                                                        fatal: 0,
+                                                    } : null,
                                                     monsterThrow: {
                                                         missile: thrownMissile,
                                                         x: game.u?.ux || 0,

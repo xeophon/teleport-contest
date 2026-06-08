@@ -207,6 +207,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [799-monster-thrown-dart-hero-poison-2026-06-08.md](799-monster-thrown-dart-hero-poison-2026-06-08.md): successful poisoned monster-thrown dart hero hits now use poisoned object naming, thrown-weapon poison effects, resistance/no-extra-message handling, poison-before-landing ordering, and surviving poisoned dart retention.
 - [800-monster-thrown-dart-hero-lethal-cleanup-2026-06-08.md](800-monster-thrown-dart-hero-lethal-cleanup-2026-06-08.md): physical lethal monster-thrown dart hero hits now use the `killed by a dart` death cause, skip normal pre-death drop/mulch, and land the dart through death cleanup for visible and unseen hit-message flows.
 - [801-monster-thrown-dart-hero-lifesaving-landing-2026-06-08.md](801-monster-thrown-dart-hero-lifesaving-landing-2026-06-08.md): monster-thrown dart physical life-saving now resumes the returned `thitu()` tail with Strength exercise and normal hit landing/drop/mulch instead of death cleanup.
+- [802-monster-thrown-dart-hero-poisoned-lifesaving-2026-06-08.md](802-monster-thrown-dart-hero-poisoned-lifesaving-2026-06-08.md): poisoned monster-thrown dart physical life-saving now applies C's `u.umortality > oldumort` fatal-zero poison gate before normal landing.
 
 ## Cross-Cutting Themes
 
