@@ -31006,6 +31006,7 @@ const GENOCIDE_EXTRA_MONSTER_NAMES = [
     'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
     'electric eel', 'kraken', 'giant', 'minotaur', 'water troll',
 ];
+const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set(['ki-rin']);
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 
@@ -31097,6 +31098,10 @@ function genocidedMonsterNames() {
 
 function isMonsterGenocidedName(name) {
     return genocidedMonsterNames().includes(normalizeGenocideName(name));
+}
+
+function isMonsterForbiddenForGenocideName(name) {
+    return GENOCIDE_FORBIDDEN_MONSTER_NAMES.has(normalizeGenocideName(name));
 }
 
 function markMonsterGenocided(name) {
@@ -31530,6 +31535,10 @@ async function finishGenocideInput(raw) {
     }
     if (isMonsterGenocidedName(data.name)) {
         await retryGenocidePrompt(pending, 'Such creatures no longer exist in this world.');
+        return;
+    }
+    if (isMonsterForbiddenForGenocideName(data.name)) {
+        await retryGenocidePrompt(pending, 'A thunderous voice booms through the caverns:  "No, mortal!  That will not be done."');
         return;
     }
     if (pending.cursed) {

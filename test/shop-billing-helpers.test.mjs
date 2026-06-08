@@ -13679,6 +13679,22 @@ test('genocide catalogs special C normal-genocide monsters', async () => {
     }
 });
 
+test('genocide refuses C non-G_GENO ki-rin', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31074, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('ki-rin');
+
+    const message = game._pending_message || '';
+    assert.match(message, /A thunderous voice booms through the caverns:/);
+    assert.match(message, /"No, mortal!  That will not be done\."/);
+    assert.doesNotMatch(message, /Wiped out all ki-rin/);
+    assert.equal(game._command_mode, 'genocideText');
+    assert.notEqual(game._genocided_monsters?.includes('ki-rin'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };
