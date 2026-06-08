@@ -13873,6 +13873,35 @@ test('genocide refuses C non-G_GENO ghost family', async () => {
     }
 });
 
+test('genocide resolves C priest title aliases before G_GENO refusal', async () => {
+    const cases = [
+        ['aligned cleric', 'aligned cleric'],
+        ['aligned priest', 'aligned cleric'],
+        ['aligned priestess', 'aligned cleric'],
+        ['high cleric', 'high cleric'],
+        ['high priest', 'high cleric'],
+        ['high priestess', 'high cleric'],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, forbiddenName] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31320 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, /A thunderous voice booms through the caverns:/);
+        assert.match(message, /"No, mortal!  That will not be done\."/);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.doesNotMatch(message, /Wiped out all/);
+        assert.equal(game._command_mode, 'genocideText');
+        assert.notEqual(game._genocided_monsters?.includes(forbiddenName), true);
+    }
+});
+
 test('blessed genocide refuses C non-G_GENO angel class', async () => {
     installNonShopFloorState();
     game.inventory = [scrollOfGenocide(31075, 's', { blessed: true })];
