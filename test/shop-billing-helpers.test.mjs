@@ -1383,6 +1383,23 @@ function scrollOfDestroyArmor(id, letter = 's', cursed = false) {
     };
 }
 
+function scrollOfGenocide(id, letter = 's', extra = {}) {
+    return {
+        id,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of genocide',
+        actualKind: 'scroll of genocide',
+        scrollIndex: 8,
+        quan: 1,
+        ox: 5,
+        oy: 5,
+        letter,
+        line: `${letter} - a scroll of genocide`,
+        ...extra,
+    };
+}
+
 function chargeableRing(id, letter = 'r', spe = 0) {
     return {
         id,
@@ -1458,6 +1475,21 @@ function metalAmulet(id, name, amuletIndex, letter = 'a', extra = {}) {
         line: `${letter} - ${article} ${appearance} amulet`,
         ...extra,
     };
+}
+
+function wornHeroLifeSavingAmulet(id, letter = 'a') {
+    return metalAmulet(id, 'amulet of life saving', 1, letter, {
+        worn: true,
+        kind: 'amulet of life saving',
+        actualKind: 'amulet of life saving',
+        known: true,
+        line: `${letter} - an amulet of life saving (being worn)`,
+    });
+}
+
+async function enterGenocideResponse(name) {
+    for (const ch of name) await rhack(ch);
+    await rhack('\n');
 }
 
 function realAmuletOfYendor(id, letter = 'a', extra = {}) {
@@ -13291,6 +13323,128 @@ test('confused remove curse ignores stale field-only unpaid water', async () => 
     assert.equal(shkp.billct || 0, 0);
     assert.equal((game._usedUpShopBills || []).length, 0);
     assert.doesNotMatch(game._pending_message, /you pay for it/);
+});
+
+test('self-genocide consumes life saving but still dies', async () => {
+    installCommandShopState();
+    game._startup_race = 'dwarf';
+    game.urace = { adj: 'dwarf', noun: 'dwarf' };
+    game.u.uhp = 10;
+    game.u.uhpmax = 20;
+    game.u.acurr.a[A_CON] = 10;
+    const scroll = scrollOfGenocide(30912, 's');
+    const amulet = wornHeroLifeSavingAmulet(30913, 'a');
+    game.inventory = [amulet, scroll];
+
+    await rhack('r');
+    await rhack('s');
+    assert.equal(game._command_mode, 'genocideText');
+    await enterGenocideResponse('dwarf');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(game._pending_message, /Wiped out all dwarves\./);
+    assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.match(game._pending_message, /You feel much better!  The medallion crumbles to dust!/);
+    assert.match(game._pending_message, /Unfortunately you are still genocided\.\.\./);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game._death_cause, 'scroll of genocide');
+    assert.equal(game._death_no_bones, 1);
+    assert.equal(game._genocided_monsters.includes('dwarf'), true);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(game.u.uhp, 20);
+});
+
+test('confused genocide consumes life saving but still dies from genocidal confusion', async () => {
+    installCommandShopState();
+    game.u._confusionTimeout = 10;
+    game.u.uhp = 10;
+    game.u.uhpmax = 20;
+    game.u.acurr.a[A_CON] = 10;
+    const scroll = scrollOfGenocide(30914, 's');
+    const amulet = wornHeroLifeSavingAmulet(30915, 'a');
+    game.inventory = [amulet, scroll];
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(game._pending_message, /Being confused, you mispronounce the magic words/);
+    assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.match(game._pending_message, /Unfortunately you are still genocided\.\.\./);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game._death_cause, 'genocidal confusion');
+    assert.equal(game._death_no_bones, 1);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(game.u.uhp, 20);
+});
+
+test('explore self-genocide death decline survives and clears death state', async () => {
+    installCommandShopState();
+    game.flags.explore = true;
+    game._startup_race = 'dwarf';
+    game.urace = { adj: 'dwarf', noun: 'dwarf' };
+    const scroll = scrollOfGenocide(30916, 's');
+    game.inventory = [scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('dwarf');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._death_no_bones, 1);
+    assert.equal(game._death_cause, 'scroll of genocide');
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    await rhack('n');
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, "OK, so you don't die.");
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_no_bones || 0, 0);
+    assert.equal(game._genocided_monsters.includes('dwarf'), true);
+    assert.equal(game._survived_death_count, 1);
+});
+
+test('explore self-genocide life saving decline uses savelife hp cap', async () => {
+    installCommandShopState();
+    game.flags.explore = true;
+    game._startup_race = 'dwarf';
+    game.urace = { adj: 'dwarf', noun: 'dwarf' };
+    game.u.uhp = 10;
+    game.u.uhpmax = 200;
+    game.u.acurr.a[A_CON] = 10;
+    const scroll = scrollOfGenocide(30917, 's');
+    const amulet = wornHeroLifeSavingAmulet(30918, 'a');
+    game.inventory = [amulet, scroll];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('dwarf');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game._life_saving_refresh_con || 0, 0);
+    assert.equal(game.u.acurr.a[A_CON], 9);
+    assert.equal(game.u.uhp, 90);
+    assert.equal(game._death_bones_prepared, 1);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    await rhack('n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.u.uhp, 90);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_no_bones || 0, 0);
+    assert.equal(game._death_bones_prepared || 0, 0);
+    assert.equal(game._bones_ok || false, false);
+    assert.equal(game._death_current_move || 0, 0);
+    assert.equal(game._death_moves || 0, 0);
 });
 
 test('unpaid camera grease and tinning kit use charge one tenth price', () => {

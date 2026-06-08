@@ -11357,6 +11357,19 @@ export function consumeLifeSavingAmulet({ clearStoning = false } = {}) {
     return true;
 }
 
+function applyLifeSavingConLoss() {
+    if (game._life_saving_refresh_con && game.u?.acurr?.a)
+        game.u.acurr.a[A_CON] = Math.max(3, game.u.acurr.a[A_CON] - 1);
+    game._life_saving_refresh_con = 0;
+}
+
+function restoreHeroHpAfterLifeSaving() {
+    if (!game.u) return;
+    const con = game.u.acurr?.a?.[A_CON] ?? 10;
+    const givehp = 50 + 10 * Math.trunc(con / 2);
+    game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
+}
+
 function clearUnsafePetrifyingCorpseWieldAfterLifeSaving() {
     if (game.u?.stoneResistance || wornGlovesItem()) return;
     let clearedAlternate = false;
@@ -31069,6 +31082,28 @@ function finishHeroGenocide(messages, cause = 'scroll of genocide') {
     messages.push('You die...');
     if (game.u) game.u.uhp = 0;
     game._death_cause = cause;
+    game._death_no_bones = 1;
+    game._genocide_hero_death_pending = 1;
+    if (!consumeLifeSavingAmulet()) return;
+    messages.push('But wait...');
+    messages.push(`Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+    messages.push('You feel much better!');
+    messages.push('The medallion crumbles to dust!');
+    applyLifeSavingConLoss();
+    restoreHeroHpAfterLifeSaving();
+    messages.push('Unfortunately you are still genocided...');
+}
+
+function armHeroGenocideDeathPrompt() {
+    if (!game._genocide_hero_death_pending) return false;
+    game._genocide_hero_death_pending = 0;
+    game._pending_time_passed = 0;
+    game.context.move = 0;
+    game._process_command_time_now = 0;
+    game._run_steps_remaining = 0;
+    game._command_mode = 'deathDieMore';
+    prepareDeathBones();
+    return true;
 }
 
 function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scroll of genocide' } = {}) {
@@ -31127,12 +31162,13 @@ async function endGenocidePrompt(messages = [], more = false) {
     game._genocide_pending = null;
     game._genocide_input = '';
     game._command_mode = null;
-    game.context.move = 1;
     if (messages.length) await setMessage(messages.join('  '), more);
     else {
         game._pending_message = '';
         game._message_more = 0;
     }
+    if (armHeroGenocideDeathPrompt()) return;
+    game.context.move = 1;
 }
 
 async function retryGenocidePrompt(pending, message) {
@@ -56576,9 +56612,7 @@ export async function rhack(_cmd) {
                 clearUnsafePetrifyingCorpseWieldAfterLifeSaving();
             }
             clearLifeSavedDeathState();
-            if (game._life_saving_refresh_con && game.u?.acurr?.a)
-                game.u.acurr.a[4] = Math.max(3, game.u.acurr.a[4] - 1);
-            game._life_saving_refresh_con = 0;
+            applyLifeSavingConLoss();
             if (stoningLifeSaved && game.u) {
                 const con = game.u.acurr?.a?.[A_CON] ?? 10;
                 const givehp = 50 + 10 * Math.trunc(con / 2);
@@ -60305,7 +60339,7 @@ export async function rhack(_cmd) {
             const deathTurn = game.moves || 1;
             game._death_moves ||= game._death_current_move ? deathTurn : Math.max(1, deathTurn - 1);
             game._death_current_move = 0;
-            if (game.flags?.debug) {
+            if (game.flags?.debug || game.flags?.explore) {
                 await setMessage('Die? [yn] (n)');
                 game._command_mode = 'wizardDieConfirm';
                 return;
@@ -60341,8 +60375,13 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
-            game.u.uhp = game.u.uhpmax || 1;
+            restoreHeroHpAfterLifeSaving();
             clearLifeSavedDeathState();
+            game._death_no_bones = 0;
+            game._death_bones_prepared = 0;
+            game._death_corpse_created = 0;
+            game._bones_ok = false;
+            game._genocide_hero_death_pending = 0;
             game._wizard_survived_death = 1;
             game._survived_death_count = (game._survived_death_count || 0) + 1;
             if (game._death_negative_level_teleport_escape_message) {
@@ -62912,6 +62951,7 @@ export async function rhack(_cmd) {
                 if (item.cursed) await createCursedGenocideMonsters(target, messages);
                 else genocideMonsterType(target, messages, { killPlayer: true, cause: 'genocidal confusion' });
                 await setMessage(messages.join('  '), true);
+                if (armHeroGenocideDeathPrompt()) return;
                 game._command_mode = null;
                 game.context.move = 1;
                 return;
