@@ -13661,6 +13661,18 @@ function shiftedVampireLeaderBatMonster(id = 30940) {
     return { monster, loot };
 }
 
+function currentGenocideCleanupExperience() {
+    game._known_object_score_types ??= new Set((game._discoveries || [])
+        .filter(item => item.known !== false)
+        .map(item => `${item.section}:${item.name}`));
+    game._known_object_score_types.add('Scrolls:scroll of genocide');
+    return { urexp: game.u.urexp || 0 };
+}
+
+function assertGenocideCleanupExperienceUnchanged(before) {
+    assert.equal(game.u.urexp || 0, before.urexp);
+}
+
 test('genocide cleanup reshapes shifted monster when current form is wiped out', async () => {
     installNonShopFloorState();
     initRng(2);
@@ -13668,6 +13680,7 @@ test('genocide cleanup reshapes shifted monster when current form is wiped out',
     const { monster, loot } = shiftedDoppelgangerAsGoblin();
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30929, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13682,6 +13695,8 @@ test('genocide cleanup reshapes shifted monster when current form is wiped out',
     assert.match(message, /Wiped out all goblins\./);
     assert.match(message, /The goblin turns into/);
     assert.equal(message.indexOf('Wiped out all goblins.') < message.indexOf('The goblin turns into'), true);
+    assert.equal(game._vanquished_total || 0, 0);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup removes shifted monster when base form is wiped out', async () => {
@@ -13690,6 +13705,7 @@ test('genocide cleanup removes shifted monster when base form is wiped out', asy
     const { monster, loot } = shiftedDoppelgangerAsGoblin(30933);
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30935, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13706,6 +13722,10 @@ test('genocide cleanup removes shifted monster when base form is wiped out', asy
     assert.equal(loot.oy, 5);
     assert.match(message, /Wiped out all doppelgangers\./);
     assert.doesNotMatch(message, /turns into/);
+    assert.equal(game._vanquished_counts?.doppelganger, 1);
+    assert.equal(game._vanquished_counts?.goblin || 0, 0);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup lets shifted base target consume monster life saving', async () => {
@@ -13720,6 +13740,7 @@ test('genocide cleanup lets shifted base target consume monster life saving', as
     monster.minvent.unshift(amulet);
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30949, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13741,6 +13762,8 @@ test('genocide cleanup lets shifted base target consume monster life saving', as
     assert.match(message, /The goblin looks much better!  The medallion crumbles to dust!/);
     assert.doesNotMatch(message, /still genocided|turns into/);
     assert.equal(message.indexOf('Wiped out all doppelgangers.') < message.indexOf('But wait...'), true);
+    assert.equal(game._vanquished_total || 0, 0);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup restores shifted true form after failed life saving', async () => {
@@ -13756,6 +13779,7 @@ test('genocide cleanup restores shifted true form after failed life saving', asy
     monster.minvent.unshift(amulet);
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30956, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13774,6 +13798,10 @@ test('genocide cleanup restores shifted true form after failed life saving', asy
     assert.match(message, /But wait\.\.\.  The goblin's medallion begins to glow!/);
     assert.match(message, /Unfortunately, the goblin is still genocided\.\.\./);
     assert.doesNotMatch(message, /turns into/);
+    assert.equal(game._vanquished_counts?.doppelganger, 1);
+    assert.equal(game._vanquished_counts?.goblin || 0, 0);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup consumes monster life saving before current-form removal', async () => {
@@ -13791,6 +13819,7 @@ test('genocide cleanup consumes monster life saving before current-form removal'
     });
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30952, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13810,6 +13839,9 @@ test('genocide cleanup consumes monster life saving before current-form removal'
     assert.match(message, /The goblin looks much better!  The medallion crumbles to dust!/);
     assert.match(message, /Unfortunately, the goblin is still genocided\.\.\./);
     assert.equal(message.indexOf('The medallion crumbles to dust!') < message.indexOf('Unfortunately, the goblin is still genocided...'), true);
+    assert.equal(game._vanquished_counts?.goblin, 1);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup reshapes shifted vampire when visible form is wiped out', async () => {
@@ -13819,6 +13851,7 @@ test('genocide cleanup reshapes shifted vampire when visible form is wiped out',
     const { monster, loot } = shiftedVampireBatMonster();
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30932, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13832,6 +13865,8 @@ test('genocide cleanup reshapes shifted vampire when visible form is wiped out',
     assert.equal(game.level.objects.includes(loot), false);
     assert.match(message, /Wiped out all vampire bats\./);
     assert.match(message, /The vampire bat turns into/);
+    assert.equal(game._vanquished_total || 0, 0);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup removes shifted vampire when base form is wiped out', async () => {
@@ -13840,6 +13875,7 @@ test('genocide cleanup removes shifted vampire when base form is wiped out', asy
     const { monster, loot } = shiftedVampireBatMonster(30936);
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30938, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13856,6 +13892,10 @@ test('genocide cleanup removes shifted vampire when base form is wiped out', asy
     assert.equal(loot.oy, 5);
     assert.match(message, /Wiped out all vampires\./);
     assert.doesNotMatch(message, /turns into|rises as/);
+    assert.equal(game._vanquished_counts?.vampire, 1);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('genocide cleanup restores shifted vampire true form after failed life saving', async () => {
@@ -13871,6 +13911,7 @@ test('genocide cleanup restores shifted vampire true form after failed life savi
     monster.minvent.unshift(amulet);
     game.level.monsters = [monster];
     game.inventory = [scrollOfGenocide(30960, 's')];
+    const experienceBefore = currentGenocideCleanupExperience();
 
     await rhack('r');
     await rhack('s');
@@ -13889,6 +13930,10 @@ test('genocide cleanup restores shifted vampire true form after failed life savi
     assert.match(message, /But wait\.\.\.  The vampire bat's medallion begins to glow!/);
     assert.match(message, /Unfortunately, the vampire bat is still genocided\.\.\./);
     assert.doesNotMatch(message, /turns into|rises as/);
+    assert.equal(game._vanquished_counts?.vampire, 1);
+    assert.equal(game._vanquished_counts?.['vampire bat'] || 0, 0);
+    assert.equal(game._vanquished_total, 1);
+    assertGenocideCleanupExperienceUnchanged(experienceBefore);
 });
 
 test('class genocide cleanup reshapes visible shifted monster before species wipeout', async () => {

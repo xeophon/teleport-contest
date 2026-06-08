@@ -31164,6 +31164,7 @@ function killGenocidedMonsters(messages = []) {
                 continue;
             }
             restoreGenocideMonsterTrueFormForDeath(mon);
+            recordVanquished(mon, false);
             if (activeLevel) dropMonsterInventory(mon);
             level.monsters = level.monsters.filter(other => other !== mon);
             if (activeLevel) newsym(mon.mx, mon.my);
