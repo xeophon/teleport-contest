@@ -13577,6 +13577,31 @@ test('genocide pluralizes lurker above with C compound rule', async () => {
     assert.equal(game._genocided_monsters.includes('lurker above'), true);
 });
 
+test('genocide keeps C as-is plural monster names unchanged', async () => {
+    const cases = [
+        ['manes', /maneses/],
+        ['tengu', /tengus/],
+        ['Uruk-hai', /Uruk-hais/],
+        ['Olog-hai', /Olog-hais/],
+        ['Nazgul', /Nazguls/],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [name, badPlural] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31055 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(name);
+
+        const message = game._pending_message || '';
+        assert.match(message, new RegExp(`Wiped out all ${name.replace('-', '\\-')}\\.`));
+        assert.doesNotMatch(message, badPlural);
+        assert.equal(game._genocided_monsters.includes(name), true);
+    }
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

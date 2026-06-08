@@ -30998,6 +30998,14 @@ function scrollReadMessages(confusedReading) {
 }
 
 const GENOCIDE_MAX_TRIES = 5;
+const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
+const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
+
+function isCAsIsMonsterPlural(name) {
+    const lower = String(name || '').toLowerCase();
+    return C_AS_IS_MONSTER_PLURAL_NAMES.has(lower)
+        || C_AS_IS_MONSTER_PLURAL_SUFFIXES.some(suffix => lower.endsWith(suffix));
+}
 
 function normalizeGenocideName(name) {
     let lower = String(name || '').trim().toLowerCase();
@@ -31024,6 +31032,7 @@ function normalizeGenocideName(name) {
 
 function pluralizeMonsterName(name) {
     const lower = String(name || '').toLowerCase();
+    if (isCAsIsMonsterPlural(name)) return name;
     if (lower === 'human') return 'humans';
     if (lower === 'dwarf') return 'dwarves';
     if (lower === 'elf') return 'elves';
