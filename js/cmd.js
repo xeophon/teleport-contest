@@ -31019,6 +31019,14 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
 ]);
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
+const C_GENOCIDE_NAME_ALIASES = new Map([
+    ['grey dragon', 'gray dragon'],
+    ['baby grey dragon', 'baby gray dragon'],
+    ['grey unicorn', 'gray unicorn'],
+    ['grey ooze', 'gray ooze'],
+    ['mindflayer', 'mind flayer'],
+    ['master mindflayer', 'master mind flayer'],
+]);
 
 function isCAsIsMonsterPlural(name) {
     const lower = String(name || '').toLowerCase();
@@ -31091,6 +31099,7 @@ function genocideMonsterCatalog() {
 function genocideMonsterByName(name) {
     const wanted = normalizeGenocideName(name);
     if (!wanted) return null;
+    const aliasedWanted = C_GENOCIDE_NAME_ALIASES.get(wanted) || wanted;
     for (const data of genocideMonsterCatalog()) {
         const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
         const candidates = [
@@ -31106,7 +31115,7 @@ function genocideMonsterByName(name) {
             genderNames?.male === 'incubus' ? 'incubi' : null,
             genderNames?.female === 'succubus' ? 'succubi' : null,
         ].filter(Boolean).map(normalizeGenocideName);
-        if (candidates.includes(wanted)) return data;
+        if (candidates.includes(wanted) || candidates.includes(aliasedWanted)) return data;
     }
     return null;
 }

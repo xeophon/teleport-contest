@@ -13704,6 +13704,33 @@ test('genocide resolves C gendered neutral monster aliases', async () => {
     }
 });
 
+test('genocide accepts C alternate monster spellings', async () => {
+    const cases = [
+        ['grey dragon', 'gray dragon', /Wiped out all gray dragons\./],
+        ['baby grey dragon', 'baby gray dragon', /Wiped out all baby gray dragons\./],
+        ['grey unicorn', 'gray unicorn', /Wiped out all gray unicorns\./],
+        ['grey ooze', 'gray ooze', /Wiped out all gray oozes\./],
+        ['mindflayer', 'mind flayer', /Wiped out all mind flayers\./],
+        ['master mindflayer', 'master mind flayer', /Wiped out all master mind flayers\./],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, markedName, expected] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31230 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, expected);
+        assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+        assert.equal(game._command_mode || null, null);
+        assert.equal(game._genocided_monsters.includes(markedName), true);
+    }
+});
+
 test('genocide resolves C amorous demon aliases before G_GENO refusal', async () => {
     const cases = ['incubus', 'succubus', 'incubi', 'succubi'];
     for (let i = 0; i < cases.length; i++) {
