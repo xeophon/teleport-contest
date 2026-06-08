@@ -34615,7 +34615,7 @@ function kickFloorObjectSupported(obj, x, y, options = {}) {
     if (isBoulderObject(obj)) return false;
     const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
-    if (quantity !== 1 && !fragileBreakKind) return false;
+    if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
     if ((!isBoxObject(obj) && isTipContainerObject(obj)) || globContents(obj).length) return false;
     const shopFloorGate = !!options.shopFloorGate;
     if ((shopObjectOrContentsUnpaid(obj) || (shopkeeperForCostlySpot(x, y) && !shopFloorGate))
@@ -34646,7 +34646,7 @@ function kickedFragilePreflightBreakKind(obj) {
 function kickFloorObjectRange(obj, x, y, dir) {
     const stats = game.u?.acurr?.a || [];
     const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
-    const weight = globObjectWeight({ ...obj, quan: 1 });
+    const weight = globObjectWeight(shopBillableGold(obj) ? obj : { ...obj, quan: 1 });
     let range = Math.trunc(strength / 2) - Math.trunc(weight / 40);
     if (heroUsesMartialKickRangeBonus()) range += rnd(3);
 
@@ -34752,6 +34752,7 @@ function placeKickedFloorObject(obj, x, y, messages, options = {}) {
 function splitKickedFloorObjectForFlight(obj) {
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     if (!obj || quantity <= 1) return obj;
+    if (shopBillableGold(obj)) return obj;
     const kicked = {
         ...obj,
         id: next_ident(),
@@ -34766,7 +34767,8 @@ function splitKickedFloorObjectForFlight(obj) {
 function kickedFloorObjectKickName(obj) {
     if (!shopBillableGold(obj)) return floorObjectArticleName(obj);
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
-    return pickupObjectName({ ...obj, line: '', quan: quantity });
+    const name = pickupObjectName({ ...obj, line: '', quan: quantity });
+    return quantity > 1 ? quantityObjectName(obj, name, quantity) : name;
 }
 
 function kickedCoinFlightStopPileAt(obj, x, y) {
@@ -34774,6 +34776,93 @@ function kickedCoinFlightStopPileAt(obj, x, y) {
     return (game.level?.objects || []).find(candidate =>
         candidate && candidate !== obj && !candidate.hidden && !candidate.buried
         && !candidate.transientProjectile && candidate.ox === x && candidate.oy === y) || null;
+}
+
+const FLYING_COIN_MESSAGES = [
+    'scatter the coins',
+    'knock coins all over the place',
+    'send coins flying in all directions',
+];
+
+function splitKickedGoldScatterStack(obj) {
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (!obj || quantity <= 1) return obj;
+    const splitCount = rnd(Math.min(quantity - 1, Number.MAX_SAFE_INTEGER));
+    obj.quan = quantity - splitCount;
+    delete obj.line;
+    const splitObj = {
+        ...obj,
+        id: next_ident(),
+        o_id: undefined,
+        _shopBillObjectId: undefined,
+        quan: splitCount,
+    };
+    return splitObj;
+}
+
+function kickedGoldScatterClosedDoor(loc) {
+    return !!(loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+}
+
+function kickedGoldScatterLanding(obj, sx, sy, blastForce, messages) {
+    const dir = rn2(N_DIRS);
+    const dx = xdir[dir] || 0;
+    const dy = ydir[dir] || 0;
+    const force = Math.max(1, Math.trunc(Number(blastForce || 1)) - Math.trunc(globObjectWeight(obj) / 40));
+    let range = rnd(force);
+    let x = sx;
+    let y = sy;
+    while (range-- > 0) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!isok(nx, ny)) break;
+        const loc = game.level?.at?.(nx, ny);
+        if (!loc || !ZAP_POS(loc.typ) || kickedGoldScatterClosedDoor(loc)) break;
+        x = nx;
+        y = ny;
+        const mon = magicBagScatterMonsterAt(x, y);
+        if (mon) {
+            range--;
+            const hit = magicBagScatterHitMonster(mon, obj, x, y, messages);
+            if (hit.stopped) return { placed: true, consumed: !!hit.consumed };
+            continue;
+        }
+        if (game.u?.ux === x && game.u?.uy === y) {
+            const hit = magicBagScatterHitHero(obj, messages);
+            if (hit.consumed) return { placed: false, consumed: true };
+            if (hit.hit) range -= 3;
+        }
+        if (loc.typ === SINK) break;
+    }
+    return { x, y, placed: false, consumed: false };
+}
+
+function scatterKickedGoldStack(obj, sx, sy, blastForce, messages) {
+    if (!obj || !game.level) return [];
+    removeFloorObject(obj);
+    const scattered = [];
+    while (obj) {
+        const piece = splitKickedGoldScatterStack(obj);
+        if (piece === obj) obj = null;
+        const landing = kickedGoldScatterLanding(piece, sx, sy, blastForce, messages);
+        if (!landing.placed && !landing.consumed) {
+            placeObjectOnFloorWithEffects(piece, landing.x, landing.y, messages, 'land', {
+                stack: true,
+                usedUpShopBillOnDestroy: true,
+            });
+        }
+        if (!landing.consumed) scattered.push(piece);
+    }
+    newsym(sx, sy);
+    return scattered;
+}
+
+function applyKickedObjectThumpOuch(messages) {
+    messages.push('Thump!');
+    if (!lowRangeKickedObjectAvoidsOuch()) {
+        applyKickedObjectOuchDamage();
+        messages.push('Ouch!  That hurts!');
+    }
 }
 
 function kickedObjectIronBarsBreakChance(obj) {
@@ -34934,15 +35023,25 @@ async function kickFloorObjectToward(dir, x, y) {
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
     if (range < 2) {
-        messages.push('Thump!');
-        if (!lowRangeKickedObjectAvoidsOuch()) {
-            applyKickedObjectOuchDamage();
-            messages.push('Ouch!  That hurts!');
-        }
+        applyKickedObjectThumpOuch(messages);
         return { handled: true, messages, moved: false };
     }
     if (!gate && !canHandleMonsterImpact && !ordinarySameLevelFlight)
         return { handled: true, messages, moved: false };
+
+    const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
+    if (shopBillableGold(obj) && quantity > 1) {
+        if (rn2(20)) {
+            if (!heroIsDeaf()) messages.push('Thwwpingg!');
+            messages.push(`You ${FLYING_COIN_MESSAGES[rn2(FLYING_COIN_MESSAGES.length)]}!`);
+            scatterKickedGoldStack(obj, x, y, rnd(3), messages);
+            return { handled: true, messages, moved: true, scattered: true };
+        }
+        if (quantity > 300) {
+            applyKickedObjectThumpOuch(messages);
+            return { handled: true, messages, moved: false };
+        }
+    }
 
     obj = splitKickedFloorObjectForFlight(obj);
     let monsterImpact = { handled: false };

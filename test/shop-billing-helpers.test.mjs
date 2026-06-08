@@ -44769,6 +44769,108 @@ test('command kicked single gold piece stops and stacks at first occupied square
     assert.deepEqual(getRngLog(), []);
 });
 
+test('command kicked multi gold stack scatters into random sub-stacks', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const coins = { ...goldPieces(512100, 7), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coins];
+    enableRngLog({ reset: true });
+    installCoreRngValues([
+        1, 0, 0,       // rn2(20), coin message, scatter blast force
+        2, 0, 4, 0,    // split 3 coins, id, east, range 1
+        1, 0, 2, 0,    // split 2 coins, id, north, range 1
+        0, 0, 6, 0,    // split 1 coin, id, south, range 1
+        3, 0,          // final coin northeast, range 1
+    ]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const floorGold = game.level.objects.filter(obj => obj.otyp === 466 || obj.cls === 'coin');
+    const bySpot = new Map(floorGold.map(obj => [`${obj.ox},${obj.oy}`, obj.quan]));
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(coins), true);
+    assert.equal(floorGold.length, 4);
+    assert.deepEqual([...bySpot.entries()].sort(), [
+        ['6,4', 2],
+        ['6,6', 1],
+        ['7,4', 1],
+        ['7,5', 3],
+    ]);
+    assert.equal(bySpot.has('14,5'), false);
+    assert.equal(game._pending_message,
+        'You kick 7 gold pieces.  Thwwpingg!  You scatter the coins!');
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(20)',
+        'rn2(3)',
+        'rnd(3)',
+        'rnd(6)',
+        'rnd(2)',
+        'rn2(8)',
+        'rnd(1)',
+        'rnd(3)',
+        'rnd(2)',
+        'rn2(8)',
+        'rnd(1)',
+        'rnd(1)',
+        'rnd(2)',
+        'rn2(8)',
+        'rnd(1)',
+        'rn2(8)',
+        'rnd(1)',
+    ]);
+});
+
+test('command kicked small multi gold stack rare no-scatter falls through to flight', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const coins = { ...goldPieces(512101, 7), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coins];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], coins);
+    assert.equal(coins.quan, 7);
+    assert.equal(coins.ox, 14);
+    assert.equal(coins.oy, 5);
+    assert.equal(game._pending_message, 'You kick 7 gold pieces.');
+    assert.doesNotMatch(game._pending_message, /Thwwpingg|scatter|Thump|falls|hits|misses/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0']);
+});
+
+test('command kicked large multi gold stack rare no-scatter thumps in place', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    const coins = { ...goldPieces(512102, 301), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coins];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], coins);
+    assert.equal(coins.quan, 301);
+    assert.equal(coins.ox, 6);
+    assert.equal(coins.oy, 5);
+    assert.equal(game._pending_message, 'You kick 301 gold pieces.  Thump!');
+    assert.doesNotMatch(game._pending_message, /Thwwpingg|scatter|falls|hits|misses|Ouch/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0', 'rn2(3)=0']);
+});
+
 test('command kicked ordinary floor object can get stuck in visible web mid-flight', async () => {
     installNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
