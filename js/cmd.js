@@ -39,6 +39,7 @@ const C_RANDOM_CORPSE = 265;
 const VANQUISHED_MONSTER_DATA = new Map(
     RNDMONST_COMMON_MONSTERS.map(([name, , mlevel], index) => [name, { mlevel, index }]),
 );
+const VANQUISHED_COUNT_LIMIT = 255;
 const XP_SPECIAL_ATTACK_TYPES = new Set(['tuch', 'stng', 'hugs', 'spit', 'engl', 'brea', 'expl', 'boom', 'gaze', 'tent']);
 const XP_DOUBLE_DAMAGE_TYPES = new Set(['magm', 'fire', 'cold', 'slee', 'disn', 'elec', 'drst', 'acid', 'spc1', 'spc2']);
 const XP_FLAT_DAMAGE_TYPES = new Set(['drli', 'ston', 'slim']);
@@ -47997,7 +47998,8 @@ export function recordVanquished(mon, awardExperience = true) {
     if (mon._vanquished_recorded) return;
     mon._vanquished_recorded = 1;
     game._vanquished_counts ??= {};
-    game._vanquished_counts[name] = (game._vanquished_counts[name] || 0) + 1;
+    const previousCount = Math.max(0, Math.trunc(Number(game._vanquished_counts[name]) || 0));
+    game._vanquished_counts[name] = Math.min(VANQUISHED_COUNT_LIMIT, previousCount + 1);
     game._vanquished_total = Object.values(game._vanquished_counts).reduce((sum, count) => sum + count, 0);
     game._vanquished = Object.entries(game._vanquished_counts)
         .sort(([nameA], [nameB]) => {

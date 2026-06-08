@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { advanceRegions, interruptEatingOccupation, moveloop_core, processEatingOccupationTick, processForceLockOccupation, processMonsterTurns, processPickLockOccupation, __allmainTestHooks as allmain } from '../js/allmain.js';
-import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, recordVanquished, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
 import { pushKey, resetInputState } from '../js/input.js';
@@ -13682,6 +13682,18 @@ function currentGenocideCleanupExperience() {
 function assertGenocideCleanupExperienceUnchanged(before) {
     assert.equal(game.u.urexp || 0, before.urexp);
 }
+
+test('vanquished count saturates at C mvitals died limit', () => {
+    installNonShopFloorState();
+    game._vanquished_counts = { goblin: 254 };
+    game._vanquished_total = 254;
+    recordVanquished(ordinaryThrowTarget('goblin', 6, 5), false);
+    recordVanquished(ordinaryThrowTarget('goblin', 7, 5), false);
+
+    assert.equal(game._vanquished_counts.goblin, 255);
+    assert.equal(game._vanquished_total, 255);
+    assert.deepEqual(game._vanquished, ['255 goblins']);
+});
 
 test('genocide cleanup reshapes shifted monster when current form is wiped out', async () => {
     installNonShopFloorState();
