@@ -31001,6 +31001,10 @@ const GENOCIDE_MAX_TRIES = 5;
 const GENOCIDE_EXTRA_MONSTERS = [
     { name: 'watchman', mlet: '@', glyph: '@', color: CLR_GRAY, mlevel: 6, hpLevel: 9, difficulty: 8, mmove: 10, maligntyp: -2, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
     { name: 'watch captain', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 10, hpLevel: 11, difficulty: 12, mmove: 10, maligntyp: -4, genoFreq: 1, mercenary: true, armed: true, alwaysPeaceful: true },
+    { name: 'Keystone Kop', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 1, hpLevel: 1, difficulty: 3, mmove: 6, maligntyp: 9, genoFreq: 0, armed: true },
+    { name: 'Kop Sergeant', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 2, hpLevel: 2, difficulty: 4, mmove: 8, maligntyp: 10, genoFreq: 0, armed: true },
+    { name: 'Kop Lieutenant', mlet: 'K', glyph: 'K', color: CLR_CYAN, mlevel: 3, hpLevel: 3, difficulty: 5, mmove: 10, maligntyp: 11, genoFreq: 0, armed: true },
+    { name: 'Kop Kaptain', mlet: 'K', glyph: 'K', color: CLR_BLUE, mlevel: 4, hpLevel: 4, difficulty: 6, mmove: 12, maligntyp: 12, genoFreq: 0, armed: true },
     { name: 'ghost', mlet: ' ', glyph: ' ', color: CLR_GRAY, mlevel: 10, hpLevel: 10, difficulty: 12, mmove: 3, maligntyp: -5, genoFreq: 0 },
     { name: 'shade', mlet: ' ', glyph: ' ', color: CLR_BLACK, mlevel: 12, hpLevel: 12, difficulty: 14, mmove: 10, maligntyp: 0, genoFreq: 0 },
 ];

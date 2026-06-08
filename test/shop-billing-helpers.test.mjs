@@ -13649,6 +13649,21 @@ test('genocide catalogs C watch captain as a normal genocidable monster', async 
     assert.equal(game._genocided_monsters.includes('watch captain'), true);
 });
 
+test('genocide catalogs C Keystone Kop as a normal genocidable monster', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31243, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('Keystone Kop');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all Keystone Kops\./);
+    assert.doesNotMatch(message, /Such creatures do not exist in this world/);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._genocided_monsters.includes('Keystone Kop'), true);
+});
+
 test('genocide catalogs special C normal-genocide monsters', async () => {
     const cases = [
         ['queen bee', /Wiped out all queen bees\./],
@@ -13823,6 +13838,28 @@ test('blessed genocide refuses C non-G_GENO ghost class', async () => {
     assert.equal(game._command_mode, 'genocideText');
     for (const name of ['ghost', 'shade'])
         assert.notEqual(game._genocided_monsters?.includes(name), true);
+});
+
+test('blessed genocide catalogs C Kop class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31244, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('kop');
+
+    const message = game._pending_message || '';
+    for (const expected of [
+        /Wiped out all Keystone Kops\./,
+        /Wiped out all Kop Sergeants\./,
+        /Wiped out all Kop Lieutenants\./,
+        /Wiped out all Kop Kaptains\./,
+    ])
+        assert.match(message, expected);
+    assert.doesNotMatch(message, /You aren't permitted|does not represent any monster/);
+    assert.equal(game._command_mode || null, null);
+    for (const name of ['Keystone Kop', 'Kop Sergeant', 'Kop Lieutenant', 'Kop Kaptain'])
+        assert.equal(game._genocided_monsters.includes(name), true);
 });
 
 test('genocide refuses C non-G_GENO elemental', async () => {
