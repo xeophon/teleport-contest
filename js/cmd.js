@@ -35061,6 +35061,33 @@ function continueKickedFlightAfterNoDrop(obj, flight, dir, messages) {
     });
 }
 
+function resolveKickedFlightGateShipping(obj, flight, dir, messages) {
+    let shipObject = null;
+    while (flight.gate) {
+        obj.ox = flight.x;
+        obj.oy = flight.y;
+        const shipped = maybeShipRemoteProjectileObject(obj, flight.x, flight.y, messages, {
+            allowGold: shopBillableGold(obj),
+            shopFloorObj: !!shopkeeperForCostlySpot(flight.x, flight.y),
+        });
+        shipObject = shipped;
+        if (shipped.handled)
+            chargeKickedGoldMigrationShopDebt(obj, flight.x, flight.y, messages);
+        if (shipped.handled)
+            return { migrated: true, flight, shipObject };
+        if (!shipped.noDrop) break;
+        flight = continueKickedFlightAfterNoDrop(obj, flight, dir, messages);
+    }
+    return { migrated: false, flight, shipObject };
+}
+
+function finishKickedFlightLanding(obj, sx, sy, flight, messages) {
+    obj.ox = flight.x;
+    obj.oy = flight.y;
+    chargeKickedObjectNormalFlightFromShop(obj, sx, sy, flight.x, flight.y, messages);
+    placeKickedFloorObject(obj, flight.x, flight.y, messages);
+}
+
 async function breakKickedFragileFloorObject(obj, x, y, messages) {
     const preflightBreakKind = kickedFragilePreflightBreakKind(obj);
     if (!preflightBreakKind) return false;
@@ -35190,47 +35217,33 @@ async function kickFloorObjectToward(dir, x, y) {
         return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
     }
     if (ordinarySameLevelFlight) {
-        let flight = kickedSameLevelFlightStop(obj, x, y, dir, range, messages);
+        const flight = kickedSameLevelFlightStop(obj, x, y, dir, range, messages);
         removeFloorObject(obj);
         newsym(x, y);
-        while (flight.gate) {
-            obj.ox = flight.x;
-            obj.oy = flight.y;
-            const shipped = maybeShipRemoteProjectileObject(obj, flight.x, flight.y, messages, {
-                allowGold: shopBillableGold(obj),
-                shopFloorObj: !!shopkeeperForCostlySpot(flight.x, flight.y),
-            });
-            if (shipped.handled)
-                chargeKickedGoldMigrationShopDebt(obj, flight.x, flight.y, messages);
-            if (shipped.handled)
-                return { handled: true, messages, moved: true, shipObject: shipped };
-            if (!shipped.noDrop) break;
-            flight = continueKickedFlightAfterNoDrop(obj, flight, dir, messages);
-        }
-        obj.ox = flight.x;
-        obj.oy = flight.y;
-        chargeKickedObjectNormalFlightFromShop(obj, x, y, flight.x, flight.y, messages);
-        placeKickedFloorObject(obj, flight.x, flight.y, messages);
-        return { handled: true, messages, moved: true };
+        const resolved = resolveKickedFlightGateShipping(obj, flight, dir, messages);
+        if (resolved.migrated)
+            return { handled: true, messages, moved: true, shipObject: resolved.shipObject };
+        finishKickedFlightLanding(obj, x, y, resolved.flight, messages);
+        const result = { handled: true, messages, moved: true };
+        if (resolved.shipObject) result.shipObject = resolved.shipObject;
+        return result;
     }
 
     if (!gate) return { handled: false };
 
     removeFloorObject(obj);
     newsym(x, y);
-    obj.ox = landX;
-    obj.oy = landY;
 
-    const shipped = maybeShipRemoteProjectileObject(obj, landX, landY, messages, {
-        allowGold: shopBillableGold(obj),
-        shopFloorObj: !!shopkeeperForCostlySpot(landX, landY),
-    });
-    if (shipped.handled)
-        chargeKickedGoldMigrationShopDebt(obj, landX, landY, messages);
-    if (!shipped.handled) {
-        placeKickedFloorObject(obj, landX, landY, messages);
-    }
-    return { handled: true, messages, moved: true, shipObject: shipped };
+    const resolved = resolveKickedFlightGateShipping(obj, {
+        x: landX,
+        y: landY,
+        gate,
+        remainingSteps: Math.max(0, range - 2),
+    }, dir, messages);
+    if (resolved.migrated)
+        return { handled: true, messages, moved: true, shipObject: resolved.shipObject };
+    finishKickedFlightLanding(obj, x, y, resolved.flight, messages);
+    return { handled: true, messages, moved: true, shipObject: resolved.shipObject };
 }
 
 function carriedDropDownGateAt(obj, x, y, { allowGold = false } = {}) {

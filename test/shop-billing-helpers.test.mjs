@@ -44837,6 +44837,35 @@ test('command kicked single gold piece stops and stacks at first occupied square
     assert.deepEqual(getRngLog(), []);
 });
 
+test('command kicked single gold piece stops on occupied down stairs without ship RNG', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.u.acurr.a[A_STR] = 18;
+    const coin = { ...goldPieces(512116, 1), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    const pile = { ...goldPieces(512117, 4), letter: undefined, line: undefined, ox: 7, oy: 5 };
+    game.level.objects = [coin, pile];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 42]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.length, 1);
+    assert.equal(game.level.objects[0], coin);
+    assert.equal(game.level.objects.includes(pile), false);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).includes(coin), false);
+    assert.equal(coin.ox, 7);
+    assert.equal(coin.oy, 5);
+    assert.equal(coin.quan, 5);
+    assert.equal(pile.quan, 0);
+    assert.equal(game._pending_message, 'You kick gold piece.');
+    assert.doesNotMatch(game._pending_message, /falls down the stairs|hits|Thump|Thwwpingg/);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('command kicked single gold piece falls down stairs', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });
@@ -45554,6 +45583,97 @@ test('command kick floor object in trap while hallucinating calls it a tizzy', a
     assert.equal(game._pending_message,
         "You find a web.  You can't kick something that's in a tizzy!");
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+});
+
+test('command kicked box no-drop at down stairs continues same-level flight', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    game.u.acurr.a[A_STR] = 25;
+    const box = shopFloorContainer(512118, 6, 5);
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).includes(box), false);
+    assert.equal(box.ox > 7, true);
+    assert.equal(box.oy, 5);
+    assert.equal(game._pending_message, 'You kick a large box.');
+    assert.doesNotMatch(game._pending_message, /falls down the stairs|THUD|lid slams|goods lost/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rn2(3)=1']);
+});
+
+test('command kicked box down stairs queues migration after local lid roll fails', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.u.acurr.a[A_STR] = 25;
+    const box = shopFloorContainer(512119, 6, 5);
+    game.level.objects = [box];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 0, 42]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(box), false);
+    assert.equal(queued.includes(box), true);
+    assert.equal(box._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.equal(game._pending_message, 'You kick a large box.  A large box falls down the stairs.');
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rn2(3)=0', 'rn2(100)=42']);
+});
+
+test('command kicked shop-floor box no-drop at non-shop stairs charges final flight', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: x <= 6 ? ROOMOFFSET : 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    game.u.acurr.a[A_STR] = 25;
+    const box = shopFloorContainer(512120, 6, 5);
+    game.level.objects = [box];
+    const expectedPrice = shop.shopItemPrice(box, 6, 5);
+    assert.equal(expectedPrice > 0, true);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1, 1]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).includes(box), false);
+    assert.equal(box.ox > 7, true);
+    assert.equal(box.oy, 5);
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick a large box\./);
+    assert.match(game._pending_message,
+        new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for it!`));
+    assert.doesNotMatch(game._pending_message, /falls down the stairs|THUD|lid slams|goods lost/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rn2(3)=1']);
 });
 
 test('command kick locked trapped empty box breaks lock then fires trap', async () => {
