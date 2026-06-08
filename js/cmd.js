@@ -22790,10 +22790,12 @@ function monsterLifeSavingAmulet(mon) {
     }) || null;
 }
 
-function applyHeroProjectileMonsterLifeSaving(mon, messages) {
+function applyHeroProjectileMonsterLifeSaving(mon, messages, {
+    unseenMaybeNot = true,
+    visibleSquare = cansee(mon.mx, mon.my),
+} = {}) {
     const amulet = monsterLifeSavingAmulet(mon);
     if (!amulet) return false;
-    const visibleSquare = cansee(mon.mx, mon.my);
     if (visibleSquare) {
         messages.push('But wait...');
         messages.push(`${sSuffixText(fireScrollMonsterName(mon))} medallion begins to glow!`);
@@ -22818,7 +22820,7 @@ function applyHeroProjectileMonsterLifeSaving(mon, messages) {
         return false;
     }
     mon.dead = false;
-    if (!visibleSquare) messages.push('Maybe not...');
+    if (!visibleSquare && unseenMaybeNot) messages.push('Maybe not...');
     return true;
 }
 
@@ -31134,9 +31136,19 @@ function killGenocidedMonsters(messages = []) {
                 });
                 continue;
             }
-            if (level === game.level) dropMonsterInventory(mon);
+            mon.dead = true;
+            mon.mhp = 0;
+            const activeLevel = level === game.level;
+            if (applyHeroProjectileMonsterLifeSaving(mon, activeLevel ? messages : [], {
+                unseenMaybeNot: false,
+                visibleSquare: activeLevel ? cansee(mon.mx, mon.my) : false,
+            })) {
+                if (activeLevel) newsym(mon.mx, mon.my);
+                continue;
+            }
+            if (activeLevel) dropMonsterInventory(mon);
             level.monsters = level.monsters.filter(other => other !== mon);
-            if (level === game.level) newsym(mon.mx, mon.my);
+            if (activeLevel) newsym(mon.mx, mon.my);
         }
     };
     cleanLevel(game.level);
