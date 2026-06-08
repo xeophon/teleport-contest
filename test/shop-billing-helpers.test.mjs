@@ -13535,6 +13535,20 @@ test('genocide pluralizes baluchitherium with C ium suffix', async () => {
     assert.equal(game._genocided_monsters.includes('baluchitherium'), true);
 });
 
+test('genocide pluralizes violet fungus with C suffix rule', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31052, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('violet fungus');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Wiped out all violet fungi\./);
+    assert.doesNotMatch(message, /violet funguses/);
+    assert.equal(game._genocided_monsters.includes('violet fungus'), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };
