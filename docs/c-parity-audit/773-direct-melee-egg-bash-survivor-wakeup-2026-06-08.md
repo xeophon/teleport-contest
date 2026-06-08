@@ -21,9 +21,12 @@ Added focused command-path coverage in `test/shop-billing-helpers.test.mjs`:
 - eating/wait state, alignment penalty, hostility flags, inventory use-up, no floor object, and no weapon-conduct/chronicle state are asserted;
 - nearby thrown-egg and pyrolisk canaries stayed in the focused run to preserve non-melee helper behavior.
 
+## Follow-Up Coverage
+
+- Sleeping egg-bash survivor growl/nearby-wakeup ordering is covered by audit 774.
+
 ## Remaining Gaps
 
-- Sleeping egg-bash survivors still need a growl/nearby-wakeup canary.
 - Special social targets such as priests, watchmen, and same-species bystanders should remain narrow follow-ups.
 - The shared egg helper still mixes thrown and melee delivery details; a future combat-core cleanup should split the delivery contract more explicitly.
 

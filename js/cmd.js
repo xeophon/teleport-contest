@@ -54672,13 +54672,22 @@ async function moveHero(dx, dy) {
                 if (eggMessages.lifeSaving || eggMessages.fatal) break;
                 if (killed) break;
                 if (eggHit.wakeupTail !== false) {
-                    directMeleeNonlethalWakeupTail(mon, messages, attackPreHitState, {
-                        ordinaryMelee: !directMeleeFromSpecialApply,
-                        forcefight: directMeleeForcefight,
-                        visible: targetSpotted,
-                        wakeMessage: false,
-                    });
-                    directMeleeNonlethalWakeupApplied = true;
+                    const eggOrdinaryMelee = !directMeleeFromSpecialApply;
+                    const deferEggSleepingWakeTail = attackIndex === 0 && wokeFromSleep
+                        && !twoWeaponActive && eggOrdinaryMelee
+                        && directMeleeSleeperWakeTailMayMessage(mon, attackPreHitState, { visible: targetSpotted });
+                    if (deferEggSleepingWakeTail) {
+                        deferSleepingWakeTail = true;
+                        deferredSleepingWakePreHitState = attackPreHitState;
+                    } else {
+                        directMeleeNonlethalWakeupTail(mon, messages, attackPreHitState, {
+                            ordinaryMelee: eggOrdinaryMelee,
+                            forcefight: directMeleeForcefight,
+                            visible: targetSpotted,
+                        });
+                        if (attackPreHitState?.msleeping && eggOrdinaryMelee) wokeByHit = false;
+                        directMeleeNonlethalWakeupApplied = true;
+                    }
                 }
                 continue;
             }

@@ -179,6 +179,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [771-direct-melee-acid-jelly-passive-fallback-2026-06-08.md](771-direct-melee-acid-jelly-passive-fallback-2026-06-08.md): direct hero melee production-name fallback for spotted jelly and ochre jelly `AT_NONE/AD_ACID` passive object corrosion, without replay-seed coupling.
 - [772-direct-melee-potion-bash-survivor-wakeup-2026-06-08.md](772-direct-melee-potion-bash-survivor-wakeup-2026-06-08.md): direct hero melee wielded potion bash fixed one-point survivor damage plus post-`potionhit()` `wakeup(TRUE)` peaceful anger tail.
 - [773-direct-melee-egg-bash-survivor-wakeup-2026-06-08.md](773-direct-melee-egg-bash-survivor-wakeup-2026-06-08.md): direct hero melee wielded egg bash survivor `wakeup(TRUE)` anger tail while preserving thrown-egg wake behavior.
+- [774-direct-melee-egg-bash-sleeping-wakeup-message-2026-06-08.md](774-direct-melee-egg-bash-sleeping-wakeup-message-2026-06-08.md): direct hero melee wielded egg bash sleeping survivor visible wake message and deferred growl/nearby-wakeup/anger tail.
 
 ## Cross-Cutting Themes
 

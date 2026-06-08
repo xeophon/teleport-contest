@@ -75447,6 +75447,67 @@ test('wielded egg bash survivor still runs melee wakeup anger tail', async () =>
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
 });
 
+test('wielded egg bash sleeping peaceful survivor wakes growls then angers', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+    game.u.ulevel = 20;
+    game.u.uhitinc = 30;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    const eggItem = { ...egg(876084, 'e'), otyp: EGG, wielded: true };
+    eggItem.line = 'e - an egg (wielded)';
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 1,
+        meating: 3,
+        mstrategy: 'waitforu',
+        mpeaceful: true,
+        data: { name: 'goblin', mlevel: 2, mlet: 'o', humanoid: true, maligntyp: -1, msound: 'MS_ORC' },
+    });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 9, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    game.inventory = [eggItem];
+    game.level.monsters = [goblin, nearbySleeper];
+    game._force_fight_target = goblin;
+    markSquareVisible(6, 5);
+    markSquareVisible(9, 5);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin with an egg.  Splat!  The goblin wakes up!');
+    assert.equal(game._message_more, 1);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message,
+        'The goblin screams!  The jackal wakes up.  The goblin gets angry!');
+    assert.equal(goblin.mhp, 29);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.meating, 0);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.hostile, true);
+    assert.equal(goblin.angry, true);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.equal(game.inventory.includes(eggItem), false);
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    assert.equal(game._chronicle_first_weapon_hit || 0, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(6)'), []);
+});
+
 test('wielded egg stack bash consumes the whole stack as used-up eggs', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
