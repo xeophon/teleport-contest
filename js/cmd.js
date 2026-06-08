@@ -49164,6 +49164,9 @@ function rottenFoodEffect({ adjective = 'Rotten', foodWord = 'food' } = {}) {
     if (!rn2(4)) {
         const confusionDuration = d(2, 4);
         if (game.u) game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusionDuration;
+        message += heroIsHallucinating()
+            ? '  You feel rather trippy.'
+            : '  You feel rather light headed.';
     } else if (!game.u?.blind && !rn2(4)) {
         d(2, 10);
         if (game.u) game.u.blind = true;

@@ -41240,7 +41240,10 @@ test('metallivorous slow digestion ring rotten metal can confuse without eating 
     assert.equal(game.inventory.includes(ring), true);
     assert.equal(game.u.uhunger, 900);
     assert.ok((game.u._confusionTimeout || 0) > 0);
-    assert.match(game._pending_message, /Blecch!  Awful metal!/);
+    assert.equal(
+        game._pending_message,
+        'This ring is indigestible!  Blecch!  Awful metal!  You feel rather light headed.'
+    );
 });
 
 test('metallivorous floor slow digestion ring remains on the floor after rotten metal effect', async () => {
