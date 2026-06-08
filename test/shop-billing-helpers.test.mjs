@@ -13697,6 +13697,10 @@ test('genocide cleanup removes shifted monster when base form is wiped out', asy
 
     const message = game._pending_message || '';
     assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(monster.data?.name, 'doppelganger');
+    assert.equal(monster.chamBase, undefined);
     assert.equal(game.level.objects.includes(loot), true);
     assert.equal(loot.ox, 6);
     assert.equal(loot.oy, 5);
@@ -13737,6 +13741,39 @@ test('genocide cleanup lets shifted base target consume monster life saving', as
     assert.match(message, /The goblin looks much better!  The medallion crumbles to dust!/);
     assert.doesNotMatch(message, /still genocided|turns into/);
     assert.equal(message.indexOf('Wiped out all doppelgangers.') < message.indexOf('But wait...'), true);
+});
+
+test('genocide cleanup restores shifted true form after failed life saving', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    game._genocided_monsters = ['goblin'];
+    const { monster, loot } = shiftedDoppelgangerAsGoblin(30953);
+    const amulet = metalAmulet(30955, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    monster.minvent.unshift(amulet);
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30956, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('doppelganger');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(monster.data?.name, 'doppelganger');
+    assert.equal(monster.chamBase, undefined);
+    assert.equal(monster.minvent.includes(amulet), false);
+    assert.equal(game.level.objects.includes(amulet), false);
+    assert.equal(game.level.objects.includes(loot), true);
+    assert.match(message, /Wiped out all doppelgangers\./);
+    assert.match(message, /But wait\.\.\.  The goblin's medallion begins to glow!/);
+    assert.match(message, /Unfortunately, the goblin is still genocided\.\.\./);
+    assert.doesNotMatch(message, /turns into/);
 });
 
 test('genocide cleanup consumes monster life saving before current-form removal', async () => {
@@ -13810,10 +13847,47 @@ test('genocide cleanup removes shifted vampire when base form is wiped out', asy
 
     const message = game._pending_message || '';
     assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(monster.data?.name, 'vampire');
+    assert.equal(monster.vampBase, undefined);
     assert.equal(game.level.objects.includes(loot), true);
     assert.equal(loot.ox, 6);
     assert.equal(loot.oy, 5);
     assert.match(message, /Wiped out all vampires\./);
+    assert.doesNotMatch(message, /turns into|rises as/);
+});
+
+test('genocide cleanup restores shifted vampire true form after failed life saving', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    game._genocided_monsters = ['vampire bat'];
+    const { monster, loot } = shiftedVampireBatMonster(30957);
+    const amulet = metalAmulet(30959, 'amulet of life saving', 1, 'a', {
+        worn: true,
+        owornmask: 1,
+        line: 'a - a circular amulet (being worn)',
+    });
+    monster.minvent.unshift(amulet);
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30960, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('vampire');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(monster.dead, true);
+    assert.equal(monster.mhp, 0);
+    assert.equal(monster.data?.name, 'vampire');
+    assert.equal(monster.vampBase, undefined);
+    assert.equal(monster.minvent.includes(amulet), false);
+    assert.equal(game.level.objects.includes(amulet), false);
+    assert.equal(game.level.objects.includes(loot), true);
+    assert.match(message, /Wiped out all vampires\./);
+    assert.match(message, /But wait\.\.\.  The vampire bat's medallion begins to glow!/);
+    assert.match(message, /Unfortunately, the vampire bat is still genocided\.\.\./);
     assert.doesNotMatch(message, /turns into|rises as/);
 });
 

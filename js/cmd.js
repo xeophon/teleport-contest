@@ -31115,6 +31115,23 @@ function shiftGenocidedMonsterForm(mon, names, messages = [], options = {}) {
     });
 }
 
+function restoreGenocideMonsterTrueFormForDeath(mon) {
+    const baseName = monsterGenocideBaseName(mon);
+    if (!baseName) return false;
+    const baseData = monsterByRndName(baseName) || RANDOM_MONSTER_BY_NAME.get(baseName);
+    if (!baseData) return false;
+    mon.data = { ...baseData, hpLevel: baseData.hpLevel ?? baseData.mlevel };
+    mon.name = baseData.name;
+    mon.mlet = baseData.mlet;
+    mon.glyph = baseData.glyph;
+    mon.color = baseData.color;
+    delete mon.chamBase;
+    delete mon.vampBase;
+    delete mon.chamName;
+    delete mon.cham;
+    return true;
+}
+
 function killGenocidedMonsters(messages = []) {
     const names = new Set(genocidedMonsterNames());
     if (!names.size) return;
@@ -31146,6 +31163,7 @@ function killGenocidedMonsters(messages = []) {
                 if (activeLevel) newsym(mon.mx, mon.my);
                 continue;
             }
+            restoreGenocideMonsterTrueFormForDeath(mon);
             if (activeLevel) dropMonsterInventory(mon);
             level.monsters = level.monsters.filter(other => other !== mon);
             if (activeLevel) newsym(mon.mx, mon.my);
