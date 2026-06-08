@@ -76087,6 +76087,31 @@ test('direct hero melee hostile vulnerable target on Elbereth uses low-record hy
     assert.equal(game.u.ualign.abuse, penalty);
 });
 
+test('direct hero melee blind hostile target on Elbereth omits fade text but deletes engraving', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876847,
+        monsterExtra: { mpeaceful: 0, hostile: true },
+    });
+    game.u.blind = true;
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message, 'You hit the goblin.  You feel like a hypocrite.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
 test('direct hero melee hostile human-shaped target does not treat Elbereth as scary', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({
         weaponId: 876831,

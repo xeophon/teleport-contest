@@ -47,7 +47,7 @@ The focused command keeps the adjacent direct-melee sleeping/wakeup/tame/priest 
 ## Deferred Gaps
 
 - Full `onscary()` parity remains broader: displacement, `guardobjects`, altar/vampire interactions, lawful-minion details, full shop/temple residency, and movement/pathing need separate coverage. The direct hero-square scare-monster scroll subcase is covered by audit 759.
-- Blind fade-message suppression is source-backed but not separately pinned in this slice.
+- Blind fade-message suppression is covered by audit 761.
 - Exact `adjalign()` threshold side effects such as Erinys adjustments remain outside this local direct-melee alignment model.
 - Full `peacefuls_respond()` remains deferred.
 - Bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred wake queues, and other special helpers remain separate from this ordinary direct-melee hook.

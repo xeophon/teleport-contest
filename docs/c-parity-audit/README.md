@@ -166,6 +166,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [758-direct-melee-setmangry-elbereth-hypocrisy-2026-06-08.md](758-direct-melee-setmangry-elbereth-hypocrisy-2026-06-08.md): direct hero melee `setmangry()` Elbereth hypocrisy, post-wipe engraving fade/deletion, high/low alignment penalties, and peaceful/vulnerable gates.
 - [759-direct-melee-setmangry-scare-monster-scroll-onscary-2026-06-08.md](759-direct-melee-setmangry-scare-monster-scroll-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` scare-monster scroll `onscary()` parity, hero-square scroll hypocrisy gating, and hard scare-immunity canaries.
 - [760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md](760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` altar/vampire `onscary()` parity, hero-square altar scare source for vampires and vampire shifters, and final-restriction bypass canaries.
+- [761-direct-melee-setmangry-blind-elbereth-fade-2026-06-08.md](761-direct-melee-setmangry-blind-elbereth-fade-2026-06-08.md): direct hero melee `setmangry(TRUE)` blind-hero Elbereth fade-message suppression while preserving hypocrisy penalties and direct engraving deletion.
 
 ## Cross-Cutting Themes
 
