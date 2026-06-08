@@ -76067,7 +76067,15 @@ test('direct hero melee sleeping growl wakes nearby sleepers before anger', asyn
         mstrategy: STRAT_WAITFORU,
         data: { name: 'gnome', mlevel: 1, humanoid: true },
     });
+    const buriedCorpse = zombieCorpse(876824, 7, 5, { zombifyTurn: 190 });
+    const floorBuriedCorpse = zombieCorpse(876827, 6, 6, { zombifyTurn: 160 });
+    const farBuriedCorpse = zombieCorpse(876825, 8, 5, { zombifyTurn: 190 });
+    const unburiedCorpse = zombieCorpse(876828, 6, 4, { buried: false, zombifyTurn: 190 });
+    const dueCorpse = zombieCorpse(876829, 5, 5, { zombifyTurn: 100 });
+    game.moves = 100;
     game.level.monsters = [mon, nearbySleeper, uniqueSleeper, farSleeper];
+    game.level.buriedobjlist = [buriedCorpse, farBuriedCorpse, dueCorpse];
+    game.level.objects = [floorBuriedCorpse, unburiedCorpse];
     markSquareVisible(9, 5);
     markSquareVisible(7, 6);
     installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
@@ -76084,6 +76092,11 @@ test('direct hero melee sleeping growl wakes nearby sleepers before anger', asyn
     assert.equal(uniqueSleeper.mstrategy, STRAT_WAITFORU);
     assert.equal(farSleeper.msleeping, 1);
     assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(buriedCorpse.zombifyTurn, 160);
+    assert.equal(floorBuriedCorpse.zombifyTurn, 140);
+    assert.equal(farBuriedCorpse.zombifyTurn, 190);
+    assert.equal(unburiedCorpse.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
     assert.equal(game.u.ualign.record, -1);
     assert.equal(game.u.ualign.abuse, 1);
 });
@@ -76100,7 +76113,10 @@ test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl
         mstrategy: STRAT_WAITFORU,
         data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
     });
+    const buriedCorpse = zombieCorpse(876826, 7, 5, { zombifyTurn: 190 });
+    game.moves = 100;
     game.level.monsters = [mon, nearbySleeper];
+    game.level.buriedobjlist = [buriedCorpse];
     markSquareVisible(9, 5);
     installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
 
@@ -76117,6 +76133,7 @@ test('direct hero melee sleeping peaceful silent nonhumanoid wakes without growl
     assert.equal(mon.meating, 0);
     assert.equal(nearbySleeper.msleeping, 1);
     assert.equal(nearbySleeper.mstrategy, STRAT_WAITFORU);
+    assert.equal(buriedCorpse.zombifyTurn, 190);
     assert.equal(game.u.ualign.record, -1);
     assert.equal(game.u.ualign.abuse, 1);
 });

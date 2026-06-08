@@ -22970,6 +22970,7 @@ function directMeleeGrowlWakeNearby(mon, messages) {
         if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq))
             clearDirectMeleeWaitStrategyMask(sleeper);
     }
+    disturbBuriedZombieCorpseTimersAt(mon?.mx || 0, mon?.my || 0);
 }
 
 function directMeleeAngerPeacefulMonster(mon, messages, { visible = false } = {}) {

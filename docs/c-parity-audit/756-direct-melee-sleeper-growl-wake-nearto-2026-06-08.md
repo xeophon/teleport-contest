@@ -40,7 +40,7 @@ The focused command also keeps the awake survivor, tame survivor, bullwhip apply
 
 - Unseen-but-audible source growl naming remains deferred; this slice only preserves visible source growl text while still running wake-nearby.
 - Hallucinated growl verb RNG/table, `iflags.last_msg = PLNMSG_GROWL`, and run interruption via `nomul(0)` remain deferred.
-- `disturb_buried_zombies()` from `wake_nearto_core()` remains deferred for this direct-melee growl path.
+- `disturb_buried_zombies()` from this direct-melee growl path is covered by audit 757; other `wake_nearto()` callers remain separate.
 - Full `wakeup()` mimic/object/furniture reveal and force-fight `mundetected` behavior remains deferred.
 - Full `setmangry()` Elbereth hypocrisy and `peacefuls_respond()` behavior remains deferred.
 - Two-weapon deferred sleeping-hit queues, knockback movement, special apply paths, and potion/egg bash paths remain separate follow-ups.
