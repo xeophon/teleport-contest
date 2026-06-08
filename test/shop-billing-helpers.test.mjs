@@ -13579,6 +13579,33 @@ test('genocide pluralizes lurker above with C compound rule', async () => {
     assert.equal(game._genocided_monsters.includes('lurker above'), true);
 });
 
+test('genocide resolves C irregular plural aliases with trailing object text', async () => {
+    const cases = [
+        ['homunculi corpse', 'homunculus', /Wiped out all homunculi\./],
+        ['violet fungi corpse', 'violet fungus', /Wiped out all violet fungi\./],
+        ['baluchitheria corpse', 'baluchitherium', /Wiped out all baluchitheria\./],
+        ['lurkers above corpse', 'lurker above', /Wiped out all lurkers above\./],
+        ['watchmen corpse', 'watchman', /Wiped out all watchmen\./],
+        ['mumakil corpse', 'mumak', /Wiped out all mumakil\./],
+    ];
+
+    for (let i = 0; i < cases.length; i++) {
+        const [input, target, expected] = cases[i];
+        installNonShopFloorState();
+        game.inventory = [scrollOfGenocide(31420 + i, 's')];
+
+        await rhack('r');
+        await rhack('s');
+        await enterGenocideResponse(input);
+
+        const message = game._pending_message || '';
+        assert.match(message, expected);
+        assert.doesNotMatch(message, /Such creatures do not exist/);
+        assert.equal(game._command_mode || null, null);
+        assert.equal(game._genocided_monsters.includes(target), true);
+    }
+});
+
 test('genocide keeps C as-is plural monster names unchanged', async () => {
     const cases = [
         ['manes', /maneses/],
@@ -13836,7 +13863,7 @@ test('genocide rejects C alternate-spelling plural suffixes', async () => {
 });
 
 test('genocide resolves C amorous demon aliases before G_GENO refusal', async () => {
-    const cases = ['incubus', 'succubus', 'incubi', 'succubi'];
+    const cases = ['incubus', 'succubus', 'incubi', 'succubi', 'incubi corpse', 'succubi corpse'];
     for (let i = 0; i < cases.length; i++) {
         const input = cases[i];
         installNonShopFloorState();

@@ -31077,7 +31077,15 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['wolf werewolf', 'werewolf'],
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
+    ['incubi', 'amorous demon'],
+    ['succubi', 'amorous demon'],
+    ['violet fungi', 'violet fungus'],
+    ['homunculi', 'homunculus'],
+    ['baluchitheria', 'baluchitherium'],
+    ['lurkers above', 'lurker above'],
+    ['watchmen', 'watchman'],
     ['djinn', 'djinni'],
+    ['mumakil', 'mumak'],
     ['erinyes', 'erinys'],
 ]);
 
