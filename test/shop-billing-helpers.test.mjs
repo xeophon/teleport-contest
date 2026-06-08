@@ -76055,6 +76055,91 @@ test('direct hero melee force-fought hidden survivor reveals in wakeup tail', as
     assert.equal(game.u.ualign.abuse, 0);
 });
 
+test('direct hero melee force-fought hidden sleeper reveals before growl', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876868,
+        name: 'trapper',
+        monsterExtra: {
+            mpeaceful: 0,
+            hostile: true,
+            msleeping: 1,
+            mundetected: true,
+            mstrategy: 'waitforu',
+        },
+        dataExtra: { name: 'trapper', humanoid: false, maligntyp: -3, msound: 'MS_ORC', mlevel: 2 },
+    });
+    const nearbySleeper = ordinaryThrowTarget('jackal', 9, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'jackal', mlevel: 0, mlet: 'dog' },
+    });
+    game.level.monsters = [mon, nearbySleeper];
+    markSquareVisible(9, 5);
+    const loc = game.level.at(6, 5);
+    loc.map_invisible = true;
+    loc.remembered_glyph = { ch: 'I', color: 8, dec: false };
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit it.  The trapper screams!  The jackal wakes up.');
+    assert.doesNotMatch(game._pending_message, /wakes up!/);
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mundetected, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(loc.map_invisible, false);
+    assert.equal(loc.remembered_glyph, null);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(game.u.ualign.record, 0);
+    assert.equal(game.u.ualign.abuse, 0);
+});
+
+test('direct hero melee F prefix hidden peaceful sleeper growls then angers', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876869,
+        monsterExtra: {
+            msleeping: 1,
+            mundetected: true,
+            mstrategy: 'waitforu',
+        },
+        dataExtra: { msound: 'MS_ORC' },
+    });
+    const loc = game.level.at(6, 5);
+    loc.map_invisible = true;
+    loc.remembered_glyph = { ch: 'I', color: 8, dec: false };
+    game._force_fight_target = null;
+    installCoreRngValues([0, 0, 0, 1, 1, 1, 1, ...Array(20).fill(1)]);
+
+    await rhack('F');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit it.  The goblin screams!  The goblin gets angry!');
+    assert.doesNotMatch(game._pending_message, /wakes up/);
+    assert.equal(game._force_fight || 0, 0);
+    assert.equal(game._force_fight_target, null);
+    assert.equal(game.level.monsters.includes(mon), true);
+    assert.equal(mon.dead, undefined);
+    assert.equal(mon.msleeping, 0);
+    assert.equal(mon.mundetected, 0);
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, true);
+    assert.equal(mon.mstrategy, 0);
+    assert.equal(mon.meating, 0);
+    assert.equal(loc.map_invisible, false);
+    assert.equal(loc.remembered_glyph, null);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
 test('direct hero melee force-fought object mimic reveals after hit', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({
         weaponId: 876866,

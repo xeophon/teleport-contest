@@ -23376,26 +23376,37 @@ function directMeleeNonlethalWakeupTail(mon, messages, preHitState, {
     visible = false,
 } = {}) {
     if (!mon) return false;
+    let angerFeedbackVisible = visible;
     if (ordinaryMelee) {
-        directMeleeSetmangryElberethHypocrisy(mon, messages);
-        directMeleeWakeupReveal(mon, { forcefight });
         if (preHitState?.msleeping) {
             if (visible) messages.push(directMeleeWakeMessage(mon, true));
             mon.msleeping = 0;
-            if (mon.meating !== undefined) mon.meating = 0;
+        }
+        const revealed = directMeleeWakeupReveal(mon, { forcefight });
+        const postRevealCanSee = directMeleeMonsterCanBeSeen(mon);
+        const postRevealCouldSee = couldsee(mon.mx ?? 0, mon.my ?? 0);
+        const postRevealGrowlCanMessage = postRevealCanSee || !heroIsDeaf();
+        if (revealed && forcefight) {
+            const angerIsHumanoid = mon?.data?.humanoid || mon?.humanoid
+                || mon?.isshk || mon?.isgd || mon?.ispriest;
+            angerFeedbackVisible = angerIsHumanoid
+                ? (visible || postRevealCouldSee)
+                : (visible || postRevealGrowlCanMessage);
+        }
+        if (mon.meating !== undefined) mon.meating = 0;
+        if (preHitState?.msleeping) {
             const verb = directMeleeGrowlVerb(mon);
             if (!directMeleeGrowlSuppressed(mon)) {
-                if (visible && verb) directMeleePushGrowlMessage(mon, messages, verb);
+                if (postRevealGrowlCanMessage && verb) directMeleePushGrowlMessage(mon, messages, verb);
                 directMeleeGrowlWakeNearby(mon, messages);
             }
-        } else if (mon.meating !== undefined) {
-            mon.meating = 0;
         }
+        directMeleeSetmangryElberethHypocrisy(mon, messages);
         clearDirectMeleeWaitStrategyMask(mon);
     }
     if (preHitState?.mpeaceful && mon.mpeaceful) {
-        if (mon.ispriest) directMeleeAngerPeacefulPriest(mon, messages, { visible });
-        else if (ordinaryMelee) directMeleeAngerPeacefulMonster(mon, messages, { visible });
+        if (mon.ispriest) directMeleeAngerPeacefulPriest(mon, messages, { visible: angerFeedbackVisible });
+        else if (ordinaryMelee) directMeleeAngerPeacefulMonster(mon, messages, { visible: angerFeedbackVisible });
     }
     return true;
 }

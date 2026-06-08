@@ -14,7 +14,7 @@ Covered behavior:
 - force-fought `mundetected` survivors reveal during the `wakeup()` tail, clear stale remembered invisible markers at the target square, and still finish eating and wait-state cleanup;
 - reveal itself consumes no RNG; non-force visible object mimic discovery consumes only the temporary fake-object `next_ident()` needed for C's `that_is_a_mimic()` naming path, not combat hit RNG.
 
-This remains local to direct movement melee. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, full mimic light-blocking, exact furniture/object discovery wording for every map glyph, or post-reveal sleeping hidden target growl wording.
+This remains local to direct movement melee. It does not extend bullwhip apply force-attacks, wielded potion bash, wielded egg bash, projectile hits, two-weapon deferred queues, swallowed/jousting/artifact melee, full mimic light-blocking, or exact furniture/object discovery wording for every map glyph. Post-reveal sleeping hidden target growl/anger ordering is covered by audit 769.
 
 C anchors:
 
@@ -34,7 +34,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 
 ## Deferred Gaps
 
-- Sleeping hidden force-fight targets still need the post-reveal visible `growl()`/anger wording pinned; this slice covers the awake hidden survivor state transition.
+- Sleeping hidden force-fight post-reveal visible `growl()`/anger wording is covered by audit 769; this slice covers awake hidden survivor reveal and mimic-discovery cleanup.
 - Furniture/light-blocking mimic details are represented by appearance cleanup, but full `is_lightblocker_mappear()`/`unblock_point()` parity remains broader display/vision work.
 - Exact `that_is_a_mimic()` wording for every remembered object/furniture/monster glyph remains broader mimic discovery text work.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.

@@ -42,7 +42,7 @@ The focused command still keeps the direct-melee sleeping/awake/tame canaries pl
 - Object drop/throw impact disturbance via C `maybe_disturb_buried_zombies()` remains separate.
 - Exact timer API parity beyond the modeled `zombifyTurn` shortening remains deferred.
 - Unseen/audible growl naming, hallucinated growl table, and run interruption remain deferred. The local direct-melee `PLNMSG_GROWL` reuse for same-species bystander flee wording is covered by audit 765.
-- Bounded `wakeup()` reveal behavior for apparent object mimics and force-fought `mundetected` survivors is covered by audit 768; full mimic light-blocking, exact discovery wording, and sleeping hidden post-reveal growl wording remain deferred. Remaining `setmangry()` peaceful-neighbor fallout outside ordinary/special/tame humanoid bystanders, town-watch arrest, nonhumanoid same-species growl/flee, and quest-leader guardian-target anger remains separate from audits 762-767.
+- Bounded `wakeup()` reveal behavior for apparent object mimics and force-fought `mundetected` survivors is covered by audit 768; force-fought sleeping hidden survivor post-reveal growl/anger ordering is covered by audit 769; full mimic light-blocking and exact discovery wording remain deferred. Remaining `setmangry()` peaceful-neighbor fallout outside ordinary/special/tame humanoid bystanders, town-watch arrest, nonhumanoid same-species growl/flee, and quest-leader guardian-target anger remains separate from audits 762-767.
 
 ## Verification
 
