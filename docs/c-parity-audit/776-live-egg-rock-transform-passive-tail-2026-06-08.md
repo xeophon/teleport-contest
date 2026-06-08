@@ -23,7 +23,7 @@ Extended focused command-path coverage in `test/shop-billing-helpers.test.mjs`:
 
 ## Remaining Gaps
 
-- Real `AD_STON` direct-melee passive consequences are still only approximated outside the existing deferred monster-turn touch path.
+- Real `AD_STON` direct-melee passive consequences are covered separately in audit 777.
 - Stale wielded ordinary egg versus touch-petrifying targets remains a separate compact canary.
 
 ## Verification

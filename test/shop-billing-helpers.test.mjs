@@ -75817,6 +75817,32 @@ function installDirectPassiveObjectMeleeState({
     return { blade, target };
 }
 
+function cockatricePassiveTarget(extra = {}) {
+    return passiveObjectTarget('cockatrice', 'AD_STON', 6, 5, {
+        m_lev: 5,
+        mhp: 50,
+        mhpmax: 50,
+        msleeping: 0,
+        mpeaceful: false,
+        data: { name: 'cockatrice', mlevel: 5, mac: 10, touchPetrifies: true },
+        ...extra,
+    });
+}
+
+function installDirectCockatriceMeleeState({ inventory = [], extra = {}, rngValues = null } = {}) {
+    installNonShopFloorState();
+    game.flags.verbose = false;
+    Object.assign(game.u, { uhp: 50, uhpmax: 50, stoneResistance: false });
+    game.u.acurr.a[A_DEX] = 25;
+    game.inventory = inventory;
+    const cockatrice = cockatricePassiveTarget(extra);
+    game.level.monsters = [cockatrice];
+    markSquareVisible(6, 5);
+    installCoreRngValues(rngValues || [0, 0, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+    return { cockatrice };
+}
+
 test('direct hero melee lethal target uses monster life saving before cleanup', async () => {
     installNonShopFloorState();
     Object.assign(game.u, { ulevel: 20, uexp: 0, urexp: 0, uhitinc: 30, udaminc: 1 });
@@ -77817,6 +77843,84 @@ test('direct hero melee surviving tame target preserves peacefulness', async () 
     assert.equal(dog.meating, 0);
     assert.equal(game.u.ualign.record, 0);
     assert.equal(game.u.ualign.abuse, 0);
+});
+
+test('direct hero melee bare-handed cockatrice passive petrifies hero', async () => {
+    const { cockatrice } = installDirectCockatriceMeleeState();
+
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /You hit it\./);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.doesNotMatch(message, /corrodes|rusts|smoulders|less effective/);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by a cockatrice');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(cockatrice.mhp < 50, true);
+    assert.equal(cockatrice.dead, undefined);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rn2(3)'), false);
+    assert.equal(calls.includes('rn2(6)'), false);
+});
+
+test('direct hero melee gloved bare-handed cockatrice passive is blocked', async () => {
+    const gloves = wornArmor(876890, 'leather gloves', 'g');
+    const { cockatrice } = installDirectCockatriceMeleeState({ inventory: [gloves] });
+
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You hit it\./);
+    assert.doesNotMatch(message, /turn to stone|corrodes|rusts|smoulders|less effective/);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.uhp, 50);
+    assert.equal(cockatrice.mhp < 50, true);
+    assert.equal(game.inventory.includes(gloves), true);
+    assert.match(gloves.line, /leather gloves \(being worn\)/);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rn2(3)'), true);
+});
+
+test('direct hero melee weapon cockatrice passive is blocked', async () => {
+    const blade = wieldedWeapon(876891, 'dagger', 'd', 0);
+    const { cockatrice } = installDirectCockatriceMeleeState({ inventory: [blade] });
+
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You hit it\./);
+    assert.doesNotMatch(message, /turn to stone|corrodes|rusts|smoulders|less effective/);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.uhp, 50);
+    assert.equal(cockatrice.mhp < 50, true);
+    assert.equal(game.u.uconduct?.weaphit, 1);
+    assert.equal(game.inventory.includes(blade), true);
+    assert.equal(blade.wielded, true);
+    const calls = getRngLog().map(rngCallName);
+    assert.equal(calls.includes('rn2(3)'), true);
+});
+
+test('direct hero melee lethal bare-handed cockatrice still petrifies hero', async () => {
+    const { cockatrice } = installDirectCockatriceMeleeState({
+        extra: { mhp: 1, mhpmax: 1 },
+    });
+    Object.assign(game.u, { ulevel: 20, uhitinc: 30, udaminc: 30 });
+
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.match(message, /You kill the cockatrice!/);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by a cockatrice');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(cockatrice.dead, true);
+    assert.equal(cockatrice.mhp, 0);
 });
 
 test('direct hero melee against disenchanter drains unpaid enchanted weapon', async () => {

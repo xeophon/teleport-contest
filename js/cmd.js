@@ -31914,6 +31914,32 @@ function applyDirectMeleePassiveObject(mon, weapon, messages) {
     return { ...erodeDirectMeleePassiveObject(targetObject, type, messages), type, object: targetObject };
 }
 
+function applyDirectMeleePassiveStoning(mon, weapon, messages, { weaponWasDestroyed = false } = {}) {
+    if (!passiveStoningAttackForMonster(mon)) return { handled: false, fatal: false, lifeSaving: false };
+    if (weapon || weaponWasDestroyed || wornGlovesItem()) return { handled: true, fatal: false, lifeSaving: false };
+    if (game.u?.stoneResistance || heroPolyselfResistsStoning()) return { handled: true, fatal: false, lifeSaving: false };
+    const rescue = maybeTurnPolyselfIntoStoneGolem();
+    if (rescue) {
+        if (Array.isArray(messages)) messages.push(rescue);
+        return { handled: true, fatal: false, lifeSaving: false, rescued: true };
+    }
+
+    if (Array.isArray(messages)) messages.push('You turn to stone...');
+    if (game.u) game.u.uhp = 0;
+    const name = String(mon?.data?.name || mon?.name || 'monster').toLowerCase();
+    game._death_cause = `petrified by ${articleFor(name)}`;
+    game._death_bones_body = 'statue';
+    if (messages && typeof messages === 'object') messages.more = true;
+    if (consumeLifeSavingAmulet({ clearStoning: true })) {
+        if (Array.isArray(messages))
+            messages.push('You die...  But wait...  Your medallion begins to glow!');
+        if (messages && typeof messages === 'object') messages.lifeSaving = true;
+        return { handled: true, fatal: false, lifeSaving: true };
+    }
+    if (messages && typeof messages === 'object') messages.fatal = true;
+    return { handled: true, fatal: true, lifeSaving: false };
+}
+
 function wandRechargeLimit(item) {
     const name = wandTypeName(item);
     if (name === 'wishing' || isWishingWand(item)) return 1;
@@ -38732,20 +38758,37 @@ function normalizedPassiveObjectAttackType(type) {
     return '';
 }
 
-function passiveObjectAttackForMonster(mon) {
-    if (!mon) return '';
+function passiveAttackEntriesForMonster(mon) {
     const attacks = [];
+    if (!mon) return attacks;
     if (mon.attack) attacks.push(mon.attack);
     if (Array.isArray(mon.attacks)) attacks.push(...mon.attacks);
     if (mon.data?.attack) attacks.push(mon.data.attack);
     if (Array.isArray(mon.data?.attacks)) attacks.push(...mon.data.attacks);
-    for (const attack of attacks) {
+    return attacks.filter(attack => {
         const aatyp = String(attack?.aatyp || attack?.type || '').toLowerCase();
-        if (aatyp !== 'none' && aatyp !== 'at_none' && aatyp !== 'passive') continue;
+        return aatyp === 'none' || aatyp === 'at_none' || aatyp === 'passive';
+    });
+}
+
+function passiveObjectAttackForMonster(mon) {
+    if (!mon) return '';
+    for (const attack of passiveAttackEntriesForMonster(mon)) {
         const adtyp = normalizedPassiveObjectAttackType(attack?.adtyp || attack?.damageType);
         if (adtyp) return adtyp;
     }
     return MONSTER_PASSIVE_OBJECT_ATTACK_FALLBACKS.get(String(mon.data?.name || mon.name || '').toLowerCase()) || '';
+}
+
+function passiveStoningAttackForMonster(mon) {
+    if (!mon) return false;
+    for (const attack of passiveAttackEntriesForMonster(mon)) {
+        const key = String(attack?.adtyp || attack?.damageType || '').toLowerCase();
+        if (key === 'ad_ston' || key === 'ston' || key === 'stone' || key === 'stoning')
+            return true;
+    }
+    const name = String(mon.data?.name || mon.name || '').toLowerCase();
+    return name === 'cockatrice' || name === 'chickatrice' || !!(mon.touchPetrifies || mon.data?.touchPetrifies);
 }
 
 function monsterAtSquareForPassiveObject(x, y) {
@@ -54503,12 +54546,13 @@ async function moveHero(dx, dy) {
         const martialArts = role === 'Monk' || role === 'Samurai';
         const basicBareHands = martialArts || role === 'Barbarian' || role === 'Caveman';
         const inventory = game.inventory || [];
-        const weapon = role === 'Monk' ? null : inventory.find(item => item.wielded)
+        const actualWieldedWeapon = inventory.find(item => item.wielded)
             || inventory.find(item =>
                 item.line?.includes('weapon in')
                 || item.line?.includes('wielded in right'));
+        const weapon = role === 'Monk' ? null : actualWieldedWeapon;
         const secondWeapon = game._twoweapon
-            ? inventory.find(item => item !== weapon
+            ? inventory.find(item => item !== actualWieldedWeapon
                 && /\b(?:wielded|weapon) in left hand\b/.test(item.line || ''))
             : null;
         const twoWeaponActive = game._twoweapon && !!secondWeapon
@@ -54594,6 +54638,7 @@ async function moveHero(dx, dy) {
         let deferredSleepingWakePreHitState = null;
         let killed = false;
         let killingAttackWeapon = null;
+        let killingAttackContactProtectionWeapon = null;
         let killedByNormalMelee = false;
         let directMeleeHit = false;
         let directMeleeOrdinaryWakeupAllowed = false;
@@ -54601,6 +54646,7 @@ async function moveHero(dx, dy) {
         let directMeleeNonlethalWrapperApplied = false;
         for (let attackIndex = 0; attackIndex < attackWeapons.length; attackIndex++) {
             const attackWeapon = attackWeapons[attackIndex];
+            const attackContactProtectionWeapon = attackWeapon || (attackIndex === 0 ? actualWieldedWeapon : null);
             const attackPreHitState = {
                 msleeping: mon.msleeping,
                 meating: mon.meating,
@@ -54704,6 +54750,11 @@ async function moveHero(dx, dy) {
                         if (attackIndex === 0) {
                             directMeleeLowHpSurvivorFlee(mon);
                             applyDirectMeleePassiveObject(mon, eggHit.consumed ? null : attackWeapon, messages);
+                            applyDirectMeleePassiveStoning(mon,
+                                eggHit.consumed ? null : attackContactProtectionWeapon,
+                                messages,
+                                { weaponWasDestroyed: !!eggHit.consumed });
+                            if (messages.lifeSaving || messages.fatal) break;
                             rn2(3);
                         }
                     }
@@ -54757,6 +54808,7 @@ async function moveHero(dx, dy) {
             killed = mon.mhp <= 0;
             if (killed) {
                 killingAttackWeapon = attackWeapon;
+                killingAttackContactProtectionWeapon = attackContactProtectionWeapon;
                 killedByNormalMelee = true;
             }
             if (mon.mtame && damage > 0) {
@@ -54813,12 +54865,17 @@ async function moveHero(dx, dy) {
                 if (!deferAttackSleepingWakeTail) {
                     directMeleeLowHpSurvivorFlee(mon);
                     applyDirectMeleePassiveObject(mon, attackWeapon, messages);
+                    applyDirectMeleePassiveStoning(mon, attackContactProtectionWeapon, messages);
+                    if (messages.lifeSaving || messages.fatal) break;
                     directPassiveObjectApplied = true;
                     rn2(3);
                 }
             }
-            if (!directPassiveObjectApplied)
+            if (!directPassiveObjectApplied) {
                 applyDirectMeleePassiveObject(mon, attackWeapon, messages);
+                applyDirectMeleePassiveStoning(mon, attackContactProtectionWeapon, messages);
+                if (messages.lifeSaving || messages.fatal) break;
+            }
         }
 
         if (messages.lifeSaving || messages.fatal) {
@@ -54908,8 +54965,32 @@ async function moveHero(dx, dy) {
             }
         }
         messages.push(`You ${killVerb} ${killedPet ? `the poor ${killedName}` : targetPhrase}!`);
-        if (killedByNormalMelee)
+        if (killedByNormalMelee) {
             applyDirectMeleePassiveObject(mon, killingAttackWeapon, messages);
+            applyDirectMeleePassiveStoning(mon, killingAttackContactProtectionWeapon, messages);
+        }
+        if (messages.lifeSaving || messages.fatal) {
+            recordHeroKillConduct();
+            mon.dead = true;
+            mon.mhp = 0;
+            markHeroKilledTameMonster(mon);
+            recordVanquished(mon);
+            const potionCallPrompt = game._command_mode === 'callPotionAfterMore';
+            await setMessage(messages.join('  '), potionCallPrompt || !!messages.more);
+            game._run_stop_now = 1;
+            game._run_steps_remaining = 0;
+            game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            game._command_mode = 'deathDieMore';
+            game._pending_time_passed = 0;
+            game._process_command_time_now = 0;
+            prepareDeathBones();
+            return;
+        }
         recordHeroKillConduct();
         mon.dead = true;
         mon.mhp = 0;
