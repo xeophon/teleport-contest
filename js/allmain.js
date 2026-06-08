@@ -8686,6 +8686,11 @@ export async function processMonsterTurns() {
                                     continue;
                                 }
                             }
+                            if (ordinaryDartBlockAhead(mon.mx, mon.my)) {
+                                landDartTerrainStop(mon.mx, mon.my);
+                                if (!finishDartThrowAction()) return false;
+                                continue;
+                            }
                             let interveningTarget = null;
                             let dartTerrainStop = null;
                             for (let step = 1; step < throwRange; step++) {
@@ -8707,6 +8712,17 @@ export async function processMonsterTurns() {
                                     rn2(100); // C breaktest() calls obj_resists(); ordinary darts still survive.
                                     if (!(game.u?._statusSuffix || '').includes('Deaf') && !(game.u?._deafTimeout || 0))
                                         addToplineMessage('Clonk!');
+                                    dartTerrainStop = { x: sx, y: sy };
+                                    break;
+                                }
+                                const stoppedOnSink = remainingRange
+                                    && game.level?.at(sx, sy)?.typ === SINK;
+                                if (stoppedOnSink && !game.u?.blind && cansee(sx, sy)) {
+                                    const sinkVerb = (game.u?._statusSuffix || '').includes('Hallu')
+                                        ? 'plops' : 'drops';
+                                    addDartThrowFollowup(`The dart ${sinkVerb} onto the sink.`);
+                                }
+                                if (stoppedOnSink || remainingRange && ordinaryDartBlockAhead(sx, sy)) {
                                     dartTerrainStop = { x: sx, y: sy };
                                     break;
                                 }

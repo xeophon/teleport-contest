@@ -202,6 +202,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [794-monster-thrown-dart-visible-hero-drop-order-2026-06-08.md](794-monster-thrown-dart-visible-hero-drop-order-2026-06-08.md): visible monster-thrown dart hero hits now queue hero-square landing until after the throw message, deferred damage, and Strength exercise.
 - [795-monster-thrown-dart-hero-catch-2026-06-08.md](795-monster-thrown-dart-hero-catch-2026-06-08.md): monster-thrown dart hero delivery now runs C's generic thrown-object catch gate before dart damage, hit rolling, and drop-throw landing.
 - [796-monster-thrown-dart-misfire-terrain-2026-06-08.md](796-monster-thrown-dart-misfire-terrain-2026-06-08.md): cursed or greased monster-thrown darts now use C's post-extraction slip gate, redirected vectors, zero-vector drops, and sink/wall/forced-bars terrain stops.
+- [797-monster-thrown-dart-ordinary-terrain-2026-06-08.md](797-monster-thrown-dart-ordinary-terrain-2026-06-08.md): ordinary monster-thrown darts now cover C-shaped preflight closed-door stops, visible sink drops, and post-step next-square terrain stops in the production kobold dart path.
 
 ## Cross-Cutting Themes
 
