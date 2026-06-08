@@ -1678,6 +1678,7 @@ const POISONOUS_CORPSES = new Set(['kobold', 'large kobold', 'kobold leader', 'k
 const CORPSE_EATER_MONSTERS = new Set(['purple worm', 'baby purple worm', 'ghoul', 'piranha']);
 const DART = 353;
 const CREAM_PIE = 10081;
+const BLINDING_VENOM = 10184;
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const KNIFE = 10026;
@@ -6661,7 +6662,21 @@ export async function processMonsterTurns() {
                             boulderLinedUp = monsterLinedUp(mon, throwTargetX, throwTargetY);
                     }
                     if (canSpitVenom && monsterLinedUp(mon, throwTargetX, throwTargetY)) {
-                        next_ident();
+                        const thrownVenom = {
+                            id: next_ident(),
+                            otyp: BLINDING_VENOM,
+                            cls: 'venom',
+                            glyph: '.',
+                            color: CLR_BROWN,
+                            _display_color: CLR_BROWN,
+                            kind: 'splash of blinding venom',
+                            actualKind: 'splash of blinding venom',
+                            singular: 'splash of blinding venom',
+                            plural: 'splashes of blinding venom',
+                            quan: 1,
+                            spe: 1,
+                            owt: 1,
+                        };
                         mon._spit_no_balk = 1;
                         const spitRoll = rn2(BOLT_LIM - throwRange);
                         if (!spitRoll) {
@@ -6670,28 +6685,68 @@ export async function processMonsterTurns() {
                                 addToplineMessage(`${monsterDisplayName(mon, true)} spits venom!`);
                                 recordDiscovery('Venoms', 'splash of venom', null, false);
                             }
-                            for (let step = 1; step < throwRange; step++) rn2(5);
-                            const attackRoll = rnd(20);
-                            const targetAc = game.u?.uac ?? 10;
-                            const missed = targetAc + 8 <= attackRoll;
-                            let resultMessage = game.u?.blind || game.flags?.verbose === false
-                                ? 'You are hit.'
-                                : 'You are hit by a splash of venom.';
-                            if (missed) {
-                                resultMessage = game.u?.blind || game.flags?.verbose === false
-                                    ? 'It misses.'
-                                    : targetAc + 8 <= attackRoll - 2
-                                        ? 'A splash of venom misses you.'
-                                        : 'You are almost hit by a splash of venom.';
+                            let interveningTarget = null;
+                            for (let step = 1; step < throwRange; step++) {
+                                const sx = mon.mx + throwDx * step;
+                                const sy = mon.my + throwDy * step;
+                                const targetMon = monsterAtFlightSquare(sx, sy, mon);
+                                if (targetMon) {
+                                    const hitValue = monsterThrownObjectAccidentalHitValue(targetMon, thrownVenom);
+                                    const hitRoll = rnd(20);
+                                    if (hitValue >= hitRoll) {
+                                        interveningTarget = targetMon;
+                                        break;
+                                    }
+                                }
                                 rn2(5);
-                                rn2(100);
-                            } else {
-                                const wasBlind = !!game.u?.blind;
-                                const blindinc = applyMonsterBlindingVenomBlindness();
-                                if (blindinc)
-                                    resultMessage = `${resultMessage}  ${wasBlind ? 'Your eyes sting.' : 'The venom blinds you.'}`;
                             }
-                            if (resultMessage) addToplineMessage(resultMessage);
+                            if (interveningTarget) {
+                                revealProjectileHitMimicAppearance(interveningTarget);
+                                interveningTarget.msleeping = 0;
+                                const targetVisible = !game.u?.blind && cansee(interveningTarget.mx, interveningTarget.my);
+                                const hitMessage = targetVisible
+                                    ? `The splash of venom hits the ${interveningTarget.data?.name || 'monster'}.`
+                                    : 'It is hit.';
+                                addToplineMessage(hitMessage);
+                                const blindTarget = monsterCanBeBlindedByMonsterThrownBlindingVenom(interveningTarget);
+                                const showBlindMessage = blindTarget && targetVisible
+                                    && interveningTarget.mcansee !== false;
+                                if (blindTarget) {
+                                    if (showBlindMessage)
+                                        addToplineMessage(`${monsterDisplayName(interveningTarget)} is blinded by the venom.`);
+                                    applyMonsterThrownBlindingVenomBlindness(interveningTarget);
+                                }
+                                const floorMessages = [];
+                                landMonsterThrownObject(thrownVenom, interveningTarget.mx, interveningTarget.my, {
+                                    glyph: '.',
+                                    color: CLR_BROWN,
+                                    messages: floorMessages,
+                                    ohit: true,
+                                });
+                                addMonsterThrownFloorMessages(floorMessages, targetVisible || visibleSpitter);
+                            } else {
+                                const attackRoll = rnd(20);
+                                const targetAc = game.u?.uac ?? 10;
+                                const missed = targetAc + 8 <= attackRoll;
+                                let resultMessage = game.u?.blind || game.flags?.verbose === false
+                                    ? 'You are hit.'
+                                    : 'You are hit by a splash of venom.';
+                                if (missed) {
+                                    resultMessage = game.u?.blind || game.flags?.verbose === false
+                                        ? 'It misses.'
+                                        : targetAc + 8 <= attackRoll - 2
+                                            ? 'A splash of venom misses you.'
+                                            : 'You are almost hit by a splash of venom.';
+                                    rn2(5);
+                                    rn2(100);
+                                } else {
+                                    const wasBlind = !!game.u?.blind;
+                                    const blindinc = applyMonsterBlindingVenomBlindness();
+                                    if (blindinc)
+                                        resultMessage = `${resultMessage}  ${wasBlind ? 'Your eyes sting.' : 'The venom blinds you.'}`;
+                                }
+                                if (resultMessage) addToplineMessage(resultMessage);
+                            }
                         }
                         game._search_pending_count = 0;
                         game._run_steps_remaining = 0;
@@ -9758,18 +9813,34 @@ function applyMonsterBlindingVenomBlindness() {
     return blindinc;
 }
 
-function monsterCanBeBlindedByMonsterThrownCreamPie(mon) {
+function monsterCanBeBlindedByMonsterThrownObject(mon) {
     const data = mon?.data || {};
     if (mon?.noeyes || mon?.noEyes || data.noeyes || data.noEyes) return false;
     return !(mon?.mcansee === false && !(mon.mblinded || 0));
 }
 
-function applyMonsterThrownCreamPieBlindness(mon) {
-    if (!monsterCanBeBlindedByMonsterThrownCreamPie(mon)) return 0;
+function applyMonsterThrownObjectBlindness(mon) {
+    if (!monsterCanBeBlindedByMonsterThrownObject(mon)) return 0;
     const blindTime = rnd(25) + 20;
     mon.mcansee = false;
     mon.mblinded = Math.min(127, (mon.mblinded || 0) + blindTime);
     return blindTime;
+}
+
+function monsterCanBeBlindedByMonsterThrownCreamPie(mon) {
+    return monsterCanBeBlindedByMonsterThrownObject(mon);
+}
+
+function applyMonsterThrownCreamPieBlindness(mon) {
+    return applyMonsterThrownObjectBlindness(mon);
+}
+
+function monsterCanBeBlindedByMonsterThrownBlindingVenom(mon) {
+    return monsterCanBeBlindedByMonsterThrownObject(mon);
+}
+
+function applyMonsterThrownBlindingVenomBlindness(mon) {
+    return applyMonsterThrownObjectBlindness(mon);
 }
 
 function monsterThrownSpearNames(item) {

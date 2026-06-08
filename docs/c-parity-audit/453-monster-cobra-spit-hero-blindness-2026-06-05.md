@@ -33,5 +33,6 @@ node --test --test-name-pattern "cobra spit" test/shop-billing-helpers.test.mjs
 
 ## Remaining
 
-- Monster-thrown hero/polyself passive object behavior remains the best next source-backed projectile slice.
+- Cobra-spit intervening-monster blinding is covered in `781-monster-cobra-spit-intervening-blinding-2026-06-08.md`.
+- Monster-thrown hero/polyself passive object behavior remains a separate source-backed projectile slice.
 - Broader direct `hits_bars()` object-class gates and direct hero-thrown stone-missile rock-passer harmless handling remain separate candidates.

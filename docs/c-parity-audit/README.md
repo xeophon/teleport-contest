@@ -186,6 +186,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [778-stale-ordinary-egg-touch-petrifier-2026-06-08.md](778-stale-ordinary-egg-touch-petrifier-2026-06-08.md): stale ordinary egg splat/use-up instead of live egg-to-rock transform against cockatrices and chickatrices.
 - [779-direct-melee-ad-ench-glove-fallback-2026-06-08.md](779-direct-melee-ad-ench-glove-fallback-2026-06-08.md): bare-handed direct hero melee against disenchanters falls back to worn gloves for `AD_ENCH` passive drain, with shop billing, cancelled-monster suppression, and no-object RNG gates.
 - [780-monster-launcher-intervening-passive-object-2026-06-08.md](780-monster-launcher-intervening-passive-object-2026-06-08.md): monster-fired launcher-arrow intervening hits preserve the live `drop_throw()` passive-object target through deferred landing, including rust-prone projectile material, hit-only mulch before passive erosion, and passive erosion before stacking.
+- [781-monster-cobra-spit-intervening-blinding-2026-06-08.md](781-monster-cobra-spit-intervening-blinding-2026-06-08.md): cobra blinding-venom spit now routes through the production intervening-monster `ohitmon()` path before hero delivery, including accidental-hit threshold, mimic reveal, wakeup, monster blindness duration, and hit-only venom consumption.
 
 ## Cross-Cutting Themes
 

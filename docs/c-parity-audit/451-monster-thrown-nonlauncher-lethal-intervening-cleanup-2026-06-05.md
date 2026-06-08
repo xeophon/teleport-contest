@@ -27,4 +27,4 @@ Date: 2026-06-05
 ## Remaining Gaps
 
 - Resume-index adjustment for removed intervening monsters that appear before the thrower in `game.level.monsters` is still launcher-shaped and should be generalized in a scheduler-focused slice.
-- Acid venom, eggs, blinding venom, and broader generic object-hit factoring remain separate direct-delivery work.
+- Acid venom, eggs, and broader generic object-hit factoring remain separate direct-delivery work; cobra-spit blinding venom intervening hits are covered in audit 781.

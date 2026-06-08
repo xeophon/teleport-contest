@@ -7417,7 +7417,7 @@ test('automatic hostile MS_CUSS monster cusses and wakes nearby sleepers', async
         ['rn2(5)', 'rn2(5)', 'rn2(5)']);
 });
 
-async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHero = {} } = {}) {
+async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHero = {}, extraMonsters = [] } = {}) {
     installStableNonShopFloorState();
     initRng(seed);
     enableRngLog({ reset: true });
@@ -7447,7 +7447,7 @@ async function runMonsterCobraSpit({ seed = 7, uac = 10, inventory = [], extraHe
         muy: game.u.uy,
         data: { name: 'cobra', mlet: 'S', mlevel: 6, mmove: NORMAL_SPEED },
     });
-    game.level.monsters = [cobra];
+    game.level.monsters = [cobra, ...extraMonsters];
 
     queueEscapeForMonsterTurn();
     for (let x = 5; x <= 9; x++) markSquareVisible(x, 5);
@@ -7472,6 +7472,39 @@ test('automatic hostile cobra spit hit blinds the hero with blinding venom', asy
     assert.ok(game.u._blindTimeout > 0);
     assert.deepEqual(result.rng.map(entry => entry.replace(/=.*/, '')),
         ['rn2(5)', 'rn2(5)', 'rnd(2)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rnd(20)', 'rnd(25)']);
+});
+
+test('automatic hostile cobra spit blinds intervening monster before hero', async () => {
+    const blocker = ordinaryThrowTarget('goblin', 7, 5, {
+        ac: 30,
+        mac: 30,
+        mhp: 5,
+        mhpmax: 5,
+        mcansee: true,
+        mblinded: 0,
+        msleeping: 1,
+        data: { name: 'goblin', mlevel: 1, mac: 30 },
+    });
+    const result = await runMonsterCobraSpit({
+        seed: 7,
+        extraMonsters: [blocker],
+    });
+    const rngNames = result.rng.map(entry => entry.replace(/=.*/, ''));
+
+    assert.match(result.message, /The cobra spits venom!/);
+    assert.match(result.message, /The splash of venom hits the goblin\./);
+    assert.match(result.message, /The goblin is blinded by the venom\./);
+    assert.doesNotMatch(result.message, /You are hit by a splash of venom|venom blinds you/);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.blind, false);
+    assert.equal(game.u.ucreamed, 0);
+    assert.equal(game.u._blindTimeout, 0);
+    assert.equal(blocker.msleeping, 0);
+    assert.equal(blocker.mcansee, false);
+    assert.ok(blocker.mblinded >= 21 && blocker.mblinded <= 45, result.rng.join(', '));
+    assert.equal(game.level.objects.some(obj => obj.cls === 'venom'), false);
+    assert.ok(rngNames.includes('rnd(20)'), result.rng.join(', '));
+    assert.ok(rngNames.includes('rnd(25)'), result.rng.join(', '));
 });
 
 test('automatic hostile cobra spit uses thitu miss threshold before blinding', async () => {

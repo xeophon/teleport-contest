@@ -39,6 +39,6 @@ Monster-thrown cream pies now use the `ohitmon()` intervening-monster path befor
 
 ## Remaining Gaps
 
-- Acid venom, eggs, and blinding venom remain separate `ohitmon()` slices.
+- Acid venom and eggs remain separate `ohitmon()` slices; cobra-spit blinding venom intervening hits are covered in audit 781.
 - Full monster death cleanup for non-launcher thrown intervening hits remains narrower than `xkilled()`/`mondied()` and should stay source-backed.
 - Cream-pie intervening hits currently cover the production Kop path; broader generic monster object-hit factoring should wait until another concrete special object path needs it.
