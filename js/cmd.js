@@ -19075,6 +19075,7 @@ function monsterPolymorphTargetAllowed(data) {
     if (!data) return false;
     const name = String(data.name || '').toLowerCase();
     return !(data.noPoly || data.nopoly || data.no_polymorph || data.placeholder
+        || isMonsterGenocidedName(name)
         || data.unique || data.nemesis || data.rider || data.guardian
         || data.were || data.wereHuman || data.wereBeast || /^were/.test(name)
         || name === 'death' || name === 'pestilence' || name === 'famine'
@@ -31037,7 +31038,7 @@ function genocidedMonsterNames() {
 }
 
 function isMonsterGenocidedName(name) {
-    return genocidedMonsterNames().includes(name);
+    return genocidedMonsterNames().includes(normalizeGenocideName(name));
 }
 
 function markMonsterGenocided(name) {
@@ -31057,15 +31058,82 @@ function genocideListLines() {
     return rows.slice(0, 24);
 }
 
-function killGenocidedMonsters() {
+function monsterGenocideCurrentName(mon) {
+    return normalizeGenocideName(mon?.data?.name || mon?.name || '');
+}
+
+function monsterGenocideBaseName(mon) {
+    const data = mon?.data || {};
+    const raw = mon?.chamBase || mon?.vampBase || mon?.chamName || mon?.cham
+        || data.chamBase || data.vampBase || data.chamName || data.cham || '';
+    return normalizeGenocideName(raw);
+}
+
+function monsterGenocideVampshifterTarget(mon, names, level = game.level) {
+    const baseName = normalizeGenocideName(vampshifterRevivalBaseName(mon) || monsterGenocideBaseName(mon));
+    if (!baseName || names.has(baseName)) return null;
+    const baseData = monsterByRndName(baseName) || RANDOM_MONSTER_BY_NAME.get(baseName);
+    if (!baseData) return null;
+
+    const current = monsterGenocideCurrentName(mon);
+    let targetName = baseName;
+    const leader = baseName === 'vampire leader' || baseName === 'vampire lord'
+        || baseName === 'vlad the impaler' || baseData.vampireLeader;
+    const loc = level?.at?.(mon?.mx, mon?.my);
+    const badWalkingForm = loc && (IS_POOL(loc.typ) || IS_LAVA(loc.typ));
+
+    if (leader && !rn2(baseName === 'vlad the impaler' ? 3 : 10) && !badWalkingForm) {
+        targetName = 'wolf';
+    } else {
+        targetName = !rn2(4) ? 'fog cloud' : 'vampire bat';
+    }
+    if (names.has(targetName) || (current !== baseName && !rn2(4)))
+        targetName = baseName;
+
+    const target = monsterByRndName(targetName) || RANDOM_MONSTER_BY_NAME.get(targetName) || baseData;
+    if (normalizeGenocideName(target.name) === current) return baseData;
+    return normalizeGenocideName(target.name) === baseName ? target : { ...target, vampshifter: true, vampBase: baseName };
+}
+
+function monsterGenocideCleanupTarget(mon, names, level = game.level) {
+    if (!mon) return null;
+    if (vampshifterRevivalBaseName(mon)) return monsterGenocideVampshifterTarget(mon, names, level);
+    const target = randomMonsterPolymorphTarget(mon);
+    if (target) return target;
+    const baseName = monsterGenocideBaseName(mon);
+    return baseName && !names.has(baseName) ? (monsterByRndName(baseName) || RANDOM_MONSTER_BY_NAME.get(baseName)) : null;
+}
+
+function shiftGenocidedMonsterForm(mon, names, messages = [], options = {}) {
+    const target = monsterGenocideCleanupTarget(mon, names, options.level);
+    if (!target) return false;
+    return applyMonsterPolymorphTarget(mon, target, messages, options.visible, {
+        dropInvalidSaddle: options.dropInvalidSaddle !== false,
+        refresh: options.refresh !== false,
+    });
+}
+
+function killGenocidedMonsters(messages = []) {
     const names = new Set(genocidedMonsterNames());
     if (!names.size) return;
     const cleanLevel = level => {
         if (!level?.monsters) return;
         for (const mon of [...level.monsters]) {
-            const name = mon.data?.name || mon.name;
-            const base = mon.chamBase || mon.vampBase;
-            if (!names.has(name) && !names.has(base)) continue;
+            const name = monsterGenocideCurrentName(mon);
+            const base = monsterGenocideBaseName(mon);
+            const currentGone = names.has(name);
+            const baseGone = names.has(base);
+            if (!currentGone && !baseGone) continue;
+            if (currentGone && base && !baseGone) {
+                const activeLevel = level === game.level;
+                shiftGenocidedMonsterForm(mon, names, activeLevel ? messages : [], {
+                    level,
+                    dropInvalidSaddle: activeLevel,
+                    refresh: activeLevel,
+                    visible: activeLevel ? undefined : false,
+                });
+                continue;
+            }
             if (level === game.level) dropMonsterInventory(mon);
             level.monsters = level.monsters.filter(other => other !== mon);
             if (level === game.level) newsym(mon.mx, mon.my);
@@ -31216,7 +31284,7 @@ function genocideMonsterType(data, messages, { killPlayer = false, cause = 'scro
     game._chronicle_genocide_count = (game._chronicle_genocide_count || 0) + 1;
     messages.push(`Wiped out all ${pluralizeMonsterName(name)}.`);
     killDeadSpeciesEggHatchTimers(game);
-    killGenocidedMonsters();
+    killGenocidedMonsters(messages);
     killDeadSpeciesEggHatchTimers(game);
     if (classMode) revertHeroVampshifterForGenocide(name, messages);
     if (killPlayer) {
@@ -51326,8 +51394,10 @@ function polyTrapWarpIronFootwear(item) {
     refreshInventoryObjectLine(item);
 }
 
-function applyMonsterPolymorphTarget(mon, target, messages, visible = monsterCanBeSeenForPotionEffect(mon)) {
+function applyMonsterPolymorphTarget(mon, target, messages, visible = monsterCanBeSeenForPotionEffect(mon), options = {}) {
     if (!mon || !target) return false;
+    const refresh = options.refresh !== false;
+    const dropSaddle = options.dropInvalidSaddle !== false;
     const oldVisible = visible;
     const oldName = potionHitMonsterName(mon);
     const oldHp = Math.max(1, mon.mhp || 1);
@@ -51353,8 +51423,8 @@ function applyMonsterPolymorphTarget(mon, target, messages, visible = monsterCan
     set_malign(mon);
     if (oldVisible && monsterCanBeSeenForPotionEffect(mon) && !heroIsHallucinating())
         messages.push(`${oldName} turns into ${indefiniteArticle(nextData.name)} ${nextData.name}!`);
-    dropInvalidSaddleAfterPolymorph(mon, messages, oldVisible);
-    newsym(mon.mx, mon.my);
+    if (dropSaddle) dropInvalidSaddleAfterPolymorph(mon, messages, oldVisible);
+    if (refresh) newsym(mon.mx, mon.my);
     return true;
 }
 

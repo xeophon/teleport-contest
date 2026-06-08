@@ -13625,6 +13625,154 @@ test('class-genociding shifted vampire base fails post-wipeout revert', async ()
     assert.equal(game._genocided_monsters.includes('vampire'), true);
 });
 
+function shiftedDoppelgangerAsGoblin(id = 30927) {
+    const loot = dagger(id + 1, 'd');
+    const monster = ordinaryThrowTarget('goblin', 6, 5, {
+        data: { name: 'goblin', mlevel: 0, hpLevel: 0, mlet: 'o', glyph: 'o', mmove: 6, maligntyp: -3 },
+        chamBase: 'doppelganger',
+        minvent: [loot],
+    });
+    return { monster, loot };
+}
+
+function shiftedVampireBatMonster(id = 30930) {
+    const loot = dagger(id + 1, 'd');
+    const monster = ordinaryThrowTarget('vampire bat', 6, 5, {
+        mhp: 6,
+        mhpmax: 6,
+        m_lev: 5,
+        data: { name: 'vampire bat', mlevel: 5, hpLevel: 5, mlet: 'B', glyph: 'B', mmove: 20, vampshifter: true },
+        vampBase: 'vampire',
+        minvent: [loot],
+    });
+    return { monster, loot };
+}
+
+function shiftedVampireLeaderBatMonster(id = 30940) {
+    const loot = dagger(id + 1, 'd');
+    const monster = ordinaryThrowTarget('vampire bat', 6, 5, {
+        mhp: 6,
+        mhpmax: 6,
+        m_lev: 5,
+        data: { name: 'vampire bat', mlevel: 5, hpLevel: 5, mlet: 'B', glyph: 'B', mmove: 20, vampshifter: true },
+        vampBase: 'vampire leader',
+        minvent: [loot],
+    });
+    return { monster, loot };
+}
+
+test('genocide cleanup reshapes shifted monster when current form is wiped out', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    markHeroNeighborhoodVisible();
+    const { monster, loot } = shiftedDoppelgangerAsGoblin();
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30929, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('goblin');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), true);
+    assert.notEqual(monster.data?.name, 'goblin');
+    assert.equal(monster.chamBase, 'doppelganger');
+    assert.equal(monster.minvent?.includes(loot), true);
+    assert.equal(game.level.objects.includes(loot), false);
+    assert.match(message, /Wiped out all goblins\./);
+    assert.match(message, /The goblin turns into/);
+});
+
+test('genocide cleanup removes shifted monster when base form is wiped out', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    const { monster, loot } = shiftedDoppelgangerAsGoblin(30933);
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30935, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('doppelganger');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(game.level.objects.includes(loot), true);
+    assert.equal(loot.ox, 6);
+    assert.equal(loot.oy, 5);
+    assert.match(message, /Wiped out all doppelgangers\./);
+    assert.doesNotMatch(message, /turns into/);
+});
+
+test('genocide cleanup reshapes shifted vampire when visible form is wiped out', async () => {
+    installNonShopFloorState();
+    initRng(3);
+    markHeroNeighborhoodVisible();
+    const { monster, loot } = shiftedVampireBatMonster();
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30932, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('vampire bat');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), true);
+    assert.notEqual(monster.data?.name, 'vampire bat');
+    assert.equal(monster.vampBase, 'vampire');
+    assert.equal(monster.minvent?.includes(loot), true);
+    assert.equal(game.level.objects.includes(loot), false);
+    assert.match(message, /Wiped out all vampire bats\./);
+    assert.match(message, /The vampire bat turns into/);
+});
+
+test('genocide cleanup removes shifted vampire when base form is wiped out', async () => {
+    installNonShopFloorState();
+    markHeroNeighborhoodVisible();
+    const { monster, loot } = shiftedVampireBatMonster(30936);
+    game.level.monsters = [monster];
+    game.inventory = [scrollOfGenocide(30938, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('vampire');
+
+    const message = game._pending_message || '';
+    assert.equal(game.level.monsters.includes(monster), false);
+    assert.equal(game.level.objects.includes(loot), true);
+    assert.equal(loot.ox, 6);
+    assert.equal(loot.oy, 5);
+    assert.match(message, /Wiped out all vampires\./);
+    assert.doesNotMatch(message, /turns into|rises as/);
+});
+
+test('genocide cleanup uses saved-level terrain for shifted vampire fallback', async () => {
+    installNonShopFloorState();
+    initRng(11);
+    const { monster, loot } = shiftedVampireLeaderBatMonster();
+    const savedLevel = {
+        monsters: [monster],
+        objects: [],
+        at: (x, y) => ({ roomno: 0, typ: x === 6 && y === 5 ? LAVAPOOL : ROOM }),
+    };
+    game._saved_levels = new Map([['0:2', { level: savedLevel }]]);
+    game.inventory = [scrollOfGenocide(30942, 's')];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('vampire bat');
+
+    const message = game._pending_message || '';
+    assert.equal(savedLevel.monsters.includes(monster), true);
+    assert.notEqual(monster.data?.name, 'vampire bat');
+    assert.notEqual(monster.data?.name, 'wolf');
+    assert.equal(monster.vampBase, 'vampire leader');
+    assert.equal(monster.minvent?.includes(loot), true);
+    assert.equal(savedLevel.objects.includes(loot), false);
+    assert.equal(game.level.objects.includes(loot), false);
+    assert.match(message, /Wiped out all vampire bats\./);
+    assert.doesNotMatch(message, /turns into/);
+});
+
 test('explore self-genocide death decline survives and clears death state', async () => {
     installCommandShopState();
     game.flags.explore = true;
