@@ -44701,6 +44701,74 @@ test('command kicked shop-floor ordinary object through seen remote hole charges
     assert.equal(shkp.billct, 0);
 });
 
+test('command kicked ordinary floor object no-drop at down stairs continues same-level flight', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512112), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).includes(blade), false);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.doesNotMatch(game._pending_message, /falls down the stairs|goods lost|Thump/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1']);
+});
+
+test('command kicked shop-floor ordinary object no-drop at non-shop stairs charges final flight', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: x <= 6 ? ROOMOFFSET : 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512113), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    const expectedPrice = shop.shopItemPrice(blade, 6, 5);
+    assert.equal(expectedPrice > 0, true);
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).includes(blade), false);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.equal(shkp.debit, expectedPrice);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message,
+        new RegExp(`You owe Izchak ${expectedPrice} zorkmids? for it!`));
+    assert.doesNotMatch(game._pending_message, /falls down the stairs|goods lost/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1']);
+});
+
 test('command kick ordinary floor object flies across same-level open terrain', async () => {
     installNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
@@ -44790,6 +44858,40 @@ test('command kicked single gold piece falls down stairs', async () => {
     assert.equal(coin._impactDropMigration?.where, MIGR_STAIRS_UP);
     assert.equal(game._pending_message, 'You kick gold piece.  A gold piece falls down the stairs.');
     assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rn2(100)=42']);
+});
+
+test('command kicked shop-floor single gold piece no-drop at non-shop stairs charges final flight', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: x <= 6 ? ROOMOFFSET : 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    game.u.acurr.a[A_STR] = 18;
+    const coin = { ...goldPieces(512114, 1), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [coin];
+    enableRngLog({ reset: true });
+    installCoreRngValues([1]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(coin), true);
+    assert.equal(queuedImpactDropsFor({ dnum: 0, dlevel: 2 }).includes(coin), false);
+    assert.equal(coin.ox, 14);
+    assert.equal(coin.oy, 5);
+    assert.equal(shkp.debit, 1);
+    assert.equal(shkp.loan, 1);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(game._pending_message, 'You kick gold piece.  You owe Izchak 1 zorkmid.');
+    assert.doesNotMatch(game._pending_message, /falls down the stairs|goods lost/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=1']);
 });
 
 test('command kicked multi gold stack scatters into random sub-stacks', async () => {
@@ -46315,6 +46417,40 @@ test('command kicked shop-floor ordinary object down stairs charges before migra
     assert.equal(shkp.debit, expectedPrice);
     assert.equal(shkp.robbed || 0, 0);
     assert.equal(shkp.billct, 0);
+});
+
+test('command kicked shop-floor ordinary object down non-shop stairs migrates without billing', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.level.at = (x, y) => ({
+        roomno: x <= 6 ? ROOMOFFSET : 0,
+        typ: x === 7 && y === 5 ? STAIRS : ROOM,
+        ladder: 0,
+        lit: true,
+    });
+    initRng(1);
+    const blade = { ...dagger(512115), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 42]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queued.includes(blade), true);
+    assert.equal(blade._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /A dagger falls down the stairs\./);
+    assert.doesNotMatch(game._pending_message, /goods lost|for it/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rn2(100)=42']);
 });
 
 test('command kicked stone missile hits rock-passing monster harmlessly', async () => {

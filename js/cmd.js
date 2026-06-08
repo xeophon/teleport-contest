@@ -34829,6 +34829,41 @@ function chargeKickedGoldNormalFlightFromShop(obj, sx, sy, x, y, messages) {
     return charged;
 }
 
+function chargeKickedObjectNormalFlightFromShop(obj, sx, sy, x, y, messages) {
+    if (shopBillableGold(obj))
+        return chargeKickedGoldNormalFlightFromShop(obj, sx, sy, x, y, messages);
+    if (!obj || !kickedGoldNormalFlightLeavesShop(sx, sy, x, y)) return null;
+    const shkp = kickedGoldSourceShopkeeper(sx, sy);
+    if (!shkp) return null;
+    if (shopObjectOrContentsUnpaid(obj)) {
+        const charged = convertUnpaidObjectToShopDebt(obj, { silent: false });
+        if (charged.message) messages.push(charged.message);
+        return charged;
+    }
+    const value = lostShopMerchandiseValueForObject({ ox: sx, oy: sy }, obj, shkp);
+    if (!(value > 0)) return { charged: false, value: 0, shkp };
+    const creditBefore = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    const peaceful = shopkeeperPeacefulForDebt(shkp);
+    const remaining = chargeShopkeeperForLostMerchandise(shkp, value, { peaceful });
+    if (!peaceful) {
+        if (!game.u?.blind && cansee(shkp.mx, shkp.my))
+            messages.push(`${shopkeeperDisplayName(shkp)} booms: "${game.plname || 'Hero'}, you are a thief!"`);
+        else if (!heroIsDeaf())
+            messages.push('You hear a scream, "Thief!"');
+    } else {
+        const usedCredit = creditBefore > Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+        if (usedCredit && shkp.credit > 0)
+            messages.push(`You have ${shkp.credit} ${shopCurrency(shkp.credit)} credit remaining.`);
+        else if (usedCredit && !remaining)
+            messages.push('You have no credit remaining.');
+        else if (remaining > 0) {
+            const still = usedCredit ? 'still ' : '';
+            messages.push(`You ${still}owe ${shopkeeperDisplayName(shkp)} ${remaining} ${shopCurrency(remaining)} for ${shopDebtObjectPronoun(obj)}!`);
+        }
+    }
+    return { charged: true, value, shkp, remaining };
+}
+
 function chargeKickedGoldMigrationShopDebt(obj, gateX, gateY, messages) {
     if (!shopBillableGold(obj)) return null;
     const shkp = shopkeeperForCostlySpot(gateX, gateY);
@@ -34973,10 +35008,14 @@ function kickedObjectHitsIronBars(obj, barsX, barsY, pointBlank, messages) {
 }
 
 function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
+    return kickedSameLevelFlightStopFrom(obj, x, y, dir, Math.max(0, range - 1), messages, { pointBlank: true });
+}
+
+function kickedSameLevelFlightStopFrom(obj, x, y, dir, steps, messages = [], options = {}) {
     let landX = x;
     let landY = y;
-    let pointBlank = true;
-    for (let remaining = range - 1; remaining > 0; remaining--) {
+    let pointBlank = options.pointBlank !== false;
+    for (let remaining = Math.max(0, Math.trunc(Number(steps || 0))); remaining > 0; remaining--) {
         const nx = landX + dir.dx;
         const ny = landY + dir.dy;
         if (!isok(nx, ny)) break;
@@ -35006,14 +35045,20 @@ function kickedSameLevelFlightStop(obj, x, y, dir, range, messages = []) {
         }
         const closedDoor = typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
         const gate = remoteProjectileDownGateAt(obj, nx, ny, { allowGold: shopBillableGold(obj) });
-        if (gate) return { x: nx, y: ny, gate };
+        if (gate) return { x: nx, y: ny, gate, remainingSteps: remaining - 1 };
         if (!loc || !ZAP_POS(typ) || closedDoor) break;
         landX = nx;
         landY = ny;
         if (IS_POOL(typ) || IS_LAVA(typ) || typ === SINK) break;
         pointBlank = false;
     }
-    return { x: landX, y: landY, gate: null };
+    return { x: landX, y: landY, gate: null, remainingSteps: 0 };
+}
+
+function continueKickedFlightAfterNoDrop(obj, flight, dir, messages) {
+    return kickedSameLevelFlightStopFrom(obj, flight.x, flight.y, dir, flight.remainingSteps || 0, messages, {
+        pointBlank: false,
+    });
 }
 
 async function breakKickedFragileFloorObject(obj, x, y, messages) {
@@ -35145,25 +35190,26 @@ async function kickFloorObjectToward(dir, x, y) {
         return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
     }
     if (ordinarySameLevelFlight) {
-        const flight = kickedSameLevelFlightStop(obj, x, y, dir, range, messages);
+        let flight = kickedSameLevelFlightStop(obj, x, y, dir, range, messages);
         removeFloorObject(obj);
         newsym(x, y);
-        obj.ox = flight.x;
-        obj.oy = flight.y;
-        if (flight.gate) {
+        while (flight.gate) {
+            obj.ox = flight.x;
+            obj.oy = flight.y;
             const shipped = maybeShipRemoteProjectileObject(obj, flight.x, flight.y, messages, {
                 allowGold: shopBillableGold(obj),
-                shopFloorObj: !!shopkeeperForCostlySpot(x, y),
+                shopFloorObj: !!shopkeeperForCostlySpot(flight.x, flight.y),
             });
             if (shipped.handled)
                 chargeKickedGoldMigrationShopDebt(obj, flight.x, flight.y, messages);
-            if (!shipped.handled) {
-                chargeKickedGoldNormalFlightFromShop(obj, x, y, flight.x, flight.y, messages);
-                placeKickedFloorObject(obj, flight.x, flight.y, messages);
-            }
-            return { handled: true, messages, moved: true, shipObject: shipped };
+            if (shipped.handled)
+                return { handled: true, messages, moved: true, shipObject: shipped };
+            if (!shipped.noDrop) break;
+            flight = continueKickedFlightAfterNoDrop(obj, flight, dir, messages);
         }
-        chargeKickedGoldNormalFlightFromShop(obj, x, y, flight.x, flight.y, messages);
+        obj.ox = flight.x;
+        obj.oy = flight.y;
+        chargeKickedObjectNormalFlightFromShop(obj, x, y, flight.x, flight.y, messages);
         placeKickedFloorObject(obj, flight.x, flight.y, messages);
         return { handled: true, messages, moved: true };
     }
@@ -35177,7 +35223,7 @@ async function kickFloorObjectToward(dir, x, y) {
 
     const shipped = maybeShipRemoteProjectileObject(obj, landX, landY, messages, {
         allowGold: shopBillableGold(obj),
-        shopFloorObj: !!shopkeeperForCostlySpot(x, y),
+        shopFloorObj: !!shopkeeperForCostlySpot(landX, landY),
     });
     if (shipped.handled)
         chargeKickedGoldMigrationShopDebt(obj, landX, landY, messages);
