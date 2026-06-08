@@ -1693,6 +1693,10 @@ const MONSTER_BLINDING_VENOM_SPITTERS = new Set(['cobra', 'guardian naga']);
 const ORCISH_DAGGER = 10020;
 const DAGGER = 10023;
 const KNIFE = 10026;
+const ATHAME = 10094;
+const STILETTO = 10109;
+const ELVEN_DAGGER = 10123;
+const TIN_OPENER = 10159;
 const SPEAR = 10030;
 const MONSTER_THROWN_SPEAR_RANKS = new Map([
     ['dwarvish spear', 0],
@@ -9949,37 +9953,83 @@ function monsterSlimeproof(mon) {
     return name === 'green slime' || !!(data.flaming || data.noncorporeal || data.slimeproof);
 }
 
+function monsterMunstoneObjectKind(item) {
+    return String(item?.kind || item?.actualKind || '').toLowerCase();
+}
+
+function monsterMunstoneObjectKinds(item) {
+    return [item?.actualKind, item?.kind]
+        .map(name => String(name || '').toLowerCase())
+        .filter(Boolean);
+}
+
+const MONSTER_TIN_OPENER_DAGGER_OTYPS = new Set([ORCISH_DAGGER, DAGGER, ATHAME, ELVEN_DAGGER]);
+const MONSTER_TIN_OPENER_KNIFE_OTYPS = new Set([KNIFE, STILETTO]);
+const MONSTER_TIN_OPENER_WEAPON_KINDS = new Set([
+    'dagger', 'elven dagger', 'orcish dagger', 'silver dagger', 'athame',
+    'scalpel', 'knife', 'stiletto', 'worm tooth', 'crysknife',
+]);
+
+function sameMonsterInventoryObject(a, b) {
+    return !!a && !!b && (a === b || (a.id != null && b.id != null && a.id === b.id));
+}
+
+function monsterWeldedMunstoneWeapon(mon) {
+    const weapon = mon?.mw || null;
+    if (!weapon) return null;
+    if (!(mon.minvent || []).some(item => sameMonsterInventoryObject(item, weapon))) return null;
+    return weapon.welded || weapon.cursed && (weapon.wielded || sameMonsterInventoryObject(mon.mw, weapon))
+        ? weapon
+        : null;
+}
+
+function monsterMunstoneTinOpenerItem(item) {
+    if (item?.otyp === TIN_OPENER) return true;
+    const kinds = monsterMunstoneObjectKinds(item);
+    if (kinds.includes('tin opener')) return true;
+    if (MONSTER_TIN_OPENER_DAGGER_OTYPS.has(item?.otyp)
+        || MONSTER_TIN_OPENER_KNIFE_OTYPS.has(item?.otyp)) {
+        return true;
+    }
+    if (item?.cls !== 'weapon') return false;
+    return kinds.some(kind => MONSTER_TIN_OPENER_WEAPON_KINDS.has(kind));
+}
+
 function monsterCanOpenTin(mon) {
     const data = mon?.data || {};
     if (data.animal) return false;
+    const weldedWeapon = monsterWeldedMunstoneWeapon(mon);
     return (mon?.minvent || []).some(item => {
-        const kind = String(item.kind || item.actualKind || '').toLowerCase();
-        return item.kind === 'tin opener' || kind.includes('tin opener')
-            || kind.includes('dagger') || kind.includes('knife');
+        if (weldedWeapon && !sameMonsterInventoryObject(item, weldedWeapon)) return false;
+        return monsterMunstoneTinOpenerItem(item);
     });
 }
 
 function monsterMunstoneFoodSpecies(item) {
-    return String(item?.corpsenm?.name || item?.corpsenm || '').toLowerCase();
+    const species = String(item?.corpsenm?.name || item?.corpsenm || '').toLowerCase();
+    if (species) return species;
+    const tinMatch = String(item?.kind || '').toLowerCase().match(/^tin:(.+)$/);
+    return tinMatch ? tinMatch[1].trim() : '';
 }
 
 function monsterMunstoneItemIsCorpse(item) {
-    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    const kind = monsterMunstoneObjectKind(item);
     return item?.otyp === CORPSE || item?.otyp === 'corpse' || /\bcorpse$/.test(kind);
 }
 
 function monsterMunstoneItemIsTin(item) {
-    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
-    return item?.otyp === TIN || kind === 'tin';
+    const kind = String(item?.kind || '').toLowerCase();
+    const actualKind = String(item?.actualKind || '').toLowerCase();
+    return item?.otyp === TIN || kind === 'tin' || actualKind === 'tin' || kind.startsWith('tin:');
 }
 
 function monsterMunstoneItemIsAcidPotion(item) {
-    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    const kind = monsterMunstoneObjectKind(item);
     return item?.otyp === POT_ACID || item?.potionIndex === 23 || kind === 'acid' || kind === 'potion of acid';
 }
 
 function monsterMunstoneItemIsGreenSlimeGlob(item) {
-    const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+    const kind = monsterMunstoneObjectKind(item);
     return item?.otyp === GLOB_OF_GREEN_SLIME || item?.globby && /\bgreen slime\b/.test(kind);
 }
 

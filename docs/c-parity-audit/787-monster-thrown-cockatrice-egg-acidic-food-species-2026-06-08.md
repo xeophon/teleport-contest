@@ -36,5 +36,5 @@ Implemented the next production monster-thrown petrifying egg `munstone()` food-
 
 ## Remaining Gaps
 
-- `munstone()` tin recognition and opener eligibility still need a dedicated slice for `kind: "tin:<species>"`, numeric-only opener metadata, and cursed/welded wielded-weapon constraints.
+- `munstone()` tin recognition and opener eligibility for `kind: "tin:<species>"`, numeric-only opener metadata, animals, and cursed/welded wielded-weapon constraints are covered in audit 788.
 - Cursed/greased monster-thrown egg misfire and sink/ordinary wall stop handling remain separate projectile slices.

@@ -193,6 +193,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [785-monster-thrown-cockatrice-egg-munstone-tiny-2026-06-08.md](785-monster-thrown-cockatrice-egg-munstone-tiny-2026-06-08.md): monster-thrown petrifying eggs now cover intervening-monster self-cure via lizard corpse, C slowdown/limber wording, period punctuation, and tiny target rock/statue fallout.
 - [786-monster-thrown-cockatrice-egg-munstone-acid-tin-2026-06-08.md](786-monster-thrown-cockatrice-egg-munstone-acid-tin-2026-06-08.md): monster-thrown petrifying eggs now cover acid-potion `munstone()` death/survival fallout, openable lizard tin self-cure, stone-resistant slimeproof glob guard behavior, and C's zero physical egg damage after cure.
 - [787-monster-thrown-cockatrice-egg-acidic-food-species-2026-06-08.md](787-monster-thrown-cockatrice-egg-acidic-food-species-2026-06-08.md): monster-thrown petrifying eggs now cover C's broader `M1_ACID` corpse/tin species for monster `munstone()`, including acidic-corpse stomach damage and acidic-tin damage suppression.
+- [788-monster-thrown-cockatrice-egg-tin-opener-eligibility-2026-06-08.md](788-monster-thrown-cockatrice-egg-tin-opener-eligibility-2026-06-08.md): monster-thrown petrifying eggs now cover C-shaped monster tin opener eligibility, including `tin:<species>` metadata, numeric tin openers, animal rejection, and cursed/welded wielded-weapon gating.
 
 ## Cross-Cutting Themes
 
