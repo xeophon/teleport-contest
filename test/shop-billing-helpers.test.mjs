@@ -75875,6 +75875,34 @@ function installDirectDisenchanterMeleeState({
     return { shkp, blade, disenchanter };
 }
 
+function installDirectBareHandDisenchanterMeleeState({
+    gloves = null,
+    mcan = false,
+    rngValues = Array(100).fill(50),
+} = {}) {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 20, my: 20, shk: { x: 20, y: 20 } });
+    installCoreRngValues(rngValues);
+    game.flags.verbose = false;
+    Object.assign(game.u, { ulevel: 20, uhitinc: 30 });
+    game.u.acurr.a[A_DEX] = 25;
+    game.inventory = gloves ? [gloves] : [];
+    if (gloves) shop.addObjectToShopBill(shkp, gloves, 40);
+    const disenchanter = disenchanterTarget(6, 5, {
+        m_lev: 12,
+        mhp: 50,
+        mhpmax: 50,
+        msleeping: 0,
+        mpeaceful: false,
+        mcan,
+        data: { mac: 10 },
+    });
+    game.level.monsters.push(disenchanter);
+    markSquareVisible(6, 5);
+    enableRngLog({ reset: true });
+    return { shkp, gloves, disenchanter };
+}
+
 function installDirectPassiveObjectMeleeState({
     seed = 1,
     type = 'rust',
@@ -78032,6 +78060,67 @@ test('direct hero melee against disenchanter drains unpaid enchanted weapon', as
     const log = getRngLog();
     assert.deepEqual(log.filter(entry => entry.startsWith('rn2(100)=')).map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
     assert.equal(log.findIndex(entry => entry.startsWith('rn2(100)=')) < log.length - 1, true);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
+});
+
+test('direct hero melee bare-handed disenchanter drains worn gloves', async () => {
+    const gloves = wornArmor(876892, 'leather gloves', 'g', 2);
+    const { shkp, disenchanter } = installDirectBareHandDisenchanterMeleeState({ gloves });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.match(game._pending_message, /You drain .*leather gloves, you pay for it!/);
+    assert.match(game._pending_message, /Your leather gloves seem less effective\./);
+    assert.equal(gloves.spe, 1);
+    assert.equal(gloves.unpaid, false);
+    assert.equal(game.inventory.includes(gloves), true);
+    assert.match(gloves.line, /\+1 pair of leather gloves \(being worn\)/);
+    assert.equal(shop.shopBillEntryForObject(shkp, gloves), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 40);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(disenchanter.mhp < 50, true);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    const log = getRngLog();
+    assert.deepEqual(log.filter(entry => entry.startsWith('rn2(100)=')).map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
+});
+
+test('direct hero melee bare-handed disenchanter without gloves skips passive drain', async () => {
+    const { disenchanter } = installDirectBareHandDisenchanterMeleeState();
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.doesNotMatch(game._pending_message, /drain|less effective|pay for it/);
+    assert.equal(game.inventory.length, 0);
+    assert.equal(disenchanter.mhp < 50, true);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    const log = getRngLog();
+    assert.deepEqual(log.filter(entry => entry.startsWith('rn2(100)=')), []);
+    assert.match(log[log.length - 1], /^rn2\(3\)=/);
+});
+
+test('direct hero melee bare-handed cancelled disenchanter skips worn glove drain', async () => {
+    const gloves = wornArmor(876893, 'leather gloves', 'g', 2);
+    const { shkp, disenchanter } = installDirectBareHandDisenchanterMeleeState({ gloves, mcan: true });
+
+    await rhack('l');
+
+    assert.match(game._pending_message, /You hit it\./);
+    assert.doesNotMatch(game._pending_message, /drain|less effective|pay for it/);
+    assert.equal(gloves.spe, 2);
+    assert.equal(gloves.unpaid, true);
+    assert.equal(game.inventory.includes(gloves), true);
+    assert.match(gloves.line, /\+2 leather gloves \(being worn\)/);
+    assert.equal(shop.shopBillEntryForObject(shkp, gloves).useup, false);
+    assert.equal((game._usedUpShopBills || []).length, 0);
+    assert.equal(disenchanter.mhp < 50, true);
+    assert.equal(game.u.uconduct?.weaphit || 0, 0);
+    const log = getRngLog();
+    assert.deepEqual(log.filter(entry => entry.startsWith('rn2(100)=')), []);
     assert.match(log[log.length - 1], /^rn2\(3\)=/);
 });
 

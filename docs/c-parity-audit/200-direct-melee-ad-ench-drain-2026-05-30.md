@@ -30,7 +30,7 @@ Added focused command-path coverage in `test/shop-billing-helpers.test.mjs`:
 - Hero/polyself target passive-object handling for monster-thrown landings is still open.
 - Production dart hit landing and launcher-arrow landing are still open.
 - Broader direct passive-object erosion/burning/corrosion parity remains incomplete outside the covered `AD_ENCH` path.
-- Worn-glove fallback is implemented but still needs a focused source-derived test if hidden coverage starts exercising unarmed disenchanter hits.
+- Worn-glove fallback is covered in audit 779.
 
 ## Verification
 

@@ -184,6 +184,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [776-live-egg-rock-transform-passive-tail-2026-06-08.md](776-live-egg-rock-transform-passive-tail-2026-06-08.md): fresh ordinary egg-to-rock metadata cleanup plus direct melee low-HP/passive-object tail ordering.
 - [777-direct-melee-ad-ston-passive-2026-06-08.md](777-direct-melee-ad-ston-passive-2026-06-08.md): direct hero melee cockatrice/chickatrice `AD_STON` passive stoning, including glove/weapon protection and lethal-hit fallout.
 - [778-stale-ordinary-egg-touch-petrifier-2026-06-08.md](778-stale-ordinary-egg-touch-petrifier-2026-06-08.md): stale ordinary egg splat/use-up instead of live egg-to-rock transform against cockatrices and chickatrices.
+- [779-direct-melee-ad-ench-glove-fallback-2026-06-08.md](779-direct-melee-ad-ench-glove-fallback-2026-06-08.md): bare-handed direct hero melee against disenchanters falls back to worn gloves for `AD_ENCH` passive drain, with shop billing, cancelled-monster suppression, and no-object RNG gates.
 
 ## Cross-Cutting Themes
 
