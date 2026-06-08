@@ -23262,14 +23262,15 @@ function directMeleePeacefulBystandersRespond(attacked, messages) {
         const guardian = mon.data?.guardian || mon.guardian || mon.data?.msound === 'MS_GUARDIAN';
         const alreadyFleeing = !!(mon.mflee || mon.mfleetim);
         if (!guardian && level < rn2(10)) {
-            mon.mflee = 1;
-            mon.mfleetim = Math.min((mon.mfleetim || 0) + rn2(50) + 25, 127);
+            directMeleeMonflee(mon, rn2(50) + 25, {
+                first: true,
+                message: !gasp.exclaimed,
+                messages,
+            });
             if (gasp.exclaimed && game.flags?.verbose !== false && !alreadyFleeing) {
                 gasp.text = `${gasp.text} and then turns to flee.`;
                 gasp.needPunct = false;
-            } else if (!gasp.exclaimed) {
-                messages.push(`${fireScrollMonsterName(mon)} turns to flee.`);
-            }
+            } else if (!gasp.exclaimed) gasp.exclaimed = true;
         }
         if (gasp.text) messages.push(`${gasp.text}${gasp.needPunct ? '.' : ''}`);
         if (mon.mtame || mon.pet) continue;

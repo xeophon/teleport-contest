@@ -36,7 +36,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 
 ## Deferred Gaps
 
-- Tame humanoid bystanders, existing-fleeing wording outside the nonhumanoid same-species branch, and all `flags.verbose` branches remain outside this slice.
+- Tame humanoid bystanders and humanoid `monflee()` timer/wording are covered by audit 767. Other `flags.verbose` branches remain outside this slice.
 - The local guardian identity helper is name/marker based; C compares monster indices, so polymorphed/disguised quest guardian edge cases remain broader role/monster metadata work.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.

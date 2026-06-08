@@ -76108,6 +76108,172 @@ test('direct hero melee blind peaceful humanoid bystander does not respond', asy
     assert.equal(game.u.ualign.abuse, 1);
 });
 
+test('direct hero melee low-level humanoid bystander flees then angers', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876864 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mstrategy: 'waitforu',
+        mtrack: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+        data: { name: 'gnome', mlevel: 1, mlet: 'G', humanoid: true, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 5, 7, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  The gnome turns to flee.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 0);
+    assert.equal(bystander.hostile, true);
+    assert.equal(bystander.angry, true);
+    assert.equal(bystander.mstrategy, 0);
+    assert.equal(bystander.mflee, 1);
+    assert.equal(bystander.mfleetim, 32);
+    assert.deepEqual(bystander.mtrack, [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+    ]);
+    assert.equal(game.u.ualign.record, -2);
+    assert.equal(game.u.ualign.abuse, 2);
+});
+
+test('direct hero melee tame humanoid bystander can flee without anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876861 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mtame: 5,
+        mstrategy: 'waitforu',
+        mtrack: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+        data: { name: 'gnome', mlevel: 1, mlet: 'G', humanoid: true, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 5, 7, 1, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  The gnome turns to flee.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.mtame, 5);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mstrategy, 'waitforu');
+    assert.equal(bystander.mflee, 1);
+    assert.equal(bystander.mfleetim, 32);
+    assert.deepEqual(bystander.mtrack, [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+    ]);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee tame humanoid bystander can gasp then flee without anger', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876863 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mtame: 5,
+        pet: true,
+        mstrategy: 'waitforu',
+        mtrack: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+        data: { name: 'gnome', mlevel: 1, mlet: 'G', humanoid: true, msound: 'MS_HUMANOID', maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 0, 0, 2, 7, ...Array(20).fill(1)]);
+
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You hit the goblin.  The goblin gets angry!  The gnome gasps and then turns to flee.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.mtame, 5);
+    assert.equal(bystander.pet, true);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mstrategy, 'waitforu');
+    assert.equal(bystander.mflee, 1);
+    assert.equal(bystander.mfleetim, 32);
+    assert.deepEqual(bystander.mtrack, [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+    ]);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
+test('direct hero melee already-fleeing tame humanoid bystander keeps untimed flee', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876862 });
+    const bystander = ordinaryThrowTarget('gnome', 5, 6, {
+        mhp: 10,
+        mhpmax: 10,
+        msleeping: 0,
+        mcanmove: true,
+        mcansee: true,
+        mpeaceful: 1,
+        mtame: 5,
+        mflee: 1,
+        mfleetim: 0,
+        mstrategy: 'waitforu',
+        mtrack: [{ x: 4, y: 4 }, { x: 5, y: 5 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+        data: { name: 'gnome', mlevel: 1, mlet: 'G', humanoid: true, maligntyp: 0 },
+    });
+    game.level.monsters = [mon, bystander];
+    game.u._statusSuffix = ' Deaf';
+    markSquareVisible(5, 6);
+    installCoreRngValues([0, 0, 0, 1, 1, 5, 7, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.  The goblin gets angry!');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(bystander.mpeaceful, 1);
+    assert.equal(bystander.mtame, 5);
+    assert.equal(bystander.hostile, undefined);
+    assert.equal(bystander.angry, undefined);
+    assert.equal(bystander.mstrategy, 'waitforu');
+    assert.equal(bystander.mflee, 1);
+    assert.equal(bystander.mfleetim, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(50)').slice(-1), [7]);
+    assert.deepEqual(bystander.mtrack, [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+    ]);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+});
+
 test('direct hero melee town watch bystander arrests and angers guards', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({ weaponId: 876854 });
     const guard = ordinaryThrowTarget('watchman', 5, 6, {

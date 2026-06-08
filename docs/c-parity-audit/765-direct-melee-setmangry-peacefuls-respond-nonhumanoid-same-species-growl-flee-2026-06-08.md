@@ -38,7 +38,7 @@ Focused direct-melee coverage in `test/shop-billing-helpers.test.mjs` now assert
 ## Deferred Gaps
 
 - Current quest-leader anger when the attacked target is the role guardian is covered by audit 766.
-- Tame humanoid bystanders, existing-fleeing wording variants, hallucinated growl verb tables, vrock gas-cloud side effects, gremlin light artifacts, and all `flags.verbose` branches remain outside this slice.
+- Tame humanoid bystanders and humanoid `monflee()` timer/wording are covered by audit 767. Hallucinated growl verb tables, vrock gas-cloud side effects, gremlin light artifacts, and other `flags.verbose` branches remain outside this slice.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.
 

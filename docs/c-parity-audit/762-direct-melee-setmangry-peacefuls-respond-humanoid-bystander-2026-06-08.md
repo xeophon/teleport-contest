@@ -40,9 +40,9 @@ The focused command keeps adjacent direct-melee target anger and Elbereth blind-
 
 ## Deferred Gaps
 
-- Full `peacefuls_respond()` remains broader: tame bystander handling beyond preserving peacefulness and ordinary/tame optional gasp/flee wording still need separate coverage. Shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763, town-watch bystander arrest is covered by audit 764, nonhumanoid same-species growl/flee is covered by audit 765, and current quest-leader role-guardian-target anger is covered by audit 766.
+- Full `peacefuls_respond()` remains broader outside the bounded direct-melee subset. Shopkeeper/priest/non-guardian current quest-leader shrug behavior is covered by audit 763, town-watch bystander arrest is covered by audit 764, nonhumanoid same-species growl/flee is covered by audit 765, current quest-leader role-guardian-target anger is covered by audit 766, and tame/low-level humanoid bystander flee handling is covered by audit 767.
 - The local `m_canseeu()` approximation covers invisibility and line of sight but does not yet model every telepathy, monster sense, underwater, or special perception condition.
-- Exact `monflee()` timers and follow-up wording for the nonhumanoid same-species branch are covered by audit 765; existing-fleeing wording outside that slice and all `flags.verbose` branches remain deferred.
+- Exact `monflee()` timers and follow-up wording for the nonhumanoid same-species branch are covered by audit 765; humanoid existing-fleeing and gasp-plus-verbose flee wording are covered by audit 767; other `flags.verbose` branches remain deferred.
 - Monster-moving `setmangry()` callers and special direct-attack helpers remain separate from this ordinary hero-melee hook.
 
 ## Verification
