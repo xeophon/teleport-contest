@@ -76113,6 +76113,166 @@ test('direct hero melee hostile human-shaped target does not treat Elbereth as s
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
 });
 
+test('direct hero melee hostile blind vampire on Elbereth altar bypasses Gehennom restriction', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876841,
+        name: 'vampire',
+        monsterExtra: { mpeaceful: 0, hostile: true, mcansee: false },
+        dataExtra: { mlevel: 10, mlet: 'V', undead: true, humanoid: true },
+    });
+    const altarLoc = game.level.at(game.u.ux, game.u.uy);
+    altarLoc.typ = ALTAR;
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    game.inhell = true;
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message,
+        'You hit the vampire.  You feel like a hypocrite.  The engraving beneath you fades.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
+test('direct hero melee hostile blind shifted vampire on Elbereth altar bypasses Gehennom restriction', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876842,
+        name: 'vampire bat',
+        monsterExtra: {
+            mpeaceful: 0,
+            hostile: true,
+            mcansee: false,
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+        dataExtra: {
+            mlevel: 5,
+            mlet: 'B',
+            glyph: 'B',
+            vampshifter: true,
+            vampBase: 'vampire',
+            cham: 'vampire',
+        },
+    });
+    const altarLoc = game.level.at(game.u.ux, game.u.uy);
+    altarLoc.typ = ALTAR;
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    game.inhell = true;
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message,
+        'You hit the vampire bat.  You feel like a hypocrite.  The engraving beneath you fades.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
+test('direct hero melee hostile blind vampire on Elbereth altar bypasses endgame restriction', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876844,
+        name: 'vampire',
+        monsterExtra: { mpeaceful: 0, hostile: true, mcansee: false },
+        dataExtra: { mlevel: 10, mlet: 'V', undead: true, humanoid: true },
+    });
+    const altarLoc = game.level.at(game.u.ux, game.u.uy);
+    altarLoc.typ = ALTAR;
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    game.astral_level = { dnum: 8, dlevel: 5 };
+    game.u.uz = { dnum: 8, dlevel: 1 };
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    const penalty = rngValuesForCall(getRngLog(), 'rnd(5)')[0];
+    assert.equal(game._pending_message,
+        'You hit the vampire.  You feel like a hypocrite.  The engraving beneath you fades.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.engravings.length, 0);
+    assert.equal(game.u.ualign.record, 4 - penalty);
+    assert.equal(game.u.ualign.abuse, penalty);
+});
+
+test('direct hero melee hostile nonvampire on Elbereth altar still respects Gehennom restriction', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876843,
+        monsterExtra: { mpeaceful: 0, hostile: true },
+    });
+    const altarLoc = game.level.at(game.u.ux, game.u.uy);
+    altarLoc.typ = ALTAR;
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    game.inhell = true;
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.engravings[0].text, 'Elbereth');
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
+});
+
+test('direct hero melee hostile nonvampire on Elbereth altar still respects endgame restriction', async () => {
+    const { mon } = installDirectMeleePeacefulSurvivor({
+        weaponId: 876845,
+        monsterExtra: { mpeaceful: 0, hostile: true },
+    });
+    const altarLoc = game.level.at(game.u.ux, game.u.uy);
+    altarLoc.typ = ALTAR;
+    altarLoc.flags = Align2amask(A_LAWFUL);
+    altarLoc.altarmask = altarLoc.flags;
+    game.astral_level = { dnum: 8, dlevel: 5 };
+    game.u.uz = { dnum: 8, dlevel: 1 };
+    game.u.ualign.record = 4;
+    game.level.engravings = [{ x: game.u.ux, y: game.u.uy, text: 'Elbereth', type: BURN }];
+    installCoreRngValues([0, 0, 0, 1, 1, 2, 1, ...Array(20).fill(1)]);
+    enableRngLog({ reset: true });
+
+    await rhack('l');
+
+    assert.equal(game._pending_message, 'You hit the goblin.');
+    assert.equal(mon.mpeaceful, 0);
+    assert.equal(mon.hostile, true);
+    assert.equal(mon.angry, undefined);
+    assert.equal(game.level.engravings[0].text, 'Elbereth');
+    assert.equal(game.u.ualign.record, 4);
+    assert.equal(game.u.ualign.abuse, 0);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rnd(5)'), []);
+});
+
 test('direct hero melee hostile blind target on Elbereth and scare scroll feels hypocritical', async () => {
     const { mon } = installDirectMeleePeacefulSurvivor({
         weaponId: 876833,

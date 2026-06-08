@@ -23007,6 +23007,26 @@ function directMeleePriestInOwnTemple(priest) {
         && directMeleePriestHasShrine(priest));
 }
 
+function directMeleeMonsterIsVampireOrShifter(mon) {
+    const data = mon?.data || {};
+    const rawMlet = String(data.mlet ?? mon?.mlet ?? data.glyph ?? mon?.glyph ?? '');
+    const mlet = rawMlet.toLowerCase();
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    return rawMlet === 'V' || mlet === 'vampire'
+        || mon?.vampshifter || data.vampshifter
+        || mon?.cham === 'vampire' || data.cham === 'vampire'
+        || mon?.vampBase === 'vampire' || data.vampBase === 'vampire'
+        || ['vampire', 'vampire lord', 'vampire lady', 'vampire leader',
+            'vampire mage'].includes(name);
+}
+
+function directMeleeHeroAltarScaresVampire(mon) {
+    const ux = game.u?.ux ?? 0;
+    const uy = game.u?.uy ?? 0;
+    return game.level?.at?.(ux, uy)?.typ === ALTAR
+        && directMeleeMonsterIsVampireOrShifter(mon);
+}
+
 function directMeleeOnscaryAtHero(mon) {
     const data = mon?.data || {};
     const name = String(data.name || mon?.name || '').toLowerCase();
@@ -23016,6 +23036,7 @@ function directMeleeOnscaryAtHero(mon) {
     if (mlet === 'A' || name === 'angel' || mon?.rider || data.rider) return false;
     if (mlet === '@' || mon?.unique || data.unique || data.uniq || data.nemesis) return false;
     if ((mon?.isshk && shopkeeperInHisShop(mon)) || directMeleePriestInOwnTemple(mon)) return false;
+    if (directMeleeHeroAltarScaresVampire(mon)) return true;
     if (directMeleeScareMonsterScrollAtHero()) return true;
     if (mon?.isshk || mon?.isgd || mon?.guard) return false;
     if (mon?.mcansee === false || mon?.mcansee === 0) return false;

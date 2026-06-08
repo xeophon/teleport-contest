@@ -38,7 +38,7 @@ The focused command keeps the adjacent Elbereth hypocrisy canaries from audit 75
 
 ## Deferred Gaps
 
-- Full `onscary()` breadth outside this direct-melee hero-square scroll hook remains deferred: displacement, `guardobjects`, vampire/altar behavior, auditory scare, movement/flee logic, `goodpos_onscary()`, and monster pathing.
+- Full `onscary()` breadth outside this direct-melee hero-square scroll hook remains deferred: displacement, `guardobjects`, auditory scare, movement/flee logic, `goodpos_onscary()`, and monster pathing. The direct hero-square altar/vampire subcase is covered by audit 760.
 - Full shopkeeper/priest room-boundary edge cases remain broader than the current direct helpers, especially C `inhishop()` boundary semantics and all `inhistemple()` level/room cases.
 - Scare-monster scroll pickup/read/dust/shop billing lifecycle remains covered elsewhere in the shop/pickup stream, not this melee hook.
 - Branch-predicate bypass through the scroll is implemented by ordering but does not have separate Gehennom/endgame canaries in this slice.

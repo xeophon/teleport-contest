@@ -165,6 +165,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [757-direct-melee-sleeper-growl-disturb-buried-zombies-2026-06-08.md](757-direct-melee-sleeper-growl-disturb-buried-zombies-2026-06-08.md): direct hero melee sleeper growl `wake_nearto()` buried-zombie disturbance, adjacent buried corpse zombify timer shortening, and silent-source no-disturb canaries.
 - [758-direct-melee-setmangry-elbereth-hypocrisy-2026-06-08.md](758-direct-melee-setmangry-elbereth-hypocrisy-2026-06-08.md): direct hero melee `setmangry()` Elbereth hypocrisy, post-wipe engraving fade/deletion, high/low alignment penalties, and peaceful/vulnerable gates.
 - [759-direct-melee-setmangry-scare-monster-scroll-onscary-2026-06-08.md](759-direct-melee-setmangry-scare-monster-scroll-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` scare-monster scroll `onscary()` parity, hero-square scroll hypocrisy gating, and hard scare-immunity canaries.
+- [760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md](760-direct-melee-setmangry-altar-vampire-onscary-2026-06-08.md): direct hero melee `setmangry(TRUE)` altar/vampire `onscary()` parity, hero-square altar scare source for vampires and vampire shifters, and final-restriction bypass canaries.
 
 ## Cross-Cutting Themes
 
