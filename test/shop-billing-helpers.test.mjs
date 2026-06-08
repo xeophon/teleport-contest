@@ -13695,6 +13695,23 @@ test('genocide refuses C non-G_GENO ki-rin', async () => {
     assert.notEqual(game._genocided_monsters?.includes('ki-rin'), true);
 });
 
+test('blessed genocide refuses C non-G_GENO angel class', async () => {
+    installNonShopFloorState();
+    game.inventory = [scrollOfGenocide(31075, 's', { blessed: true })];
+
+    await rhack('r');
+    await rhack('s');
+    await enterGenocideResponse('A');
+
+    const message = game._pending_message || '';
+    assert.match(message, /You aren't permitted to genocide such monsters\./);
+    assert.match(message, /What class of monsters do you want to genocide\?/);
+    assert.doesNotMatch(message, /Wiped out all/);
+    assert.equal(game._command_mode, 'genocideText');
+    for (const name of ['couatl', 'Aleax', 'Angel', 'ki-rin', 'Archon'])
+        assert.notEqual(game._genocided_monsters?.includes(name), true);
+});
+
 function installShiftedVampireBatPolyself() {
     initRng(1);
     game.urace = { adj: 'human', noun: 'human' };

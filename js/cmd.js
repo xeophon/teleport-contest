@@ -31006,7 +31006,7 @@ const GENOCIDE_EXTRA_MONSTER_NAMES = [
     'queen bee', 'woodchuck', 'jellyfish', 'piranha', 'shark', 'giant eel',
     'electric eel', 'kraken', 'giant', 'minotaur', 'water troll',
 ];
-const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set(['ki-rin']);
+const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set(['couatl', 'aleax', 'angel', 'ki-rin', 'archon']);
 const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha']);
 const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 
@@ -31511,8 +31511,13 @@ async function finishGenocideInput(raw) {
             await retryGenocidePrompt(pending, `That ${input.length === 1 ? 'symbol' : 'response'} does not represent any monster.`);
             return;
         }
+        const eligibleMembers = members.filter(data => !isMonsterForbiddenForGenocideName(data.name));
+        if (!eligibleMembers.length) {
+            await retryGenocidePrompt(pending, "You aren't permitted to genocide such monsters.");
+            return;
+        }
         let wiped = 0;
-        for (const data of members) {
+        for (const data of eligibleMembers) {
             if (isMonsterGenocidedName(data.name) || data.unique || data.nemesis) continue;
             genocideMonsterType(data, messages, { classMode: true });
             wiped++;
