@@ -197,6 +197,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [789-monster-thrown-cockatrice-egg-misfire-sink-wall-2026-06-08.md](789-monster-thrown-cockatrice-egg-misfire-sink-wall-2026-06-08.md): monster-thrown petrifying eggs now cover cursed/greased slip misfires, zero-vector launch-square drops, redirected sink stops, and ordinary wall obstruction landing.
 - [790-monster-thrown-passive-proof-stale-target-2026-06-08.md](790-monster-thrown-passive-proof-stale-target-2026-06-08.md): monster-thrown passive-object landings now reveal visible proofed floor-object protection and skip stale passive targets after lethal intervening cleanup.
 - [791-monster-thrown-passive-fire-material-2026-06-08.md](791-monster-thrown-passive-fire-material-2026-06-08.md): monster-thrown passive-object fire erosion now honors explicit projectile material and appearance naming for unidentified wooden projectiles.
+- [792-monster-thrown-passive-acid-corr-ench-2026-06-08.md](792-monster-thrown-passive-acid-corr-ench-2026-06-08.md): monster-thrown passive-object acid, corrosion, and disenchantment now have production canaries for gate behavior, mutation before stacking, and drain-before-stack merging.
 
 ## Cross-Cutting Themes
 

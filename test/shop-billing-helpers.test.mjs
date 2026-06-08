@@ -60096,6 +60096,260 @@ test('production monster runed spear hit can smoulder from intervening red mold 
         rawRng.join(', '));
 });
 
+test('production monster plain dagger acid hit can corrode before stacking', async () => {
+    const cleanStack = { ...dagger(874414), ox: 8, oy: 5, letter: undefined, line: undefined, spe: 0 };
+    const acidBlob = passiveObjectTarget('acid blob', 'acid', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const acidDagger = { ...dagger(874415), letter: undefined, line: undefined, spe: 0 };
+    const { daggerItem, thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 14,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: acidDagger,
+        extraMonsters: [acidBlob],
+        initialObjects: [cleanStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the acid blob|It is hit/);
+    assert.match(messages, /The dagger corrodes!/, rawRng.join(', '));
+    assert.equal(acidBlob.mhp < 20, true, rawRng.join(', '));
+    assert.equal(acidBlob.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded2, 1);
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.equal(rawRng.some(entry => entry === 'rn2(6)=0'), true, rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(2)=')
+        || entry.startsWith('rnl(4)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+});
+
+test('production monster plain dagger acid miss gate stacks unchanged object', async () => {
+    const cleanStack = { ...dagger(874416), ox: 8, oy: 5, letter: undefined, line: undefined, spe: 0 };
+    const acidBlob = passiveObjectTarget('acid blob', 'acid', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const acidDagger = { ...dagger(874417), letter: undefined, line: undefined, spe: 0 };
+    const { daggerItem, thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: acidDagger,
+        extraMonsters: [acidBlob],
+        initialObjects: [cleanStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the acid blob|It is hit/);
+    assert.doesNotMatch(messages, /dagger corrodes|corrosion/);
+    assert.equal(acidBlob.mhp < 20, true, rawRng.join(', '));
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false, rawRng.join(', '));
+    assert.equal(cleanStack.quan, 2);
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(game.level.objects.length, 1);
+
+    const acidGate = rawRng.find(entry => entry.startsWith('rn2(6)='));
+    assert.ok(acidGate, rawRng.join(', '));
+    assert.notEqual(acidGate, 'rn2(6)=0', rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(2)=')
+        || entry.startsWith('rnl(4)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+});
+
+test('production monster greased dagger acid miss gate does not merge clean stack', async () => {
+    const cleanStack = { ...dagger(874422), ox: 8, oy: 5, letter: undefined, line: undefined, spe: 0 };
+    const acidBlob = passiveObjectTarget('acid blob', 'acid', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const greasedDagger = { ...dagger(874423), letter: undefined, line: undefined, spe: 0, greased: true };
+    const { daggerItem, thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: greasedDagger,
+        extraMonsters: [acidBlob],
+        initialObjects: [cleanStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the acid blob|It is hit/);
+    assert.doesNotMatch(messages, /dagger corrodes|corrosion/);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.greased, true);
+    assert.equal(landed.oeroded2 || 0, 0);
+    assert.equal(cleanStack.greased || false, false);
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    const acidGate = rawRng.find(entry => entry.startsWith('rn2(6)='));
+    assert.ok(acidGate, rawRng.join(', '));
+    assert.notEqual(acidGate, 'rn2(6)=0', rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(2)=')
+        || entry.startsWith('rnl(4)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+});
+
+test('production monster plain dagger corrosion hit has no acid gate before stacking', async () => {
+    const cleanStack = { ...dagger(874418), ox: 8, oy: 5, letter: undefined, line: undefined, spe: 0 };
+    const blackPudding = passiveObjectTarget('black pudding', 'corr', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const corrodingDagger = { ...dagger(874419), letter: undefined, line: undefined, spe: 0 };
+    const { daggerItem, thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: corrodingDagger,
+        extraMonsters: [blackPudding],
+        initialObjects: [cleanStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the black pudding|It is hit/);
+    assert.match(messages, /The dagger corrodes!/);
+    assert.equal(blackPudding.mhp < 20, true, rawRng.join(', '));
+    assert.equal(blackPudding.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oeroded2, 1);
+    assert.equal(cleanStack.oeroded2 || 0, 0);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(6)=') || entry.startsWith('rn2(2)=')
+        || entry.startsWith('rnl(4)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+});
+
+test('production monster proofed dagger corrosion reveals proof and does not merge clean stack', async () => {
+    const cleanStack = { ...dagger(874424), ox: 8, oy: 5, letter: undefined, line: undefined, spe: 0 };
+    const blackPudding = passiveObjectTarget('black pudding', 'corr', 8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const proofDagger = {
+        ...dagger(874425),
+        letter: undefined,
+        line: undefined,
+        spe: 0,
+        oerodeproof: true,
+        rknown: false,
+    };
+    const { daggerItem, thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: proofDagger,
+        extraMonsters: [blackPudding],
+        initialObjects: [cleanStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the black pudding|It is hit/);
+    assert.match(messages, /Somehow, the dagger is not affected by the corrosion\./);
+    assert.equal(blackPudding.mhp < 20, true, rawRng.join(', '));
+    assert.equal(blackPudding.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    const landed = game.level.objects.find(obj => obj.id === daggerItem.id);
+    assert.ok(landed, rawRng.join(', '));
+    assert.equal(landed.ox, 8);
+    assert.equal(landed.oy, 5);
+    assert.equal(landed.oerodeproof, true);
+    assert.equal(landed.rknown, true);
+    assert.equal(landed.oeroded2 || 0, 0);
+    assert.equal(cleanStack.oerodeproof || false, false);
+    assert.equal(cleanStack.rknown || false, false);
+    assert.equal(cleanStack.quan, 1);
+    assert.equal(game.level.objects.length, 2);
+
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(6)=') || entry.startsWith('rn2(2)=')
+        || entry.startsWith('rnl(4)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rn2(100)=')), false,
+        rawRng.join(', '));
+});
+
+test('production monster enchanted dagger drain can stack after disenchanter hit', async () => {
+    const drainedStack = { ...dagger(874420), ox: 8, oy: 5, letter: undefined, line: undefined, spe: 1 };
+    const disenchanter = disenchanterTarget(8, 5, {
+        ac: 15,
+        mac: 15,
+        mhp: 20,
+        mhpmax: 20,
+    });
+    const enchantedDagger = { ...dagger(874421), letter: undefined, line: undefined, spe: 2 };
+    const { daggerItem, thrower, rawRng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        seed: 1,
+        heroBlind: false,
+        levelCells: [[7, 5, { typ: IRONBARS }]],
+        projectile: enchantedDagger,
+        extraMonsters: [disenchanter],
+        initialObjects: [drainedStack],
+    });
+    const messages = collectMonsterThrowMessages(preNhgetchMessages);
+
+    assert.match(messages, /dagger hits the disenchanter|It is hit/);
+    assert.doesNotMatch(messages, /rust|corrode|smoulder|less effective/);
+    assert.equal(disenchanter.mhp < 20, true, rawRng.join(', '));
+    assert.equal(disenchanter.msleeping, 0);
+    assert.equal(thrower.minvent.some(obj => obj.id === daggerItem.id), false);
+    assert.equal(thrower.missile, null);
+
+    assert.equal(game.level.objects.some(obj => obj.id === daggerItem.id), false, rawRng.join(', '));
+    assert.equal(drainedStack.spe, 1);
+    assert.equal(drainedStack.quan, 2);
+    assert.equal(game.level.objects.length, 1);
+
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(100)=')), true, rawRng.join(', '));
+    assert.equal(rawRng.some(entry => entry.startsWith('rn2(6)=')
+        || entry.startsWith('rn2(3)=') || entry.startsWith('rnl(4)=')), false,
+        rawRng.join(', '));
+});
+
 test('production monster dwarvish spear hit uses stout spear damage and text', async () => {
     const dwarvishSpear = monsterDwarvishSpear(874383);
     const { spearItem, thrower, rng, rawRng, preNhgetchMessages } = await runMonsterSpearIronBars({

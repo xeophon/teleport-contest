@@ -38599,6 +38599,8 @@ function sameMonsterThrownStackObject(existing, obj) {
     if (existing.ox !== obj.ox || existing.oy !== obj.oy) return false;
     if (!!existing.unpaid !== !!obj.unpaid || !!existing.no_charge !== !!obj.no_charge) return false;
     if (existing.unpaid && !sameShopBillUnitPrice(existing, obj)) return false;
+    const erosionMatters = wishedDamageProfile(existing).erosionMatters || wishedDamageProfile(obj).erosionMatters;
+    const compareProofKnown = !!(game.u?.blind || game.u?.hallucinating || /\bHallu\b/.test(game.u?._statusSuffix || ''));
     return objectStackType(existing) === objectStackType(obj)
         && existing.cls === obj.cls
         && existing.kind === obj.kind
@@ -38613,6 +38615,10 @@ function sameMonsterThrownStackObject(existing, obj) {
         && !!existing.opoisoned === !!obj.opoisoned
         && (existing.oeroded || 0) === (obj.oeroded || 0)
         && (existing.oeroded2 || 0) === (obj.oeroded2 || 0)
+        && !!existing.greased === !!obj.greased
+        && (!erosionMatters || (!!existing.oerodeproof === !!obj.oerodeproof
+            && !!existing.rustproof === !!obj.rustproof
+            && (!compareProofKnown || !!existing.rknown === !!obj.rknown)))
         && existing.gemDescription === obj.gemDescription
         && existing.scrollIndex === obj.scrollIndex
         && existing.potionIndex === obj.potionIndex
