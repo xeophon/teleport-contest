@@ -31034,6 +31034,7 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['gray elf', 'Grey-elf'],
     ['wood-elf', 'Woodland-elf'],
     ['wood elf', 'Woodland-elf'],
+    ['woodland nymph', 'wood nymph'],
     ['mindflayer', 'mind flayer'],
     ['master mindflayer', 'master mind flayer'],
 ]);

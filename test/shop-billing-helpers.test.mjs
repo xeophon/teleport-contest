@@ -13729,6 +13729,7 @@ test('genocide accepts C alternate monster spellings', async () => {
         ['gray elf', 'Grey-elf', /Wiped out all Grey-elves\./],
         ['wood-elf', 'Woodland-elf', /Wiped out all Woodland-elves\./],
         ['wood elf', 'Woodland-elf', /Wiped out all Woodland-elves\./],
+        ['woodland nymph', 'wood nymph', /Wiped out all wood nymphs\./],
         ['mindflayer', 'mind flayer', /Wiped out all mind flayers\./],
         ['master mindflayer', 'master mind flayer', /Wiped out all master mind flayers\./],
     ];
