@@ -14869,6 +14869,7 @@ function destroyLavaFatalInventorySelection(selection) {
 function heroLavaEntryEffect(targetMoveTyp) {
     const messages = [];
     const dmg = d(6, 6);
+    burnAwayHeroSlime(messages);
     const initiallySurvivesLava = heroHasFireResistance()
         || (heroHasWaterWalking() && dmg < (game.u?.uhp || 0));
     const fatalInventoryBurn = initiallySurvivesLava ? [] : lavaFatalInventoryBurnSelection();

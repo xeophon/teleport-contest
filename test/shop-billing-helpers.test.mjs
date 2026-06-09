@@ -43428,6 +43428,31 @@ test('m-prefix into lava sinks fire-resistant hero after guarded water walking b
     assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
 });
 
+test('m-prefix into lava burns away slime before fire-resistant sink message', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: true,
+        slimed: true,
+        _slimingTimeout: 5,
+        _statusSuffix: ' Slimed',
+    });
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u.slimed, false);
+    assert.equal(game.u._slimingTimeout, 0);
+    assert.doesNotMatch(game.u._statusSuffix || '', /Slimed/);
+    assert.match(pending, /The slime that covers you is burned away!/);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.ok(pending.indexOf('The slime that covers you is burned away!') < pending.indexOf('You sink into the molten lava'));
+    assert.equal(game.u.utraptype, TT_LAVA);
+});
+
 test('m-prefix into lava clears burned levitation boots without recursive lava fallout', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);
