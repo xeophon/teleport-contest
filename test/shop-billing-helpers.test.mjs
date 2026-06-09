@@ -11,7 +11,7 @@ import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng
 import { encodeBonesLevel } from '../js/save.js';
 import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, BURN, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMC, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
-import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
+import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_RED, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
 import { vision_recalc, vision_reset } from '../js/vision.js';
 import { fireBreathDamageMonster } from '../js/fire_breath.js';
@@ -42,6 +42,7 @@ const BAG_OF_TRICKS = 10158;
 const POT_WATER = 253;
 const SLIME_MOLD = 11009;
 const BEARTRAP = 10161;
+const LAND_MINE = 10160;
 const MEAT_RING = 10164;
 const TIN_OPENER = 10159;
 const GLOB_OF_GREEN_SLIME = 10182;
@@ -28778,6 +28779,12 @@ function setupUntrapDestinationBearTrap(options = {}) {
     return trap;
 }
 
+function setupUntrapDestinationLandMine(options = {}) {
+    const trap = setupUntrapDestinationWeb([], options);
+    trap.ttyp = LANDMINE;
+    return trap;
+}
+
 test('#untrap current-square web and box prompts before removing web', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
     const box = shopFloorContainer(881000);
@@ -28857,6 +28864,30 @@ test('#untrap current-square bear trap and box can skip trap for box prompt', as
 
     assert.equal(game._command_mode, 'untrapWebContainerConfirm');
     assert.equal(game._pending_message, 'There is a container and a bear trap here.  Disarm the bear trap? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square land mine and box can skip trap for box prompt', async () => {
+    const trap = setupUntrapDestinationLandMine({ webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881027);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapWebContainerConfirm');
+    assert.equal(game._pending_message, 'There is a container and a land mine here.  Disarm the land mine? [ynq] (q)');
     assert.deepEqual(getRngLog(), []);
     assert.equal(game.level.traps.includes(trap), true);
     assert.equal(game.context.move || 0, 0);
@@ -31654,6 +31685,167 @@ test('#untrap adjacent bear trap is blocked by a boulder for ordinary heroes', a
     assert.equal(game._pending_message, 'There is a boulder in your way.');
     assert.equal(game.level.traps.includes(trap), true);
     assert.equal(game.level.objects.some(obj => obj.otyp === BEARTRAP), false);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap disarms a seen land mine into a floor land mine', async () => {
+    const trap = setupUntrapDestinationLandMine({ rng: [0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const mine = game.level.objects.find(obj => obj.otyp === LAND_MINE && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rnd(2)=1']);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You disarm the land mine.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(mine);
+    assert.equal(mine.kind, 'land mine');
+    assert.equal(mine.quan || 1, 1);
+    assert.equal(mine.owt, 200);
+    assert.equal(mine.material, 'iron');
+    assert.equal(mine.opoisoned || false, false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap land mine conversion stacks with existing floor land mines', async () => {
+    const trap = setupUntrapDestinationLandMine({ rng: [0] });
+    game.level.objects = [{
+        id: 881030,
+        otyp: LAND_MINE,
+        cls: 'tool',
+        glyph: '(',
+        color: CLR_RED,
+        kind: 'land mine',
+        actualKind: 'land mine',
+        ox: 6,
+        oy: 5,
+        quan: 2,
+        owt: 400,
+        material: 'iron',
+        oc_material: 'iron',
+        cursed: false,
+        blessed: false,
+        spe: 0,
+        opoisoned: false,
+    }];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const mines = game.level.objects.filter(obj => obj.otyp === LAND_MINE && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rnd(2)=1']);
+    assert.equal(game._pending_message, 'You disarm the land mine.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(mines.length, 1);
+    assert.equal(mines[0].quan, 3);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap user-made land mine in shop auto-sells after conversion', async () => {
+    const trap = setupUntrapDestinationLandMine({ madeby: true, rng: [0] });
+    const shkp = {
+        isshk: true,
+        shoproom: ROOMOFFSET,
+        shoptype: SHOPBASE,
+        shknam: 'Izchak',
+        mx: 1,
+        my: 1,
+        shk: { x: 1, y: 1 },
+        bill: [],
+        billct: 0,
+        minvent: [{ cls: 'coin', otyp: 466, glyph: '$', quan: 100 }],
+        m_id: 881028,
+    };
+    game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
+    game.level.monsters = [shkp];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const mine = game.level.objects.find(obj => obj.otyp === LAND_MINE && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rnd(2)=1']);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(mine);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._shop_sale_pending || null, null);
+    assert.match(game._pending_message, /^You disarm your land mine\.  You relinquish a land mine and receive .* in compensation\.$/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap Ranger does not auto-disarm a seen land mine', async () => {
+    const trap = setupUntrapDestinationLandMine({ role: 'Ranger', rng: [1, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(2)=1', 'rnl(5)=0']);
+    assert.equal(game._pending_message, 'That land mine is difficult to disarm.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === LAND_MINE), false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap land mine failure can leave the hero in place', async () => {
+    const trap = setupUntrapDestinationLandMine({ rng: [1, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=0']);
+    assert.equal(game._pending_message, 'That land mine is difficult to disarm.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === LAND_MINE), false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap failed adjacent land mine disarm respects blocked movement', async () => {
+    const trap = setupUntrapDestinationLandMine({ rng: [1, 1] });
+    installUntrapLevelCells([[6, 5, { typ: STONE, lit: true }]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=1']);
+    assert.equal(game._pending_message, "Whoops...  Fortunately, you don't move onto it.");
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap adjacent land mine is blocked by a boulder for ordinary heroes', async () => {
+    const trap = setupUntrapDestinationLandMine({ rng: [0] });
+    game.level.objects = [floorBoulder(881029, { ox: 6, oy: 5 })];
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'There is a boulder in your way.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === LAND_MINE), false);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap ignores an unseen land mine', async () => {
+    const trap = setupUntrapDestinationLandMine({ rng: [0] });
+    trap.tseen = false;
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'You know of no traps there.');
+    assert.equal(game.level.traps.includes(trap), true);
     assert.equal(game.context.move || 0, 0);
 });
 
