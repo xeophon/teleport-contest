@@ -1625,6 +1625,7 @@ function dropCarriedObjectAtHero(item, messages = [], dropTarget = null) {
         });
     if (!placed) clearObjectShopBillState(item);
     let shopSale = null;
+    if (placed) impactDisturbsBuriedZombieCorpseTimersForObject(dropped, { violent: false });
     if (placed && !sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy)) {
         shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
         if (shopSale?.message) messages.push(shopSale.message);
@@ -12717,6 +12718,31 @@ function disturbBuriedZombieCorpseTimersAt(x, y) {
     };
     for (const obj of level.buriedobjlist || []) scan(obj, true);
     for (const obj of level.objects || []) scan(obj, false);
+}
+
+function impactZombieDisturbanceWeight(obj) {
+    if (shopBillableGold(obj)) {
+        const explicit = Math.trunc(Number(obj?.owt ?? obj?.weight ?? 0));
+        return explicit > 0 ? explicit : goldStackWeight(obj?.quan || 1);
+    }
+    return floorEffectsObjectWeight(obj);
+}
+
+function impactZombieDisturbanceFlimsyObject(obj) {
+    if (!obj) return true;
+    if (isFoodObject(obj)) return true;
+    const material = useStoneObjectMaterial(obj);
+    if (USE_STONE_FLIMSY_MATERIALS.has(material)) return true;
+    const kind = objectKindKey(obj);
+    return /\b(?:cream pie|candy bar|shirt|robe|cloak|leather|rubber hose|scroll|spellbook|paper|cloth)\b/.test(kind);
+}
+
+function impactDisturbsBuriedZombieCorpseTimersForObject(obj, { violent = false } = {}) {
+    if (!obj || impactZombieDisturbanceFlimsyObject(obj)) return false;
+    const threshold = violent ? 10 : 100;
+    if (impactZombieDisturbanceWeight(obj) < threshold) return false;
+    disturbBuriedZombieCorpseTimersAt(obj.ox || 0, obj.oy || 0);
+    return true;
 }
 
 function wakeNearbyFromForceLock(messages) {
@@ -34920,6 +34946,7 @@ function placeKickedFloorObject(obj, x, y, messages, options = {}) {
     if (typeof options.beforePlace === 'function')
         options.beforePlace(obj);
     const placed = placeUnstackedFloorObject(obj);
+    impactDisturbsBuriedZombieCorpseTimersForObject(placed, { violent: true });
     const stacked = stackDroppedFloorObject(placed);
     newsym(x, y);
     return stacked;
@@ -35821,6 +35848,8 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
     const impact = !hardLanding
         ? { loss: 0, broke: false, messages }
         : projectileContainerImpactDmg(placed, options.fromX ?? game.u?.ux ?? x, options.fromY ?? game.u?.uy ?? y, { messages, silent: options.silent });
+    if (hardLanding && options.impactDisturbsBuriedZombies !== false)
+        impactDisturbsBuriedZombieCorpseTimersForObject(placed, { violent: true });
     const shopLanding = resolveUnpaidProjectileShopLanding(placed, x, y, options);
     if (shopLanding.message) messages.push(shopLanding.message);
     const shopSale = shopLanding.handled ? { handled: false, shkp: null, message: '', messages: [] }
@@ -68064,6 +68093,7 @@ export async function rhack(_cmd) {
             let shopGold = { messages: [] };
             if (!shipObject.handled && !consumedByFloor) {
                 placeStackableFloorObject(floorGold);
+                impactDisturbsBuriedZombieCorpseTimersForObject(floorGold, { violent: false });
                 shopGold = sellobjDroppedGoldAt(floorGold.ox, floorGold.oy, amount);
             }
             const guard = (game.level?.monsters || []).find(mon => mon.isgd || mon.data?.name === 'guard');
@@ -68133,6 +68163,7 @@ export async function rhack(_cmd) {
             }
             if (!shipObject.handled && !consumedByFloor) {
                 game.level.objects.push(dropped);
+                impactDisturbsBuriedZombieCorpseTimersForObject(dropped, { violent: false });
                 if (!sellobjReturnUnpaidToShop(dropped, dropped.ox, dropped.oy))
                     shopSale = beginDroppedPaidObjectSale(dropped, dropped.ox, dropped.oy);
                 if (shopSale?.message) floorMessages.push(shopSale.message);

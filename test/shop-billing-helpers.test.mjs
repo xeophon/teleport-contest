@@ -46936,9 +46936,15 @@ test('command kicked knife can be forced to hit later iron bars', async () => {
 test('command kick ordinary floor object stops before blocked same-level terrain', async () => {
     installStableNonShopFloorState();
     game.u.acurr.a[A_STR] = 18;
+    game.moves = 100;
     game.level.at(8, 5).typ = STONE;
     const blade = { ...dagger(512086), letter: undefined, line: undefined, ox: 6, oy: 5 };
-    game.level.objects = [blade];
+    const listCorpse = zombieCorpse(5120861, 7, 5, { buried: false, zombifyTurn: 190 });
+    const floorBuried = zombieCorpse(5120862, 8, 5, { zombifyTurn: 160 });
+    const farBuried = zombieCorpse(5120863, 9, 5, { zombifyTurn: 190 });
+    const dueCorpse = zombieCorpse(5120864, 6, 5, { zombifyTurn: 100 });
+    game.level.objects = [blade, listCorpse, floorBuried, farBuried];
+    game.level.buriedobjlist = [listCorpse, dueCorpse];
     enableRngLog({ reset: true });
 
     await rhack('\x04');
@@ -46949,6 +46955,10 @@ test('command kick ordinary floor object stops before blocked same-level terrain
     assert.equal(game.level.objects.includes(blade), true);
     assert.equal(blade.ox, 7);
     assert.equal(blade.oy, 5);
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
     assert.equal(game._pending_message, 'You kick a dagger.');
     assert.doesNotMatch(game._pending_message, /empty space|Thump|falls|hits|misses/);
     assert.deepEqual(getRngLog(), []);
@@ -49743,6 +49753,50 @@ test('command carried drop down stairs can stay and place locally', async () => 
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(3)']);
 });
 
+test('command carried hard drop disturbs buried zombies by C impact thresholds', async () => {
+    installNonShopFloorState();
+    game.moves = 100;
+    const armor = carriedGlassArmor(512019, 'c');
+    const scroll = {
+        id: 512020,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of light',
+        actualKind: 'scroll of light',
+        quan: 1,
+        owt: 200,
+        ox: 5,
+        oy: 5,
+        letter: 's',
+        line: 's - a scroll of light',
+    };
+    const listCorpse = zombieCorpse(512021, 5, 5, { buried: false, zombifyTurn: 190, rotAwayTurn: 130 });
+    const floorBuried = zombieCorpse(512022, 6, 5, { zombifyTurn: 160 });
+    const farBuried = zombieCorpse(512023, 7, 5, { zombifyTurn: 190 });
+    const dueCorpse = zombieCorpse(512024, 4, 5, { zombifyTurn: 100 });
+    game.level.objects = [listCorpse, floorBuried, farBuried];
+    game.level.buriedobjlist = [listCorpse, dueCorpse];
+    game.inventory = [armor];
+
+    await rhack('d');
+    await rhack('c');
+
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(listCorpse.rotAwayTurn, 130);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
+
+    game.inventory = [scroll];
+    await rhack('d');
+    await rhack('s');
+
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
+});
+
 test('unpaid fragile carried potion down stairs charges before muffled break', async () => {
     const { shkp } = installCommandShopState();
     installRemoteDownStairGate({ x: 5, y: 5 });
@@ -49807,6 +49861,26 @@ test('shop-floor stock falling through a hole charges stolen value before migrat
     assert.equal(shkp.debit, expected);
     assert.equal(shkp.billct, 0);
     assert.equal(blade.no_charge, false);
+});
+
+test('impact drop alone does not disturb buried zombie corpse timers', () => {
+    installNonShopFloorState();
+    installSeenHoleAtHero();
+    installCoreRngValues([0]);
+    game.moves = 100;
+    const blade = { ...dagger(5120201), letter: undefined, line: undefined, ox: 5, oy: 5 };
+    const corpse = zombieCorpse(5120202, 5, 5, { buried: false, zombifyTurn: 190 });
+    game.level.objects = [blade];
+    game.level.buriedobjlist = [corpse];
+    enableRngLog({ reset: true });
+
+    const impact = shop.impactDropFloorObjects(5, 5, game.level.traps[0], { targetLevel: { dnum: 0, dlevel: 2 } });
+
+    assert.equal(impact.fallenCount, 1);
+    assert.equal(game.level.objects.includes(blade), false);
+    assert.equal(queuedImpactDropsFor().includes(blade), true);
+    assert.equal(corpse.zombifyTurn, 190);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0']);
 });
 
 test('shop-floor billed stock falling through a hole charges live bill owner before square owner', () => {
@@ -81741,6 +81815,7 @@ test('hero-thrown dagger harms ordinary monster and survives landing', async () 
     installNonShopFloorState();
     initRng(2);
     Object.assign(game.u, { ulevel: 20, uluck: 10, uhitinc: 10 });
+    game.moves = 100;
     game.u.acurr.a[A_DEX] = 25;
     const blade = dagger(876097, 'd');
     const goblin = ordinaryThrowTarget('goblin', 7, 5, {
@@ -81751,8 +81826,14 @@ test('hero-thrown dagger harms ordinary monster and survives landing', async () 
         meating: 4,
         mstrategy: STRAT_WAITFORU,
     });
+    const listCorpse = zombieCorpse(8760971, 7, 5, { buried: false, zombifyTurn: 190, rotAwayTurn: 130 });
+    const floorBuried = zombieCorpse(8760972, 8, 5, { zombifyTurn: 160 });
+    const farBuried = zombieCorpse(8760973, 9, 5, { zombifyTurn: 190 });
+    const dueCorpse = zombieCorpse(8760974, 6, 5, { zombifyTurn: 100 });
     game.inventory = [blade];
     game.level.monsters = [goblin];
+    game.level.objects = [listCorpse, floorBuried, farBuried];
+    game.level.buriedobjlist = [listCorpse, dueCorpse];
     enableRngLog({ reset: true });
 
     await rhack('t');
@@ -81766,6 +81847,11 @@ test('hero-thrown dagger harms ordinary monster and survives landing', async () 
     assert.equal(goblin.meating, 0);
     assert.equal(goblin.mstrategy, 0);
     assert.equal(goblin.mpeaceful, 0);
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(listCorpse.rotAwayTurn, 130);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
     assert.equal(game.inventory.includes(blade), false);
     const landed = game.level.objects.find(obj => obj.id === blade.id);
     assert.ok(landed);

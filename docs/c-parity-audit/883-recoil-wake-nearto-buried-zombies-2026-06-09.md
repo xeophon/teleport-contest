@@ -28,4 +28,4 @@ node --test --test-reporter=dot --test-name-pattern "levitating hero-thrown ordi
 ## Remaining Follow-Up
 
 - Visible wake messages from generic `wake_nearto()` are still broader display/senses work.
-- Object-impact disturbance through C `impact_disturbs_zombies()` remains separate from this `wake_nearto()` slice.
+- Object-impact disturbance through C `impact_disturbs_zombies()` is covered by `884-object-impact-disturbs-buried-zombies-2026-06-09.md`.
