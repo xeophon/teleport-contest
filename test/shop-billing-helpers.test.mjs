@@ -955,6 +955,16 @@ function wornArmor(id, kind = 'leather armor', letter = 'a', spe = 0, extra = {}
     };
 }
 
+async function finishArmorWearOccupation(maxTurns = 8) {
+    game._pending_time_passed = Math.max(game._pending_time_passed || 0, maxTurns);
+    try {
+        await moveloop_core();
+    } catch (err) {
+        if (!/Input queue empty/.test(String(err?.message || err))) throw err;
+    }
+    resetInputState();
+}
+
 function carriedGlassArmor(id, letter = 'a', extra = {}) {
     return {
         id,
@@ -19032,6 +19042,60 @@ test('takeoff command blocks boots caught in bear trap', async () => {
     assert.equal(game.context.move || 0, 0);
     assert.equal(boots.worn, true);
     assert.equal(game._pending_message, 'The bear trap prevents you from pulling your foot out.');
+});
+
+test('takeoff command levitation boots over lava sink after delayed removal', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: true,
+        levitating: true,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const boots = wornArmor(3057036, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await rhack('T');
+    if (game._command_mode === 'takeOffObject') await rhack('b');
+    await finishArmorWearOccupation();
+
+    assert.equal(game._armor_wear_occupation, null);
+    assert.equal(boots.worn, false);
+    assert.equal(game.inventory.includes(boots), true);
+    assert.equal(boots.known, true);
+    assert.equal(game.u.levitating, false);
+    assert.match(game._pending_message || '', /You finish taking off your snow boots\./);
+    assert.match(game._pending_message || '', /You sink into the molten lava, but it only burns slightly!/);
+    assert.equal(game.u.uhp, 39);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok((game.u.utrap || 0) > 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
+});
+
+test('takeoff command fumble boots does not schedule donning fumble timeout', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    const boots = wornArmor(3057037, 'fumble boots', 'b');
+    game.inventory = [boots];
+    game._pending_fumble_boots_timeout = 0;
+
+    await rhack('T');
+    if (game._command_mode === 'takeOffObject') await rhack('b');
+    await finishArmorWearOccupation();
+
+    assert.equal(game._armor_wear_occupation, null);
+    assert.equal(boots.worn, false);
+    assert.equal(game._pending_fumble_boots_timeout || 0, 0);
+    assert.match(game._pending_message || '', /You finish taking off your fumble boots\./);
 });
 
 test('takeoff command blocks covered body armor before select-off checks', async () => {
@@ -39804,6 +39868,46 @@ test('successful centaur polyself losing levitation boots over pool falls in and
     assert.match(game._pending_message || '', /Pheew!  That was close\./);
     assert.equal(game.level.objects[0].ox, 6);
     assert.equal(game.level.objects[0].oy, 5);
+});
+
+test('successful centaur polyself losing levitation boots over lava burns before drop', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uen: 0,
+        uenmax: 0,
+        ulevel: 1,
+        uac: 9,
+        levitating: true,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const boots = wornArmor(32126, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await debugPolyselfInto('plains centaur');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u._polyself_form?.name, 'plains centaur');
+    assert.match(pending, /Your boots are pushed off your feet!/);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.doesNotMatch(pending, /float gently|sink like a rock/);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.u.levitating, false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
 });
 
 test('successful centaur polyself losing levitation boots keeps other levitation source', async () => {

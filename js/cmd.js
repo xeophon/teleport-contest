@@ -14783,9 +14783,9 @@ function polyselfLavaFalloutMessage(targetMoveTyp) {
         : 'You fall into the molten lava!  You burn to a crisp...';
 }
 
-function addPolyselfWaterWalkingLavaFallout(item, messages, targetMoveTyp) {
+function addBootsOffLavaFallout(item, messages, targetMoveTyp, discoveryKind = objectKindKey(item)) {
     item.known = true;
-    recordKnownArmorDiscovery('water walking boots', false);
+    recordKnownArmorDiscovery(discoveryKind, false);
     d(6, 6);
     if (game.u?.fireResistance) {
         game.u.utrap = rn1(4, 4) + (rn1(4, 12) << 8);
@@ -14811,7 +14811,7 @@ function addPolyselfWaterWalkingBootsOffSideEffects(item, messages) {
     const loc = game.level?.at(x, y);
     const targetMoveTyp = movementSurfaceTerrain(loc);
     if (movementIsLavaAt(x, y, loc)) {
-        addPolyselfWaterWalkingLavaFallout(item, messages, targetMoveTyp);
+        addBootsOffLavaFallout(item, messages, targetMoveTyp, 'water walking boots');
         return;
     }
     if (!movementIsPoolAt(x, y, loc)) return;
@@ -14868,6 +14868,17 @@ function addPolyselfLevitationPoolFallout(item, messages, x, y, loc) {
     return true;
 }
 
+function addPolyselfLevitationLavaFallout(item, messages, x, y, loc) {
+    if (!game.u?.levitating || game.u?.flying || game.u?.Flying) return false;
+    if (game.u?.uswallow || game.u?.ustuck || game.u?.uinwater || game.u?.underwater || game.u?.uunderwater) return false;
+    if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) return false;
+    if (!movementIsLavaAt(x, y, loc)) return false;
+    const targetMoveTyp = movementSurfaceTerrain(loc);
+    clearPolyselfLevitationBootSource(item);
+    addBootsOffLavaFallout(item, messages, targetMoveTyp, 'levitation boots');
+    return true;
+}
+
 function polyselfLevitationFloatDownMessage(x, y, loc) {
     if (!game.u?.levitating) return '';
     if (game.u.flying || game.u.Flying) return 'You have stopped levitating and are now flying.';
@@ -14882,6 +14893,7 @@ function addPolyselfLevitationBootsOffSideEffects(item, messages) {
     const x = game.u.ux || 0;
     const y = game.u.uy || 0;
     const loc = game.level?.at(x, y);
+    if (addPolyselfLevitationLavaFallout(item, messages, x, y, loc)) return;
     if (addPolyselfLevitationPoolFallout(item, messages, x, y, loc)) return;
     const floatDownMessage = polyselfLevitationFloatDownMessage(x, y, loc);
     if (!floatDownMessage) return;
@@ -14889,13 +14901,25 @@ function addPolyselfLevitationBootsOffSideEffects(item, messages) {
     messages.push(floatDownMessage);
 }
 
-function addPolyselfBootsOffSideEffects(item, messages) {
+export function addBootsOffSideEffects(item, messages = []) {
+    const hadRelocation = game._relocate_after_more;
+    const hadLavaDeath = game._polyself_lava_death_more || 0;
     const kind = objectKindKey(item);
     if (kind === 'water walking boots') addPolyselfWaterWalkingBootsOffSideEffects(item, messages);
     if (kind === 'levitation boots') addPolyselfLevitationBootsOffSideEffects(item, messages);
-    if (kind !== 'speed boots' || !game.u) return;
-    if (otherWornFastEquipment(item) || (game.u._veryfastTimeout || 0) > 0) return;
-    messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
+    if (kind === 'speed boots' && game.u
+        && !otherWornFastEquipment(item) && !(game.u._veryfastTimeout || 0))
+        messages.push(`You feel yourself slow down${heroHasIntrinsicFast() ? ' a bit' : ''}.`);
+    return {
+        messages,
+        more: (!!game._relocate_after_more && game._relocate_after_more !== hadRelocation)
+            || (!hadLavaDeath && !!game._polyself_lava_death_more),
+        fatal: game._command_mode === 'lavaDeathMore',
+    };
+}
+
+function addPolyselfBootsOffSideEffects(item, messages) {
+    addBootsOffSideEffects(item, messages);
 }
 
 function polyselfBodyArmorOffMessages(item) {
@@ -62146,6 +62170,12 @@ export async function rhack(_cmd) {
                             syncHeroSpeedState();
                         updateGauntletsOfPowerStrength(occupation.kind, false);
                         updateWornDisplacement();
+                        if (occupation.kind && /boots$/.test(occupation.kind)) {
+                            const bootMessages = [];
+                            const bootFallout = addBootsOffSideEffects(item, bootMessages);
+                            if (bootMessages.length) next = [next, ...bootMessages].join('  ');
+                            queuedMore ||= !!bootFallout?.more;
+                        }
                         const armorName = String(`${occupation.kind || ''} ${occupation.simpleName || ''} ${pickupObjectName(item)}`).toLowerCase();
                         if (/\b(?:gloves?|gauntlets?)\b/.test(armorName)) {
                             const fallout = takeOffGlovesPetrifyingSelfTouchMessages(item);

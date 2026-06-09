@@ -3,7 +3,7 @@
 
 import { game } from './gstate.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem } from './cmd.js';
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -9603,6 +9603,7 @@ async function finishMonsterTurnTail() {
             game._armor_wear_occupation = null;
             let message = 'You finish your dressing maneuver.';
             let armorFinishFatalResult = null;
+            let armorFinishNeedsMore = false;
             if (game._topline_after_more && !game._pending_message && !game._message_more)
                 game._topline_after_more = '';
             const item = occupationItem;
@@ -9625,6 +9626,12 @@ async function finishMonsterTurnTail() {
                         if (!game.u?.veryfast) message += '  You slow down.';
                     }
                     updateGauntletsOfPowerStrength(occupation.kind, false);
+                    if (occupation.kind && /boots$/.test(occupation.kind)) {
+                        const bootMessages = [];
+                        const bootFallout = addBootsOffSideEffects(item, bootMessages);
+                        if (bootMessages.length) message = [message, ...bootMessages].join('  ');
+                        armorFinishNeedsMore ||= !!bootFallout?.more;
+                    }
                     const fallout = appendArmorTakeoffGlovesFallout(message, item, occupation);
                     message = fallout.message;
                     if (fallout.fatal || fallout.lifeSaving) {
@@ -9676,7 +9683,7 @@ async function finishMonsterTurnTail() {
                     item.line = wornSpeedBootsLine(item);
                 }
             }
-            if (occupation.kind === 'fumble boots')
+            if (occupation.action !== 'takeoff' && occupation.kind === 'fumble boots')
                 game._pending_fumble_boots_timeout = 1;
             if (game._pending_message && game._message_more) {
                 game._queued_message_after_more ||= message;
@@ -9694,6 +9701,10 @@ async function finishMonsterTurnTail() {
                 game._armor_finish_after_more = 1;
             } else if (!addToplineMessage(message) && game._message_more) {
                 game._armor_finish_after_more = 1;
+            }
+            if (armorFinishNeedsMore) {
+                game._message_more = 1;
+                game._process_time_with_more = 0;
             }
             if (armorFinishFatalResult) {
                 if (armorFinishFatalResult.more) {
@@ -15722,27 +15733,28 @@ export async function moveloop_core() {
         if (clearColdHalluDisplay) g._hallu_display_after_cold_topline = 0;
         if (clearDeferredMultiattackHalluDisplay) g._hallu_display_after_deferred_multiattack = 0;
         if (clearExpelHalluDisplay) g._hallu_display_after_expel = 0;
-	        const prayerPartialTurn = !movedMonsters && g._prayer_occupation
-	            && g._pending_prayer_finish_message;
-	        if (armorTailOnly) {
-	            const occupationForTail = g._armor_wear_occupation;
-	            g._armor_wear_occupation = null;
-	            g._monster_turns_started = 0;
-	            const advancedTail = await processMonsterTurns();
-	            g._armor_wear_occupation = occupationForTail;
+        const prayerPartialTurn = !movedMonsters && g._prayer_occupation
+            && g._pending_prayer_finish_message;
+        if (armorTailOnly) {
+            const occupationForTail = g._armor_wear_occupation;
+            g._armor_wear_occupation = null;
+            g._monster_turns_started = 0;
+            const advancedTail = await processMonsterTurns();
+            g._armor_wear_occupation = occupationForTail;
             if (advancedTail) {
                 g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
                 advanceSpecialLevelFeatures(g);
                 advanceRegions(g);
             }
-	            const occupation = g._armor_wear_occupation;
-	            if (occupation?.turns > 0) occupation.turns--;
-	            const item = (g.inventory || []).find(invItem => invItem.letter === occupation?.itemLetter);
+            const occupation = g._armor_wear_occupation;
+            if (occupation?.turns > 0) occupation.turns--;
+            const item = (g.inventory || []).find(invItem => invItem.letter === occupation?.itemLetter);
             if (occupation && !(occupation.turns > 0)) {
                 g._armor_wear_occupation = null;
                 let message = 'You finish your dressing maneuver.';
                 let armorFinishFatalResult = null;
+                let armorFinishNeedsMore = false;
                 if (occupation.action === 'takeoff') {
                     message = `You finish taking off your ${occupation.simpleName || pickupObjectName(item || {})}.`;
                     if (item && item.worn && occupation.acBonus != null) {
@@ -15758,6 +15770,12 @@ export async function moveloop_core() {
                             if (!g.u?.veryfast) message += '  You slow down.';
                         }
                         updateGauntletsOfPowerStrength(occupation.kind, false);
+                        if (occupation.kind && /boots$/.test(occupation.kind)) {
+                            const bootMessages = [];
+                            const bootFallout = addBootsOffSideEffects(item, bootMessages);
+                            if (bootMessages.length) message = [message, ...bootMessages].join('  ');
+                            armorFinishNeedsMore ||= !!bootFallout?.more;
+                        }
                         const fallout = appendArmorTakeoffGlovesFallout(message, item, occupation);
                         message = fallout.message;
                         if (fallout.fatal || fallout.lifeSaving) {
@@ -15809,10 +15827,10 @@ export async function moveloop_core() {
                         item.line = wornSpeedBootsLine(item, g);
                     }
                 }
-                if (occupation.kind === 'fumble boots') g._pending_fumble_boots_timeout = 1;
+                if (occupation.action !== 'takeoff' && occupation.kind === 'fumble boots') g._pending_fumble_boots_timeout = 1;
                 g._pending_message = message;
                 g._keep_pending_message = 1;
-                g._message_more = armorFinishFatalResult?.more ? 1 : 0;
+                g._message_more = armorFinishNeedsMore || armorFinishFatalResult?.more ? 1 : 0;
                 g._process_time_with_more = 0;
                 g._topline_after_more = '';
                 if (armorFinishFatalResult)
