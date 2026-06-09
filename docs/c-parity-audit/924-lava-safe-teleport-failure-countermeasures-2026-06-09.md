@@ -9,6 +9,7 @@ Date: 2026-06-09
 - `nethack-c/upstream/src/trap.c:6936` prints `You're still burning.` when a returning death cannot be rescued by `safe_teleds()`.
 - `nethack-c/upstream/src/trap.c:6944` through `nethack-c/upstream/src/trap.c:6955` grants short temporary fire resistance and water walking after two returning failures, then jumps to survivor inventory fire handling.
 - `nethack-c/upstream/src/trap.c:6942` through `nethack-c/upstream/src/trap.c:6961` clears the lava-effects recursion guard after a successful rescue and manually calls `spoteffects(FALSE)`, so landing traps still run while pickup/autopickup remains disabled.
+- `nethack-c/upstream/src/hack.c:3402` through `nethack-c/upstream/src/hack.c:3414` runs the Warning + melting-ice messages after trap handling and pickup-gated sections.
 - `nethack-c/upstream/src/timeout.c:63` and `nethack-c/upstream/src/timeout.c:845` define the timeout-end messages for those temporary abilities.
 
 ## JS Parity Slice
@@ -20,13 +21,16 @@ Date: 2026-06-09
 - Added turn-timeout cleanup and C timeout-end messages for those temporary abilities.
 - Successful direct fatal-lava rescues now run a current-square landing trap pass after the safe teleport in both life-saving and wizard/explore refusal continuations. The hook reuses the movement trap result helpers, appends trap messages to the rescue message, and routes fatal/life-saving trap outcomes through the normal command-mode handling.
 - The rescue landing hook intentionally avoids movement pickup, autopickup, object-list, and floor-object helpers, matching the `spoteffects(FALSE)` pickup-disabled constraint for this trap slice.
+- Rescue landing now also runs the pickup-independent melting-ice Warning tail from `spoteffects(FALSE)` when the safe teleport lands on timed ice.
 
 ## Tests
 
 - `explore m-prefix fatal lava failed safe teleports twice grants temporary countermeasures`
 - `explore m-prefix fatal lava prompts and decline teleports to safety`
 - `m-prefix fatal lava consumes life saving and teleports to safety`
+- `m-prefix fatal lava life saving warns on melting ice landing`
 - `explore m-prefix fatal lava rescue triggers landing trap without pickup`
+- `explore m-prefix fatal lava rescue warns on melting ice landing`
 - `already lava-trapped countdown death uses life saving and safe teleport`
 - `explore lava-trapped countdown death decline clears trap and teleports`
 
@@ -34,7 +38,9 @@ Verification:
 
 ```sh
 node --test --test-reporter=dot --test-name-pattern "m-prefix fatal lava consumes life saving and teleports to safety|explore m-prefix fatal lava prompts and decline teleports to safety|failed safe teleports twice|already lava-trapped countdown death uses life saving and safe teleport|explore lava-trapped countdown death decline clears trap and teleports" test/shop-billing-helpers.test.mjs
+node --test --test-reporter dot --test-name-pattern "m-prefix fatal lava life saving warns on melting ice landing" test/shop-billing-helpers.test.mjs
 node --test --test-reporter dot --test-name-pattern "explore m-prefix fatal lava rescue triggers landing trap without pickup" test/shop-billing-helpers.test.mjs
+node --test --test-reporter dot --test-name-pattern "explore m-prefix fatal lava rescue warns on melting ice landing" test/shop-billing-helpers.test.mjs
 node --test --test-reporter dot --test-name-pattern "fatal lava" test/shop-billing-helpers.test.mjs
 node --test --test-reporter=dot --test-name-pattern "lava safe|safe teleports twice|fatal lava|lava-trapped countdown|m-prefix.*lava|drum earthquake lava|land mine adjacent lava|temporary ability to survive burning|temporary ability to walk on liquid" test/shop-billing-helpers.test.mjs
 git diff --check
@@ -48,4 +54,4 @@ Result: focused lava rescue retry/countermeasure tests passed; broader lava patt
 
 ## Remaining Gaps
 
-- Direct fatal lava rescue now covers the landing trap and pickup-disabled part of C's manual `spoteffects(FALSE)`. Broader non-trap landing effects from `spoteffects(FALSE)`, such as sink/special-room/ice/hidden-monster cues where applicable, remain unmodeled.
+- Direct fatal lava rescue now covers the landing trap, pickup-disabled, and melting-ice Warning parts of C's manual `spoteffects(FALSE)`. Broader non-trap landing effects from `spoteffects(FALSE)`, such as sink/special-room and hidden-monster cues where applicable, remain unmodeled.

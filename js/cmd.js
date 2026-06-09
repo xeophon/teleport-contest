@@ -22,8 +22,8 @@ import { dryupFountainAt, dryupFountainResultAt } from './fountain.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
     clearCorpseTimeout, corpseName, freezeObjectInIcebox,
-    buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, objectIceEffect, objIceEffectsAt,
-    removedFromIcebox, riderRevivalDelay, startCorpseTimeout, startMeltIceTimeout, stopMeltIceTimersAt, unearthObjectsAt, zombieFormNameForCorpse,
+    buryObjectsAt, findBuriedBallNear, isBuriedBallTrapActive, isIceAt, objectIceEffect, objIceEffectsAt,
+    removedFromIcebox, riderRevivalDelay, spotMeltIceTimeLeft, startCorpseTimeout, startMeltIceTimeout, stopMeltIceTimersAt, unearthObjectsAt, zombieFormNameForCorpse,
 } from './ice.js';
 import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
@@ -23407,6 +23407,25 @@ async function heroLandingTrapEffectAt(x, y, messages) {
 
 async function heroDropBallTrapRelocationEffect(x, y, messages) {
     return heroLandingTrapEffectAt(x, y, messages);
+}
+
+function heroLandingIceWarningMessage(x, y) {
+    if (!game.u?.warning || !isIceAt(x, y)) return '';
+    const timeLeft = spotMeltIceTimeLeft(x, y);
+    if (!timeLeft || timeLeft >= 15) return '';
+    if (timeLeft < 5) return 'The ice, is gonna BREAK!';
+    if (timeLeft < 10) return 'You feel the ice shift beneath you!';
+    return 'The ice seems very soft and slushy.';
+}
+
+async function heroLandingSpotEffectsNoPickup(messages) {
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    const trap = await heroLandingTrapEffectAt(x, y, messages);
+    if (trap.more || trap.trapResult) return trap;
+    const iceWarning = heroLandingIceWarningMessage(game.u?.ux || x, game.u?.uy || y);
+    if (iceWarning) messages.push(iceWarning);
+    return trap;
 }
 
 async function heroDropBallPostRelocationEffects(x, y, messages) {
@@ -59770,7 +59789,7 @@ export async function rhack(_cmd) {
                 if (teleport.ok) {
                     clearFatalLavaRescueState();
                     const messages = [game._pending_message || lifeSavingMessage, teleport.message].filter(Boolean);
-                    const landing = await heroLandingTrapEffectAt(game.u?.ux || 0, game.u?.uy || 0, messages);
+                    const landing = await heroLandingSpotEffectsNoPickup(messages);
                     game._pending_message = messages.join('  ');
                     game._message_more = landing.more || landing.trapResult ? 1 : 0;
                     if (landing.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
@@ -63614,7 +63633,7 @@ export async function rhack(_cmd) {
                 if (teleport.ok) {
                     clearFatalLavaRescueState();
                     if (teleport.message) survivalMessages.push(teleport.message);
-                    landing = await heroLandingTrapEffectAt(game.u?.ux || 0, game.u?.uy || 0, survivalMessages);
+                    landing = await heroLandingSpotEffectsNoPickup(survivalMessages);
                 } else if (lavaRefusalFatalEntry) {
                     const failedRescue = handleFatalLavaSafeTeleportFailure(survivalMessages);
                     await setMessage(survivalMessages.join('  '), failedRescue.retry || failedRescue.more);

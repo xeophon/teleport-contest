@@ -44173,6 +44173,41 @@ test('m-prefix fatal lava consumes life saving and teleports to safety', async (
     assert.equal(game.u.uy, 7);
 });
 
+test('m-prefix fatal lava life saving warns on melting ice landing', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues(Array(260).fill(0));
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+        warning: true,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330025, 'a');
+    game.inventory = [amulet];
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+
+    const landingX = 8;
+    const landingY = 5;
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === landingX && y === landingY ? ICE : STONE, lit: true });
+    game.level.traps = [];
+    game.level.objects = [];
+    game.level.monsters = [];
+    game.level.meltIceTimers = [{ x: landingX, y: landingY, turn: (game.moves || 0) + 4, seq: 1 }];
+
+    await rhack(' ');
+
+    const pending = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(pending, /You feel much better!/);
+    assert.match(pending, /You materialize in a different location!/);
+    assert.match(pending, /The ice, is gonna BREAK!/);
+    assert.deepEqual([game.u.ux, game.u.uy], [landingX, landingY]);
+});
+
 test('explore m-prefix fatal lava prompts and decline teleports to safety', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0, 19, 7]);
@@ -44254,6 +44289,45 @@ test('explore m-prefix fatal lava rescue triggers landing trap without pickup', 
     assert.equal(game.u.utraptype, 'beartrap');
     assert.equal(game.level.objects.includes(floorScroll), true);
     assert.equal(game.inventory.includes(floorScroll), false);
+});
+
+test('explore m-prefix fatal lava rescue warns on melting ice landing', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues(Array(260).fill(0));
+    game.flags.explore = true;
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+        warning: true,
+    });
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lavaDeathMore');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    const landingX = 8;
+    const landingY = 5;
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === landingX && y === landingY ? ICE : STONE, lit: true });
+    game.level.traps = [];
+    game.level.objects = [];
+    game.level.monsters = [];
+    game.level.meltIceTimers = [{ x: landingX, y: landingY, turn: (game.moves || 0) + 4, seq: 1 }];
+
+    await rhack('n');
+
+    const pending = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(pending, /OK, so you don't die\./);
+    assert.match(pending, /You materialize in a different location!/);
+    assert.match(pending, /The ice, is gonna BREAK!/);
+    assert.deepEqual([game.u.ux, game.u.uy], [landingX, landingY]);
 });
 
 test('explore m-prefix fatal lava failed safe teleports twice grants temporary countermeasures', async () => {
