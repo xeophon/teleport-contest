@@ -22,7 +22,7 @@
 
 ## Remaining follow-up
 
-- Post-life-saving airlevel/levitation continuation remains open for failed-object `kick_ouch()` because the current JS life-saving command mode restores HP on the follow-up input without a per-action continuation hook.
+- Post-life-saving airlevel/levitation continuation is covered by `878-kick-ouch-lifesaving-hurtle-continuation-2026-06-09.md`.
 
 ## Verification
 

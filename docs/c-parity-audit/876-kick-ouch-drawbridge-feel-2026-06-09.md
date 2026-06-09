@@ -23,7 +23,7 @@
 
 ## Remaining follow-up
 
-- Post-life-saving airlevel/levitation hurtle remains open because the current JS life-saving command mode restores HP on the follow-up input without a per-action continuation hook.
+- Post-life-saving airlevel/levitation hurtle is covered by `878-kick-ouch-lifesaving-hurtle-continuation-2026-06-09.md`.
 - Successful object-kick airlevel recoil is covered by `877-kick-object-success-air-recoil-2026-06-09.md`.
 
 ## Verification

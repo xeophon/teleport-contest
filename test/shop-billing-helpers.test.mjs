@@ -45221,6 +45221,64 @@ test('levitating fatal command kicked object ouch does not consume recoil range'
     assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(1)=0']);
 });
 
+test('levitating command kicked object ouch life saving hurtles after rescue', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true, uhp: 5, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.acurr.a[A_CON] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512171 };
+    const amulet = wornHeroLifeSavingAmulet(512172, 'a');
+    game.level.objects = [boulder];
+    game.inventory = [amulet];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 4, 0, 0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.match(game._pending_message,
+        /Ouch!  That hurts!  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.doesNotMatch(game._pending_message, /You hurtle|You float/);
+    assert.equal(game._death_cause, 'kicking a boulder');
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(19)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message,
+        'You feel much better!  The medallion crumbles to dust!  You hurtle in the opposite direction.');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.ux, 1);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, true);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(game._life_saving_kick_ouch_recoil || null, null);
+    assert.deepEqual(getRngLog(),
+        ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(19)=0', 'rn2(2)=0']);
+});
+
 test('blind command kicked boulder on closed door feels target before object ouch damage', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
@@ -45352,6 +45410,63 @@ test('fatal command kick at drawbridge wall dies from kicking a drawbridge', asy
     assert.equal(game._death_cause, 'kicking a drawbridge');
     assert.doesNotMatch(game._pending_message, /You hurtle|You float|crashes open|The door|WHAMMM/);
     assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(1)=0']);
+});
+
+test('levitating command kick at drawbridge wall life saving hurtles after rescue', async () => {
+    installStableNonShopFloorState();
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true, uhp: 5, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.acurr.a[A_CON] = 10;
+    const wallLoc = game.level.at(6, 5);
+    Object.assign(wallLoc, { roomno: 0, typ: DBWALL, lit: true });
+    const bridgeLoc = game.level.at(7, 5);
+    Object.assign(bridgeLoc, { roomno: 0, typ: DRAWBRIDGE_UP, flags: DB_WEST | DB_MOAT, lit: true });
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return wallLoc;
+        if (x === 7 && y === 5) return bridgeLoc;
+        return { roomno: 0, typ: ROOM, lit: true };
+    };
+    const amulet = wornHeroLifeSavingAmulet(512173, 'a');
+    game.level.objects = [];
+    game.inventory = [amulet];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 4, 0, 0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(wallLoc.typ, DBWALL);
+    assert.equal(bridgeLoc.typ, DRAWBRIDGE_UP);
+    assert.deepEqual(game._maploc, { x: 7, y: 5 });
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.match(game._pending_message, /The drawbridge is unaffected\./);
+    assert.match(game._pending_message,
+        /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.doesNotMatch(game._pending_message, /You hurtle|You float/);
+    assert.equal(game._death_cause, 'kicking a drawbridge');
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(19)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message,
+        'You feel much better!  The medallion crumbles to dust!  You hurtle in the opposite direction.');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.ux, 1);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, true);
+    assert.equal(game._life_saving_kick_ouch_recoil || null, null);
+    assert.deepEqual(getRngLog(),
+        ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(19)=0', 'rn2(2)=0']);
 });
 
 test('command kicked object ouch wakes nearby sleepers', async () => {

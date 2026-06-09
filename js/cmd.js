@@ -34825,6 +34825,8 @@ function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null }
         return null;
     }
     const fatalResult = heroDartTrapFatalResult(messages, kickOuchDeathCause(wakeX, wakeY, kickObjectName));
+    if (fatalResult.lifeSaving)
+        queueKickOuchLifeSavingRecoil(dir);
     return fatalResult;
 }
 
@@ -51533,6 +51535,23 @@ function restoreLifeSavedHeroForContinuation() {
     if (game.u) game.u.uhp = game.u.uhpmax || 1;
 }
 
+function queueKickOuchLifeSavingRecoil(dir) {
+    if (!dir || !heroHorizontalThrowAirRecoilActive()) return;
+    const dx = Math.sign(dir.dx || 0);
+    const dy = Math.sign(dir.dy || 0);
+    if (!dx && !dy) return;
+    game._life_saving_kick_ouch_recoil = {
+        dir: { dx, dy },
+    };
+}
+
+function consumeKickOuchLifeSavingRecoil() {
+    const queued = game._life_saving_kick_ouch_recoil;
+    game._life_saving_kick_ouch_recoil = null;
+    if (!queued) return null;
+    return heroHorizontalThrowRecoilResult(queued.dir, rn1(2, 4));
+}
+
 function finishLandminePitFalloutResult(messages, fatalResult, pitResult) {
     if (pitResult?.message) messages.push(pitResult.message);
     const lavaDeath = game._command_mode === 'lavaDeathMore' && game._death_cause === 'burned by molten lava';
@@ -57827,6 +57846,11 @@ export async function rhack(_cmd) {
                 const givehp = 50 + 10 * Math.trunc(con / 2);
                 game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
             }
+            const postRecoil = consumeKickOuchLifeSavingRecoil();
+            if (postRecoil?.message) {
+                game._pending_message = [lifeSavingMessage, postRecoil.message].filter(Boolean).join('  ');
+                game._message_more = postRecoil.more || postRecoil.trapResult ? 1 : 0;
+            }
             if (levelTeleportEscape) {
                 const escapeMessage = game._life_saving_level_teleport_escape_message;
                 game._life_saving_level_teleport_escape_message = '';
@@ -57834,6 +57858,7 @@ export async function rhack(_cmd) {
                 await beginEscapedGame([lifeSavingMessage, escapeMessage]);
                 return;
             }
+            if (postRecoil?.trapResult && applyLifeSavingOrFatalCommandMode(postRecoil.trapResult)) return;
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._suppress_monster_attack_messages = 1;
         }
