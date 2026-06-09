@@ -16493,6 +16493,70 @@ function setBlindfoldedState(active) {
     game.u.Blindfolded = !!active;
 }
 
+function facewearCausesBlindness(item) {
+    const kind = objectKindKey(item);
+    return kind === 'blindfold' || kind === 'towel';
+}
+
+function facewearPutOnMessageName(item, baseName) {
+    return objectKindKey(item) === 'towel' ? `${baseName} around your head` : baseName;
+}
+
+function putOnFacewearConflictMessage(worn, item) {
+    const wornKind = objectKindKey(worn);
+    const itemKind = objectKindKey(item);
+    if (wornKind === 'towel') return 'Your face is already covered by a towel.';
+    if (wornKind === 'blindfold') {
+        if (itemKind === 'lenses') return "You can't wear lenses because you're wearing a blindfold there already.";
+        return 'You are already wearing a blindfold.';
+    }
+    if (wornKind === 'lenses') {
+        if (itemKind === 'blindfold') return "You can't wear a blindfold because you're wearing some lenses there already.";
+        return 'You are already wearing some lenses.';
+    }
+    return 'You are already wearing something there.';
+}
+
+async function putOnFacewear(item) {
+    if (!isFacewearItem(item)) return null;
+
+    const wornFacewear = wornFacewearItem();
+    if (wornFacewear) return { messages: [putOnFacewearConflictMessage(wornFacewear, item)], move: 0 };
+
+    const baseName = facewearBaseName(item);
+    item.worn = true;
+    item.owornmask = W_TOOL;
+    item.line = `${item.letter || '?'} - ${baseName} (being worn)`;
+    if (facewearCausesBlindness(item) && game.u) {
+        const alreadyBlind = !!game.u.blind || (game.u._blindTimeout || 0) > 0 || (game.u.ucreamed || 0) > 0;
+        game.u.blind = true;
+        setBlindfoldedState(true);
+        await docrt();
+        const wearName = facewearPutOnMessageName(item, baseName);
+        return alreadyBlind
+            ? { messages: [`You are now wearing ${wearName}.`] }
+            : { messages: [`You are now wearing ${wearName}.`, "You can't see any more."] };
+    }
+    return { messages: [`You are now wearing ${baseName}.`] };
+}
+
+async function takeOffFacewear(item) {
+    if (!isFacewearItem(item)) return null;
+
+    const baseName = facewearBaseName(item);
+    item.worn = false;
+    item.owornmask = 0;
+    item.line = `${item.letter || '?'} - ${baseName}`;
+    if (facewearCausesBlindness(item) && game.u) {
+        setBlindfoldedState(false);
+        const stillBlind = (game.u._blindTimeout || 0) > 0 || (game.u.ucreamed || 0) > 0;
+        game.u.blind = stillBlind;
+        await docrt();
+        return { messages: [`You were wearing ${baseName}.`, stillBlind ? 'You still cannot see.' : 'You can see again.'] };
+    }
+    return { messages: [`You were wearing ${baseName}.`] };
+}
+
 async function applyBlindfoldOrLenses(item) {
     if (!isBlindfoldOrLensesApplyItem(item)) return null;
 
@@ -16513,30 +16577,20 @@ async function applyBlindfoldOrLenses(item) {
             item.bknown = true;
             return { messages: [`You can't.  ${kind === 'lenses' ? 'They are' : 'It is'} cursed.`] };
         }
-        item.worn = false;
-        item.owornmask = 0;
-        item.line = `${item.letter || '?'} - ${baseName}`;
-        if (kind === 'blindfold' && game.u) {
-            setBlindfoldedState(false);
-            const stillBlind = (game.u._blindTimeout || 0) > 0 || (game.u.ucreamed || 0) > 0;
-            game.u.blind = stillBlind;
-            await docrt();
-            return { messages: [`You were wearing ${baseName}.`, stillBlind ? 'You still cannot see.' : 'You can see again.'], more: true };
-        }
-        return { messages: [`You were wearing ${baseName}.`] };
+        return takeOffFacewear(item);
     }
 
     item.worn = true;
     item.owornmask = W_TOOL;
     item.line = `${item.letter || '?'} - ${baseName} (being worn)`;
-    if (kind === 'blindfold' && game.u) {
+    if (facewearCausesBlindness(item) && game.u) {
         const alreadyBlind = !!game.u.blind || (game.u._blindTimeout || 0) > 0 || (game.u.ucreamed || 0) > 0;
         game.u.blind = true;
         setBlindfoldedState(true);
         await docrt();
         return alreadyBlind
             ? { messages: [`You are now wearing ${baseName}.`] }
-            : { messages: [`You are now wearing ${baseName}.`, "You can't see any more."], more: true };
+            : { messages: [`You are now wearing ${baseName}.`, "You can't see any more."] };
     }
     return { messages: [`You are now wearing ${baseName}.`] };
 }
@@ -63010,22 +63064,23 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
+        const facewear = (game.inventory || []).find(invItem => invItem.letter === ch && isFacewearItem(invItem));
+        if (facewear) {
+            const result = await putOnFacewear(facewear);
+            await setMessage(result.messages.join('  '), !!result.more);
+            game._command_mode = null;
+            game.context.move = result.move ?? 1;
+            return;
+        }
         const accessory = (game.inventory || []).find(invItem => invItem.letter === ch
-            && ['blindfold', 'towel', 'lenses', 'meat ring'].includes(invItem.kind || invItem.actualKind));
+            && ['meat ring'].includes(invItem.kind || invItem.actualKind));
         if (accessory) {
             accessory.worn = true;
             const baseName = String(accessory.line || `${ch} - ${pickupObjectName(accessory)}`)
                 .replace(/^[a-zA-Z] - /, '')
                 .replace(/ \(being worn\).*$/, '');
             accessory.line = `${ch} - ${baseName} (being worn)`;
-            const accessoryKind = accessory.kind || accessory.actualKind;
-            if (['blindfold', 'towel'].includes(accessoryKind) && game.u) {
-                game.u.blind = true;
-                await docrt();
-                await setMessage(`You are now wearing ${baseName}.  You can't see any more.`);
-            } else {
-                await setMessage(`${accessory.line}.`);
-            }
+            await setMessage(`${accessory.line}.`);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -63069,15 +63124,11 @@ export async function rhack(_cmd) {
         const baseName = String(item.line || `${item.letter || '?'} - ${pickupObjectName(item)}`)
             .replace(/^[a-zA-Z] - /, '')
             .replace(/ \(being worn\).*$/, '');
-        const accessoryKind = item.kind || item.actualKind;
-        if (['blindfold', 'towel'].includes(accessoryKind) && game.u) {
-            item.worn = false;
-            item.line = `${item.letter || '?'} - ${baseName}`;
-            game.u.blind = false;
-            await docrt();
-            await setMessage(`You were wearing ${baseName}.  You can see again.`, true);
+        const facewearOff = await takeOffFacewear(item);
+        if (facewearOff) {
+            await setMessage(facewearOff.messages.join('  '), !!facewearOff.more);
             game.context.move = 1;
-            game._process_time_with_more = 1;
+            if (facewearOff.more) game._process_time_with_more = 1;
             return;
         }
         const acBonus = (ARMOR_AC_BONUS[String(item.kind || '').toLowerCase()] ?? 0) + (item.spe ?? 0);
@@ -63340,22 +63391,23 @@ export async function rhack(_cmd) {
             game.context.move = 1;
             return;
         }
+        const facewear = (game.inventory || []).find(invItem => invItem.letter === ch && isFacewearItem(invItem));
+        if (facewear) {
+            const result = await putOnFacewear(facewear);
+            await setMessage(result.messages.join('  '), !!result.more);
+            game._command_mode = null;
+            game.context.move = result.move ?? 1;
+            return;
+        }
         const accessory = (game.inventory || []).find(invItem => invItem.letter === ch
-            && ['blindfold', 'towel', 'lenses', 'meat ring'].includes(invItem.kind || invItem.actualKind));
+            && ['meat ring'].includes(invItem.kind || invItem.actualKind));
         if (accessory) {
             accessory.worn = true;
             const baseName = String(accessory.line || `${ch} - ${pickupObjectName(accessory)}`)
                 .replace(/^[a-zA-Z] - /, '')
                 .replace(/ \(being worn\).*$/, '');
             accessory.line = `${ch} - ${baseName} (being worn)`;
-            const accessoryKind = accessory.kind || accessory.actualKind;
-            if (['blindfold', 'towel'].includes(accessoryKind) && game.u) {
-                game.u.blind = true;
-                await docrt();
-                await setMessage(`You are now wearing ${baseName}.  You can't see any more.`);
-            } else {
-                await setMessage(`${accessory.line}.`);
-            }
+            await setMessage(`${accessory.line}.`);
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -67138,7 +67190,7 @@ export async function rhack(_cmd) {
         }
         const facewearApply = await applyBlindfoldOrLenses(item);
         if (facewearApply) {
-            await setMessage(facewearApply.messages.join('  '), facewearApply.more || facewearApply.messages.length > 1);
+            await setMessage(facewearApply.messages.join('  '), !!facewearApply.more);
             game.context.move = 1;
             return;
         }

@@ -18391,9 +18391,9 @@ test('applying an unworn blindfold wears it and applying it again removes it', a
     assert.equal(game.u.Blindfolded, true);
     assert.equal(blindfold.line, 'b - a blindfold (being worn)');
     assert.equal(game._pending_message, "You are now wearing a blindfold.  You can't see any more.");
+    assert.equal(game._message_more || 0, 0);
     assert.doesNotMatch(game._pending_message, /Nothing happens/);
 
-    await rhack(' ');
     await rhack('a');
     await rhack('b');
 
@@ -18405,6 +18405,7 @@ test('applying an unworn blindfold wears it and applying it again removes it', a
     assert.equal(game.u._blindTimeout || 0, 0);
     assert.equal(blindfold.line, 'b - a blindfold');
     assert.equal(game._pending_message, 'You were wearing a blindfold.  You can see again.');
+    assert.equal(game._message_more || 0, 0);
 });
 
 test('applying lenses while blindfolded reports the worn facewear conflict', async () => {
@@ -18496,6 +18497,73 @@ test('applying cursed worn lenses leaves them on with cursed takeoff wording', a
     assert.equal(lenses.line, 'l - a pair of lenses (being worn)');
     assert.equal(lenses.bknown, true);
     assert.equal(game._pending_message, "You can't.  They are cursed.");
+});
+
+test('putting on blindfold with P preserves temporary blindness source', async () => {
+    installNonShopFloorState();
+    const blindfold = ordinaryTool(3057010, 'blindfold', 'b');
+    game.inventory = [blindfold];
+    game.u.blind = true;
+    game.u._blindTimeout = 7;
+
+    await rhack('P');
+
+    assert.equal(game._command_mode, 'putOnObject');
+    assert.match(game._pending_message, /What do you want to put on\? \[b or \?\*\]/);
+
+    await rhack('b');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(blindfold.worn, true);
+    assert.ok(blindfold.owornmask);
+    assert.equal(blindfold.line, 'b - a blindfold (being worn)');
+    assert.equal(game.u.blind, true);
+    assert.equal(game.u.blindfolded, true);
+    assert.equal(game.u.Blindfolded, true);
+    assert.equal(game.u._blindTimeout, 7);
+    assert.equal(game._pending_message, 'You are now wearing a blindfold.');
+    assert.equal(game._message_more || 0, 0);
+});
+
+test('putting on lenses while blindfolded reports C puton conflict', async () => {
+    installNonShopFloorState();
+    const blindfold = wornTool(3057011, 'blindfold', 'b');
+    const lenses = ordinaryTool(3057012, 'lenses', 'l');
+    game.inventory = [blindfold, lenses];
+    game.u.blind = true;
+    game.u.blindfolded = true;
+    game.u.Blindfolded = true;
+
+    await rhack('P');
+    await rhack('l');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(lenses.worn || false, false);
+    assert.equal(blindfold.worn, true);
+    assert.equal(game._pending_message, "You can't wear lenses because you're wearing a blindfold there already.");
+});
+
+test('wear command fallback puts on towel as facewear state', async () => {
+    installNonShopFloorState();
+    const towel = ordinaryTool(3057013, 'towel', 't');
+    game.inventory = [towel];
+
+    await rhack('W');
+
+    assert.equal(game._command_mode, 'wearObject');
+    assert.equal(game._pending_message, 'What do you want to wear? [*]');
+
+    await rhack('t');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(towel.worn, true);
+    assert.ok(towel.owornmask);
+    assert.equal(towel.line, 't - a towel (being worn)');
+    assert.equal(game.u.blind, true);
+    assert.equal(game.u.blindfolded, true);
+    assert.equal(game.u.Blindfolded, true);
+    assert.equal(game._pending_message, "You are now wearing a towel around your head.  You can't see any more.");
+    assert.equal(game._message_more || 0, 0);
 });
 
 test('unknown gray stone is suggested by apply and opens stone target prompt', async () => {
