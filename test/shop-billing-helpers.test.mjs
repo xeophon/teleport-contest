@@ -43333,6 +43333,109 @@ test('no-blow form gates flutes horns and bugles but not harp or drum', async ()
     }
 });
 
+function installEarthquakeDrumHeroLavaFillState({ lifeSaving = false } = {}) {
+    installStableNonShopFloorState();
+    game.flags.verbose = false;
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: false,
+        ulevel: 1,
+        blind: false,
+        hallucinating: false,
+        stunned: false,
+        _statusSuffix: '',
+        _deafTimeout: 0,
+        _confusionTimeout: 0,
+        _stunTimeout: 0,
+    });
+    const stableAt = game.level.at;
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const laterFountainLoc = { roomno: ROOMOFFSET, typ: FOUNTAIN };
+    const cells = new Map([
+        ['5,5', targetLoc],
+        ['5,4', { roomno: ROOMOFFSET, typ: LAVAPOOL }],
+        ['5,6', laterFountainLoc],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || stableAt(x, y);
+    markSquareVisible(5, 5);
+    markSquareVisible(5, 6);
+    game.level.traps = [];
+    game.level.objects = [];
+    const drum = chargedTool(3402, 'drum of earthquake', 'd', 3);
+    const amulet = lifeSaving ? wornHeroLifeSavingAmulet(3403, 'a') : null;
+    game.inventory = lifeSaving ? [amulet, drum] : [drum];
+    return { drum, amulet, targetLoc, laterFountainLoc };
+}
+
+function earthquakeDrumHeroLavaFillRng(tail = []) {
+    return [
+        0, 0, 0,
+        ...Array(12).fill(1), 0,
+        1,
+        5, 5, 5, 5, 5, 5,
+        ...tail,
+    ];
+}
+
+test('drum earthquake lava fill with life saving stops later earthquake effects', async () => {
+    const { drum, amulet, targetLoc, laterFountainLoc } =
+        installEarthquakeDrumHeroLavaFillState({ lifeSaving: true });
+    installCoreRngValues(earthquakeDrumHeroLavaFillRng([0, 19, 7]));
+
+    await rhack('a');
+    await rhack('d');
+
+    const pending = game._pending_message || '';
+    assert.equal(drum.spe, 2);
+    assert.equal(drum.known, true);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(targetLoc.typ, LAVAPOOL);
+    assert.equal(laterFountainLoc.typ, FOUNTAIN);
+    assert.match(pending, /You produce a heavy, thunderous rolling!/);
+    assert.match(pending, /The entire dungeon is shaking around you!/);
+    assert.doesNotMatch(pending, /The hole fills with lava|fountain falls into a chasm/);
+    assert.match(pending, /You fall into the molten lava!/);
+    assert.match(pending, /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 1);
+    assert.equal(game._life_saving_lava_safe_teleport, 1);
+});
+
+test('drum earthquake fatal lava fill stops later earthquake effects', async () => {
+    const { drum, targetLoc, laterFountainLoc } = installEarthquakeDrumHeroLavaFillState();
+    installCoreRngValues(earthquakeDrumHeroLavaFillRng([0]));
+
+    await rhack('a');
+    await rhack('d');
+
+    const pending = game._pending_message || '';
+    assert.equal(drum.spe, 2);
+    assert.equal(drum.known || false, false);
+    assert.equal(targetLoc.typ, LAVAPOOL);
+    assert.equal(laterFountainLoc.typ, FOUNTAIN);
+    assert.match(pending, /You produce a heavy, thunderous rolling!/);
+    assert.match(pending, /The entire dungeon is shaking around you!/);
+    assert.doesNotMatch(pending, /The hole fills with lava|fountain falls into a chasm/);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.match(pending, /You die\.\.\./);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'deathAttributesPrompt');
+    assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
+});
+
 test('manual instrument tune normalizes notes and opens the stronghold drawbridge', async () => {
     const { bridge, wall } = installStrongholdInstrumentState('ABCDE');
     const flute = ordinaryTool(3450, 'wooden flute', 'f');

@@ -6853,7 +6853,8 @@ async function doEarthquakePit(x, y, tuPit, messages) {
 
     const fillType = earthquakeFillHoleType(x, y);
     if (fillType !== ROOM) {
-        earthquakeLiquidFlow(x, y, fillType, chasm, messages);
+        const liquidFlow = earthquakeLiquidFlow(x, y, fillType, chasm, messages);
+        if (liquidFlow?.heroResult) messages.heroResult = liquidFlow.heroResult;
         if (!downwardDigTrapAt(x, y)) return;
     }
 
@@ -6916,19 +6917,23 @@ async function doEarthquake(force) {
                 const featureMessage = earthquakeFeatureMessage(loc);
                 if (featureMessage && !game.u?.blind && couldsee(x, y)) messages.push(featureMessage);
                 await doEarthquakePit(x, y, tuPit, messages);
+                if (earthquakeHeroResultStops(messages.heroResult)) return messages;
             } else if (loc.typ === SCORR) {
                 loc.typ = CORR;
                 newsym(x, y);
                 if (!game.u?.blind && couldsee(x, y)) messages.push('A secret corridor is revealed.');
                 await doEarthquakePit(x, y, tuPit, messages);
+                if (earthquakeHeroResultStops(messages.heroResult)) return messages;
             } else if (loc.typ === CORR || loc.typ === ROOM) {
                 await doEarthquakePit(x, y, tuPit, messages);
+                if (earthquakeHeroResultStops(messages.heroResult)) return messages;
             } else if (loc.typ === SDOOR) {
                 loc.typ = DOOR;
                 newsym(x, y);
                 if (!game.u?.blind && couldsee(x, y)) messages.push('A secret door is revealed.');
                 if (loc.doormask === D_NODOOR) {
                     await doEarthquakePit(x, y, tuPit, messages);
+                    if (earthquakeHeroResultStops(messages.heroResult)) return messages;
                 } else {
                     loc.doormask = D_NODOOR;
                     newsym(x, y);
@@ -6937,6 +6942,7 @@ async function doEarthquake(force) {
             } else if (loc.typ === DOOR) {
                 if (loc.doormask === D_NODOOR) {
                     await doEarthquakePit(x, y, tuPit, messages);
+                    if (earthquakeHeroResultStops(messages.heroResult)) return messages;
                 } else {
                     loc.doormask = D_NODOOR;
                     newsym(x, y);
@@ -6946,6 +6952,28 @@ async function doEarthquake(force) {
         }
     }
     return messages;
+}
+
+function earthquakeHeroResultStops(result) {
+    return !!(result && (result.fatal || result.lifeSaving));
+}
+
+function earthquakeFatalEndsInstrument(result) {
+    return !!(result?.fatal && !result.lifeSaving);
+}
+
+async function finishEarthquakeInstrumentMessages(messages, earthquakeMessages) {
+    const heroResult = earthquakeMessages?.heroResult || messages.heroResult || null;
+    await setMessage(messages.join('  '), messages.length > 1 || !!heroResult?.more);
+    if (earthquakeHeroResultStops(heroResult)) {
+        game.context.move = 0;
+        game._pending_time_passed = 0;
+        if (heroResult.lifeSaving || !heroResult.lavaDeath)
+            applyLifeSavingOrFatalCommandMode(heroResult);
+        return true;
+    }
+    game.context.move = 1;
+    return false;
 }
 
 async function zapDigDownwardResult() {
@@ -18104,10 +18132,14 @@ async function finishMusicalImprovisation(item) {
         messages.push('You produce a heavy, thunderous rolling!');
         const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
         messages.push(`The entire ${earthquakeLevelDescription()} is shaking around you!`, ...earthquakeMessages);
-        awakenMonstersWithInstrument(ROWNO * COLNO);
-        item.known = true;
-        item.dknown = true;
-        updateChargedItemLine(item);
+        if (!earthquakeFatalEndsInstrument(earthquakeMessages.heroResult)) {
+            awakenMonstersWithInstrument(ROWNO * COLNO);
+            item.known = true;
+            item.dknown = true;
+            updateChargedItemLine(item);
+        }
+        await finishEarthquakeInstrumentMessages(messages, earthquakeMessages);
+        return true;
     } else {
         game._zap_item = item;
         game._zap_prelude_messages = messages;
@@ -68403,8 +68435,6 @@ export async function rhack(_cmd) {
             checkUnpaidUsage(item, usageMessages);
             item.spe = Math.max(0, (item.spe ?? 0) - 1);
             updateChargedItemLine(item);
-            item.known = true;
-            item.dknown = true;
             const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
             const messages = [
                 ...usageMessages,
@@ -68412,13 +68442,16 @@ export async function rhack(_cmd) {
                 `The entire ${earthquakeLevelDescription()} is shaking around you!`,
                 ...earthquakeMessages,
             ];
-            for (const mon of game.level?.monsters || []) {
-                mon.msleeping = 0;
-                mon.mcanmove = true;
-                mon.mfrozen = 0;
+            if (!earthquakeFatalEndsInstrument(earthquakeMessages.heroResult)) {
+                item.known = true;
+                item.dknown = true;
+                for (const mon of game.level?.monsters || []) {
+                    mon.msleeping = 0;
+                    mon.mcanmove = true;
+                    mon.mfrozen = 0;
+                }
             }
-            await setMessage(messages.join('  '), messages.length > 1);
-            game.context.move = 1;
+            await finishEarthquakeInstrumentMessages(messages, earthquakeMessages);
             return;
         }
         if (name.includes('drum')) {
