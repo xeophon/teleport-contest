@@ -18746,8 +18746,8 @@ function mapInvisibleMonsterAt(mon) {
     if (!loc) return;
     loc.map_invisible = true;
     loc.waslit = true;
-    loc.remembered_glyph = { ch: 'I', color: NO_COLOR, dec: false };
     newsym(mon.mx, mon.my);
+    loc.remembered_glyph = { ch: 'I', color: NO_COLOR, dec: false };
 }
 
 function setMonsterMinvisFromPotion(mon, cursedPotion) {
@@ -22032,14 +22032,34 @@ function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, d
     return { blocked: true, messages, trapResult };
 }
 
+function heroHorizontalThrowRecoilCanSpotMonster(mon) {
+    if (!mon || game.u?.blind || mon.mundetected) return false;
+    return !(mon.minvis || mon.invis || mon.invisible) || game.u?.seeInvisible;
+}
+
 function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
     if (!mon) return '';
-    const name = articleFor(mon.data?.name || mon.name || 'creature');
+    const loc = game.level?.at?.(x, y);
+    const preGlyphInvisible = !!(loc?.map_invisible || loc?.remembered_glyph?.ch === 'I');
+    const appearance = M_AP_TYPE(mon);
+    const preGlyphMonster = !mon.mundetected
+        && (appearance === M_AP_MONSTER
+            || (!appearance && mon.appearObj == null && !mon.appearGlyph
+                && heroHorizontalThrowRecoilCanSpotMonster(mon)));
     mon.mundetected = 0;
+    const canSpotAfterUnhide = heroHorizontalThrowRecoilCanSpotMonster(mon);
+    const name = canSpotAfterUnhide
+        ? articleFor(mon.data?.name || mon.name || 'creature')
+        : 'something';
+    const pronoun = canSpotAfterUnhide ? 'it' : 'something';
     mon.msleeping = 0;
     mon.meating = 0;
+    revealHeroProjectileHitMimicAppearance(mon);
+    if (!heroHorizontalThrowRecoilCanSpotMonster(mon)) mapInvisibleMonsterAt(mon);
     setHeroObjectHitMonsterAngry(mon);
     wakeNearbyMonstersAt(x, y, 10);
+    if (!preGlyphMonster && !preGlyphInvisible)
+        return `You find ${name} by bumping into ${pronoun}.`;
     return `You bump into ${name}.`;
 }
 

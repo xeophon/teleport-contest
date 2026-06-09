@@ -71608,6 +71608,155 @@ test('levitating hero-thrown ordinary weapon recoil bumps monster without damage
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil reveals object mimic by bumping', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    markSquareVisible(4, 5);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876171, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, { mhp: 20, mhpmax: 20 });
+    const mimic = ordinaryThrowTarget('large mimic', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        mstrategy: STRAT_WAITFORU,
+        m_ap_type: M_AP_OBJECT,
+        appearObj: 215,
+        appearGlyph: '(',
+        appearColor: 7,
+        data: { name: 'large mimic', mlevel: 9 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin, mimic];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You find a large mimic by bumping into it\./);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(mimic.mhp, 20);
+    assert.equal(mimic.msleeping, 0);
+    assert.equal(mimic.mpeaceful, 0);
+    assert.equal(mimic.mstrategy, 0);
+    assert.equal(mimic.m_ap_type || 0, 0);
+    assert.equal(mimic.appearObj, null);
+    assert.equal(mimic.appearGlyph, null);
+    assert.equal(mimic.appearColor, null);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil maps unspotted invisible monster', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    markSquareVisible(4, 5);
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876172, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, { mhp: 20, mhpmax: 20 });
+    const stalker = ordinaryThrowTarget('stalker', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        minvis: 1,
+        data: { name: 'stalker', mlevel: 8 },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin, stalker];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You find something by bumping into something\./);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(stalker.mhp, 20);
+    assert.equal(stalker.msleeping, 0);
+    assert.equal(stalker.mpeaceful, 0);
+    assert.equal(game.level.at(4, 5).map_invisible, true);
+    assert.equal(game.level.at(4, 5).remembered_glyph?.ch, 'I');
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bump square', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(876173, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 10, 5, { mhp: 20, mhpmax: 20 });
+    const newt = ordinaryThrowTarget('newt', 4, 5, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mpeaceful: true,
+    });
+    const jackal = ordinaryThrowTarget('jackal', 4, 6, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mpeaceful: true,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin, newt, jackal];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\.  You bump into a newt\./);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(newt.mhp, 4);
+    assert.equal(jackal.mhp, 4);
+    assert.equal(newt.msleeping, 0);
+    assert.equal(jackal.msleeping, 0);
+    assert.equal(jackal.mpeaceful, true);
+    assert.equal(jackal.mstrategy, 0);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
 test('levitating hero-thrown ordinary weapon recoil passes over seen anti-magic field', async () => {
     installNonShopFloorState();
     installCoreRngValues([0]);
