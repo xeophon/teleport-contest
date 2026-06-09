@@ -35,8 +35,7 @@
 
 ## Remaining follow-up
 
-- Top-level unpaid containers with contents remain intentionally blocked by the support guard; C same-shop landing would call recursive `subfrombill()` for that case.
-- Box preflight impact for unpaid fragile contents has helper coverage, but a full command canary for a same-level non-gate break would still be useful.
+- Top-level unpaid containers with contents and the same-level box preflight content-impact canary are covered by audit 869.
 - Obstruction/door "comes loose" kicks have a separate active `addtobill()` path and remain outside this slice.
 
 ## Verification

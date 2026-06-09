@@ -34219,7 +34219,7 @@ function countContentsForShopDebt(obj, seen = new Set()) {
     seen.add(obj);
     let count = 0;
     for (const child of globContents(obj)) {
-        if (!shopBillableGold(child)) count++;
+        count++;
         count += countContentsForShopDebt(child, seen);
     }
     return count;
@@ -34620,10 +34620,11 @@ function kickFloorObjectSupported(obj) {
     if (quantity !== 1 && !fragileBreakKind && !shopBillableGold(obj)) return false;
     const contents = globContents(obj);
     const unpaidContents = contents.some(child => shopObjectOrContentsUnpaid(child));
+    const topLevelUnpaidContainer = container && obj.unpaid;
     const paidContainerWithUnpaidContents = container && !obj.unpaid && unpaidContents;
-    if ((!box && container && !paidContainerWithUnpaidContents)
-        || (!box && contents.length && !paidContainerWithUnpaidContents)) return false;
-    const supportedTopLevelUnpaid = obj.unpaid && !contents.length;
+    if ((!box && container && !paidContainerWithUnpaidContents && !topLevelUnpaidContainer)
+        || (!box && contents.length && !paidContainerWithUnpaidContents && !topLevelUnpaidContainer)) return false;
+    const supportedTopLevelUnpaid = obj.unpaid && (!contents.length || topLevelUnpaidContainer);
     if (shopObjectOrContentsUnpaid(obj)
         && !supportedTopLevelUnpaid
         && !paidContainerWithUnpaidContents
@@ -34877,7 +34878,9 @@ function chargeKickedObjectNormalFlightFromShop(obj, sx, sy, x, y, messages) {
 
 function chargeKickedUnpaidObjectNormalFlightFromShop(obj, sx, sy, shkp, messages) {
     const debtItems = collectObjectAndContentsShopDebtItems(obj, shkp);
-    const value = lostShopMerchandiseValueForObject({ ox: sx, oy: sy }, obj, shkp);
+    const value = lostShopMerchandiseValueForObject({ ox: sx, oy: sy }, obj, shkp, new Set(), {
+        includeContainedGold: false,
+    });
     if (!(value > 0)) return { charged: false, value: 0, shkp };
 
     const creditBefore = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
@@ -34903,10 +34906,19 @@ function chargeKickedUnpaidObjectNormalFlightFromShop(obj, sx, sy, shkp, message
     return { charged: true, value, shkp, remaining };
 }
 
-function returnKickedUnpaidObjectNormalFlightToShop(obj, x, y) {
+function returnKickedUnpaidObjectNormalFlightToShop(obj, x, y, messages = []) {
     if (!obj?.unpaid || shopBillableGold(obj)) return null;
-    if (returnUnpaidObjectToShopBillOwnerAt(obj, x, y))
-        return { returned: true };
+    const { shkp } = shopkeeperOwningObjectOrContentsBillEntry(obj);
+    const spotShkp = shopkeeperForCostlySpot(x, y);
+    if (sameShopkeeper(shkp, spotShkp) && shopkeeperInHisShop(shkp)) {
+        const containedGold = containedShopGold(obj);
+        subFromShopBill(obj, shkp);
+        if (containedGold > 0) {
+            const donation = donateGoldToShopkeeper(shkp, containedGold);
+            messages.push(...shopGoldDonationMessages(donation, { selling: false }));
+        }
+        return { returned: true, shkp };
+    }
     return null;
 }
 
@@ -35132,7 +35144,7 @@ function finishKickedFlightLanding(obj, sx, sy, flight, messages) {
     obj.oy = flight.y;
     chargeKickedObjectNormalFlightFromShop(obj, sx, sy, flight.x, flight.y, messages);
     placeKickedFloorObject(obj, flight.x, flight.y, messages, {
-        beforePlace: () => returnKickedUnpaidObjectNormalFlightToShop(obj, flight.x, flight.y),
+        beforePlace: () => returnKickedUnpaidObjectNormalFlightToShop(obj, flight.x, flight.y, messages),
     });
 }
 
