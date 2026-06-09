@@ -43308,6 +43308,88 @@ test('m-prefix into lava burns non-fireproof water walking boots before fatal la
     assert.equal(game._command_mode, 'deathAttributesPrompt');
 });
 
+test('m-prefix fatal lava burns initial non-survivor organic and potion inventory', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const rations = foodRationStack(330005, 3, 'f');
+    const potion = oilPotion(330006, 'o');
+    const scroll = scrollOfCharging(330007, 's');
+    const book = healingSpellbook(330008, 'b');
+    const harp = ordinaryTool(330009, 'wooden harp', 'h');
+    const fireproofRation = { ...foodRation(330010, 'r'), oerodeproof: true };
+    const fireScroll = {
+        id: 330011,
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of fire',
+        actualKind: 'scroll of fire',
+        scrollIndex: 16,
+        quan: 1,
+        letter: 'F',
+        line: 'F - a scroll of fire',
+    };
+    const fireballBook = {
+        ...healingSpellbook(330012, 'B'),
+        kind: 'spellbook of fireball',
+        actualKind: 'spellbook of fireball',
+        spellName: 'fireball',
+        line: 'B - a spellbook of fireball',
+    };
+    game.inventory = [rations, potion, scroll, book, harp, fireproofRation, fireScroll, fireballBook];
+
+    await rhack('m');
+    await rhack('l');
+
+    const remaining = game.inventory;
+    assert.equal(remaining.includes(rations), false);
+    assert.equal(remaining.includes(potion), false);
+    assert.equal(remaining.includes(scroll), false);
+    assert.equal(remaining.includes(book), false);
+    assert.equal(remaining.includes(harp), false);
+    assert.equal(remaining.includes(fireproofRation), true);
+    assert.equal(remaining.includes(fireScroll), true);
+    assert.equal(remaining.includes(fireballBook), true);
+    assert.match(game._pending_message || '', /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.doesNotMatch(game._pending_message || '', /boils and explodes|catches fire and burns|wooden harp/);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
+test('m-prefix lava does not whole-burn inventory when initial water walking would survive', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+        fireResistance: false,
+    });
+    const boots = wornArmor(330013, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    const rations = foodRationStack(330014, 2, 'f');
+    const potion = oilPotion(330015, 'o');
+    game.inventory = [boots, rations, potion];
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(game.inventory.includes(rations), true);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(game.u.uac, 10);
+    assert.match(pending, /Your .*boots burst into flame!/);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.ok(pending.search(/Your .*boots burst into flame!/) < pending.indexOf('You fall into the molten lava!'));
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
 test('m-prefix into lava sinks fire-resistant hero after guarded water walking boot burn', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);

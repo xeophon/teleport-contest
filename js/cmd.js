@@ -14816,9 +14816,62 @@ function burnLavaWornBootsFirst(messages) {
     return true;
 }
 
+function lavaFatalOrganicInventoryItem(item, cls) {
+    if (cls === 'scroll' || cls === 'spellbook') return true;
+    const material = String(item?.material || item?.oc_material || '').toLowerCase();
+    if (LAVA_DIRECT_BURN_MATERIALS.has(material)) return true;
+    const itemCls = itemClassKey(item);
+    const kind = objectKindKey(item);
+    if ((itemCls === 'food' || item?.otyp === FOOD_CLASS || item?.glyph === '%')
+        && !/\btin\b/.test(kind)) return true;
+    if (item?.otyp === CORPSE || item?.otyp === 'corpse') return true;
+    if (item?.globby || GLOB_TYPES.has(kind.replace(/^glob of /, ''))) return true;
+    const profile = wishedDamageProfile(item);
+    if (profile.erosionMatters && profile.primaryWord === 'burnt') return true;
+    return /\b(?:wax|leather|cloth|wood|wooden|paper|bone|corpse|meat|ration|food|fruit|egg|sack|bag|box|chest|leash|rope|bow|arrow|club|quarterstaff|aklys|bullwhip|sling|flute|harp|drum|whistle|horn)\b/.test(kind);
+}
+
+function lavaFatalInventoryItemFireExempt(item, cls) {
+    if (item?.oerodeproof || item?.fireResistance || item?.fireResistant) return true;
+    const name = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
+    if (cls === 'scroll' && (item?.scrollIndex === 16 || /\bscroll of fire\b/.test(name))) return true;
+    if (cls === 'spellbook' && /\bfireball\b/.test(name)) return true;
+    const kind = objectKindKey(item);
+    return kind === 'wand of fire' || kind === 'fire horn' || item?.oprop === 'fire'
+        || item?.oprop === 'fire resistance' || item?.oc_oprop === 'fire'
+        || item?.oc_oprop === 'fire resistance';
+}
+
+function lavaFatalInventoryBurnSelection() {
+    const selected = [];
+    for (const item of game.inventory || []) {
+        if (!item || item.in_use || item.inUse) continue;
+        const cls = fireDestroyableInventoryClass(item);
+        if (lavaFatalInventoryItemFireExempt(item, cls)) continue;
+        if (lavaObjResistsHard(item)) continue;
+        if (cls === 'potion' || lavaFatalOrganicInventoryItem(item, cls))
+            selected.push(item);
+    }
+    return selected;
+}
+
+function destroyLavaFatalInventorySelection(selection) {
+    let destroyed = 0;
+    for (const item of selection || []) {
+        if (!(game.inventory || []).includes(item)) continue;
+        if (isWornArmorItem(item)) destroyWornArmorItem(item);
+        else useUpInventoryItem(item, item.quan || 1);
+        destroyed++;
+    }
+    return destroyed;
+}
+
 function heroLavaEntryEffect(targetMoveTyp) {
     const messages = [];
     const dmg = d(6, 6);
+    const initiallySurvivesLava = heroHasFireResistance()
+        || (heroHasWaterWalking() && dmg < (game.u?.uhp || 0));
+    const fatalInventoryBurn = initiallySurvivesLava ? [] : lavaFatalInventoryBurnSelection();
     burnLavaWornBootsFirst(messages);
     if (!heroHasFireResistance()) {
         if (heroHasWaterWalking()) {
@@ -14828,6 +14881,7 @@ function heroLavaEntryEffect(targetMoveTyp) {
                 return { messages, fatal: false, more: messages.length > 1 };
             }
         }
+        destroyLavaFatalInventorySelection(fatalInventoryBurn);
         messages.push(polyselfLavaFalloutMessage(targetMoveTyp));
         game._death_cause = 'burned by molten lava';
         game._command_mode = 'lavaDeathMore';
