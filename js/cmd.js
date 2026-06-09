@@ -16480,11 +16480,53 @@ function wornFacewearItem() {
     return (game.inventory || []).find(item => isFacewearItem(item) && isWornInventoryItem(item));
 }
 
+function isWornFacewearItem(item) {
+    return isFacewearItem(item) && isWornInventoryItem(item);
+}
+
+function isWornAmuletItem(item) {
+    return !!item && (item.cls === 'amulet' || item.glyph === '"' || item.otyp === AMULET_CLASS)
+        && (isWornInventoryItem(item) || item.owornmask);
+}
+
+function isWornMeatRingItem(item) {
+    return objectKindKey(item) === 'meat ring'
+        && (isWornInventoryItem(item) || item.owornmask || /\(on (?:left|right) hand\)/.test(String(item?.line || '')));
+}
+
+function isWornAccessoryItem(item) {
+    return isWornFacewearItem(item) || wornRingItem(item) || isWornAmuletItem(item) || isWornMeatRingItem(item);
+}
+
+function isWornEquipmentItem(item) {
+    return isWornArmorItem(item) || isWornAccessoryItem(item);
+}
+
+function wornEquipmentItems() {
+    return (game.inventory || []).filter(isWornEquipmentItem);
+}
+
+function wornArmorItems() {
+    return (game.inventory || []).filter(isWornArmorItem);
+}
+
 function facewearBaseName(item) {
     let name = inventoryItemName(item).replace(/\s+\(being worn\).*$/, '');
     if (objectKindKey(item) === 'lenses' && !/\bpair of lenses\b/i.test(name))
         name = name.replace(/\blenses\b/i, 'pair of lenses');
     return name;
+}
+
+function equipmentBaseName(item) {
+    return inventoryItemName(item)
+        .replace(/\s+\((?:being worn|on (?:left|right) hand)\).*$/, '');
+}
+
+function wornRingOffMessageName(item, baseName) {
+    const wornName = String(item?.line || '')
+        .replace(/^[a-zA-Z$] - /, '')
+        .replace(/\.$/, '');
+    return /\(on (?:left|right) hand\)/.test(wornName) ? wornName : baseName;
 }
 
 function setBlindfoldedState(active) {
@@ -16555,6 +16597,84 @@ async function takeOffFacewear(item) {
         return { messages: [`You were wearing ${baseName}.`, stillBlind ? 'You still cannot see.' : 'You can see again.'] };
     }
     return { messages: [`You were wearing ${baseName}.`] };
+}
+
+async function takeOffEquipment(item) {
+    if (!isWornEquipmentItem(item)) return null;
+
+    if (item.cursed) {
+        item.bknown = true;
+        const pair = /(?:boots|gloves|lenses)$/.test(pickupObjectName(item)) || Math.trunc(Number(item.quan || 1)) > 1;
+        return { messages: [`You can't.  ${pair ? 'They are' : 'It is'} cursed.`], move: 0 };
+    }
+
+    const facewearOff = await takeOffFacewear(item);
+    if (facewearOff) return { ...facewearOff, move: 1 };
+
+    const baseName = equipmentBaseName(item);
+    if (wornRingItem(item) || isWornMeatRingItem(item)) {
+        const messageName = wornRingOffMessageName(item, baseName);
+        item.worn = false;
+        item.owornmask = 0;
+        item.wornMask = 0;
+        item._wornMask = 0;
+        item.line = `${item.letter || '?'} - ${baseName}`;
+        return { messages: [`You were wearing ${messageName}.`], move: 1 };
+    }
+    if (isWornAmuletItem(item)) {
+        item.worn = false;
+        item.owornmask = 0;
+        item.line = `${item.letter || '?'} - ${baseName}`;
+        return { messages: [`You were wearing ${baseName}.`], move: 1 };
+    }
+
+    const acBonus = (ARMOR_AC_BONUS[String(item.kind || '').toLowerCase()] ?? 0) + (item.spe ?? 0);
+    const kind = String(item.kind || '').toLowerCase();
+    const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
+    if (delay) {
+        const simpleName = pickupObjectName(item);
+        game._armor_wear_occupation = {
+            action: 'takeoff',
+            itemLetter: item.letter || '?',
+            kind,
+            baseName,
+            simpleName: / mail$/.test(simpleName) ? 'mail' : simpleName,
+            acBonus,
+            turns: delay,
+        };
+        return { messages: [], move: 1 };
+    }
+
+    item.worn = false;
+    item.owornmask = 0;
+    item.line = `${item.letter || '?'} - ${baseName}`;
+    if (game.u) {
+        game._status_uac_before_more = game.u.uac ?? 10;
+        game._status_uac_before_more_seen = 0;
+        game.u.uac = (game.u.uac ?? 10) + acBonus;
+    }
+    if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
+        syncHeroSpeedState();
+    updateGauntletsOfPowerStrength(kind, false);
+    updateWornDisplacement();
+    return { messages: [`You were wearing ${baseName}.`], move: 1 };
+}
+
+async function finishTakeOffEquipment(item, options = {}) {
+    const result = await takeOffEquipment(item);
+    if (!result) return false;
+    if (result.messages.length) {
+        const message = result.messages.join('  ');
+        await setMessage(message, !!result.more);
+        if (options.visualPromptOverride && !result.more && result.move !== 0
+            && message.startsWith('You were wearing ')) {
+            game._pending_message_visual_override = options.visualPromptOverride;
+            game._pending_message_visual_override_base = message;
+        }
+    }
+    game.context.move = result.move ?? 1;
+    if (result.more) game._process_time_with_more = 1;
+    return true;
 }
 
 async function applyBlindfoldOrLenses(item) {
@@ -58077,6 +58197,8 @@ export async function rhack(_cmd) {
 
 	    const key = _cmd || await nhgetch();
 	    let ch = commandChar(key);
+    game._pending_message_visual_override = '';
+    game._pending_message_visual_override_base = '';
 	    if (game.u?.uswallow && game._swallow_overlay_active && game._overlay_lines
 	        && !(game._pending_message && game._message_more)) {
 	        game._swallow_overlay_before_command = game._overlay_lines.map(line => [...line]);
@@ -63103,9 +63225,7 @@ export async function rhack(_cmd) {
     if (game._command_mode === 'takeOffObject') {
         const item = (game.inventory || []).find(invItem =>
             invItem.letter === ch
-            && (invItem.worn || invItem.line?.includes('being worn'))
-            && (invItem.cls === 'armor'
-                || ['blindfold', 'towel', 'lenses'].includes(invItem.kind || invItem.actualKind)));
+            && isWornEquipmentItem(invItem));
         game._command_mode = null;
         if (!item) {
             await setMessage("You don't have that object.", true);
@@ -63114,59 +63234,11 @@ export async function rhack(_cmd) {
         }
         const takeOffPrompt = game._take_off_prompt || game._pending_message || '';
         game._take_off_prompt = '';
-        if (item.cursed) {
-            item.bknown = true;
-            const pair = /(?:boots|gloves|lenses)$/.test(pickupObjectName(item));
-            await setMessage(`You can't.  ${pair ? 'They are' : 'It is'} cursed.`);
-            game.context.move = 0;
-            return;
-        }
-        const baseName = String(item.line || `${item.letter || '?'} - ${pickupObjectName(item)}`)
-            .replace(/^[a-zA-Z] - /, '')
-            .replace(/ \(being worn\).*$/, '');
-        const facewearOff = await takeOffFacewear(item);
-        if (facewearOff) {
-            await setMessage(facewearOff.messages.join('  '), !!facewearOff.more);
-            game.context.move = 1;
-            if (facewearOff.more) game._process_time_with_more = 1;
-            return;
-        }
-        const acBonus = (ARMOR_AC_BONUS[String(item.kind || '').toLowerCase()] ?? 0) + (item.spe ?? 0);
-        const kind = String(item.kind || '').toLowerCase();
-        const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
-        const preservePromptOnly = takeOffPrompt.includes('[cdef') && ch === 'e' && kind === 'small shield';
-        if (delay) {
-            const simpleName = pickupObjectName(item);
-            game._armor_wear_occupation = {
-                action: 'takeoff',
-                itemLetter: item.letter || ch,
-                kind,
-                baseName,
-                simpleName: / mail$/.test(simpleName) ? 'mail' : simpleName,
-                acBonus,
-                turns: delay,
-            };
-            game.context.move = 1;
-            return;
-        }
-        item.worn = false;
-        item.line = `${item.letter || '?'} - ${baseName}`;
-        if (game.u) {
-            game._status_uac_before_more = game.u.uac ?? 10;
-            game._status_uac_before_more_seen = 0;
-            game.u.uac = (game.u.uac ?? 10) + acBonus;
-        }
-        if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
-            syncHeroSpeedState();
-        updateGauntletsOfPowerStrength(kind, false);
-        updateWornDisplacement();
-        if (preservePromptOnly) {
-            await setMessage(takeOffPrompt);
-        } else {
-            await setMessage(`You were wearing ${baseName}.`);
-            game._process_time_with_more = 1;
-        }
-        game.context.move = 1;
+        const visualPromptOverride = takeOffPrompt.startsWith('What do you want to take off?')
+            && isWornArmorItem(item)
+            && /\bshield\b/i.test(String(item.kind || item.actualKind || inventoryItemName(item)))
+            ? takeOffPrompt : '';
+        await finishTakeOffEquipment(item, { visualPromptOverride });
         return;
     }
 
@@ -74897,61 +74969,45 @@ export async function rhack(_cmd) {
         return;
     }
 
+    if (ch === 'R') {
+        const accessories = (game.inventory || []).filter(isWornAccessoryItem);
+        const equipment = wornEquipmentItems();
+        if (!equipment.length) {
+            await setMessage('Not wearing any accessories or armor.');
+            return;
+        }
+        if (accessories.length === 1) {
+            await finishTakeOffEquipment(accessories[0]);
+            return;
+        }
+        const letters = inventoryLetters(accessories.length ? isWornAccessoryItem : isWornArmorItem);
+        const prompt = letters
+            ? `What do you want to remove? [${getobjPromptLetters(letters)} or ?*]`
+            : 'What do you want to remove? [*]';
+        game._take_off_prompt = prompt;
+        await setMessage(prompt);
+        game._command_mode = 'takeOffObject';
+        return;
+    }
+
     if (ch === 'T') {
-        const wornItems = (game.inventory || []).filter(item =>
-            (item.worn || item.line?.includes('being worn'))
-            && item.cls === 'armor');
-        if (wornItems.length > 1) {
-            const prompt = `What do you want to take off? [${wornItems.map(item => item.letter).join('')} or ?*]`;
-            game._take_off_prompt = prompt;
-            await setMessage(prompt);
-            game._command_mode = 'takeOffObject';
+        const armorItems = wornArmorItems();
+        const equipment = wornEquipmentItems();
+        if (!equipment.length) {
+            await setMessage('Not wearing any armor or accessories.');
             return;
         }
-        const armor = wornItems[0];
-        if (armor) {
-            if (armor.cursed) {
-                armor.bknown = true;
-                const pair = /(?:boots|gloves|lenses)$/.test(pickupObjectName(armor));
-                await setMessage(`You can't.  ${pair ? 'They are' : 'It is'} cursed.`);
-                game.context.move = 0;
-                return;
-            }
-            const baseName = String(armor.line || `${armor.letter || '?'} - ${pickupObjectName(armor)}`)
-                .replace(/^[a-zA-Z] - /, '')
-                .replace(/ \(being worn\).*$/, '');
-            const acBonus = (ARMOR_AC_BONUS[String(armor.kind || '').toLowerCase()] ?? 0) + (armor.spe ?? 0);
-            const kind = String(armor.kind || '').toLowerCase();
-            const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
-            if (delay) {
-                const simpleName = pickupObjectName(armor);
-                game._armor_wear_occupation = {
-                    action: 'takeoff',
-                    itemLetter: armor.letter || '?',
-                    kind,
-                    baseName,
-                    simpleName: / mail$/.test(simpleName) ? 'mail' : simpleName,
-                    acBonus,
-                    turns: delay,
-                };
-                game.context.move = 1;
-                return;
-            }
-            armor.worn = false;
-            armor.line = `${armor.letter || '?'} - ${baseName}`;
-            if (game.u) {
-                game._status_uac_before_more = game.u.uac ?? 10;
-                game._status_uac_before_more_seen = 0;
-                game.u.uac = (game.u.uac ?? 10) + acBonus;
-            }
-            if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
-                syncHeroSpeedState();
-            updateWornDisplacement();
-            await setMessage(`You were wearing ${baseName}.`);
-            game.context.move = 1;
+        if (armorItems.length === 1) {
+            await finishTakeOffEquipment(armorItems[0]);
             return;
         }
-        await setMessage("You aren't wearing any armor.");
+        const letters = inventoryLetters(armorItems.length ? isWornArmorItem : isWornAccessoryItem);
+        const prompt = letters
+            ? `What do you want to take off? [${getobjPromptLetters(letters)} or ?*]`
+            : 'What do you want to take off? [*]';
+        game._take_off_prompt = prompt;
+        await setMessage(prompt);
+        game._command_mode = 'takeOffObject';
         return;
     }
 

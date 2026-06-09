@@ -18566,6 +18566,86 @@ test('wear command fallback puts on towel as facewear state', async () => {
     assert.equal(game._message_more || 0, 0);
 });
 
+test('remove command auto-removes lone worn ring with hand wording', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057014, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.inventory = [ring];
+
+    await rhack('R');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(ring.worn, false);
+    assert.equal(ring.owornmask, 0);
+    assert.equal(ring.line, 'r - an iron ring');
+    assert.equal(game._pending_message, 'You were wearing an iron ring (on left hand).');
+});
+
+test('remove command auto-removes lone worn amulet', async () => {
+    installNonShopFloorState();
+    const amulet = metalAmulet(3057015, 'amulet of magical breathing', 8, 'a', {
+        worn: true,
+        line: 'a - an octagonal amulet (being worn)',
+    });
+    game.inventory = [amulet];
+
+    await rhack('R');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(amulet.worn, false);
+    assert.equal(amulet.owornmask, 0);
+    assert.equal(amulet.line, 'a - an octagonal amulet');
+    assert.equal(game._pending_message, 'You were wearing an octagonal amulet.');
+});
+
+test('takeoff command prompts for facewear when no armor is worn', async () => {
+    installNonShopFloorState();
+    const towel = wornTool(3057016, 'towel', 't');
+    game.inventory = [towel];
+    game.u.blind = true;
+    game.u.blindfolded = true;
+    game.u.Blindfolded = true;
+
+    await rhack('T');
+
+    assert.equal(game._command_mode, 'takeOffObject');
+    assert.equal(game._pending_message, 'What do you want to take off? [t or ?*]');
+
+    await rhack('t');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(towel.worn, false);
+    assert.equal(towel.owornmask, 0);
+    assert.equal(towel.line, 't - a towel');
+    assert.equal(game.u.blind, false);
+    assert.equal(game.u.blindfolded, false);
+    assert.equal(game.u.Blindfolded, false);
+    assert.equal(game._pending_message, 'You were wearing a towel.  You can see again.');
+});
+
+test('remove command can prompt and take off armor fallback', async () => {
+    installNonShopFloorState();
+    const armor = wornArmor(3057017, 'small shield', 'a');
+    game.inventory = [armor];
+    game.u.uac = 9;
+
+    await rhack('R');
+
+    assert.equal(game._command_mode, 'takeOffObject');
+    assert.equal(game._pending_message, 'What do you want to remove? [a or ?*]');
+
+    await rhack('a');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(armor.worn, false);
+    assert.equal(armor.line, 'a - a +0 small shield');
+    assert.equal(game.u.uac, 10);
+    assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
+});
+
 test('unknown gray stone is suggested by apply and opens stone target prompt', async () => {
     installCommandShopState();
     const stone = carriedGrayStone(30571, 'g', 'loadstone');
