@@ -43644,6 +43644,131 @@ test('m-prefix fatal lava burns initial non-survivor organic and potion inventor
     assert.equal(game._command_mode, 'lavaDeathMore');
 });
 
+test('m-prefix fatal lava consumes obj_resists rng only for ordinary burn candidates', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 42, 13]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const rations = foodRationStack(330028, 2, 'f');
+    const potion = oilPotion(330029, 'o');
+    const wand = fireWand(330030, 'w');
+    const horn = chargedTool(330031, 'fire horn', 'h', 2);
+    game.inventory = [rations, potion, wand, horn];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.inventory.includes(rations), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.inventory.includes(wand), true);
+    assert.equal(game.inventory.includes(horn), true);
+    assert.match(game._pending_message || '', /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [42, 13]);
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
+test('m-prefix fatal lava preserves rider corpse without obj_resists rng', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const riderCorpse = {
+        id: 330032,
+        cls: 'food',
+        glyph: '%',
+        otyp: CORPSE,
+        kind: 'Death corpse',
+        actualKind: 'Death corpse',
+        quan: 1,
+        letter: 'c',
+        line: 'c - Death corpse',
+        corpse: { name: 'Death', rider: true },
+        corpsenm: { name: 'Death', rider: true },
+    };
+    game.inventory = [riderCorpse];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.inventory.includes(riderCorpse), true);
+    assert.match(game._pending_message || '', /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.doesNotMatch(game._pending_message || '', /items? in your inventory .* destroyed/);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
+test('m-prefix fatal lava preserves invocation objects without obj_resists rng', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const amulet = realAmuletOfYendor(330033, 'a');
+    const bell = bellOfOpening(330034, 'b');
+    const candles = candelabrum(330035, 'c', 7);
+    const book = {
+        id: 330036,
+        cls: 'spellbook',
+        glyph: '+',
+        kind: 'Book of the Dead',
+        actualKind: 'Book of the Dead',
+        quan: 1,
+        letter: 'B',
+        line: 'B - the Book of the Dead',
+    };
+    game.inventory = [amulet, bell, candles, book];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.inventory.includes(amulet), true);
+    assert.equal(game.inventory.includes(bell), true);
+    assert.equal(game.inventory.includes(candles), true);
+    assert.equal(game.inventory.includes(book), true);
+    assert.match(game._pending_message || '', /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
+test('m-prefix fatal lava treats bone horns as non-organic but burns wooden harp', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 42]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const tooledHorn = ordinaryTool(330037, 'tooled horn', 't');
+    const frostHorn = chargedTool(330038, 'frost horn', 'f', 2);
+    const plentyHorn = chargedTool(330039, 'horn of plenty', 'h', 2);
+    const harp = ordinaryTool(330040, 'wooden harp', 'p');
+    game.inventory = [tooledHorn, frostHorn, plentyHorn, harp];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.inventory.includes(tooledHorn), true);
+    assert.equal(game.inventory.includes(frostHorn), true);
+    assert.equal(game.inventory.includes(plentyHorn), true);
+    assert.equal(game.inventory.includes(harp), false);
+    assert.match(game._pending_message || '', /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [42]);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
 test('explore m-prefix fatal lava reports survivor inventory burn before prompt', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0]);
@@ -43730,7 +43855,7 @@ test('m-prefix water-walking lava survivor runs burn_stuff on scroll stack', asy
 
 test('m-prefix fatal lava consumes life saving and teleports to safety', async () => {
     installDrawbridgeMoveState(DB_LAVA);
-    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 19, 7]);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 7]);
     Object.assign(game.u, {
         uhp: 40,
         uhpmax: 40,

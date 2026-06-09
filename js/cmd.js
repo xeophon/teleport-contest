@@ -12635,6 +12635,9 @@ function fireDamageFloorItem(obj, messages, visible, options = {}) {
 const LAVA_DIRECT_BURN_MATERIALS = new Set([
     'liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather', 'wood', 'bone',
 ]);
+const LAVA_FATAL_ORGANIC_MATERIALS = new Set([
+    'liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather', 'wood',
+]);
 const LIQUID_FLOW_RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
 
 function liquidFlowRiderCorpse(obj) {
@@ -12662,6 +12665,12 @@ function lavaObjectProtectedByObjResists(obj) {
         return false;
     }
     return !isBookOfTheDeadItem(obj);
+}
+
+function lavaFatalInventoryObjResists(item) {
+    if (lavaObjResistsHard(item)) return true;
+    rn2(100);
+    return false;
 }
 
 function lavaDirectFireExemptObject(obj, cls) {
@@ -14858,7 +14867,7 @@ function burnLavaWornBootsFirst(messages) {
 function lavaFatalOrganicInventoryItem(item, cls) {
     if (cls === 'scroll' || cls === 'spellbook') return true;
     const material = String(item?.material || item?.oc_material || '').toLowerCase();
-    if (LAVA_DIRECT_BURN_MATERIALS.has(material)) return true;
+    if (material) return LAVA_FATAL_ORGANIC_MATERIALS.has(material);
     const itemCls = itemClassKey(item);
     const kind = objectKindKey(item);
     if ((itemCls === 'food' || item?.otyp === FOOD_CLASS || item?.glyph === '%')
@@ -14867,7 +14876,7 @@ function lavaFatalOrganicInventoryItem(item, cls) {
     if (item?.globby || GLOB_TYPES.has(kind.replace(/^glob of /, ''))) return true;
     const profile = wishedDamageProfile(item);
     if (profile.erosionMatters && profile.primaryWord === 'burnt') return true;
-    return /\b(?:wax|leather|cloth|wood|wooden|paper|bone|corpse|meat|ration|food|fruit|egg|sack|bag|box|chest|leash|rope|bow|arrow|club|quarterstaff|aklys|bullwhip|sling|flute|harp|drum|whistle|horn)\b/.test(kind);
+    return /\b(?:wax|leather|cloth|wood|wooden|paper|corpse|meat|ration|food|fruit|egg|sack|bag|box|chest|leash|rope|bow|arrow|club|quarterstaff|aklys|bullwhip|sling|flute|harp|drum|whistle)\b/.test(kind);
 }
 
 function lavaFatalInventoryItemFireExempt(item, cls) {
@@ -14886,10 +14895,10 @@ function lavaFatalInventoryBurnSelection() {
     for (const item of game.inventory || []) {
         if (!item || item.in_use || item.inUse) continue;
         const cls = fireDestroyableInventoryClass(item);
+        if (cls !== 'potion' && !lavaFatalOrganicInventoryItem(item, cls)) continue;
         if (lavaFatalInventoryItemFireExempt(item, cls)) continue;
-        if (lavaObjResistsHard(item)) continue;
-        if (cls === 'potion' || lavaFatalOrganicInventoryItem(item, cls))
-            selected.push(item);
+        if (lavaFatalInventoryObjResists(item)) continue;
+        selected.push(item);
     }
     return selected;
 }
