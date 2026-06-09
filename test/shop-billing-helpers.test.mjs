@@ -53,6 +53,7 @@ const TOUCHSTONE = 473;
 const DART = 353;
 const CREAM_PIE = 10081;
 const KNIFE = 10026;
+const ARROW = 349;
 const SPEAR = 10030;
 const DWARVISH_SPEAR = 10102;
 const STILETTO = 10109;
@@ -28785,6 +28786,18 @@ function setupUntrapDestinationLandMine(options = {}) {
     return trap;
 }
 
+function setupUntrapDestinationArrowTrap(options = {}) {
+    const trap = setupUntrapDestinationWeb([], options);
+    trap.ttyp = ARROW_TRAP;
+    return trap;
+}
+
+function setupUntrapDestinationDartTrap(options = {}) {
+    const trap = setupUntrapDestinationWeb([], options);
+    trap.ttyp = DART_TRAP;
+    return trap;
+}
+
 test('#untrap current-square web and box prompts before removing web', async () => {
     const web = setupUntrapDestinationWeb([], { webX: 5, webY: 5, rng: [0] });
     const box = shopFloorContainer(881000);
@@ -31838,6 +31851,154 @@ test('#untrap adjacent land mine is blocked by a boulder for ordinary heroes', a
 
 test('#untrap ignores an unseen land mine', async () => {
     const trap = setupUntrapDestinationLandMine({ rng: [0] });
+    trap.tseen = false;
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game._pending_message, 'You know of no traps there.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap current-square arrow trap and box can skip trap for box prompt', async () => {
+    const trap = setupUntrapDestinationArrowTrap({ webX: 5, webY: 5, rng: [0] });
+    const box = shopFloorContainer(881031);
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapWebContainerConfirm');
+    assert.equal(game._pending_message, 'There is a container and an arrow trap here.  Disarm the arrow trap? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.context.move || 0, 0);
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'There is a large box here.  Check it for traps? [ynq] (q)');
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.includes(box), true);
+    assert.equal(game.context.move || 0, 0);
+});
+
+test('#untrap disarms a seen arrow trap into floor arrows', async () => {
+    const trap = setupUntrapDestinationArrowTrap({ rng: [0, 7, 1, 1, 1, 1, 1] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const arrows = game.level.objects.find(obj => obj.otyp === ARROW && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(3)', 'rnl(50)', 'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+    ]);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._pending_message, 'You disarm the trap.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(arrows);
+    assert.equal(arrows.kind, 'arrow');
+    assert.equal(arrows.quan, 43);
+    assert.equal(arrows.owt, 43);
+    assert.equal(arrows.opoisoned || false, false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap disarms a seen dart trap into poisoned floor darts', async () => {
+    const trap = setupUntrapDestinationDartTrap({ rng: [0, 5, 1, 1, 1, 1, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const darts = game.level.objects.find(obj => obj.otyp === DART && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(3)', 'rnl(50)', 'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(2)', 'rn2(100)',
+    ]);
+    assert.equal(game._pending_message, 'You disarm the trap.');
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(darts);
+    assert.equal(darts.kind, 'dart');
+    assert.equal(darts.quan, 45);
+    assert.equal(darts.owt, 45);
+    assert.equal(darts.opoisoned, true);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap user-made arrow trap in shop auto-sells after conversion', async () => {
+    const trap = setupUntrapDestinationArrowTrap({ madeby: true, rng: [0, 9, 1, 1, 1, 1, 1] });
+    const shkp = {
+        isshk: true,
+        shoproom: ROOMOFFSET,
+        shoptype: SHOPBASE,
+        shknam: 'Izchak',
+        mx: 1,
+        my: 1,
+        shk: { x: 1, y: 1 },
+        bill: [],
+        billct: 0,
+        minvent: [{ cls: 'coin', otyp: 466, glyph: '$', quan: 100 }],
+        m_id: 881032,
+    };
+    game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
+    game.level.monsters = [shkp];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    const arrows = game.level.objects.find(obj => obj.otyp === ARROW && obj.ox === 6 && obj.oy === 5);
+    assert.deepEqual(getRngLog().map(rngCallName), [
+        'rn2(2)', 'rnl(50)', 'rnd(2)', 'rn2(6)', 'rn2(11)', 'rn2(10)', 'rn2(10)', 'rn2(100)',
+    ]);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.ok(arrows);
+    assert.equal(arrows.quan, 41);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._shop_sale_pending || null, null);
+    assert.match(game._pending_message, /^You disarm your trap\.  You relinquish 41 arrows and receive .* in compensation\.$/);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap arrow trap failure can leave the hero in place', async () => {
+    const trap = setupUntrapDestinationArrowTrap({ rng: [1, 0] });
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=0']);
+    assert.equal(game._pending_message, 'That arrow trap is difficult to disarm.');
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.level.objects.some(obj => obj.otyp === ARROW), false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap failed adjacent dart trap disarm respects blocked movement', async () => {
+    const trap = setupUntrapDestinationDartTrap({ rng: [1, 1] });
+    installUntrapLevelCells([[6, 5, { typ: STONE, lit: true }]]);
+
+    await enterUntrapDirection();
+    await rhack('l');
+
+    assert.deepEqual(getRngLog(), ['rn2(3)=1', 'rnl(5)=1']);
+    assert.equal(game._pending_message, "Whoops...  Fortunately, you don't move onto it.");
+    assert.equal(game.level.traps.includes(trap), true);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, false);
+    assert.equal(game.context.move, 1);
+});
+
+test('#untrap ignores an unseen dart trap', async () => {
+    const trap = setupUntrapDestinationDartTrap({ rng: [0] });
     trap.tseen = false;
 
     await enterUntrapDirection();

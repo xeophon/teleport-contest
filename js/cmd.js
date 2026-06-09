@@ -538,9 +538,20 @@ function untrapLandMineDifficultMessage(trap, underHero) {
     return `${which} land mine is difficult to disarm.`;
 }
 
+function untrapShootingTrapName(trap) {
+    return trap?.ttyp === ARROW_TRAP ? 'arrow trap' : 'dart trap';
+}
+
+function untrapShootingTrapDifficultMessage(trap, underHero) {
+    const which = trap?.madeby_u ? 'Your' : underHero ? 'This' : 'That';
+    return `${which} ${untrapShootingTrapName(trap)} is difficult to disarm.`;
+}
+
 function untrapTrapReachName(trap) {
     if (trap?.ttyp === BEAR_TRAP) return 'bear trap';
     if (trap?.ttyp === LANDMINE) return 'land mine';
+    if (trap?.ttyp === ARROW_TRAP) return 'arrow trap';
+    if (trap?.ttyp === DART_TRAP) return 'dart trap';
     return 'web';
 }
 
@@ -558,12 +569,18 @@ function untrapHoldingTrapPromptName(trap) {
         return trap?.madeby_u ? 'your bear trap' : 'a bear trap';
     if (trap?.ttyp === LANDMINE)
         return trap?.madeby_u ? 'your land mine' : 'a land mine';
+    if (trap?.ttyp === ARROW_TRAP)
+        return trap?.madeby_u ? 'your arrow trap' : 'an arrow trap';
+    if (trap?.ttyp === DART_TRAP)
+        return trap?.madeby_u ? 'your dart trap' : 'a dart trap';
     return trap?.madeby_u ? 'your web' : 'a web';
 }
 
 function untrapHoldingTrapActionName(trap) {
     if (trap?.ttyp === BEAR_TRAP) return 'Disarm the bear trap';
     if (trap?.ttyp === LANDMINE) return 'Disarm the land mine';
+    if (trap?.ttyp === ARROW_TRAP) return 'Disarm the arrow trap';
+    if (trap?.ttyp === DART_TRAP) return 'Disarm the dart trap';
     return 'Remove the web';
 }
 
@@ -1506,6 +1523,35 @@ function placeConvertedLandMineObject(trap) {
     return obj;
 }
 
+function placeConvertedShootingTrapObject(trap, otyp) {
+    if (!game.level || !trap) return null;
+    const count = 50 - rnl(50);
+    const obj = mksobj(otyp, true, false);
+    const isArrow = otyp === ARROW;
+    Object.assign(obj, {
+        cls: 'weapon',
+        glyph: ')',
+        color: CLR_CYAN,
+        kind: isArrow ? 'arrow' : 'dart',
+        actualKind: isArrow ? 'arrow' : 'dart',
+        singular: isArrow ? 'arrow' : 'dart',
+        plural: isArrow ? 'arrows' : 'darts',
+        ox: trap.tx,
+        oy: trap.ty,
+        quan: count,
+        owt: count,
+        hidden: false,
+        buried: false,
+        transientProjectile: false,
+        contained: false,
+        container: null,
+    });
+    if (isArrow) obj.opoisoned = false;
+    game.level.objects ??= [];
+    game.level.objects.push(obj);
+    return obj;
+}
+
 function autoSellConvertedTrapObject(obj, x, y) {
     const sale = shopDroppedPaidObjectSaleInfo(obj, x, y);
     if (!sale) return '';
@@ -1618,6 +1664,36 @@ async function moveHeroOntoFailedUntrapLandMine(trap, dir) {
         vision_recalc(1);
     }
     return await finishHeroDartTrapResult(heroLandmineResult(trap, 'Whoops...', { forceTrap: true }));
+}
+
+async function moveHeroOntoFailedUntrapShootingTrap(trap, dir) {
+    if ((dir.dx || dir.dy) && !canMoveHeroIntoFailedUntrapTrap(trap)) {
+        await setMessage("Whoops...  Fortunately, you don't move onto it.", true);
+        return false;
+    }
+    if (dir.dx || dir.dy) {
+        const oldx = game.u?.ux || 0;
+        const oldy = game.u?.uy || 0;
+        if (game.u) {
+            game.u.ux0 = oldx;
+            game.u.uy0 = oldy;
+            game.u.ux = trap.tx;
+            game.u.uy = trap.ty;
+            game.u.umoved = true;
+            if (game.u.usteed) {
+                game.u.usteed.mx = trap.tx;
+                game.u.usteed.my = trap.ty;
+            }
+        }
+        newsym(oldx, oldy);
+        newsym(trap.tx, trap.ty);
+        vision_recalc(1);
+    }
+    const alreadySeen = !(dir.dx || dir.dy) && !!trap?.tseen;
+    const result = trap?.ttyp === ARROW_TRAP
+        ? heroArrowTrapResult(trap, 'Whoops...', alreadySeen)
+        : heroDartTrapResult(trap, 'Whoops...', alreadySeen);
+    return await finishHeroDartTrapResult(result);
 }
 
 function damageMonsterFromFailedBearUntrap(monster, messages) {
@@ -1740,6 +1816,59 @@ async function handleUntrapLandMine(trap, dir) {
 
     const message = `You disarm ${untrapLandMineWhich(trap)} land mine.`;
     const object = placeConvertedLandMineObject(trap);
+    const saleMessage = trap.madeby_u && object
+        ? autoSellConvertedTrapObject(object, trap.tx, trap.ty)
+        : '';
+    if (object) stackDroppedFloorObject(object);
+    deleteTrap(trap);
+    game.context.move = 1;
+    await setMessage([message, saleMessage].filter(Boolean).join('  '));
+    return true;
+}
+
+async function handleUntrapShootingTrap(trap, dir) {
+    const underHero = !dir.dx && !dir.dy;
+    const trapName = untrapShootingTrapName(trap);
+    if ((game.u?.utrap || 0) > 0) {
+        await setMessage(`You cannot deal with the ${trapName} while trapped${underHero ? ' in it' : ''}!`);
+        game.context.move = 1;
+        return true;
+    }
+    const boulder = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.otyp === BOULDER
+        && obj.ox === trap.tx && obj.oy === trap.ty);
+    if (boulder && !underHero && !heroPassesWalls()) {
+        await setMessage('There is a boulder in your way.');
+        return true;
+    }
+    const monster = untrapWebMonsterAt(trap);
+    if (monster) {
+        await setMessage(`${earthquakeMonsterName(monster)} is in the way.`);
+        return true;
+    }
+    if (await blockUntrapTightDiagonalReach(trap, dir)) return true;
+    if (!heroCanReachFloorForUntrap(underHero)) {
+        if (game.u?.usteed && heroRidingSkillLevel() < P_BASIC)
+            await setMessage("You aren't skilled enough to reach from a steed.");
+        else
+            await setMessage(`You are unable to reach the ${trapName}!`);
+        return true;
+    }
+
+    const chance = untrapTrapFailureChance(trap);
+    const failed = chance > 0 && rn2(chance);
+    if (failed) {
+        if (rnl(5)) {
+            if (await moveHeroOntoFailedUntrapShootingTrap(trap, dir)) return true;
+        } else {
+            await setMessage(untrapShootingTrapDifficultMessage(trap, underHero));
+        }
+        game.context.move = 1;
+        return true;
+    }
+
+    const message = `You disarm ${trap?.madeby_u ? 'your' : 'the'} trap.`;
+    const object = placeConvertedShootingTrapObject(trap, trap?.ttyp === ARROW_TRAP ? ARROW : DART);
     const saleMessage = trap.madeby_u && object
         ? autoSellConvertedTrapObject(object, trap.tx, trap.ty)
         : '';
@@ -71220,6 +71349,8 @@ export async function rhack(_cmd) {
                 await handleUntrapBearTrap(pending.trap, pending?.dir || { dx: 0, dy: 0 });
             else if (pending?.trap?.ttyp === LANDMINE)
                 await handleUntrapLandMine(pending.trap, pending?.dir || { dx: 0, dy: 0 });
+            else if (pending?.trap?.ttyp === ARROW_TRAP || pending?.trap?.ttyp === DART_TRAP)
+                await handleUntrapShootingTrap(pending.trap, pending?.dir || { dx: 0, dy: 0 });
             else
                 await handleUntrapWebTrap(pending?.trap, pending?.dir || { dx: 0, dy: 0 });
             return;
@@ -71348,7 +71479,11 @@ export async function rhack(_cmd) {
                 candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === BEAR_TRAP);
             const landMineTrap = (game.level?.traps || []).find(candidate =>
                 candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === LANDMINE);
-            const holdingTrap = webTrap || bearTrap || landMineTrap;
+            const arrowTrap = (game.level?.traps || []).find(candidate =>
+                candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === ARROW_TRAP);
+            const dartTrap = (game.level?.traps || []).find(candidate =>
+                candidate.tx === x && candidate.ty === y && candidate.tseen && candidate.ttyp === DART_TRAP);
+            const holdingTrap = webTrap || bearTrap || landMineTrap || dartTrap || arrowTrap;
             const boxes = (!dir.dx && !dir.dy) ? untrapBoxObjectsAt(x, y) : [];
             if ((holdingTrap || boxes.length) && await blockUntrapFloorReach(holdingTrap, dir, boxes))
                 return;
@@ -71373,6 +71508,10 @@ export async function rhack(_cmd) {
                 game._command_mode = 'untrapSqueakyTool';
                 return;
             }
+            if (dartTrap && await handleUntrapShootingTrap(dartTrap, dir))
+                return;
+            if (arrowTrap && await handleUntrapShootingTrap(arrowTrap, dir))
+                return;
             if (boxes.length && await beginUntrapBoxPrompt(boxes, { force, x, y }))
                 return;
             const loc = game.level?.at?.(x, y);
