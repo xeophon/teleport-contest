@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, BURN, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, BURN, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -45218,6 +45218,139 @@ test('levitating fatal command kicked object ouch does not consume recoil range'
     assert.match(game._pending_message, /Ouch!  That hurts!  You die\.\.\./);
     assert.doesNotMatch(game._pending_message, /You hurtle|You float|You kick|crashes open|The door|WHAMMM|comes loose/);
     assert.equal(game._death_cause, 'kicking a boulder');
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(1)=0']);
+});
+
+test('blind command kicked boulder on closed door feels target before object ouch damage', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = {
+        roomno: ROOMOFFSET,
+        typ: DOOR,
+        doormask: D_CLOSED,
+        flags: D_CLOSED,
+        lit: true,
+        disp_ch: ' ',
+    };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    Object.assign(game.u, { blind: true });
+    game.u._statusSuffix = ' Blind';
+    game.viz_array = [];
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512170 };
+    game.level.objects = [boulder];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 3]);
+
+    assert.equal(doorLoc.seenv || 0, 0);
+    assert.equal(doorLoc.disp_ch, ' ');
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'Ouch!  That hurts!');
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.equal(doorLoc.typ, DOOR);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(doorLoc.seenv, 1);
+    assert.equal(doorLoc.disp_ch, '`');
+    assert.equal(boulder.seen, true);
+    assert.equal(boulder._hide_until_seen, false);
+    assert.equal(game.u.uhp, 6);
+    assert.equal(game.u._woundedLegTurns || 0, 0);
+    assert.doesNotMatch(game._pending_message, /You kick|crashes open|The door|WHAMMM|comes loose|doesn't come loose|will cost/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=4']);
+});
+
+test('blind command kicked object ouch at drawbridge wall feels wall and wakes bridge side', async () => {
+    installStableNonShopFloorState();
+    Object.assign(game.u, { ux: 5, uy: 5, uhp: 10, uhpmax: 10, blind: true });
+    game.u._statusSuffix = ' Blind';
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const wallLoc = game.level.at(6, 5);
+    Object.assign(wallLoc, { roomno: 0, typ: DBWALL, lit: true });
+    const bridgeLoc = game.level.at(7, 5);
+    Object.assign(bridgeLoc, { roomno: 0, typ: DRAWBRIDGE_UP, flags: DB_WEST | DB_MOAT, lit: true });
+    const bridgeSideSleeper = ordinaryThrowTarget('jackal', 11, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    const wallSideSleeper = ordinaryThrowTarget('goblin', 2, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.monsters = [bridgeSideSleeper, wallSideSleeper];
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512169 };
+    game.level.objects = [boulder];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 3]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.u.uhp, 6);
+    assert.equal(wallLoc.typ, DBWALL);
+    assert.equal(bridgeLoc.typ, DRAWBRIDGE_UP);
+    assert.equal((bridgeLoc.flags & DB_WEST), DB_WEST);
+    assert.equal((bridgeLoc.flags & DB_MOAT), DB_MOAT);
+    assert.equal(wallLoc.seenv, 1);
+    assert.equal(boulder.seen, true);
+    assert.equal(boulder._hide_until_seen, false);
+    assert.deepEqual(game._maploc, { x: 7, y: 5 });
+    assert.equal(bridgeSideSleeper.msleeping, 0);
+    assert.equal(bridgeSideSleeper.mstrategy, 0);
+    assert.equal(wallSideSleeper.msleeping, 1);
+    assert.equal(wallSideSleeper.mstrategy, STRAT_WAITFORU);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.match(game._pending_message, /The drawbridge is unaffected\./);
+    assert.equal(game._pending_message.indexOf('Ouch!  That hurts!')
+        < game._pending_message.indexOf('The drawbridge is unaffected.'), true);
+    assert.doesNotMatch(game._pending_message, /You kick|crashes open|The door|WHAMMM|comes loose|doesn't come loose|will cost/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=4']);
+});
+
+test('fatal command kick at drawbridge wall dies from kicking a drawbridge', async () => {
+    installStableNonShopFloorState();
+    Object.assign(game.u, { ux: 5, uy: 5, uhp: 5, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const wallLoc = game.level.at(6, 5);
+    Object.assign(wallLoc, { roomno: 0, typ: DBWALL, lit: true });
+    const bridgeLoc = game.level.at(7, 5);
+    Object.assign(bridgeLoc, { roomno: 0, typ: DRAWBRIDGE_UP, flags: DB_WEST | DB_MOAT, lit: true });
+    game.level.objects = [];
+    game.inventory = [];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 4]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(wallLoc.typ, DBWALL);
+    assert.equal(bridgeLoc.typ, DRAWBRIDGE_UP);
+    assert.deepEqual(game._maploc, { x: 7, y: 5 });
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.match(game._pending_message, /The drawbridge is unaffected\./);
+    assert.match(game._pending_message, /You die\.\.\./);
+    assert.equal(game._death_cause, 'kicking a drawbridge');
+    assert.doesNotMatch(game._pending_message, /You hurtle|You float|crashes open|The door|WHAMMM/);
     assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(1)=0']);
 });
 

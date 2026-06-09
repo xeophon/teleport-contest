@@ -34760,6 +34760,7 @@ function kickOuchDeathCause(x, y, kickObjectName = '') {
     if (loc.typ === DOOR) return 'kicking a door';
     if (loc.typ === TREE) return 'kicking a tree';
     if (IS_STWALL(loc.typ)) return 'kicking a wall';
+    if (loc.typ === DRAWBRIDGE_UP || loc.typ === DRAWBRIDGE_DOWN) return 'kicking a drawbridge';
     if (IS_OBSTRUCTED(loc.typ)) return 'kicking a rock';
     if (loc.typ === SINK) return 'kicking a sink';
     if (loc.typ === STAIRS) return 'kicking the stairs';
@@ -34768,12 +34769,41 @@ function kickOuchDeathCause(x, y, kickObjectName = '') {
     return 'kicking something weird';
 }
 
+function feelKickOuchLocation(x, y) {
+    const loc = game.level?.at?.(x, y);
+    if (!loc) return;
+    const mon = (game.level?.monsters || []).find(candidate =>
+        candidate && !candidate.dead && candidate.mx === x && candidate.my === y);
+    if (loc.map_invisible && mon) return;
+    loc.seenv = loc.seenv || 1;
+    const obj = topFloorObjectAt(x, y);
+    if (obj) {
+        obj.seen = true;
+        obj._hide_until_seen = false;
+    }
+    newsym(x, y);
+}
+
 function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null } = {}) {
     messages.push('Ouch!  That hurts!');
     const stats = game.u?.acurr?.a || [];
     rn2(2);
     rn2(2);
-    if (isok(x, y)) wakeNearbyMonstersAt(x, y, 5 * 5);
+    let wakeX = x;
+    let wakeY = y;
+    if (isok(x, y)) {
+        if (game.u?.blind) feelKickOuchLocation(x, y);
+        if (isDrawbridgeWallAt(x, y) >= 0) {
+            messages.push('The drawbridge is unaffected.');
+            const bridge = findDrawbridgeAtOrWall(x, y);
+            if (bridge) {
+                wakeX = bridge.x;
+                wakeY = bridge.y;
+                game._maploc = { x: wakeX, y: wakeY };
+            }
+        }
+        wakeNearbyMonstersAt(wakeX, wakeY, 5 * 5);
+    }
     if (!rn2(3)) {
         const woundDuration = 5 + rnd(5);
         if (!game.u._woundedLegTurns && !game.u._woundedDexPenalty) {
@@ -34793,7 +34823,7 @@ function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null }
         }
         return null;
     }
-    const fatalResult = heroDartTrapFatalResult(messages, kickOuchDeathCause(x, y, kickObjectName));
+    const fatalResult = heroDartTrapFatalResult(messages, kickOuchDeathCause(wakeX, wakeY, kickObjectName));
     return fatalResult;
 }
 
