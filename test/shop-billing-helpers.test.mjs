@@ -30073,6 +30073,120 @@ test('Sting cuts already web-trapped hero free without moving or deleting web', 
     assert.equal(game.context.move, 1);
 });
 
+async function spendOneTrapTurn() {
+    game._pending_time_passed = 1;
+    pushKey('\0');
+    await moveloop_core();
+    resetInputState();
+}
+
+test('already lava-trapped fire-resistant hero sinks deeper on waited turn', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+        utrap: (2 << 8) | 2,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+    enableRngLog({ reset: true });
+
+    await spendOneTrapTurn();
+
+    assert.equal(game._pending_message, 'You sink deeper into the lava.');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok(game.u.utrap >= 259 && game.u.utrap <= 262);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'rnd(4)').length, 1);
+});
+
+test('already lava-trapped non-fire-resistant hero loses two thirds of hp while sinking', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 30,
+        uhpmax: 30,
+        fireResistance: false,
+        utrap: (2 << 8) | 2,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+
+    await spendOneTrapTurn();
+
+    assert.equal(game._pending_message, 'You sink deeper into the lava.');
+    assert.equal(game.u.uhp, 10);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok(game.u.utrap >= 259 && game.u.utrap <= 262);
+});
+
+test('already lava-trapped hero dies when sinking countdown expires', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+        utrap: 1 << 8,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: LAVAPOOL });
+
+    await spendOneTrapTurn();
+
+    assert.match(game._pending_message || '', /You sink below the surface and die\./);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._death_cause, 'dissolved in molten lava');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._pending_time_passed, 0);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'deathIdentify');
+    assert.match(game._pending_message || '', /Do you want your possessions identified\?/);
+});
+
+test('already lava-trapped hero clears trap state after leaving lava terrain', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+        utrap: (2 << 8) | 2,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    game.inventory = [];
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+
+    await spendOneTrapTurn();
+
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+    assert.doesNotMatch(game._pending_message || '', /sink deeper|surface and die/);
+});
+
 test('force-fighting a seen destination web with Sting cuts and deletes it', async () => {
     installStableNonSokobanTrapState();
     vision_reset();

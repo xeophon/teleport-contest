@@ -41,5 +41,5 @@ Result: 3097 passing tests.
 ## Remaining Gaps
 
 - Full `lava_effects()` inventory burn, lifesaving, wizard, and explore-mode handling remains incomplete.
-- Per-turn `sink_into_lava()` trap countdown and deeper-sinking messages remain future work.
+- Per-turn `sink_into_lava()` trap countdown and deeper-sinking messages are covered by `909-lava-trap-turn-sinking-2026-06-09.md`.
 - This slice intentionally does not broaden `pooleffects(FALSE)` into full `spoteffects()` pickup/trap behavior.

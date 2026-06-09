@@ -14845,6 +14845,41 @@ function heroLavaEntryEffect(targetMoveTyp) {
     return { messages, fatal: false, more: messages.length > 1 };
 }
 
+export function processHeroLavaSinkingTurn() {
+    if (!game.u?.utrap || game.u.utraptype !== TT_LAVA) return null;
+    const x = game.u.ux || 0;
+    const y = game.u.uy || 0;
+    if (!movementIsLavaAt(x, y)) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+        return { cleared: true };
+    }
+    if (game.u.uinvulnerable) return null;
+
+    if (!heroHasFireResistance())
+        game.u.uhp = Math.trunc(((game.u.uhp || 0) + 2) / 3);
+
+    game.u.utrap = (game.u.utrap || 0) - (1 << 8);
+    if (game.u.utrap < (1 << 8)) {
+        const messages = ['You sink below the surface and die.'];
+        burnAwayHeroSlime(messages);
+        game.u.uhp = 0;
+        game._death_cause = 'dissolved in molten lava';
+        game._death_current_move = 1;
+        return {
+            message: messages.join('  '),
+            fatal: true,
+            more: true,
+        };
+    }
+
+    if (!game.u.umoved) {
+        game.u.utrap += rnd(4);
+        return { message: 'You sink deeper into the lava.' };
+    }
+    return {};
+}
+
 function addBootsOffLavaFallout(item, messages, targetMoveTyp, discoveryKind = objectKindKey(item)) {
     item.known = true;
     recordKnownArmorDiscovery(discoveryKind, false);
