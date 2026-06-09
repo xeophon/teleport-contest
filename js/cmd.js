@@ -823,7 +823,8 @@ function applyChestTrapFirePayload(box, messages) {
     }
 
     const directResult = applyChestTrapFireDamage(messages, damage, 'killed by a tower of flame');
-    if (directResult.fatal || directResult.lifeSaving) return directResult;
+    if (directResult.fatal) return directResult;
+    if (directResult.lifeSaving) restoreLifeSavedHeroForContinuation();
 
     burnAwayHeroSlime(messages);
     const fireInventory = fireDamageInventory(origDamage, false, false, { allowLifeSaving: true });
@@ -831,13 +832,21 @@ function applyChestTrapFirePayload(box, messages) {
     if (fireInventory.lifeSaving || fireInventory.fatal) {
         game._death_cause = fireInventory.deathCause || 'killed by a tower of flame';
         return {
-            lifeSaving: !!fireInventory.lifeSaving,
+            lifeSaving: fireInventory.fatal ? !!fireInventory.lifeSaving : !!directResult.lifeSaving || !!fireInventory.lifeSaving,
             fatal: !!fireInventory.fatal,
             more: true,
         };
     }
 
-    return applyChestTrapFireDamage(messages, fireInventory.damage, fireInventory.deathCause || 'killed by a tower of flame');
+    const inventoryDamageResult = applyChestTrapFireDamage(messages, fireInventory.damage, fireInventory.deathCause || 'killed by a tower of flame');
+    if (directResult.lifeSaving && !inventoryDamageResult.lifeSaving && !inventoryDamageResult.fatal && game.u) {
+        game._life_saving_post_continue_hp = game.u.uhp;
+    }
+    return {
+        ...inventoryDamageResult,
+        lifeSaving: inventoryDamageResult.fatal ? !!inventoryDamageResult.lifeSaving : !!directResult.lifeSaving || !!inventoryDamageResult.lifeSaving,
+        more: !!directResult.more || !!inventoryDamageResult.more,
+    };
 }
 
 function chestTrapExplosionObjectsAt(box) {
