@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -23418,14 +23418,65 @@ function heroLandingIceWarningMessage(x, y) {
     return 'The ice seems very soft and slushy.';
 }
 
-async function heroLandingSpotEffectsNoPickup(messages) {
+function clearModeledOneShotSpecialRoom(room) {
+    if (room?.rtype !== MORGUE) return;
+    room.rtype = OROOM;
+    if (!(game.level?.rooms || []).some(candidate => candidate?.rtype === MORGUE)
+        && !(game.level?.subrooms || []).some(candidate => candidate?.rtype === MORGUE)) {
+        if (game.level?.flags) game.level.flags.has_morgue = false;
+    }
+}
+
+async function heroLandingSpecialRoomEffectsNoPickup(x, y, messages, options = {}) {
+    const oldX = options.oldX ?? game.u?.ux0 ?? x;
+    const oldY = options.oldY ?? game.u?.uy0 ?? y;
+    const oldRoomno = game.level?.at(oldX, oldY)?.roomno || 0;
+    const newRoomno = game.level?.at(x, y)?.roomno || 0;
+    if (!newRoomno || newRoomno === oldRoomno) return { more: false };
+
+    let more = false;
+    const shopRoom = levelRoomByRoomno(newRoomno);
+    if (shopRoom?.rtype >= SHOPBASE) {
+        const shkp = shopRoom.resident || (game.level?.monsters || [])
+            .find(mon => mon.isshk && mon.shoproom === newRoomno);
+        if (shkp?.isshk && shkp.mpeaceful && !shkp.following) {
+            const hello = shopkeeperHello(shkp);
+            const shopIndex = (shkp.shoptype || shopRoom.rtype) - SHOPBASE;
+            const shopName = SHOP_TYPES[shopIndex]?.name || 'shop';
+            const shopkeeperName = shkp.shknam || shkp.shopkeeperName || shkp.givenName || 'shopkeeper';
+            const possessive = shopkeeperName.endsWith('s') ? `${shopkeeperName}'` : `${shopkeeperName}'s`;
+            messages.push(`"${hello}, ${game.plname || 'Hero'}!  Welcome${shkp.visitct ? ' again' : ''} to ${possessive} ${shopName}!"`);
+            shkp.visitct = (shkp.visitct || 0) + 1;
+        }
+    }
+
+    const templeEntry = prepareUntendedTempleEntry(newRoomno, oldRoomno);
+    if (templeEntry) {
+        const ghostText = await finishUntendedTempleEntry();
+        const templeText = [templeEntry.text, ghostText].filter(Boolean).join('  ');
+        if (templeText) messages.push(templeText);
+        more = more || !!ghostText;
+    }
+
+    const roomEntryText = specialRoomEntryText(newRoomno);
+    if (roomEntryText) {
+        messages.push(roomEntryText);
+        clearModeledOneShotSpecialRoom(levelRoomByRoomno(newRoomno));
+    }
+
+    return { more };
+}
+
+async function heroLandingSpotEffectsNoPickup(messages, options = {}) {
     const x = game.u?.ux || 0;
     const y = game.u?.uy || 0;
+    const specialRoom = await heroLandingSpecialRoomEffectsNoPickup(x, y, messages, options);
     const trap = await heroLandingTrapEffectAt(x, y, messages);
-    if (trap.more || trap.trapResult) return trap;
+    if (trap.more || trap.trapResult)
+        return { ...trap, more: !!(specialRoom.more || trap.more) };
     const iceWarning = heroLandingIceWarningMessage(game.u?.ux || x, game.u?.uy || y);
     if (iceWarning) messages.push(iceWarning);
-    return trap;
+    return { ...trap, more: !!(specialRoom.more || trap.more) };
 }
 
 async function heroDropBallPostRelocationEffects(x, y, messages) {
@@ -59785,11 +59836,15 @@ export async function rhack(_cmd) {
                 game.u.utraptype = null;
             }
             if (lavaSafeTeleport) {
+                const landingOrigin = {
+                    oldX: lavaFatalEntry ? game.u?.ux0 ?? game.u?.ux ?? 0 : game.u?.ux ?? 0,
+                    oldY: lavaFatalEntry ? game.u?.uy0 ?? game.u?.uy ?? 0 : game.u?.uy ?? 0,
+                };
                 const teleport = safeTeleportHeroSameLevel({ returnResult: true });
                 if (teleport.ok) {
                     clearFatalLavaRescueState();
                     const messages = [game._pending_message || lifeSavingMessage, teleport.message].filter(Boolean);
-                    const landing = await heroLandingSpotEffectsNoPickup(messages);
+                    const landing = await heroLandingSpotEffectsNoPickup(messages, landingOrigin);
                     game._pending_message = messages.join('  ');
                     game._message_more = landing.more || landing.trapResult ? 1 : 0;
                     if (landing.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
@@ -63629,11 +63684,15 @@ export async function rhack(_cmd) {
             const survivalMessages = ["OK, so you don't die."];
             let landing = null;
             if (lavaRefusalSafeTeleport) {
+                const landingOrigin = {
+                    oldX: lavaRefusalFatalEntry ? game.u?.ux0 ?? game.u?.ux ?? 0 : game.u?.ux ?? 0,
+                    oldY: lavaRefusalFatalEntry ? game.u?.uy0 ?? game.u?.uy ?? 0 : game.u?.uy ?? 0,
+                };
                 const teleport = safeTeleportHeroSameLevel({ returnResult: true });
                 if (teleport.ok) {
                     clearFatalLavaRescueState();
                     if (teleport.message) survivalMessages.push(teleport.message);
-                    landing = await heroLandingSpotEffectsNoPickup(survivalMessages);
+                    landing = await heroLandingSpotEffectsNoPickup(survivalMessages, landingOrigin);
                 } else if (lavaRefusalFatalEntry) {
                     const failedRescue = handleFatalLavaSafeTeleportFailure(survivalMessages);
                     await setMessage(survivalMessages.join('  '), failedRescue.retry || failedRescue.more);
