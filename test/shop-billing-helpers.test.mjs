@@ -35161,6 +35161,88 @@ test('hero land mine adjacent lava fills pit and uses lava death prompt', async 
     assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
 });
 
+test('hero land mine adjacent lava fill sinks fire-resistant hero', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+    });
+    game.inventory = [];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const cells = new Map([
+        ['6,5', targetLoc],
+        ['6,4', { roomno: ROOMOFFSET, typ: LAVAPOOL }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    markSquareVisible(6, 5);
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+    await rhack('l');
+
+    assert.match(game._pending_message,
+        /KAABLAMM!!!  You triggered a land mine!  The hole fills with lava!  You sink into the molten lava, but it only burns slightly!/);
+    assert.doesNotMatch(game._pending_message, /burn to a crisp|You die/);
+    assert.equal(targetLoc.typ, LAVAPOOL);
+    assert.equal(game.u.uhp, 14);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok((game.u.utrap || 0) > 0);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+});
+
+test('hero land mine lava fill burns water walking boots before fire-resistant sink', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        uac: 9,
+        fireResistance: true,
+    });
+    const boots = wornArmor(330005, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const cells = new Map([
+        ['6,5', targetLoc],
+        ['6,4', { roomno: ROOMOFFSET, typ: LAVAPOOL }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    markSquareVisible(6, 5);
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    enableRngLog({ reset: true });
+    installCoreRngValues([4, 2, 3, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.match(pending, /The hole fills with lava!/);
+    assert.match(pending, /Your .*boots burst into flame!/);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.ok(pending.search(/Your .*boots burst into flame!/) < pending.indexOf('You sink into the molten lava'));
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, false);
+    assert.equal(game.u.uac, 10);
+    assert.equal(game.u.uhp, 14);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+});
+
 test('deferred hero land mine scatter breaks acid before boulder pit fill', async () => {
     installStableNonShopFloorState();
     vision_reset();

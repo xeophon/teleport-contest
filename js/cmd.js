@@ -6709,16 +6709,15 @@ function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
     if (game.u?.ux !== x || game.u?.uy !== y) return;
     if (game.u?.levitating || game.u?.flying) return;
     if (typ === LAVAPOOL) {
-        if (game.u?.fireResistance) return;
-        d(6, 6);
-        game.u.uhp = 0;
-        game._death_cause = 'burned by molten lava';
-        game._command_mode = 'lavaDeathMore';
-        game.context ??= {};
-        game.context.move = 0;
-        game._pending_time_passed = 0;
-        messages.push('You fall into the molten lava!  You burn to a crisp...');
-        messages.push('You die...');
+        const lavaEffect = heroLavaEntryEffect(LAVAPOOL);
+        messages.push(...lavaEffect.messages);
+        if (lavaEffect.fatal) {
+            game.u.uhp = 0;
+            game.context ??= {};
+            game.context.move = 0;
+            game._pending_time_passed = 0;
+            messages.push('You die...');
+        }
         return;
     }
     game.u.uinwater = 1;
