@@ -34753,10 +34753,27 @@ function applyKickedBoxImpact(box, range, messages) {
     return { handled: range < 2 };
 }
 
-function applyKickedObjectOuchDamage() {
+function kickOuchDeathCause(x, y, kickObjectName = '') {
+    if (kickObjectName) return `kicking ${kickObjectName}`;
+    const loc = game.level?.at?.(x, y);
+    if (!loc) return 'kicking nothing';
+    if (loc.typ === DOOR) return 'kicking a door';
+    if (loc.typ === TREE) return 'kicking a tree';
+    if (IS_STWALL(loc.typ)) return 'kicking a wall';
+    if (IS_OBSTRUCTED(loc.typ)) return 'kicking a rock';
+    if (loc.typ === SINK) return 'kicking a sink';
+    if (loc.typ === STAIRS) return 'kicking the stairs';
+    if (loc.typ === LADDER) return 'kicking a ladder';
+    if (loc.typ === IRONBARS) return 'kicking an iron bar';
+    return 'kicking something weird';
+}
+
+function applyKickOuchDamage(x, y, messages, { kickObjectName = '' } = {}) {
+    messages.push('Ouch!  That hurts!');
     const stats = game.u?.acurr?.a || [];
     rn2(2);
     rn2(2);
+    if (isok(x, y)) wakeNearbyMonstersAt(x, y, 5 * 5);
     if (!rn2(3)) {
         const woundDuration = 5 + rnd(5);
         if (!game.u._woundedLegTurns && !game.u._woundedDexPenalty) {
@@ -34766,8 +34783,10 @@ function applyKickedObjectOuchDamage() {
         game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, woundDuration);
         game.u._woundedLegSide = 'right';
     }
-    const damage = rnd((stats[A_CON] ?? 10) > 15 ? 3 : 5);
-    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
+    const damage = maybeHalfPhysicalDamage(rnd((stats[A_CON] ?? 10) > 15 ? 3 : 5));
+    if (game.u) game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
+    if ((game.u?.uhp || 0) > 0) return null;
+    return heroDartTrapFatalResult(messages, kickOuchDeathCause(x, y, kickObjectName));
 }
 
 function placeKickedFloorObject(obj, x, y, messages, options = {}) {
@@ -34905,8 +34924,10 @@ function tryKickLooseFloorObject(obj, x, y, messages) {
         else
             messages.push(`${floorObjectTheSubject(obj)} ${kickedLooseObjectDoesNotVerb(obj)} come loose.`);
         if (!lowRangeKickedObjectAvoidsOuch()) {
-            applyKickedObjectOuchDamage();
-            messages.push('Ouch!  That hurts!');
+            const trapResult = applyKickOuchDamage(x, y, messages, {
+                kickObjectName: kickedFloorObjectKickName(obj),
+            });
+            return { handled: true, messages, moved: false, trapResult };
         }
         return { handled: true, messages, moved: false };
     }
@@ -35174,12 +35195,14 @@ function scatterKickedGoldStack(obj, sx, sy, blastForce, messages) {
     return scattered;
 }
 
-function applyKickedObjectThumpOuch(messages) {
+function applyKickedObjectThumpOuch(messages, x, y, obj) {
     messages.push('Thump!');
     if (!lowRangeKickedObjectAvoidsOuch()) {
-        applyKickedObjectOuchDamage();
-        messages.push('Ouch!  That hurts!');
+        return applyKickOuchDamage(x, y, messages, {
+            kickObjectName: kickedFloorObjectKickName(obj),
+        });
     }
+    return null;
 }
 
 function kickedObjectIronBarsBreakChance(obj) {
@@ -35354,8 +35377,11 @@ async function kickFloorObjectToward(dir, x, y) {
     if (kickedObjectLooseSourceAt(x, y)) {
         if (!obj) return { handled: false };
         if (!kickFloorObjectLooseSupported(obj)) {
-            applyKickedObjectOuchDamage();
-            return { handled: true, messages: ['Ouch!  That hurts!'], moved: false };
+            const messages = [];
+            const trapResult = applyKickOuchDamage(x, y, messages, {
+                kickObjectName: kickedFloorObjectKickName(obj),
+            });
+            return { handled: true, messages, moved: false, trapResult };
         }
         const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
         kickFloorObjectRange(obj, x, y, dir);
@@ -35388,8 +35414,8 @@ async function kickFloorObjectToward(dir, x, y) {
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
     if (range < 2) {
-        applyKickedObjectThumpOuch(messages);
-        return { handled: true, messages, moved: false };
+        const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj);
+        return { handled: true, messages, moved: false, trapResult };
     }
     if (!gate && !canHandleMonsterImpact && !ordinarySameLevelFlight)
         return { handled: true, messages, moved: false };
@@ -35403,8 +35429,8 @@ async function kickFloorObjectToward(dir, x, y) {
             return { handled: true, messages, moved: true, scattered: true };
         }
         if (quantity > 300) {
-            applyKickedObjectThumpOuch(messages);
-            return { handled: true, messages, moved: false };
+            const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj);
+            return { handled: true, messages, moved: false, trapResult };
         }
     }
 
@@ -71201,22 +71227,11 @@ export async function rhack(_cmd) {
             return;
         }
         if (!target || IS_OBSTRUCTED(target.typ) || target.typ === STAIRS || target.typ === LADDER) {
-            const stats = game.u?.acurr?.a || [];
-            rn2(2);
-            rn2(2);
-            if (!rn2(3)) {
-                const woundDuration = 5 + rnd(5);
-                if (!game.u._woundedLegTurns && !game.u._woundedDexPenalty) {
-                    game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] || 9) - 1);
-                    game.u._woundedDexPenalty = 1;
-                }
-                game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, woundDuration);
-                game.u._woundedLegSide = 'right';
-            }
-            const damage = rnd((stats[4] ?? 10) > 15 ? 3 : 5);
-            game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
-            await setMessage('Ouch!  That hurts!', game.u.uhp <= 0);
+            const messages = [];
+            const trapResult = applyKickOuchDamage(x, y, messages);
+            await setMessage(messages.join('  '), messages.length > 1 || !!trapResult?.more);
             game._command_mode = null;
+            if (trapResult && applyLifeSavingOrFatalCommandMode(trapResult)) return;
             game.context.move = 1;
             return;
         }

@@ -45147,6 +45147,121 @@ test('command kicked boulder on closed door uses object ouch instead of door kic
     assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=4']);
 });
 
+test('command kicked object ouch wakes nearby sleepers', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    const nearbySleeper = ordinaryThrowTarget('jackal', 8, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    const farSleeper = ordinaryThrowTarget('goblin', 12, 5, {
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.level.monsters = [nearbySleeper, farSleeper];
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512163 };
+    game.level.objects = [boulder];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 3]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.equal(nearbySleeper.msleeping, 0);
+    assert.equal(nearbySleeper.mstrategy, 0);
+    assert.equal(farSleeper.msleeping, 1);
+    assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=4']);
+});
+
+test('command kicked object ouch can be fatal', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    Object.assign(game.u, { uhp: 5, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512164 };
+    game.level.objects = [boulder];
+    game.inventory = [];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 4]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.match(game._pending_message, /Ouch!  That hurts!  You die\.\.\./);
+    assert.equal(game._death_cause, 'kicking a boulder');
+    assert.doesNotMatch(game._pending_message, /You kick|crashes open|The door|WHAMMM|comes loose/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(1)=0']);
+});
+
+test('command kicked object ouch uses life saving', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    Object.assign(game.u, { uhp: 5, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512165 };
+    const amulet = wornHeroLifeSavingAmulet(512166, 'a');
+    game.level.objects = [boulder];
+    game.inventory = [amulet];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 4, 0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.match(game._pending_message,
+        /Ouch!  That hurts!  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._death_cause, 'kicking a boulder');
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=5', 'rn2(19)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+});
+
 test('command kicked paid container on closed door comes loose and bills top plus contents live', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });

@@ -24,7 +24,8 @@
 
 ## Remaining follow-up
 
-- Exact `kick_ouch()` death, life saving, blindness feel-location, drawbridge-wall, wake-nearby, and levitation/airlevel hurtle fallout remain broader command-kick work.
+- `kick_ouch()` death, life saving, wake-nearby, and half-physical damage are covered in audit `874`.
+- Blindness feel-location, drawbridge-wall maploc feedback, and levitation/airlevel hurtle fallout remain broader command-kick work.
 - Shared-wall multi-shop ownership remains broader than this loose-source behavior slice.
 
 ## Verification
