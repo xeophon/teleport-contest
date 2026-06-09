@@ -23418,6 +23418,86 @@ function heroLandingIceWarningMessage(x, y) {
     return 'The ice seems very soft and slushy.';
 }
 
+function wornLevitationBootsItem() {
+    return (game.inventory || []).find(item =>
+        isWornArmorItem(item) && armorSlot(item) === 'boots'
+        && objectKindKey(item) === 'levitation boots') || null;
+}
+
+function wornLevitationRingItems() {
+    return (game.inventory || []).filter(item =>
+        wornRingItem(item) && objectKindKey(item) === 'ring of levitation');
+}
+
+function heroLandingSinkLevitationActive() {
+    return !!(game.u?.levitating || game.u?.levitation || game.u?.Levitation);
+}
+
+function removeSinkFallLevitationBoots(boots) {
+    if (!boots || !game.u) return '';
+    const oldAc = wornArmorAcValueGreatestErosion(boots);
+    const baseName = equipmentBaseName(boots);
+    boots.worn = false;
+    boots.owornmask = 0;
+    boots.line = `${boots.letter || '?'} - ${baseName}`;
+    game.u.uac = (game.u.uac ?? 10) + oldAc;
+    recordKnownArmorDiscovery('levitation boots', false);
+    updateWornDisplacement();
+    return `You were wearing ${baseName}.`;
+}
+
+function removeSinkFallLevitationRing(ring) {
+    if (!ring) return '';
+    const baseName = equipmentBaseName(ring);
+    const messageName = wornRingOffMessageName(ring, baseName);
+    ring.worn = false;
+    ring.owornmask = 0;
+    ring.wornMask = 0;
+    ring._wornMask = 0;
+    ring.line = `${ring.letter || '?'} - ${baseName}`;
+    return `You were wearing ${messageName}.`;
+}
+
+function clearHeroLevitationStateAfterSinkFall() {
+    if (!game.u) return;
+    game.u.levitating = false;
+    game.u.levitation = false;
+    game.u.Levitation = false;
+    game.u._levitationTimeout = 0;
+}
+
+function heroLandingSinkFallEffectAt(x, y, messages) {
+    const loc = game.level?.at?.(x, y);
+    if (loc?.typ !== SINK || !heroLandingSinkLevitationActive()) return { more: false, trapResult: null };
+
+    const boots = wornLevitationBootsItem();
+    const rings = wornLevitationRingItems();
+    const controlledFlight = !!(game.u?.flying || game.u?.Flying);
+    const canCrash = !controlledFlight;
+    let trapResult = null;
+
+    if (canCrash) {
+        const con = game.u?.acurr?.a?.[A_CON] ?? 10;
+        const damage = game.u?.uinvulnerable ? 0 : maybeHalfPhysicalDamage(rn1(8, 25 - con));
+        messages.push('You crash to the floor!');
+        if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+        if ((game.u?.uhp || 0) <= 0)
+            trapResult = heroDartTrapFatalResult(messages, 'fell onto a sink');
+    } else {
+        messages.push('You gain control of your flight.');
+    }
+
+    for (const ring of rings) {
+        const message = removeSinkFallLevitationRing(ring);
+        if (message) messages.push(message);
+    }
+    const bootMessage = removeSinkFallLevitationBoots(boots);
+    if (bootMessage) messages.push(bootMessage);
+    clearHeroLevitationStateAfterSinkFall();
+
+    return { more: messages.length > 1 || !!trapResult?.more, trapResult };
+}
+
 function clearModeledOneShotSpecialRoom(room) {
     if (room?.rtype !== MORGUE) return;
     room.rtype = OROOM;
@@ -23471,12 +23551,15 @@ async function heroLandingSpotEffectsNoPickup(messages, options = {}) {
     const x = game.u?.ux || 0;
     const y = game.u?.uy || 0;
     const specialRoom = await heroLandingSpecialRoomEffectsNoPickup(x, y, messages, options);
+    const sink = heroLandingSinkFallEffectAt(x, y, messages);
+    if (sink.trapResult)
+        return { ...sink, more: !!(specialRoom.more || sink.more) };
     const trap = await heroLandingTrapEffectAt(x, y, messages);
     if (trap.more || trap.trapResult)
-        return { ...trap, more: !!(specialRoom.more || trap.more) };
+        return { ...trap, more: !!(specialRoom.more || sink.more || trap.more) };
     const iceWarning = heroLandingIceWarningMessage(game.u?.ux || x, game.u?.uy || y);
     if (iceWarning) messages.push(iceWarning);
-    return { ...trap, more: !!(specialRoom.more || trap.more) };
+    return { ...trap, more: !!(specialRoom.more || sink.more || trap.more) };
 }
 
 async function heroDropBallPostRelocationEffects(x, y, messages) {

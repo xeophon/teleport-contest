@@ -11,6 +11,8 @@ Date: 2026-06-09
 - `nethack-c/upstream/src/trap.c:6942` through `nethack-c/upstream/src/trap.c:6961` clears the lava-effects recursion guard after a successful rescue and manually calls `spoteffects(FALSE)`, so landing traps still run while pickup/autopickup remains disabled.
 - `nethack-c/upstream/src/hack.c:3352` calls `check_special_room(FALSE)` before sink, trap, pickup, and melting-ice handling.
 - `nethack-c/upstream/src/hack.c:3657` through `nethack-c/upstream/src/hack.c:3795` handles shop entry, special-room entry messages, room discovery, one-shot room type clearing, and wake-room fallout.
+- `nethack-c/upstream/src/hack.c:3353` through `nethack-c/upstream/src/hack.c:3354` runs `dosinkfall()` when landing on a sink while levitating, before trap handling.
+- `nethack-c/upstream/src/hack.c:835` through `nethack-c/upstream/src/hack.c:918` handles sink levitation fallout: crash/wobble/flight-control messaging, physical damage, levitation item/source removal, and flight recalculation.
 - `nethack-c/upstream/src/hack.c:3402` through `nethack-c/upstream/src/hack.c:3414` runs the Warning + melting-ice messages after trap handling and pickup-gated sections.
 - `nethack-c/upstream/src/timeout.c:63` and `nethack-c/upstream/src/timeout.c:845` define the timeout-end messages for those temporary abilities.
 
@@ -24,6 +26,7 @@ Date: 2026-06-09
 - Successful direct fatal-lava rescues now run a current-square landing trap pass after the safe teleport in both life-saving and wizard/explore refusal continuations. The hook reuses the movement trap result helpers, appends trap messages to the rescue message, and routes fatal/life-saving trap outcomes through the normal command-mode handling.
 - The rescue landing hook intentionally avoids movement pickup, autopickup, object-list, and floor-object helpers, matching the `spoteffects(FALSE)` pickup-disabled constraint for this trap slice.
 - Rescue landing now runs the modeled pickup-independent special-room entry effects before traps: shopkeeper greetings, untended temple entry text/ghost rolls, and current morgue entry text. The modeled morgue entry clears the one-shot room type after messaging; broader room discovery, shop accounting state, and wake-room fallout remain outside this slice.
+- Rescue landing now runs a modeled sink levitation fallout before traps: sink crash/flight-control messaging, physical crash damage with life-saving/fatal routing, timed levitation cleanup, and forced removal of worn levitation rings/boots.
 - Rescue landing now also runs the pickup-independent melting-ice Warning tail from `spoteffects(FALSE)` when the safe teleport lands on timed ice.
 
 ## Tests
@@ -34,6 +37,7 @@ Date: 2026-06-09
 - `m-prefix fatal lava life saving warns on melting ice landing`
 - `explore m-prefix fatal lava rescue triggers landing trap without pickup`
 - `explore m-prefix fatal lava rescue reports morgue landing without pickup`
+- `explore m-prefix fatal lava rescue sink landing ends timed levitation without pickup`
 - `explore m-prefix fatal lava rescue warns on melting ice landing`
 - `already lava-trapped countdown death uses life saving and safe teleport`
 - `explore lava-trapped countdown death decline clears trap and teleports`
@@ -45,6 +49,7 @@ node --test --test-reporter=dot --test-name-pattern "m-prefix fatal lava consume
 node --test --test-reporter dot --test-name-pattern "m-prefix fatal lava life saving warns on melting ice landing" test/shop-billing-helpers.test.mjs
 node --test --test-reporter dot --test-name-pattern "explore m-prefix fatal lava rescue triggers landing trap without pickup" test/shop-billing-helpers.test.mjs
 node --test --test-reporter dot --test-name-pattern "explore m-prefix fatal lava rescue reports morgue landing without pickup" test/shop-billing-helpers.test.mjs
+node --test --test-reporter dot --test-name-pattern "explore m-prefix fatal lava rescue sink landing ends timed levitation without pickup" test/shop-billing-helpers.test.mjs
 node --test --test-reporter dot --test-name-pattern "explore m-prefix fatal lava rescue warns on melting ice landing" test/shop-billing-helpers.test.mjs
 node --test --test-reporter dot --test-name-pattern "fatal lava" test/shop-billing-helpers.test.mjs
 node --test --test-reporter=dot --test-name-pattern "lava safe|safe teleports twice|fatal lava|lava-trapped countdown|m-prefix.*lava|drum earthquake lava|land mine adjacent lava|temporary ability to survive burning|temporary ability to walk on liquid" test/shop-billing-helpers.test.mjs
@@ -59,4 +64,4 @@ Result: focused lava rescue retry/countermeasure tests passed; broader lava patt
 
 ## Remaining Gaps
 
-- Direct fatal lava rescue now covers the landing trap, pickup-disabled, modeled special-room entry, and melting-ice Warning parts of C's manual `spoteffects(FALSE)`. Remaining broader landing effects include sink handling, defensive hidden-monster cues where applicable, and fuller special-room fallout such as room discovery, shop accounting state, and wake-room behavior.
+- Direct fatal lava rescue now covers the landing trap, pickup-disabled, modeled special-room entry, modeled sink levitation fallout, and melting-ice Warning parts of C's manual `spoteffects(FALSE)`. Remaining broader landing effects include defensive hidden-monster cues where applicable, sink self-touch/floor-weapon damage details, and fuller special-room fallout such as room discovery, shop accounting state, and wake-room behavior.
