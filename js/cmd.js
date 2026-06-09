@@ -19584,13 +19584,41 @@ function monsterResistsCold(mon) {
         || data.coldResistance || data.resistsCold || data.resists_cold);
 }
 
+const M3_INFRAVISIBLE = 0x0200;
+const WAKE_MESSAGE_INFRARED_HIDDEN_MLETS = new Set(['blob', 'fungus', 'lizard', 'snake', 'spider', 'S']);
+
+function monsterWakeMessageInfravisible(mon) {
+    const data = mon?.data || {};
+    if (mon?.infravisible === false || mon?.infraVisible === false || mon?.infravisionVisible === false
+        || data.infravisible === false || data.infraVisible === false || data.infravisionVisible === false)
+        return false;
+    if (mon?.infravisible || mon?.infraVisible || mon?.infravisionVisible
+        || data.infravisible || data.infraVisible || data.infravisionVisible)
+        return true;
+    const mflags3 = mon?.mflags3 ?? mon?.m3 ?? mon?.flags3 ?? data.mflags3 ?? data.m3 ?? data.flags3;
+    if (Number.isFinite(Number(mflags3)) && (Number(mflags3) & M3_INFRAVISIBLE)) return true;
+    const flagText = `${mon?.mflags3 || ''} ${mon?.m3 || ''} ${mon?.flags3 || ''} ${data.mflags3 || ''} ${data.m3 || ''} ${data.flags3 || ''}`;
+    if (/\bM3_INFRAVISIBLE\b|infravisible/i.test(flagText)) return true;
+    const mlet = data.mlet || mon?.mlet || '';
+    const name = String(data.name || mon?.name || '').toLowerCase();
+    if (WAKE_MESSAGE_INFRARED_HIDDEN_MLETS.has(mlet)) return false;
+    return !(mon?.mindless || data.mindless || mon?.nonliving || data.nonliving || name.endsWith(' golem'));
+}
+
+function monsterCanseemonForWakeMessage(mon) {
+    if (!mon || game.u?.blind || mon.mundetected) return false;
+    if ((mon.minvis || mon.invis || mon.invisible) && !game.u?.seeInvisible) return false;
+    if (cansee(mon.mx, mon.my)) return true;
+    return !!(game.u?.infravision && monsterWakeMessageInfravisible(mon) && couldsee(mon.mx, mon.my));
+}
+
 function wakeNearbyMonstersAt(x, y, distance, messages = null) {
     for (const sleeper of game.level?.monsters || []) {
         if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
         const dx = (sleeper.mx || 0) - x;
         const dy = (sleeper.my || 0) - y;
         if (dx * dx + dy * dy >= distance) continue;
-        if (messages && sleeper.msleeping && directMeleeMonsterCanBeSeen(sleeper))
+        if (messages && sleeper.msleeping && monsterCanseemonForWakeMessage(sleeper))
             messages.push(directMeleeWakeMessage(sleeper, false));
         sleeper.msleeping = 0;
         if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq)) {

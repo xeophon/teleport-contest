@@ -451,6 +451,12 @@ function markSquareVisible(x, y) {
     game.viz_array[y][x] = COULD_SEE | IN_SIGHT;
 }
 
+function markSquareCouldSeeOnly(x, y) {
+    game.viz_array ??= [];
+    game.viz_array[y] ??= [];
+    game.viz_array[y][x] = COULD_SEE;
+}
+
 function markHeroNeighborhoodVisible() {
     for (let y = (game.u?.uy || 0) - 1; y <= (game.u?.uy || 0) + 1; y++)
         for (let x = (game.u?.ux || 0) - 1; x <= (game.u?.ux || 0) + 1; x++)
@@ -51589,6 +51595,60 @@ test('blunt force wakes visible apparent mimics without revealing disguise', () 
     assert.equal(furnitureMimic.mfrozen, 3);
     assert.equal(furnitureMimic.mstrategy, 0);
     assert.equal(furnitureMimic.waiting, false);
+});
+
+test('blunt force wakes dark line-of-sight sleeper without visible wake message', () => {
+    installCommandShopState();
+    game.u.blind = false;
+    game.u.infravision = false;
+    game.u.ulevel = 1;
+    const weapon = wieldedWeapon(61532, 'mace', 'm');
+    const sleeper = sleepingMonster('jackal', 6, 5, { infravisible: true });
+    sleeper.mstrategy = STRAT_WAITFORU;
+    sleeper.waiting = true;
+    game.inventory = [weapon];
+    game.level.monsters.push(sleeper);
+    markSquareCouldSeeOnly(6, 5);
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(61533),
+        weapon,
+        picktyp: false,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, []);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.equal(sleeper.waiting, false);
+});
+
+test('blunt force uses infravision for dark line-of-sight wake message', () => {
+    installCommandShopState();
+    game.u.blind = false;
+    game.u.infravision = true;
+    game.u.ulevel = 1;
+    const weapon = wieldedWeapon(61534, 'mace', 'm');
+    const sleeper = sleepingMonster('jackal', 6, 5, { infravisible: true });
+    sleeper.mstrategy = STRAT_WAITFORU;
+    sleeper.waiting = true;
+    game.inventory = [weapon];
+    game.level.monsters.push(sleeper);
+    markSquareCouldSeeOnly(6, 5);
+
+    const result = processForceLockOccupationTick({
+        chest: shopFloorContainer(61535),
+        weapon,
+        picktyp: false,
+        chance: 0,
+    });
+
+    assert.equal(result.stop, false);
+    assert.deepEqual(result.messages, ['The jackal wakes up.']);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
+    assert.equal(sleeper.waiting, false);
 });
 
 test('blunt force disturbs nearby buried zombie corpse timers', () => {
