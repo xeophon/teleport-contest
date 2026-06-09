@@ -16480,7 +16480,7 @@ function destroyDrawbridgeAtOrWallForLandmine(x, y, messages = []) {
     delete wallLoc.horizontal;
     clearLandmineDestroyedDrawbridgeStateAt(bridge.x, bridge.y);
     clearLandmineDestroyedDrawbridgeStateAt(wall.x, wall.y);
-    wakeNearbyMonstersAt(bridge.x, bridge.y, 500);
+    wakeNearbyMonstersAt(bridge.x, bridge.y, 500, messages);
     newsym(bridge.x, bridge.y);
     newsym(wall.x, wall.y);
     vision_reset();
@@ -19274,20 +19274,22 @@ function monsterResistsCold(mon) {
         || data.coldResistance || data.resistsCold || data.resists_cold);
 }
 
-function wakeNearbyMonstersAt(x, y, distance) {
+function wakeNearbyMonstersAt(x, y, distance, messages = null) {
     for (const sleeper of game.level?.monsters || []) {
         if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
         const dx = (sleeper.mx || 0) - x;
         const dy = (sleeper.my || 0) - y;
         if (dx * dx + dy * dy >= distance) continue;
+        if (messages && sleeper.msleeping && directMeleeMonsterCanBeSeen(sleeper))
+            messages.push(directMeleeWakeMessage(sleeper, false));
         sleeper.msleeping = 0;
         if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
     }
     disturbBuriedZombieCorpseTimersAt(x, y);
 }
 
-function wakeNearbyMonstersFromExplosion(x, y, damage) {
-    wakeNearbyMonstersAt(x, y, Math.max(damage * damage, 50));
+function wakeNearbyMonstersFromExplosion(x, y, damage, messages = null) {
+    wakeNearbyMonstersAt(x, y, Math.max(damage * damage, 50), messages);
 }
 
 function burningOilExplosionVisible(x, y) {
@@ -19439,7 +19441,7 @@ function explodeBurningOilPotion(potion, x, y, messages) {
         damageHeroFromBurningOilExplosion(damage, messages);
 
     payForCurrentShopTerrainDamage('burn away', messages);
-    wakeNearbyMonstersFromExplosion(x, y, damage);
+    wakeNearbyMonstersFromExplosion(x, y, damage, messages);
 }
 
 function litOilPotionHitMonster(potion, mon, messages) {
@@ -22055,7 +22057,7 @@ function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, d
         if ((game.u.uhp || 0) <= 0)
             trapResult = heroDartTrapFatalResult(messages, why);
     }
-    wakeNearbyMonstersAt(x, y, 10);
+    wakeNearbyMonstersAt(x, y, 10, messages);
     return { blocked: true, messages, trapResult };
 }
 
@@ -22168,7 +22170,7 @@ function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
     if (trapResult?.fatal && !trapResult.lifeSaving)
         return { messages, trapResult };
     heroHorizontalThrowRecoilPetrifyMonsterByTouch(mon, messages);
-    wakeNearbyMonstersAt(x, y, 10);
+    wakeNearbyMonstersAt(x, y, 10, messages);
     return { messages, trapResult };
 }
 
@@ -34937,7 +34939,7 @@ function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null }
                 game._maploc = { x: wakeX, y: wakeY };
             }
         }
-        wakeNearbyMonstersAt(wakeX, wakeY, 5 * 5);
+        wakeNearbyMonstersAt(wakeX, wakeY, 5 * 5, messages);
     }
     if (!rn2(3)) {
         const woundDuration = 5 + rnd(5);
@@ -53054,7 +53056,7 @@ function landminePostBlastTrap(trap, messages = []) {
     if (!trap) return null;
     landmineScatterFloorObjectsAt(trap.tx, trap.ty, messages);
     deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
-    wakeNearbyMonstersAt(trap.tx, trap.ty, 400);
+    wakeNearbyMonstersAt(trap.tx, trap.ty, 400, messages);
     landmineBreakDoorAt(trap.tx, trap.ty);
     if (destroyDrawbridgeAtOrWallForLandmine(trap.tx, trap.ty, messages))
         return null;

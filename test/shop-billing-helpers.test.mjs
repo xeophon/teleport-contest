@@ -45717,6 +45717,7 @@ test('command kicked object ouch wakes nearby sleepers', async () => {
         mstrategy: STRAT_WAITFORU,
     });
     game.level.monsters = [nearbySleeper, farSleeper];
+    markSquareVisible(8, 5);
     game.u.acurr.a[A_STR] = 18;
     game.u.acurr.a[A_DEX] = 10;
     const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512163 };
@@ -45730,7 +45731,7 @@ test('command kicked object ouch wakes nearby sleepers', async () => {
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.match(game._pending_message, /Ouch!  That hurts!  The jackal wakes up\./);
     assert.equal(nearbySleeper.msleeping, 0);
     assert.equal(nearbySleeper.mstrategy, 0);
     assert.equal(farSleeper.msleeping, 1);
@@ -71703,13 +71704,15 @@ test('levitating hero-thrown ordinary weapon recoil bumps boulder with C damage 
     game.inventory = [blade];
     game.level.objects = [boulder];
     game.level.monsters = [goblin, newt];
+    markSquareVisible(4, 6);
     enableRngLog({ reset: true });
 
     await rhack('t');
     await rhack('d');
     await rhack('l');
 
-    assert.match(game._pending_message, /You float in the opposite direction\.  You bump into a boulder\.  Ouch!/);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a boulder\.  Ouch!  The newt wakes up\./);
     assert.equal(game.u.ux, 5);
     assert.equal(game.u.uy, 5);
     assert.equal(game.u.uhp, 17);
@@ -72378,7 +72381,7 @@ test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bu
         mhp: 4,
         mhpmax: 4,
         msleeping: 1,
-        mpeaceful: true,
+        mpeaceful: false,
     });
     const jackal = ordinaryThrowTarget('jackal', 4, 6, {
         mhp: 4,
@@ -72395,13 +72398,15 @@ test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bu
     game.level.monsters = [goblin, newt, jackal];
     game.level.objects = [listCorpse, floorBuried, farBuried, unburiedFloorCorpse];
     game.level.buriedobjlist = [listCorpse];
+    markSquareVisible(4, 6);
     enableRngLog({ reset: true });
 
     await rhack('t');
     await rhack('d');
     await rhack('l');
 
-    assert.match(game._pending_message, /You float in the opposite direction\.  You bump into a newt\./);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a newt\..*The jackal wakes up\./);
     assert.equal(game.u.ux, 5);
     assert.equal(game.u.uy, 5);
     assert.equal(newt.mhp, 4);
@@ -72410,8 +72415,8 @@ test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bu
     assert.equal(jackal.msleeping, 0);
     assert.equal(jackal.mpeaceful, true);
     assert.equal(jackal.mstrategy, 0);
-    assert.equal(listCorpse.zombifyTurn, 140);
-    assert.equal(floorBuried.zombifyTurn, 126);
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(floorBuried.zombifyTurn, 140);
     assert.equal(farBuried.zombifyTurn, 190);
     assert.equal(unburiedFloorCorpse.zombifyTurn, 190);
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
@@ -91444,6 +91449,51 @@ test('hero-thrown lit oil potion explodes on a direct monster hit', async () => 
     assert.equal(goblin.mpeaceful, false);
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
+        'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
+    ]);
+});
+
+test('hero-thrown lit oil explosion wakes visible sleeper outside blast damage', async () => {
+    installNonShopFloorState();
+    initRng(2);
+    game.u.acurr.a[A_DEX] = 25;
+    const potion = oilPotion(880710, 'p');
+    potion.dknown = true;
+    potion.lamplit = true;
+    potion.burning = true;
+    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+        mhp: 30,
+        mhpmax: 30,
+        msleeping: 0,
+        mpeaceful: false,
+    });
+    const jackal = ordinaryThrowTarget('jackal', 10, 5, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mstrategy: STRAT_WAITFORU,
+    });
+    game.inventory = [potion];
+    game.level.monsters = [goblin, jackal];
+    markSquareVisible(goblin.mx, goblin.my);
+    markSquareVisible(jackal.mx, jackal.my);
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('p');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.match(message, /Boom!/);
+    assert.match(message, /The goblin is caught in the burning oil!/);
+    assert.match(message, /The jackal wakes up\./);
+    assert.equal(message.indexOf('The goblin is caught in the burning oil!')
+        < message.indexOf('The jackal wakes up.'), true);
+    assert.equal(goblin.mhp < 30, true);
+    assert.equal(jackal.mhp, 4);
+    assert.equal(jackal.msleeping, 0);
+    assert.equal(jackal.mstrategy, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'd(4,4)', 'rn2(100)',
     ]);
