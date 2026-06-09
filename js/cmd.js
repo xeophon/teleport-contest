@@ -16598,6 +16598,175 @@ function wornRingOffMessageName(item, baseName) {
     return /\(on (?:left|right) hand\)/.test(wornName) ? wornName : baseName;
 }
 
+function takeOffNameWithoutArticle(item) {
+    return equipmentBaseName(item).replace(/^(?:an?|the) /i, '');
+}
+
+function takeOffTheName(item) {
+    return `the ${takeOffNameWithoutArticle(item)}`;
+}
+
+function takeOffSimpleArmorName(item) {
+    return pickupObjectName(item).replace(/^pair of /i, '');
+}
+
+function takeOffCloakSimpleName(item) {
+    const name = takeOffSimpleArmorName(item);
+    if (/\brobe\b/i.test(name)) return 'robe';
+    if (/\bcloak\b/i.test(name)) return 'cloak';
+    return name;
+}
+
+function takeOffCoveredArmorBlockerResult(item) {
+    if (!isWornArmorItem(item)) return null;
+    if (item === game.u?.uskin || item.embedded || /\(embedded in your skin\)/.test(String(item.line || '')))
+        return { messages: ["You can't take that off; it's embedded."], move: 0 };
+
+    const slot = armorSlot(item);
+    const cloak = wornArmorInSlot('cloak');
+    if (slot === 'body' && cloak && cloak !== item) {
+        return {
+            messages: [`You can't take that off without taking off your ${takeOffCloakSimpleName(cloak)} first.`],
+            move: 0,
+        };
+    }
+    if (slot === 'shirt') {
+        const blockers = [];
+        if (cloak && cloak !== item) blockers.push(takeOffCloakSimpleName(cloak));
+        const suit = wornArmorInSlot('body');
+        if (suit && suit !== item) blockers.push('suit');
+        if (blockers.length) {
+            const blockerList = blockers.length === 1 ? blockers[0] : `${blockers[0]} and ${blockers[1]}`;
+            return {
+                messages: [`You can't take that off without taking off your ${blockerList} first.`],
+                move: 0,
+            };
+        }
+    }
+    return null;
+}
+
+function wornRingHand(item) {
+    const worn = String(item?.worn || '').toLowerCase();
+    if (worn === 'left' || worn === 'right') return worn;
+    const match = String(item?.line || '').match(/\(on (left|right) hand\)/);
+    return match ? match[1] : '';
+}
+
+function ringIsOnPrimaryHand(item) {
+    return (wornRingHand(item) || String(game.u?.uhandedness || 'right').toLowerCase())
+        === String(game.u?.uhandedness || 'right').toLowerCase();
+}
+
+function primaryWeldedTakeoffWeapon() {
+    const weapon = (game.inventory || []).find(itemIsPrimaryWielded);
+    return readyPrimaryWillWeld(weapon) ? weapon : null;
+}
+
+function learnTakeoffWeldedWeapon(weapon) {
+    if (!weapon) return;
+    if (weapon.welded === true) weapon.cursed = true;
+    weapon.bknown = true;
+    weapon.line = heroWieldedLineForItem(weapon);
+}
+
+function takeOffWeaponBlockerName(weapon) {
+    const name = inventoryItemName(weapon).toLowerCase();
+    if (/\b(?:sword|saber|sabre|katana|tsurugi|wakizashi|scimitar|runesword)\b/.test(name)) return 'sword';
+    if (/\bbattle-axe\b/.test(name)) return 'axe';
+    return 'weapon';
+}
+
+function takeOffRingBlockerResult(item) {
+    if (!wornRingItem(item)) return null;
+    if (polyselfNoHands()) return { messages: ['The ring is stuck.'], move: 0 };
+
+    const weapon = primaryWeldedTakeoffWeapon();
+    if (weapon && (ringIsOnPrimaryHand(item) || isTwoHandedWieldItem(weapon))) {
+        learnTakeoffWeldedWeapon(weapon);
+        return { messages: ['You cannot free a weapon hand to remove the ring.'], move: 0 };
+    }
+
+    const gloves = wornGlovesItem();
+    if (gloves && (gloves.cursed || heroHasSlipperyFingers())) {
+        const simpleName = takeOffSimpleArmorName(gloves);
+        if (!heroHasSlipperyFingers()) gloves.bknown = true;
+        return {
+            messages: [`You cannot take off your ${heroHasSlipperyFingers() ? 'slippery ' : ''}${simpleName} to remove the ring.`],
+            move: 0,
+        };
+    }
+    return null;
+}
+
+function takeOffGlovesBlockerResult(item) {
+    if (!isWornArmorItem(item) || armorSlot(item) !== 'gloves') return null;
+    const weapon = primaryWeldedTakeoffWeapon();
+    if (weapon) {
+        learnTakeoffWeldedWeapon(weapon);
+        return {
+            messages: [`You are unable to take off your gloves while wielding that ${takeOffWeaponBlockerName(weapon)}.`],
+            move: 0,
+        };
+    }
+    if (heroHasSlipperyFingers()) {
+        return {
+            messages: [`${item.unpaid ? 'The' : 'Your'} ${takeOffSimpleArmorName(item)} are too slippery to take off.`],
+            move: 0,
+        };
+    }
+    return null;
+}
+
+function takeOffBootsBlockerResult(item) {
+    if (!isWornArmorItem(item) || armorSlot(item) !== 'boots' || !game.u?.utrap) return null;
+    const trapType = game.u.utraptype;
+    if (trapType === TT_BEARTRAP || trapType === 'beartrap')
+        return { messages: ['The bear trap prevents you from pulling your foot out.'], move: 0 };
+    if (trapType === TT_INFLOOR || trapType === 'infloor')
+        return { messages: ['You are stuck in the floor, and cannot pull your feet out.'], move: 0 };
+    return null;
+}
+
+function takeOffSuitOrShirtBlockerResult(item) {
+    if (!isWornArmorItem(item)) return null;
+    const slot = armorSlot(item);
+    if (slot !== 'body' && slot !== 'shirt') return null;
+
+    const cloak = wornArmorInSlot('cloak');
+    if (cloak && cloak !== item && cloak.cursed) {
+        cloak.bknown = true;
+        return {
+            messages: [`You cannot remove your ${takeOffCloakSimpleName(cloak)} to take off ${takeOffTheName(item)}.`],
+            move: 0,
+        };
+    }
+    const suit = wornArmorInSlot('body');
+    if (slot === 'shirt' && suit && suit !== item && suit.cursed) {
+        suit.bknown = true;
+        return {
+            messages: [`You cannot remove your suit to take off ${takeOffTheName(item)}.`],
+            move: 0,
+        };
+    }
+    const weapon = primaryWeldedTakeoffWeapon();
+    if (weapon && isTwoHandedWieldItem(weapon)) {
+        learnTakeoffWeldedWeapon(weapon);
+        return {
+            messages: [`You cannot release your ${takeOffWeaponBlockerName(weapon)} to take off ${takeOffTheName(item)}.`],
+            move: 0,
+        };
+    }
+    return null;
+}
+
+function takeOffSelectBlockerResult(item) {
+    return takeOffRingBlockerResult(item)
+        || takeOffGlovesBlockerResult(item)
+        || takeOffBootsBlockerResult(item)
+        || takeOffSuitOrShirtBlockerResult(item);
+}
+
 function setBlindfoldedState(active) {
     if (!game.u) return;
     game.u.blindfolded = !!active;
@@ -16668,8 +16837,16 @@ async function takeOffFacewear(item) {
     return { messages: [`You were wearing ${baseName}.`] };
 }
 
-async function takeOffEquipment(item) {
+async function takeOffEquipment(item, options = {}) {
     if (!isWornEquipmentItem(item)) return null;
+
+    if (options.coveredArmorBlock) {
+        const coveredBlocker = takeOffCoveredArmorBlockerResult(item);
+        if (coveredBlocker) return coveredBlocker;
+    }
+
+    const selectBlocker = takeOffSelectBlockerResult(item);
+    if (selectBlocker) return selectBlocker;
 
     if (item.cursed) {
         item.bknown = true;
@@ -16802,7 +16979,7 @@ async function continueTakeOffAllQueue() {
 }
 
 async function finishTakeOffEquipment(item, options = {}) {
-    const result = await takeOffEquipment(item);
+    const result = await takeOffEquipment(item, { ...options, coveredArmorBlock: true });
     if (!result) return false;
     if (result.messages.length) {
         const message = result.messages.join('  ');

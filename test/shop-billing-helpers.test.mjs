@@ -18744,6 +18744,157 @@ test('takeoffall command treats lowercase a as an inventory letter when present'
     assert.equal(game._pending_message, 'You were wearing an octagonal amulet.');
 });
 
+test('remove command blocks ring removal through cursed gloves', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057025, 'fire resistance', 17, 'r', {
+        worn: 'right',
+        owornmask: 1,
+        line: 'r - an iron ring (on right hand)',
+    });
+    const gloves = wornArmor(3057026, 'leather gloves', 'g', 0, {
+        cursed: true,
+        bknown: false,
+    });
+    game.inventory = [ring, gloves];
+
+    await rhack('R');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(ring.worn, 'right');
+    assert.equal(gloves.worn, true);
+    assert.equal(gloves.bknown, true);
+    assert.equal(game._pending_message, 'You cannot take off your leather gloves to remove the ring.');
+});
+
+test('remove command blocks primary-hand ring removal with welded weapon', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057027, 'fire resistance', 17, 'r', {
+        worn: 'right',
+        owornmask: 1,
+        line: 'r - an iron ring (on right hand)',
+    });
+    const weapon = wieldedWeapon(3057028, 'dagger', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = false;
+    game.inventory = [ring, weapon];
+
+    await rhack('R');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(ring.worn, 'right');
+    assert.equal(weapon.bknown, true);
+    assert.equal(game._pending_message, 'You cannot free a weapon hand to remove the ring.');
+});
+
+test('remove command blocks ring removal for no-hands form', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057029, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.u._polyself_form = { name: 'werewolf', nohands: true };
+    game.inventory = [ring];
+
+    await rhack('R');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(ring.worn, 'left');
+    assert.equal(game._pending_message, 'The ring is stuck.');
+});
+
+test('takeoff command blocks slippery glove removal', async () => {
+    installNonShopFloorState();
+    const gloves = wornArmor(3057030, 'leather gloves', 'g');
+    game.u._glibTimeout = 3;
+    game.inventory = [gloves];
+
+    await rhack('T');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._pending_message, 'Your leather gloves are too slippery to take off.');
+});
+
+test('takeoff command blocks boots caught in bear trap', async () => {
+    installNonShopFloorState();
+    const boots = wornArmor(3057031, 'low boots', 'b');
+    game.u.utrap = 2;
+    game.u.utraptype = TT_BEARTRAP;
+    game.inventory = [boots];
+
+    await rhack('T');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(boots.worn, true);
+    assert.equal(game._pending_message, 'The bear trap prevents you from pulling your foot out.');
+});
+
+test('takeoff command blocks covered body armor before select-off checks', async () => {
+    installNonShopFloorState();
+    const body = wornArmor(3057032, 'leather armor', 'b');
+    const cloak = wornArmor(3057033, 'cloak', 'c');
+    game.inventory = [body, cloak];
+
+    await rhack('T');
+    await rhack('b');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(body.worn, true);
+    assert.equal(cloak.worn, true);
+    assert.equal(game._pending_message, "You can't take that off without taking off your cloak first.");
+});
+
+test('takeoff command blocks shirt covered by cloak and suit', async () => {
+    installNonShopFloorState();
+    const shirt = wornArmor(3057034, 'Hawaiian shirt', 'h');
+    const body = wornArmor(3057035, 'leather armor', 'b');
+    const cloak = wornArmor(3057036, 'cloak', 'c');
+    game.inventory = [shirt, body, cloak];
+
+    await rhack('T');
+    await rhack('h');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(shirt.worn, true);
+    assert.equal(game._pending_message, "You can't take that off without taking off your cloak and suit first.");
+});
+
+test('takeoffall selected body armor observes cursed cloak blocker', async () => {
+    installNonShopFloorState();
+    const body = wornArmor(3057037, 'leather armor', 'b');
+    const cloak = wornArmor(3057038, 'cloak', 'c', 0, {
+        cursed: true,
+        bknown: false,
+    });
+    game.inventory = [body, cloak];
+
+    await rhack('A');
+    await rhack('b');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(body.worn, true);
+    assert.equal(cloak.bknown, true);
+    assert.equal(game._pending_message, 'You cannot remove your cloak to take off the +0 leather armor.');
+});
+
+test('takeoffall selected body armor observes welded two-handed weapon blocker', async () => {
+    installNonShopFloorState();
+    const body = wornArmor(3057039, 'leather armor', 'b');
+    const weapon = wieldedWeapon(3057040, 'two-handed sword', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = false;
+    game.inventory = [body, weapon];
+
+    await rhack('A');
+    await rhack('b');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(body.worn, true);
+    assert.equal(weapon.bknown, true);
+    assert.equal(game._pending_message, 'You cannot release your sword to take off the +0 leather armor.');
+});
+
 test('unknown gray stone is suggested by apply and opens stone target prompt', async () => {
     installCommandShopState();
     const stone = carriedGrayStone(30571, 'g', 'loadstone');
