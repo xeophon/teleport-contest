@@ -48068,6 +48068,35 @@ test('command kicked non-empty box damages contents before down-stair migration'
     ]);
 });
 
+test('command kicked non-box container with ordinary contents can fly down stairs', async () => {
+    installNonShopFloorState();
+    installRemoteDownStairGate({ x: 7, y: 5 });
+    game.u.acurr.a[A_STR] = 25;
+    const bag = sack(512125);
+    delete bag.letter;
+    delete bag.line;
+    Object.assign(bag, { ox: 6, oy: 5 });
+    const potion = putObjectInContainer(bag, oilPotion(512126));
+    game.level.objects = [bag];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 42]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    const queued = queuedImpactDropsFor({ dnum: 0, dlevel: 2 });
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(bag), false);
+    assert.equal(queued.includes(bag), true);
+    assert.equal(bag.contents.includes(potion), true);
+    assert.equal(bag._impactDropMigration?.where, MIGR_STAIRS_UP);
+    assert.equal(game._pending_message, 'You kick a bag.  A bag falls down the stairs.');
+    assert.doesNotMatch(game._pending_message, /empty space|THUD|lid slams|muffled shatter|goods lost/);
+    assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rn2(100)=42']);
+});
+
 test('command kicked box no-drop at occupied down stairs impacts pile before continuing', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });

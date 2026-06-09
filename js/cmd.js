@@ -35099,8 +35099,7 @@ function kickFloorObjectSupported(obj) {
     const unpaidContents = contents.some(child => shopObjectOrContentsUnpaid(child));
     const topLevelUnpaidContainer = container && obj.unpaid;
     const paidContainerWithUnpaidContents = container && !obj.unpaid && unpaidContents;
-    if ((!box && container && !paidContainerWithUnpaidContents && !topLevelUnpaidContainer)
-        || (!box && contents.length && !paidContainerWithUnpaidContents && !topLevelUnpaidContainer)) return false;
+    if (!box && !container && contents.length) return false;
     const supportedTopLevelUnpaid = obj.unpaid && (!contents.length || topLevelUnpaidContainer);
     if (shopObjectOrContentsUnpaid(obj)
         && !supportedTopLevelUnpaid
