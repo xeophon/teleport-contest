@@ -15628,6 +15628,79 @@ test('hero floor fire burns paper golem form instead of human HP', () => {
     assert.equal(game.u.uhpmax, 30);
 });
 
+test('underwater hero floor fire erupts as boiling bubbles from the bottom', () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3, 1]);
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        underwater: true,
+        uunderwater: true,
+        fireResistance: false,
+        uinvulnerable: false,
+        uhp: 10,
+        uhpmax: 10,
+    });
+    game.level.at(6, 5).typ = POOL;
+    const trap = { ttyp: FIRE_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+
+    const result = shop.heroFireTrapResultForTest(trap, '', { allowLifeSaving: true });
+
+    assert.deepEqual(getRngLog(), [
+        'd(2,4)=8',
+        'rnd(3)=2',
+    ]);
+    assert.equal(result.message, 'A cascade of steamy bubbles erupts from the bottom!');
+    assert.equal(result.lifeSaving, false);
+    assert.equal(result.fatal, false);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.u.uhp, 8);
+    assert.equal(game.u.uhpmax, 10);
+});
+
+test('fire resistant underwater hero floor fire exits before flame inventory damage', () => {
+    installStableNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3, 1]);
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        underwater: true,
+        uunderwater: true,
+        fireResistance: true,
+        uinvulnerable: false,
+        uhp: 10,
+        uhpmax: 10,
+    });
+    game.inventory = [{
+        id: 30997,
+        letter: 'a',
+        cls: 'scroll',
+        glyph: '?',
+        kind: 'scroll of charging',
+        actualKind: 'scroll of charging',
+        quan: 1,
+        line: 'a - a scroll of charging',
+    }];
+    game.level.at(6, 5).typ = POOL;
+    const trap = { ttyp: FIRE_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+
+    const result = shop.heroFireTrapResultForTest(trap, '', { allowLifeSaving: true });
+
+    assert.deepEqual(getRngLog(), ['d(2,4)=8']);
+    assert.equal(result.message, 'A cascade of steamy bubbles erupts from the bottom!  You are uninjured.');
+    assert.equal(result.lifeSaving, false);
+    assert.equal(result.fatal, false);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.u.uhp, 10);
+    assert.equal(game.u.uhpmax, 10);
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0].kind, 'scroll of charging');
+});
+
 test('hero floor fire damages straw golem active HP without human max HP drain', () => {
     installNonShopFloorState();
     enableRngLog({ reset: true });

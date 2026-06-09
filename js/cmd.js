@@ -52710,6 +52710,28 @@ function movementRustTrapResult(trap) {
 function heroFireTrapResult(trap, prefix = '', { allowLifeSaving = false } = {}) {
     trap.tseen = true;
     const origDamage = d(2, 4);
+    if (heroIsUnderwater()) {
+        const surface = polyselfFalloffSurfaceName(game.u?.ux, game.u?.uy);
+        const bubbleMessage = `A cascade of steamy bubbles erupts from the ${surface}!`;
+        const messages = [prefix ? `${prefix}  ${bubbleMessage}` : bubbleMessage];
+        if (heroHasFireResistance()) {
+            messages.push('You are uninjured.');
+            return {
+                message: messages.join('  '),
+                more: true,
+                lifeSaving: false,
+                fatal: false,
+            };
+        }
+        const damageResult = applyChestTrapFireDamage(messages, rnd(3), 'killed by boiling water');
+        return {
+            ...damageResult,
+            message: messages.join('  '),
+            more: true,
+            lifeSaving: !!damageResult.lifeSaving,
+            fatal: !!damageResult.fatal,
+        };
+    }
     const messages = [prefix ? `${prefix}  A tower of flame erupts from the floor!` : 'A tower of flame erupts from the floor!'];
     let damage;
     if (heroHasFireResistance()) {
