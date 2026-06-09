@@ -9,7 +9,7 @@ import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
-import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, BURN, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
+import { A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_STR, A_WIS, ALLOW_TRAPS, ALTAR, AM_SHRINE, Align2amask, ANTI_MAGIC, ARROW_TRAP, BC_CHAIN, BEAR_TRAP, BILLSZ, BURN, CANDLESHOP, CLOUD, CORPSTAT_HISTORIC, COULD_SEE, DART_TRAP, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_WEST, DBWALL, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, FIRE_TRAP, FOUNTAIN, HOLE, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, LADDER, LANDMINE, LAVAPOOL, LAVAWALL, LEVEL_TELEP, MAGIC_PORTAL, MAGIC_TRAP, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MOAT, MON_MIGRATING, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, NORMAL_SPEED, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_HAMMER, P_KNIFE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POLY_TRAP, POOL, REPAIR_DELAY, ROCKTRAP, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, RUST_TRAP, SDOOR, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SLP_GAS_TRAP, SPIKED_PIT, SQKY_BOARD, STAIRS, STATUE_TRAP, STONE, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, TELEP_TRAP, TEMPLE, TRAPDOOR, TREE, TT_BEARTRAP, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, VAULT, VIBRATING_SQUARE, WATER, WEB, W_ARMC, W_ARMF, W_NONDIGGABLE, W_SADDLE } from '../js/const.js';
 import { currentFruitId, setCurrentFruitName } from '../js/fruit.js';
 import { CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_WHITE } from '../js/terminal.js';
 import { TRIBUTE_DEATH_QUOTES } from '../js/tribute.js';
@@ -20696,6 +20696,57 @@ test('magic resistant monster anti-magic pathing candidate is harmless like C', 
     assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), false);
 });
 
+test('worn magic resistance cloak makes monster anti-magic pathing harmless like C', () => {
+    const cloak = wornArmor(314141, 'cloak of magic resistance', 'c', 0, {
+        worn: false,
+        owornmask: W_ARMC,
+    });
+    const { goblin } = installKnownTrapPathingState(ANTI_MAGIC, {
+        minvent: [cloak],
+    });
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+    const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+    assert.ok(trapCandidate);
+    assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), false);
+});
+
+test('unworn magic resistance cloak leaves monster anti-magic pathing hazardous like C', () => {
+    const cloak = wornArmor(314143, 'cloak of magic resistance', 'c', 0, {
+        worn: false,
+        owornmask: 0,
+    });
+    const { goblin } = installKnownTrapPathingState(ANTI_MAGIC, {
+        minvent: [cloak],
+    });
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+    const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+    assert.ok(trapCandidate);
+    assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), true);
+});
+
+test('wrong-slot magic resistance cloak leaves monster anti-magic pathing hazardous like C', () => {
+    const cloak = wornArmor(314144, 'cloak of magic resistance', 'c', 0, {
+        worn: false,
+        owornmask: W_SADDLE,
+    });
+    const { goblin } = installKnownTrapPathingState(ANTI_MAGIC, {
+        minvent: [cloak],
+    });
+
+    const flags = allmain.monsterAllowFlagsForTest(goblin, false, false);
+    const candidates = allmain.mfndposForTest(goblin, flags);
+    const trapCandidate = candidates.find(candidate => candidate.x === 6 && candidate.y === 5);
+
+    assert.ok(trapCandidate);
+    assert.equal(!!(trapCandidate.info & ALLOW_TRAPS), true);
+});
+
 test('carried magic-defending artifact anti-magic pathing candidate is harmless like C', () => {
     const artifact = carriedMagicDefendingArtifact(31414);
     const { goblin } = installKnownTrapPathingState(ANTI_MAGIC, {
@@ -20743,6 +20794,47 @@ test('monster anti-magic trap drains magical attack cooldown and reveals visibly
     assert.equal(goblin.mhp, 10);
     assert.equal(trap.tseen, true);
     assert.equal(!!(goblin.mtrapseen & (1 << (ANTI_MAGIC - 1))), true);
+});
+
+test('worn magic resistance cloak turns monster anti-magic drain into implosion damage', () => {
+    const cloak = wornArmor(314142, 'cloak of magic resistance', 'c', 0, {
+        worn: false,
+        owornmask: W_ARMC,
+    });
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { name: 'gnomish wizard', mlet: 'G', spellcaster: true },
+        minvent: [cloak],
+        mspec_used: 3,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['rnd(4)']);
+    assert.equal(goblin.mspec_used, 3);
+    assert.equal(goblin.mhp, 7);
+    assert.equal(game.level.monsters.includes(goblin), true);
+});
+
+test('wrong-slot magic resistance cloak leaves monster anti-magic drain intact like C', () => {
+    const cloak = wornArmor(314145, 'cloak of magic resistance', 'c', 0, {
+        worn: false,
+        owornmask: W_SADDLE,
+    });
+    const { trap, goblin } = installMonsterAntiMagicTrapState({
+        data: { name: 'gnomish wizard', mlet: 'G', spellcaster: true },
+        minvent: [cloak],
+        mspec_used: 3,
+    });
+    enableRngLog({ reset: true });
+    installCoreRngValues([2]);
+
+    assert.equal(allmain.monsterAntiMagicTrapEffectForTest(goblin, trap), true);
+
+    assert.deepEqual(getRngLog().map(rngCallName), ['d(2,6)']);
+    assert.equal(goblin.mspec_used, 7);
+    assert.equal(goblin.mhp, 10);
 });
 
 test('canceled magical monster anti-magic trap learns but does not drain', () => {
