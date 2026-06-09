@@ -35355,6 +35355,57 @@ test('hero land mine adjacent lava fills pit and uses lava death prompt', async 
     assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
 });
 
+test('hero land mine adjacent lava fill consumes life saving and teleports to safety', async () => {
+    installStableNonShopFloorState();
+    vision_reset();
+    game.sokoban_dnum = 999;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330021, 'a');
+    game.inventory = [amulet];
+    const targetLoc = { roomno: ROOMOFFSET, typ: ROOM };
+    const cells = new Map([
+        ['6,5', targetLoc],
+        ['6,4', { roomno: ROOMOFFSET, typ: LAVAPOOL }],
+    ]);
+    game.level.at = (x, y) => cells.get(`${x},${y}`) || { roomno: ROOMOFFSET, typ: ROOM };
+    markSquareVisible(6, 5);
+    const trap = { ttyp: LANDMINE, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+    installCoreRngValues([4, 2, 3, 1, 1, 5, 5, 5, 5, 5, 5, 0, 19, 7]);
+
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.match(pending, /KAABLAMM!!!  You triggered a land mine!/);
+    assert.match(pending, /The hole fills with lava!/);
+    assert.match(pending, /You fall into the molten lava!/);
+    assert.match(pending, /You burn to a crisp\.\.\./);
+    assert.match(pending, /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(targetLoc.typ, LAVAPOOL);
+    assert.equal(game.level.traps.includes(trap), false);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._pending_message,
+        'You feel much better!  The medallion crumbles to dust!  You materialize in a different location!');
+    assert.equal(game.u.ux, 20);
+    assert.equal(game.u.uy, 7);
+});
+
 test('hero land mine adjacent lava fill sinks fire-resistant hero', async () => {
     installStableNonShopFloorState();
     vision_reset();

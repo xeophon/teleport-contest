@@ -6706,8 +6706,8 @@ function deleteEarthquakeLiquidTrap(trap, x, y) {
 }
 
 function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
-    if (game.u?.ux !== x || game.u?.uy !== y) return;
-    if (game.u?.levitating || game.u?.flying) return;
+    if (game.u?.ux !== x || game.u?.uy !== y) return null;
+    if (game.u?.levitating || game.u?.flying) return null;
     if (typ === LAVAPOOL) {
         const lavaEffect = heroLavaEntryEffect(LAVAPOOL);
         messages.push(...lavaEffect.messages);
@@ -6718,25 +6718,28 @@ function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
             game._pending_time_passed = 0;
             messages.push('You die...');
         }
-        return;
+        return lavaEffect;
     }
     game.u.uinwater = 1;
     game.u.underwater = true;
     game.u.uunderwater = true;
     messages.push(`You fall into the ${typ === MOAT ? 'moat' : 'pool of water'}!  You sink like a rock.`);
+    return null;
 }
 
 function earthquakeLiquidFlow(x, y, typ, trap, messages, { fillMessage = '' } = {}) {
-    if (!setEarthquakeLiquidTerrain(x, y, typ)) return false;
+    if (!setEarthquakeLiquidTerrain(x, y, typ)) return null;
     deleteEarthquakeLiquidTrap(trap, x, y);
     objIceEffectsAt(x, y, { doBuried: true });
     unearthObjectsAt(x, y);
     if (fillMessage) messages.push(fillMessage);
     messages.push(...applyLiquidFlowFloorObjectDamage(x, y, typ).messages);
-    if (game.u?.ux === x && game.u?.uy === y) applyEarthquakeHeroLiquidEffects(x, y, typ, messages);
+    let heroResult = null;
+    if (game.u?.ux === x && game.u?.uy === y)
+        heroResult = applyEarthquakeHeroLiquidEffects(x, y, typ, messages);
     else messages.push(...applyMonsterLiquidEffectsAt(x, y, { heroCaused: true, recordKill: recordVanquished }));
     newsym(x, y);
-    return true;
+    return { heroResult };
 }
 
 function landmineMaybeDunkLiquidBoulders(x, y, messages) {
@@ -53175,13 +53178,15 @@ function queueBoomerangPreRecoilLifeSavingContinuation(item, key) {
     };
 }
 
-function finishLandminePitFalloutResult(messages, fatalResult, pitResult) {
+function finishLandminePitFalloutResult(messages, fatalResult, pitResult, terrainResult = null) {
     if (pitResult?.message) messages.push(pitResult.message);
     const lavaDeath = game._command_mode === 'lavaDeathMore' && game._death_cause === 'burned by molten lava';
     return {
         ...pitResult,
-        lifeSaving: pitResult?.fatal ? !!pitResult.lifeSaving : !!fatalResult.lifeSaving || !!pitResult.lifeSaving,
-        more: pitResult?.fatal ? !!pitResult.more : lavaDeath || !!fatalResult.more || !!pitResult.more,
+        lifeSaving: pitResult?.fatal ? !!pitResult.lifeSaving
+            : !!fatalResult.lifeSaving || !!pitResult.lifeSaving || !!terrainResult?.lifeSaving,
+        more: pitResult?.fatal ? !!pitResult.more
+            : lavaDeath || !!fatalResult.more || !!pitResult.more || !!terrainResult?.more,
         message: trapMessage(...messages),
     };
 }
@@ -54592,30 +54597,31 @@ function landmineScatterFloorObjectsAt(x, y, messages = []) {
 }
 
 function landminePostBlastTrap(trap, messages = []) {
-    if (!trap) return null;
+    if (!trap) return { trap: null, terrainResult: null };
     landmineScatterFloorObjectsAt(trap.tx, trap.ty, messages);
     deleteLandmineBlastEngravingAt(trap.tx, trap.ty);
     wakeNearbyMonstersAt(trap.tx, trap.ty, 400, messages);
     landmineBreakDoorAt(trap.tx, trap.ty);
     if (destroyDrawbridgeAtOrWallForLandmine(trap.tx, trap.ty, messages))
-        return null;
+        return { trap: null, terrainResult: null };
     if (Is_airlevel(game.u?.uz) || Is_waterlevel(game.u?.uz)) {
         deleteTrap(trap);
-        return null;
+        return { trap: null, terrainResult: null };
     }
     const fillType = earthquakeFillHoleType(trap.tx, trap.ty);
     if (fillType !== ROOM) {
         const fillMessage = earthVisibleSquare(trap.tx, trap.ty)
             ? `The hole fills with ${fillType === LAVAPOOL ? 'lava' : 'water'}!`
             : '';
-        if (earthquakeLiquidFlow(trap.tx, trap.ty, fillType, trap, messages, { fillMessage })) {
+        const liquidFlow = earthquakeLiquidFlow(trap.tx, trap.ty, fillType, trap, messages, { fillMessage });
+        if (liquidFlow) {
             if (game._command_mode !== 'lavaDeathMore' || game._death_cause !== 'burned by molten lava')
                 landmineMaybeDunkLiquidBoulders(trap.tx, trap.ty, messages);
             landmineRefreshPostBlastBlockPoint(trap.tx, trap.ty);
-            return null;
+            return { trap: null, terrainResult: liquidFlow.heroResult || null };
         }
     }
-    return trap;
+    return { trap, terrainResult: null };
 }
 
 function fillLandminePitWithBoulder(trap, messages) {
@@ -54630,10 +54636,14 @@ function fillLandminePitWithBoulder(trap, messages) {
 }
 
 function landmineRecursivePitTrap(trap, messages) {
-    const pitTrap = landminePostBlastTrap(trap, messages);
-    if (!pitTrap) return null;
+    const postBlast = landminePostBlastTrap(trap, messages);
+    const pitTrap = postBlast?.trap || null;
+    if (!pitTrap) return postBlast || { trap: null, terrainResult: null };
     fillLandminePitWithBoulder(pitTrap, messages);
-    return (game.level?.traps || []).includes(pitTrap) ? pitTrap : null;
+    return {
+        trap: (game.level?.traps || []).includes(pitTrap) ? pitTrap : null,
+        terrainResult: postBlast?.terrainResult || null,
+    };
 }
 
 function woundHeroLandmineLegs() {
@@ -54688,9 +54698,10 @@ function heroLandmineAirCurrentResult(trap, prefix, damage) {
         if (fatalResult.fatal) return { message: trapMessage(...messages), ...fatalResult };
         if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
     }
-    const pitTrap = landmineRecursivePitTrap(trap, messages);
+    const recursivePit = landmineRecursivePitTrap(trap, messages);
+    const pitTrap = recursivePit?.trap || null;
     const pitResult = pitTrap ? movementPitResult(pitTrap, { recursive: true }) : {};
-    const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
+    const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult, recursivePit?.terrainResult || null);
     if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
         game._life_saving_post_continue_hp = game.u.uhp;
     return result;
@@ -54711,9 +54722,10 @@ function heroLandmineResult(trap, prefix = '', { forceTrap = false } = {}) {
     if (fatalResult.fatal)
         return { message: trapMessage(...messages), ...fatalResult };
     if (fatalResult.lifeSaving) restoreLifeSavedHeroForContinuation();
-    const pitTrap = landmineRecursivePitTrap(trap, messages);
+    const recursivePit = landmineRecursivePitTrap(trap, messages);
+    const pitTrap = recursivePit?.trap || null;
     const pitResult = pitTrap ? movementPitResult(pitTrap, { recursive: true }) : {};
-    const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult);
+    const result = finishLandminePitFalloutResult(messages, fatalResult, pitResult, recursivePit?.terrainResult || null);
     if (fatalResult.lifeSaving && !pitResult?.lifeSaving && !result.fatal && game.u)
         game._life_saving_post_continue_hp = game.u.uhp;
     return result;
