@@ -52679,36 +52679,76 @@ function heroFireTrapResult(trap, prefix = '', { allowLifeSaving = false } = {})
     trap.tseen = true;
     const origDamage = d(2, 4);
     const messages = [prefix ? `${prefix}  A tower of flame erupts from the floor!` : 'A tower of flame erupts from the floor!'];
-    let damage = 0;
-    if (game.u?.fireResistance) {
+    let damage;
+    if (heroHasFireResistance()) {
         damage = rn2(2);
         if (!damage) messages.push('You are uninjured.');
+    } else if (game.u?._polyself_form) {
+        damage = applyPolyselfFireMaxHpLoss(origDamage);
     } else {
         damage = d(2, 4);
-        const hpLoss = rn2(Math.min(game.u?.uhpmax || 1, damage + 1));
         if (game.u) {
-            game.u.uhpmax = Math.max(1, (game.u.uhpmax || 1) - hpLoss);
-            game.u.uhp = Math.min(game.u.uhp || 1, game.u.uhpmax);
+            const hpMin = 1;
+            const oldMax = game.u.uhpmax || hpMin;
+            const loss = rn2(Math.min(oldMax, damage + 1));
+            game.u.uhpmax = Math.max(hpMin, oldMax - loss);
+            game.u.uhp = Math.min(game.u.uhp || hpMin, game.u.uhpmax);
         }
     }
+
+    const directResult = applyChestTrapFireDamage(messages, damage, 'killed by a tower of flame');
+    if (directResult.genocideDeathArmed || directResult.fatal) {
+        return {
+            ...directResult,
+            message: messages.join('  '),
+            more: true,
+        };
+    }
+    if (directResult.lifeSaving) restoreLifeSavedHeroForContinuation();
+
+    burnAwayHeroSlime(messages);
     const inventoryFire = fireDamageInventory(origDamage, false, false, { allowLifeSaving });
     messages.push(...inventoryFire.messages);
+    if (inventoryFire.lifeSaving || inventoryFire.fatal) {
+        game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';
+        return {
+            message: messages.join('  '),
+            more: true,
+            lifeSaving: inventoryFire.fatal ? !!inventoryFire.lifeSaving : !!directResult.lifeSaving || !!inventoryFire.lifeSaving,
+            fatal: !!inventoryFire.fatal,
+        };
+    }
+
+    const inventoryDamageResult = applyChestTrapFireDamage(
+        messages,
+        inventoryFire.damage,
+        inventoryFire.deathCause || 'killed by a tower of flame',
+    );
+    if (inventoryDamageResult.genocideDeathArmed || inventoryDamageResult.lifeSaving || inventoryDamageResult.fatal) {
+        return {
+            ...inventoryDamageResult,
+            message: messages.join('  '),
+            lifeSaving: inventoryDamageResult.fatal
+                ? !!inventoryDamageResult.lifeSaving
+                : !!directResult.lifeSaving || !!inventoryDamageResult.lifeSaving,
+            more: true,
+        };
+    }
+
     const floorFire = burnFloorObjectsByFire(game.u?.ux || 0, game.u?.uy || 0, {
         giveFeedback: !game.u?.blind,
         heroCaused: true,
     });
     messages.push(...floorFire.messages);
     if (floorFire.count && game.u?.blind) messages.push('You smell paper burning.');
-    if (!inventoryFire.lifeSaving && !inventoryFire.fatal) {
-        damage += inventoryFire.damage;
-        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-        if ((game.u?.uhp || 0) <= 0) game._death_cause = inventoryFire.deathCause || 'killed by a tower of flame';
-    }
+    if (directResult.lifeSaving && game.u) game._life_saving_post_continue_hp = game.u.uhp;
+
     return {
+        ...inventoryDamageResult,
         message: messages.join('  '),
         more: true,
-        lifeSaving: !!inventoryFire.lifeSaving,
-        fatal: !!inventoryFire.fatal,
+        lifeSaving: !!directResult.lifeSaving || !!inventoryDamageResult.lifeSaving,
+        fatal: !!inventoryDamageResult.fatal,
     };
 }
 

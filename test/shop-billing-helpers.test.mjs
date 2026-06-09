@@ -15576,6 +15576,97 @@ test('fire trap command inventory fire that destroys blessed water uses lifesavi
     assert.equal(game._death_status_hp_before_zero ?? null, null);
 });
 
+test('hero floor fire burns paper golem form instead of human HP', () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3, 5, 1, 4, 0]);
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        fireResistance: false,
+        uinvulnerable: false,
+        uhp: 20,
+        uhpmax: 20,
+        mh: 20,
+        mhmax: 20,
+        _polyself_base: {
+            uhp: 18,
+            uhpmax: 30,
+            uen: game.u.uen,
+            uenmax: game.u.uenmax,
+            uac: game.u.uac,
+            ulevel: game.u.ulevel,
+        },
+        _polyself_form: { name: 'paper golem', mlet: "'", glyph: "'", mlevel: 3, mac: 10 },
+    });
+    const trap = { ttyp: FIRE_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+
+    const result = shop.heroFireTrapResultForTest(trap, '', { allowLifeSaving: true });
+
+    assert.deepEqual(getRngLog(), [
+        'd(2,4)=8',
+        'rn2(20)=5',
+        'rn2(5)=1',
+        'rn2(5)=4',
+    ]);
+    assert.equal(result.message, 'A tower of flame erupts from the floor!  You return to human form!');
+    assert.equal(result.lifeSaving, false);
+    assert.equal(result.fatal, false);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u.mh, null);
+    assert.equal(game.u.mhmax, null);
+    assert.equal(game.u.uhp, 18);
+    assert.equal(game.u.uhpmax, 30);
+});
+
+test('hero floor fire damages straw golem active HP without human max HP drain', () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    installCoreRngValues([3, 3, 6, 1, 4, 0]);
+    Object.assign(game.u, {
+        ux: 6,
+        uy: 5,
+        fireResistance: false,
+        uinvulnerable: false,
+        uhp: 20,
+        uhpmax: 20,
+        mh: 80,
+        mhmax: 80,
+        _polyself_base: {
+            uhp: 20,
+            uhpmax: 20,
+            uen: game.u.uen,
+            uenmax: game.u.uenmax,
+            uac: game.u.uac,
+            ulevel: game.u.ulevel,
+        },
+        _polyself_form: { name: 'straw golem', mlet: "'", glyph: "'", mlevel: 3, mac: 10 },
+    });
+    const trap = { ttyp: FIRE_TRAP, tx: 6, ty: 5, tseen: false };
+    game.level.traps = [trap];
+
+    const result = shop.heroFireTrapResultForTest(trap, '', { allowLifeSaving: true });
+
+    assert.deepEqual(getRngLog(), [
+        'd(2,4)=8',
+        'rn2(41)=6',
+        'rn2(5)=1',
+        'rn2(5)=4',
+    ]);
+    assert.equal(result.message, 'A tower of flame erupts from the floor!');
+    assert.equal(result.lifeSaving, false);
+    assert.equal(result.fatal, false);
+    assert.equal(trap.tseen, true);
+    assert.equal(game.u._polyself_form?.name, 'straw golem');
+    assert.equal(game.u.mhmax, 74);
+    assert.equal(game.u.mh, 34);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.u.uhpmax, 20);
+});
+
 function installWerewolfOldFormFireVaporLifeSavingInventory(amuletId, potionId) {
     Object.assign(game.u, {
         ux: 5,
