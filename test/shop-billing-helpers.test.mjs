@@ -48189,6 +48189,44 @@ test('command kicked pyrolisk egg splats and explodes at original square before 
     ]);
 });
 
+test('command kicked fertile egg resistance continues ordinary same-level flight', async () => {
+    installNonShopFloorState();
+    game.u.acurr.a[A_STR] = 18;
+    Object.assign(game.u, { uluck: 4 });
+    initRng(167);
+    const eggStack = {
+        ...egg(512069, undefined, 3),
+        otyp: EGG,
+        ox: 6,
+        oy: 5,
+        spe: 1,
+        corpsenm: { name: 'newt' },
+        letter: undefined,
+        line: undefined,
+    };
+    game.level.objects = [eggStack];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    const landed = game.level.objects.find(obj => obj !== eggStack && obj.otyp === EGG);
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(eggStack), true);
+    assert.equal(eggStack.quan, 2);
+    assert.equal(eggStack.ox, 6);
+    assert.equal(eggStack.oy, 5);
+    assert.ok(landed);
+    assert.equal(landed.quan, 1);
+    assert.equal(landed.ox, 14);
+    assert.equal(landed.oy, 5);
+    assert.equal(game.u.uluck, 4);
+    assert.equal(game._pending_message, 'You kick 3 eggs.');
+    assert.doesNotMatch(game._pending_message, /Splat|falls|Thump|hits|misses|top of your head/);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0', 'rnd(2)=1']);
+});
+
 test('command kick ordinary floor object down stairs records reciprocal metadata', async () => {
     installNonShopFloorState();
     installRemoteDownStairGate({ x: 7, y: 5 });

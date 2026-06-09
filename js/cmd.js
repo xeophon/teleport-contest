@@ -35557,7 +35557,7 @@ async function kickFloorObjectToward(dir, x, y) {
             || heroProjectileSupportedWeaponObject(obj));
     const fragileBreakKind = kickedFragilePreflightBreakKind(obj);
     const localBoxImpact = isBoxObject(obj);
-    const ordinarySameLevelFlight = !fragileBreakKind && !targetMon;
+    const ordinarySameLevelFlight = !targetMon;
     if (!localBoxImpact && !gate && !canHandleMonsterImpact && !fragileBreakKind && !ordinarySameLevelFlight)
         return { handled: false };
 
