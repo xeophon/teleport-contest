@@ -16439,6 +16439,39 @@ function instrumentSimpleName(item) {
     return instrumentDisplayName(item).replace(/^(?:an?|the) /i, '');
 }
 
+function isTinWhistleObject(item) {
+    return objectKindKey(item) === 'tin whistle';
+}
+
+function whistleYname(item) {
+    const name = instrumentDisplayName(item);
+    if (/\bunpaid\b/i.test(name)) return name;
+    return name.replace(/^(?:an?|the) /i, 'your ');
+}
+
+function applyTinWhistle(item) {
+    const messages = [];
+    if (!heroCanBlowInstrument()) {
+        messages.push('You are incapable of using the whistle.');
+        return messages;
+    }
+    if (game.u?.underwater || game.u?.uunderwater) {
+        messages.push(`You blow bubbles through ${whistleYname(item)}.`);
+        return messages;
+    }
+    messages.push(heroIsDeaf()
+        ? 'You feel rushing air tickle your nose.'
+        : `You produce a ${item?.cursed ? 'shrill' : 'high'} whistling sound.`);
+    wakeNearbyMonstersAt(
+        game.u?.ux || 0,
+        game.u?.uy || 0,
+        Math.max(0, Math.trunc(Number(game.u?.ulevel || 1)) * 20),
+        messages,
+        { petcall: true },
+    );
+    return messages;
+}
+
 function heroCanBlowInstrument() {
     const form = polyselfForm();
     if ((game.u?._statusSuffix || '').includes('Strngl') || game.u?.strangled || game.u?.strangling)
@@ -19612,12 +19645,27 @@ function monsterCanseemonForWakeMessage(mon) {
     return !!(game.u?.infravision && monsterWakeMessageInfravisible(mon) && couldsee(mon.mx, mon.my));
 }
 
-function wakeNearbyMonstersAt(x, y, distance, messages = null) {
+function monsterIsMinion(mon) {
+    const data = mon?.data || {};
+    return !!(mon?.isminion || mon?.isMinion || mon?.lminion
+        || data.isminion || data.isMinion || data.lminion);
+}
+
+function applyWakeNearbyPetcall(mon) {
+    if (game._monster_moving || Number(mon?.mtame || 0) <= 0) return;
+    if (!monsterIsMinion(mon)) {
+        ensurePetExtension(mon);
+        mon.mextra.edog.whistletime = Math.max(0, Math.trunc(Number(game.moves || 0)));
+    }
+    clearMonsterTrack(mon);
+}
+
+function wakeNearbyMonstersAt(x, y, distance, messages = null, { petcall = false } = {}) {
     for (const sleeper of game.level?.monsters || []) {
         if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
         const dx = (sleeper.mx || 0) - x;
         const dy = (sleeper.my || 0) - y;
-        if (dx * dx + dy * dy >= distance) continue;
+        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
         if (messages && sleeper.msleeping && monsterCanseemonForWakeMessage(sleeper))
             messages.push(directMeleeWakeMessage(sleeper, false));
         sleeper.msleeping = 0;
@@ -19625,6 +19673,7 @@ function wakeNearbyMonstersAt(x, y, distance, messages = null) {
             sleeper.mstrategy = 0;
             sleeper.waiting = false;
         }
+        if (petcall) applyWakeNearbyPetcall(sleeper);
     }
     disturbBuriedZombieCorpseTimersAt(x, y);
 }
@@ -45145,9 +45194,7 @@ function tipHatMonsterLikesMagic(mon) {
 }
 
 function tipHatMonsterIsMinion(mon) {
-    const data = mon?.data || {};
-    return !!(mon?.isminion || mon?.isMinion || mon?.lminion
-        || data.isminion || data.isMinion || data.lminion);
+    return monsterIsMinion(mon);
 }
 
 function tipHatPeacefulHumanoidNoise(mon, name, monName, moves, hungryTime) {
@@ -66989,6 +67036,12 @@ export async function rhack(_cmd) {
         }
         if (musicalInstrumentKind(item)) {
             await beginMusicalInstrumentUse(item);
+            return;
+        }
+        if (isTinWhistleObject(item)) {
+            const messages = applyTinWhistle(item);
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
             return;
         }
         if (isBellOfOpeningItem(item)) {

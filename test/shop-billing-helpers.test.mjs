@@ -40504,6 +40504,120 @@ test('applying unpaid can of grease bills usage and greases the selected object'
     assert.match(game._pending_message, /You cover a dagger with a thick layer of grease/);
 });
 
+test('tin whistle wakes nearby pet and clears pet tracking', async () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.moves = 123;
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 2 });
+    markSquareVisible(6, 5);
+    const whistle = ordinaryTool(309500, 'tin whistle', 't');
+    const dog = {
+        mx: 6,
+        my: 5,
+        m_id: 309501,
+        msleeping: 1,
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        mtame: 10,
+        pet: true,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'dog', mlet: 'dog', mlevel: 4 },
+        mextra: { edog: { apport: 3, hungrytime: 1000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        mtrack: [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }],
+    };
+    game.inventory = [whistle];
+    game.level.monsters = [dog];
+
+    await rhack('a');
+    await rhack('t');
+
+    assert.equal(game._pending_message, 'You produce a high whistling sound.  The dog wakes up.');
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.msleeping, 0);
+    assert.equal(dog.waiting, false);
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(dog.mextra.edog.whistletime, 123);
+    assert.deepEqual(dog.mtrack, [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('tin whistle petcall clears tame minion tracking without creating edog', async () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.moves = 124;
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 2 });
+    markSquareVisible(6, 5);
+    const whistle = ordinaryTool(309502, 'tin whistle', 't');
+    const minion = {
+        mx: 6,
+        my: 5,
+        m_id: 309503,
+        msleeping: 1,
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        mtame: 5,
+        pet: true,
+        isminion: true,
+        mhp: 20,
+        mhpmax: 20,
+        data: { name: 'guardian angel', mlet: 'A', mlevel: 10 },
+        mtrack: [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }],
+    };
+    game.inventory = [whistle];
+    game.level.monsters = [minion];
+
+    await rhack('a');
+    await rhack('t');
+
+    assert.equal(game._pending_message, 'You produce a high whistling sound.  The guardian angel wakes up.');
+    assert.equal(game.context.move, 1);
+    assert.equal(minion.msleeping, 0);
+    assert.equal(minion.waiting, false);
+    assert.equal(minion.mstrategy, 0);
+    assert.equal(minion.mextra || null, null);
+    assert.deepEqual(minion.mtrack, [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('underwater tin whistle blows bubbles without petcall side effects', async () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.moves = 125;
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 2, underwater: true, uunderwater: true });
+    markSquareVisible(6, 5);
+    const whistle = ordinaryTool(309504, 'tin whistle', 't');
+    const dog = {
+        mx: 6,
+        my: 5,
+        m_id: 309505,
+        msleeping: 1,
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        mtame: 10,
+        pet: true,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'dog', mlet: 'dog', mlevel: 4 },
+        mextra: { edog: { apport: 3, hungrytime: 1000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        mtrack: [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }],
+    };
+    game.inventory = [whistle];
+    game.level.monsters = [dog];
+
+    await rhack('a');
+    await rhack('t');
+
+    assert.equal(game._pending_message, 'You blow bubbles through your tin whistle.');
+    assert.equal(game.context.move, 1);
+    assert.equal(dog.msleeping, 1);
+    assert.equal(dog.waiting, true);
+    assert.equal(dog.mstrategy, STRAT_WAITFORU);
+    assert.equal(dog.mextra.edog.whistletime, 0);
+    assert.deepEqual(dog.mtrack, [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }]);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('untrapping a squeaky board with unpaid grease bills one charge before repair', async () => {
     const { shkp } = installCommandShopState();
     const trap = installSeenSqueakyBoardEast();
