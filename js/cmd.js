@@ -22110,6 +22110,35 @@ function heroHorizontalThrowRecoilPetrifyMonsterByTouch(mon, messages) {
     return petrifyMonsterFromThrownEgg(mon, messages);
 }
 
+function heroHorizontalThrowRecoilSetmangry(mon, messages) {
+    clearMonsterPotionWaitStrategy(mon);
+    if (!mon?.mpeaceful || mon.mtame || mon.pet) return false;
+    mon.mpeaceful = 0;
+    mon.hostile = true;
+    mon.angry = true;
+    if (game.u?.ualign) {
+        if (mon.ispriest) {
+            const coaligned = Number(game.u.ualign.type ?? A_NEUTRAL) === tipHatPriestAlign(mon);
+            game.u.ualign.record = (game.u.ualign.record || 0) + (coaligned ? -5 : 2);
+            if (coaligned) game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 5;
+        } else {
+            game.u.ualign.record = (game.u.ualign.record || 0) - 1;
+            game.u.ualign.abuse = (game.u.ualign.abuse || 0) + 1;
+        }
+    }
+    if (mon.data?.humanoid || mon.humanoid || mon.isshk || mon.isgd || mon.ispriest) {
+        if (directMeleeMonsterCanBeSeen(mon))
+            messages.push(`${fireScrollMonsterName(mon)} gets angry!`);
+    } else if (!directMeleeGrowlSuppressed(mon)) {
+        const verb = directMeleeGrowlVerb(mon);
+        if (directMeleeGrowlCanMessage(mon)) directMeleePushGrowlMessage(mon, messages, verb);
+        directMeleeGrowlWakeNearby(mon, messages);
+    }
+    if (!game._monster_moving)
+        directMeleePeacefulBystandersRespond(mon, messages);
+    return true;
+}
+
 function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
     if (!mon) return { messages: [], trapResult: null };
     const loc = game.level?.at?.(x, y);
@@ -22125,14 +22154,16 @@ function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
         ? articleFor(mon.data?.name || mon.name || 'creature')
         : 'something';
     const pronoun = canSpotAfterUnhide ? 'it' : 'something';
+    const messages = [!preGlyphMonster && !preGlyphInvisible
+        ? `You find ${name} by bumping into ${pronoun}.`
+        : `You bump into ${name}.`];
+    if (mon.msleeping && directMeleeMonsterCanBeSeen(mon))
+        messages.push(directMeleeWakeMessage(mon, false));
     mon.msleeping = 0;
     mon.meating = 0;
     revealHeroProjectileHitMimicAppearance(mon);
     if (!heroHorizontalThrowRecoilCanSpotMonster(mon)) mapInvisibleMonsterAt(mon);
-    setHeroObjectHitMonsterAngry(mon);
-    const messages = [!preGlyphMonster && !preGlyphInvisible
-        ? `You find ${name} by bumping into ${pronoun}.`
-        : `You bump into ${name}.`];
+    heroHorizontalThrowRecoilSetmangry(mon, messages);
     const trapResult = heroHorizontalThrowRecoilHeroPetrification(mon, messages);
     if (trapResult?.fatal && !trapResult.lifeSaving)
         return { messages, trapResult };

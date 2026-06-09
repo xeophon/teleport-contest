@@ -71901,6 +71901,103 @@ test('levitating hero-thrown ordinary weapon recoil bumps monster without damage
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil setmangry angers visible peaceful humanoid', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.ualign = { type: A_LAWFUL, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    markSquareVisible(4, 5);
+    const blade = dagger(87617001, 'd');
+    const distant = ordinaryThrowTarget('newt', 10, 5, { mhp: 20, mhpmax: 20 });
+    const goblin = ordinaryThrowTarget('goblin', 4, 5, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mpeaceful: true,
+        mstrategy: STRAT_WAITFORU,
+        data: { name: 'goblin', mlevel: 1, humanoid: true, mlet: '@' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [distant, goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You float in the opposite direction.  You bump into a goblin.  The goblin wakes up.  The goblin gets angry!');
+    assert.equal(goblin.mhp, 4);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.hostile, true);
+    assert.equal(goblin.angry, true);
+    assert.equal(goblin.mstrategy, 0);
+    assert.equal(game.u.ualign.record, -1);
+    assert.equal(game.u.ualign.abuse, 1);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil setmangry uses priest alignment rule', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.ualign = { type: A_CHAOTIC, record: 0, abuse: 0 };
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    markSquareVisible(4, 5);
+    const blade = dagger(87617002, 'd');
+    const distant = ordinaryThrowTarget('newt', 10, 5, { mhp: 20, mhpmax: 20 });
+    const priest = ordinaryThrowTarget('aligned priest', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        ispriest: true,
+        mstrategy: STRAT_WAITFORU,
+        shrine: { align: A_LAWFUL },
+        data: { name: 'aligned priest', mlevel: 12, humanoid: true, msound: 'MS_PRIEST' },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [distant, priest];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._pending_message,
+        'You float in the opposite direction.  You bump into an aligned priest.  The aligned priest wakes up.  The aligned priest gets angry!');
+    assert.equal(priest.msleeping, 0);
+    assert.equal(priest.mpeaceful, 0);
+    assert.equal(priest.hostile, true);
+    assert.equal(priest.angry, true);
+    assert.equal(priest.mstrategy, 0);
+    assert.equal(game.u.ualign.record, 2);
+    assert.equal(game.u.ualign.abuse, 0);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
 test('levitating hero-thrown ordinary weapon recoil cockatrice collision petrifies hero', async () => {
     installStableNonShopFloorState();
     installCoreRngValues([0]);
@@ -71952,7 +72049,8 @@ test('levitating hero-thrown ordinary weapon recoil cockatrice collision petrifi
     assert.equal(cockatrice.msleeping, 0);
     assert.equal(cockatrice.mpeaceful, 0);
     assert.equal(cockatrice.mstrategy, 99);
-    assert.equal(corpse.zombifyTurn, 190);
+    assert.match(message, /The cockatrice growls!/);
+    assert.equal(corpse.zombifyTurn, 160);
     assert.deepEqual(getRngLog(), ['rn2(100)=0', 'rn2(1)=0']);
 });
 
@@ -71994,7 +72092,7 @@ test('levitating hero-thrown ordinary weapon recoil cockatrice collision uses li
     assert.equal(game.u.uhp, 0);
     assert.equal(game.inventory.includes(amulet), false);
     assert.match(game._pending_message,
-        /You float in the opposite direction\.  You bump into a cockatrice\.  You turn to stone\.\.\.  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+        /You float in the opposite direction\.  You bump into a cockatrice\.  The cockatrice growls!  You turn to stone\.\.\.  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
     assert.equal(game._death_cause, 'petrified by bumping into a cockatrice');
     assert.equal(game._death_bones_body, 'statue');
     assert.equal(cockatrice.msleeping, 0);
@@ -72312,8 +72410,8 @@ test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bu
     assert.equal(jackal.msleeping, 0);
     assert.equal(jackal.mpeaceful, true);
     assert.equal(jackal.mstrategy, 0);
-    assert.equal(listCorpse.zombifyTurn, 160);
-    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(listCorpse.zombifyTurn, 140);
+    assert.equal(floorBuried.zombifyTurn, 126);
     assert.equal(farBuried.zombifyTurn, 190);
     assert.equal(unburiedFloorCorpse.zombifyTurn, 190);
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
