@@ -18646,6 +18646,104 @@ test('remove command can prompt and take off armor fallback', async () => {
     assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
 });
 
+test('takeoffall command reports when nothing is worn or readied', async () => {
+    installNonShopFloorState();
+    game.inventory = [];
+
+    await rhack('A');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(game._pending_message, 'You are not wearing anything.');
+});
+
+test('takeoffall command removes all selected items in C takeoff order', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057018, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    const missile = arrow(3057019, 'q', {
+        quivered: true,
+        line: 'q - an arrow (in quiver)',
+    });
+    const shield = wornArmor(3057020, 'small shield', 's');
+    const amulet = metalAmulet(3057021, 'amulet of magical breathing', 8, 'm', {
+        worn: true,
+        line: 'm - an octagonal amulet (being worn)',
+    });
+    const weapon = wieldedWeapon(3057022, 'dagger', 'w', 0);
+    const towel = wornTool(3057023, 'towel', 't');
+    game.inventory = [ring, missile, shield, amulet, weapon, towel];
+    game.u.blind = true;
+    game.u.blindfolded = true;
+    game.u.Blindfolded = true;
+    game.u.uac = 9;
+
+    await rhack('A');
+
+    assert.equal(game._command_mode, 'takeOffAllObject');
+    assert.equal(game._pending_message, 'What do you want to take off? [twsrmq or ?*]');
+
+    await rhack('A');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(towel.worn, false);
+    assert.equal(towel.line, 't - a towel');
+    assert.equal(game.u.blind, false);
+    assert.equal(game._pending_message, 'You were wearing a towel.  You can see again.');
+
+    await rhack('.');
+
+    assert.equal(weapon.wielded, false);
+    assert.equal(weapon.line, 'w - a +0 dagger');
+    assert.equal(game._pending_message, 'You are empty handed.');
+
+    await rhack('.');
+
+    assert.equal(shield.worn, false);
+    assert.equal(shield.line, 's - a +0 small shield');
+    assert.equal(game.u.uac, 10);
+    assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
+
+    await rhack('.');
+
+    assert.equal(ring.worn, false);
+    assert.equal(ring.owornmask, 0);
+    assert.equal(ring.line, 'r - an iron ring');
+    assert.equal(game._pending_message, 'You were wearing an iron ring (on left hand).');
+
+    await rhack('.');
+
+    assert.equal(amulet.worn, false);
+    assert.equal(amulet.line, 'm - an octagonal amulet');
+    assert.equal(game._pending_message, 'You were wearing an octagonal amulet.');
+
+    await rhack('.');
+
+    assert.equal(missile.quivered, false);
+    assert.equal(missile.line, 'q - an arrow');
+    assert.equal(game._pending_message, 'You no longer have ammunition readied.');
+    assert.equal(game._takeoff_all_queue, null);
+});
+
+test('takeoffall command treats lowercase a as an inventory letter when present', async () => {
+    installNonShopFloorState();
+    const amulet = metalAmulet(3057024, 'amulet of magical breathing', 8, 'a', {
+        worn: true,
+        line: 'a - an octagonal amulet (being worn)',
+    });
+    game.inventory = [amulet];
+
+    await rhack('A');
+    await rhack('a');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(amulet.worn, false);
+    assert.equal(amulet.line, 'a - an octagonal amulet');
+    assert.equal(game._pending_message, 'You were wearing an octagonal amulet.');
+});
+
 test('unknown gray stone is suggested by apply and opens stone target prompt', async () => {
     installCommandShopState();
     const stone = carriedGrayStone(30571, 'g', 'loadstone');

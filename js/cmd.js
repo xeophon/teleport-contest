@@ -16510,6 +16510,75 @@ function wornArmorItems() {
     return (game.inventory || []).filter(isWornArmorItem);
 }
 
+function isQuiveredItem(item) {
+    return !!item && (item.quivered || /\b(?:at the ready|in quiver(?: pouch)?)\b/.test(String(item.line || '')));
+}
+
+function takeOffAllRingSlot(item) {
+    const line = String(item?.line || '');
+    if (/\(on right hand\)/.test(line) || item?.worn === 'right') return 'rightRing';
+    return 'leftRing';
+}
+
+function takeOffAllSlot(item) {
+    if (isWornFacewearItem(item)) return 'facewear';
+    if (itemIsPrimaryWielded(item)) return 'primary';
+    if (isWornArmorItem(item)) return armorSlot(item);
+    if (wornRingItem(item) || isWornMeatRingItem(item)) return takeOffAllRingSlot(item);
+    if (isWornAmuletItem(item)) return 'amulet';
+    if (itemIsAlternateWeapon(item)) return 'alternate';
+    if (isQuiveredItem(item)) return 'quiver';
+    return '';
+}
+
+function isTakeOffAllCandidateItem(item) {
+    return !!takeOffAllSlot(item);
+}
+
+const TAKEOFF_ALL_SLOT_ORDER = [
+    'facewear', 'primary', 'shield', 'gloves', 'leftRing', 'rightRing',
+    'cloak', 'helm', 'amulet', 'body', 'shirt', 'boots', 'alternate', 'quiver',
+];
+
+function takeOffAllItems() {
+    const candidates = (game.inventory || []).filter(isTakeOffAllCandidateItem);
+    const used = new Set();
+    const ordered = [];
+    for (const slot of TAKEOFF_ALL_SLOT_ORDER) {
+        const item = candidates.find(candidate => !used.has(candidate) && takeOffAllSlot(candidate) === slot);
+        if (item) {
+            used.add(item);
+            ordered.push(item);
+        }
+    }
+    return ordered;
+}
+
+function takeOffAllPrompt() {
+    const letters = takeOffAllItems().map(item => item.letter).filter(Boolean).join('');
+    return letters
+        ? `What do you want to take off? [${getobjPromptLetters(letters)} or ?*]`
+        : 'What do you want to take off? [*]';
+}
+
+function clearTakeOffAllSelectionState() {
+    game._takeoff_all_queue = null;
+    game._takeoff_all_disrobing = '';
+    game._takeoff_all_prompt = '';
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+}
+
+function queueTakeOffAllItems(items) {
+    const wanted = new Set(items);
+    game._takeoff_all_queue = takeOffAllItems()
+        .filter(item => wanted.has(item))
+        .map(item => item.letter)
+        .filter(Boolean);
+    game._takeoff_all_disrobing = items.some(item => !['primary', 'alternate', 'quiver'].includes(takeOffAllSlot(item)))
+        ? 'disrobing' : 'disarming';
+}
+
 function facewearBaseName(item) {
     let name = inventoryItemName(item).replace(/\s+\(being worn\).*$/, '');
     if (objectKindKey(item) === 'lenses' && !/\bpair of lenses\b/i.test(name))
@@ -16658,6 +16727,78 @@ async function takeOffEquipment(item) {
     updateGauntletsOfPowerStrength(kind, false);
     updateWornDisplacement();
     return { messages: [`You were wearing ${baseName}.`], move: 1 };
+}
+
+function unwieldedBaseLine(item) {
+    return `${item.letter || '?'} - ${inventoryItemName(item)}`;
+}
+
+async function takeOffReadiedItem(item) {
+    const slot = takeOffAllSlot(item);
+    if (slot === 'primary') {
+        if (readyPrimaryWillWeld(item)) {
+            if (item.welded === true) item.cursed = true;
+            item.bknown = true;
+            item.line = heroWieldedLineForItem(item);
+            return { messages: [readyWeldedPrimaryMessage(item)], move: 0 };
+        }
+        const wasTwoweap = !!game._twoweapon;
+        item.wielded = false;
+        item.alternate = false;
+        if (item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item)))
+            game._wielded_mjollnir = false;
+        game._twoweapon = false;
+        item.line = unwieldedBaseLine(item);
+        return { messages: [wasTwoweap ? 'You are no longer wielding either weapon.' : 'You are empty handed.'], move: 1 };
+    }
+    if (slot === 'alternate') {
+        const wasTwoweap = !!game._twoweapon;
+        item.wielded = false;
+        item.alternate = false;
+        if (wasTwoweap) game._twoweapon = false;
+        item.line = unwieldedBaseLine(item);
+        return {
+            messages: [wasTwoweap
+                ? 'You are no longer wielding two weapons at once.'
+                : 'You no longer have a second weapon readied.'],
+            move: wasTwoweap ? 1 : 0,
+        };
+    }
+    if (slot === 'quiver') {
+        item.quivered = false;
+        if (item.line) item.line = item.line.replace(/ \((?:at the ready|in quiver(?: pouch)?)\).*$/, '');
+        else item.line = unwieldedBaseLine(item);
+        return { messages: ['You no longer have ammunition readied.'], move: 1 };
+    }
+    return null;
+}
+
+async function takeOffAllItem(item) {
+    const readied = await takeOffReadiedItem(item);
+    if (readied) return readied;
+    return takeOffEquipment(item);
+}
+
+async function continueTakeOffAllQueue() {
+    const queue = game._takeoff_all_queue || [];
+    while (queue.length) {
+        const letter = queue.shift();
+        const item = (game.inventory || []).find(invItem => invItem.letter === letter);
+        if (!item || !isTakeOffAllCandidateItem(item)) continue;
+        const result = await takeOffAllItem(item);
+        if (!result) continue;
+        if (!queue.length) {
+            game._takeoff_all_queue = null;
+            game._takeoff_all_disrobing = '';
+        }
+        if (result.messages.length)
+            await setMessage(result.messages.join('  '), !!result.more);
+        game.context.move = result.move ?? 1;
+        if (result.more) game._process_time_with_more = 1;
+        return true;
+    }
+    clearTakeOffAllSelectionState();
+    return false;
 }
 
 async function finishTakeOffEquipment(item, options = {}) {
@@ -58310,6 +58451,12 @@ export async function rhack(_cmd) {
             return;
     }
 
+    if (!game._running_continuation && !game._command_mode && !game._message_more
+        && game._takeoff_all_queue?.length) {
+        await continueTakeOffAllQueue();
+        return;
+    }
+
     if (await handleSanctumSummonScript(ch)) return;
 
     if (game._command_mode === 'wizardWish' && ch !== '\r' && ch !== '\n') {
@@ -63219,6 +63366,50 @@ export async function rhack(_cmd) {
             return;
         }
         game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'takeOffAllInvalidMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(game._takeoff_all_prompt || takeOffAllPrompt());
+            game._command_mode = 'takeOffAllObject';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'takeOffAllObject') {
+        const prompt = game._takeoff_all_prompt || takeOffAllPrompt();
+        if (objectPromptQuitKey(ch)) {
+            clearTakeOffAllSelectionState();
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            return;
+        }
+        if (ch === '?') {
+            setOverlay(inventoryOverlayLines(0, false, isTakeOffAllCandidateItem), 24, true);
+            game._command_mode = 'takeOffAllObject';
+            return;
+        }
+        const candidates = takeOffAllItems();
+        const item = candidates.find(candidate => candidate.letter === ch);
+        if (!item && (ch === '*' || ch === 'A' || (ch === 'a' && !candidates.some(candidate => candidate.letter === 'a')))) {
+            queueTakeOffAllItems(candidates);
+        } else if (item) {
+            queueTakeOffAllItems([item]);
+        } else {
+            await setMessage("You don't have that object.", true);
+            game._takeoff_all_prompt = prompt;
+            game._command_mode = 'takeOffAllInvalidMore';
+            return;
+        }
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        game._command_mode = null;
+        if (!(await continueTakeOffAllQueue())) {
+            await setMessage('There is nothing else you can remove or unwield.');
+        }
         return;
     }
 
@@ -75008,6 +75199,19 @@ export async function rhack(_cmd) {
         game._take_off_prompt = prompt;
         await setMessage(prompt);
         game._command_mode = 'takeOffObject';
+        return;
+    }
+
+    if (ch === 'A') {
+        const items = takeOffAllItems();
+        if (!items.length) {
+            await setMessage('You are not wearing anything.');
+            return;
+        }
+        const prompt = takeOffAllPrompt();
+        game._takeoff_all_prompt = prompt;
+        await setMessage(prompt);
+        game._command_mode = 'takeOffAllObject';
         return;
     }
 
