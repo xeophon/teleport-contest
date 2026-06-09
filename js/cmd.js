@@ -34783,6 +34783,66 @@ function kickedFloorObjectKickName(obj) {
     return quantity > 1 ? quantityObjectName(obj, name, quantity) : name;
 }
 
+function kickedObjectLooseSourceAt(x, y) {
+    const loc = game.level?.at?.(x, y);
+    const closedDoor = loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED));
+    return !!(loc && (IS_OBSTRUCTED(loc.typ) || closedDoor));
+}
+
+function kickedLooseObjectDoesNotVerb(obj) {
+    return Math.max(1, Math.trunc(Number(obj?.quan || 1))) > 1 ? "don't" : "doesn't";
+}
+
+function billKickedLooseShopObject(obj, x, y, messages) {
+    if (!obj || shopBillableGold(obj)) return null;
+    const sourceShkp = shopkeeperForCostlySpot(x, y);
+    if (!shopkeeperInHisShop(sourceShkp)) return null;
+    const heroShkp = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
+    if (sameShopkeeper(sourceShkp, heroShkp)) return null;
+    if (obj.no_charge) {
+        obj.no_charge = false;
+        return { shkp: sourceShkp, billed: false };
+    }
+    const price = shopItemPrice(obj, x, y);
+    if (!(price > 0)) return { shkp: sourceShkp, billed: false };
+    if (shopBillIsFull(sourceShkp)) {
+        messages.push('You got that for free!');
+        return { shkp: sourceShkp, billed: false };
+    }
+    const entry = addObjectToShopBill(sourceShkp, obj, price);
+    if (entry) messages.push(floorUsedUpShopBillMessage(obj, shopBillEntryTotal(entry)));
+    return { shkp: sourceShkp, billed: !!entry };
+}
+
+function tryKickLooseFloorObject(obj, x, y, messages) {
+    if (!kickedObjectLooseSourceAt(x, y)) return null;
+    const martial = heroUsesMartialKickRangeBonus();
+    const dexterity = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const failed = (!martial && rn2(20) > dexterity)
+        || kickedObjectLooseSourceAt(game.u?.ux, game.u?.uy);
+    if (failed) {
+        if (heroIsBlind())
+            messages.push("It doesn't come loose.");
+        else
+            messages.push(`${floorObjectTheSubject(obj)} ${kickedLooseObjectDoesNotVerb(obj)} come loose.`);
+        if (!lowRangeKickedObjectAvoidsOuch()) {
+            applyKickedObjectOuchDamage();
+            messages.push('Ouch!  That hurts!');
+        }
+        return { handled: true, messages, moved: false };
+    }
+
+    if (heroIsBlind())
+        messages.push('It comes loose.');
+    else
+        messages.push(`${floorObjectTheSubject(obj)} ${floorObjectVerb(obj, 'comes', 'come')} loose.`);
+    removeFloorObject(obj);
+    newsym(x, y);
+    billKickedLooseShopObject(obj, x, y, messages);
+    placeKickedFloorObject(obj, game.u?.ux, game.u?.uy, messages);
+    return { handled: true, messages, moved: true };
+}
+
 function kickedCoinFlightStopPileAt(obj, x, y) {
     if (!shopBillableGold(obj)) return null;
     return (game.level?.objects || []).find(candidate =>
@@ -35214,6 +35274,12 @@ async function kickFloorObjectToward(dir, x, y) {
     const gate = remoteProjectileDownGateAt(obj, landX, landY, { allowGold: shopBillableGold(obj) });
     if (!kickFloorObjectSupported(obj)) return { handled: false };
 
+    const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
+    if (kickedObjectLooseSourceAt(x, y)) {
+        kickFloorObjectRange(obj, x, y, dir);
+        return tryKickLooseFloorObject(obj, x, y, messages);
+    }
+
     const targetMon = (game.level?.monsters || []).find(mon =>
         mon && !mon.dead && mon.mx === landX && mon.my === landY
         && (mon.mhp == null || mon.mhp > 0));
@@ -35229,7 +35295,6 @@ async function kickFloorObjectToward(dir, x, y) {
         return { handled: false };
 
     const range = kickFloorObjectRange(obj, x, y, dir);
-    const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
     if (localBoxImpact) {
         const boxImpact = applyKickedBoxImpact(obj, range, messages);
         if (boxImpact.handled)

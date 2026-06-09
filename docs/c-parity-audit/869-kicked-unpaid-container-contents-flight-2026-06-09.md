@@ -32,7 +32,7 @@
 
 ## Remaining follow-up
 
-- Obstruction/door "comes loose" kicks have a separate active `addtobill()` path and remain outside this slice.
+- Obstruction/door "comes loose" kicks now cover ordinary live billing and `no_charge` cleanup in audit `870`; recursive container contents and gold billing remain follow-up work for that branch.
 - Broader same-shop stacking interactions after recursive bill return could use deeper canaries if floor-stack billing changes.
 
 ## Verification
