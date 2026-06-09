@@ -788,8 +788,61 @@ function chestTrapBoxInPool(box) {
     return !!loc && (IS_POOL(loc.typ) || loc.typ === WATER || loc.typ === MOAT);
 }
 
+function heroPolyselfFireHpState() {
+    if (!game.u?._polyself_form) return null;
+    if (game.u.mh != null || game.u.mhmax != null)
+        return { hpKey: 'mh', maxKey: 'mhmax' };
+    return { hpKey: 'uhp', maxKey: 'uhpmax' };
+}
+
+function polyselfFireGolemMaxDamage(form, maxHp) {
+    const name = String(form?.name || '').toLowerCase();
+    if (name === 'paper golem') return maxHp;
+    if (name === 'straw golem') return Math.trunc(maxHp / 2);
+    if (name === 'wood golem') return Math.trunc(maxHp / 4);
+    if (name === 'leather golem') return Math.trunc(maxHp / 8);
+    return 0;
+}
+
+function applyPolyselfFireMaxHpLoss(origDamage) {
+    const state = heroPolyselfFireHpState();
+    if (!state || !game.u) return null;
+    const form = game.u._polyself_form || {};
+    let damage = origDamage;
+    const maxHp = Math.max(1, Math.trunc(Number(game.u[state.maxKey] ?? game.u[state.hpKey] ?? 1)));
+    const golemDamage = polyselfFireGolemMaxDamage(form, maxHp);
+    if (golemDamage > damage) damage = golemDamage;
+    const level = Math.max(0, Math.trunc(Number(form.mlevel ?? form.level ?? form.hpLevel ?? 0)));
+    if (maxHp > level) {
+        const loss = rn2(Math.min(maxHp, damage + 1));
+        game.u[state.maxKey] = Math.max(1, maxHp - loss);
+    } else {
+        game.u[state.maxKey] = maxHp;
+    }
+    game.u[state.hpKey] = Math.min(game.u[state.hpKey] ?? game.u[state.maxKey], game.u[state.maxKey]);
+    return damage;
+}
+
 function applyChestTrapFireDamage(messages, damage, deathCause) {
     if (!damage || game.u?.uinvulnerable) return {};
+    const polyselfHp = heroPolyselfFireHpState();
+    if (polyselfHp && game.u) {
+        game.u[polyselfHp.hpKey] = Math.max(0, (game.u[polyselfHp.hpKey] || 0) - damage);
+        if ((game.u[polyselfHp.hpKey] || 0) > 0) return {};
+        if (heroHasUnchanging()) {
+            game._death_cause = 'killed while stuck in creature form';
+            messages.push('You die...');
+            return { lifeSaving: false, fatal: true, more: true };
+        }
+        const result = rehumanizeAfterPolyselfDeath();
+        appendRehumanizeDeathResultMessages(messages, result, { allowLifeSaving: true });
+        return {
+            genocideDeathArmed: !!messages.genocideDeathArmed,
+            lifeSaving: !!messages.lifeSaving,
+            fatal: !!messages.fatal,
+            more: !!messages.more,
+        };
+    }
     if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
     if ((game.u?.uhp || 0) > 0) return {};
     return heroDartTrapFatalResult(messages, deathCause);
@@ -811,6 +864,8 @@ function applyChestTrapFirePayload(box, messages) {
     if (heroHasFireResistance()) {
         damage = rn2(2);
         if (!damage) messages.push('You are uninjured.');
+    } else if (game.u?._polyself_form) {
+        damage = applyPolyselfFireMaxHpLoss(origDamage);
     } else {
         damage = d(2, 4);
         if (game.u) {
@@ -823,7 +878,7 @@ function applyChestTrapFirePayload(box, messages) {
     }
 
     const directResult = applyChestTrapFireDamage(messages, damage, 'killed by a tower of flame');
-    if (directResult.fatal) return directResult;
+    if (directResult.genocideDeathArmed || directResult.fatal) return directResult;
     if (directResult.lifeSaving) restoreLifeSavedHeroForContinuation();
 
     burnAwayHeroSlime(messages);

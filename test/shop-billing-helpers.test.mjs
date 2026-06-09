@@ -29587,6 +29587,67 @@ test('#untrap known-box fire payload respects fire resistance', async () => {
     assert.equal(game.context.move, 1);
 });
 
+test('#untrap known-box fire payload burns paper golem form instead of human HP', async () => {
+    setupUntrapDestinationWeb([], { rng: [74, 0, 1, 9, 3, 3, 5, 1, 4, 0] });
+    Object.assign(game.u, {
+        fireResistance: false,
+        uinvulnerable: false,
+        uhp: 20,
+        uhpmax: 20,
+        mh: 20,
+        mhmax: 20,
+        _polyself_base: {
+            uhp: 18,
+            uhpmax: 30,
+            uen: game.u.uen,
+            uenmax: game.u.uenmax,
+            uac: game.u.uac,
+            ulevel: game.u.ulevel,
+        },
+        _polyself_form: { name: 'paper golem', mlet: "'", glyph: "'", mlevel: 3, mac: 10 },
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(881051);
+    Object.assign(box, {
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.level.objects = [box];
+
+    await enterUntrapDirection();
+    await rhack('.');
+
+    assert.equal(game._command_mode, 'untrapBoxConfirm');
+    assert.equal(game._pending_message, 'Disarm this large box? [ynq] (q)');
+
+    await rhack('y');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rnd(75)=75',
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'rn2(20)=5',
+        'rn2(5)=1',
+        'rn2(5)=4',
+        'rn2(19)=0',
+    ]);
+    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!  You return to human form!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u._polyself_form || null, null);
+    assert.equal(game.u._polyself_base || null, null);
+    assert.equal(game.u.mh, null);
+    assert.equal(game.u.mhmax, null);
+    assert.equal(game.u.uhp, 18);
+    assert.equal(game.u.uhpmax, 30);
+    assert.equal(game.context.move, 1);
+});
+
 test('#untrap known-box fire payload can burn carried scrolls', async () => {
     const scroll = scrollOfCharging(881046, 's');
     setupUntrapDestinationWeb([scroll], { rng: [74, 0, 1, 9, 3, 3, 1, 1, 0, 1, 4, 0, 0] });
