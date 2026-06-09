@@ -25,7 +25,7 @@
 
 ## Remaining follow-up
 
-- Boomerang pre-recoil still uses the message-only `heroHorizontalThrowRecoil()` wrapper before `boomhit()` flow. Full C parity there needs a separate slice because no-save fatal recoil should stop before `boomhit()`, while life saving should return and continue the curved boomerang path.
+- Boomerang pre-recoil obstacle death and life-saving continuation are covered by `880-boomerang-pre-recoil-lifesaving-continuation-2026-06-09.md`.
 - Recoil monster collision is still non-damaging in both C and JS for the currently modeled path; deeper sensory and wake details remain broader `hurtle_step()` parity if hidden tests target them.
 
 ## Verification

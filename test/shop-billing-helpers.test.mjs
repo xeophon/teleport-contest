@@ -70354,6 +70354,105 @@ test('levitating hero-thrown boomerang recoils before curved flight hits target'
     ]);
 });
 
+test('levitating hero-thrown boomerang pre-recoil boulder collision can kill before boomhit', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([2, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        uhandedness: 'right',
+        uhp: 3,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_DEX] = 25;
+    const boomerang = monsterBoomerang(8761661, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const boulder = floorBoulder(8761662, { ox: 4, oy: 5 });
+    const goblin = ordinaryThrowTarget('goblin', 6, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+    });
+    game.inventory = [boomerang];
+    game.level.objects = [boulder];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a boulder\.  Ouch!  You die\.\.\./);
+    assert.doesNotMatch(game._pending_message, /skillfully catch|boomerang hits|returns|fails to return|misses|Klonk/);
+    assert.equal(game._death_cause, 'bumping into a boulder');
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 0);
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(1)=0']);
+});
+
+test('levitating hero-thrown boomerang pre-recoil boulder collision life saving continues into catch', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([2, 0, 0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        uhandedness: 'right',
+        uhp: 3,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.acurr.a[A_CON] = 10;
+    const amulet = wornHeroLifeSavingAmulet(8761663, 'a');
+    const boomerang = monsterBoomerang(8761664, {
+        letter: 'b',
+        line: 'b - a boomerang',
+        ox: 5,
+        oy: 5,
+    });
+    const boulder = floorBoulder(8761665, { ox: 4, oy: 5 });
+    game.inventory = [amulet, boomerang];
+    game.level.objects = [boulder];
+    game.level.monsters = [];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('b');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.level.objects.some(obj => obj.id === boomerang.id), false);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a boulder\.  Ouch!  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._death_cause, 'bumping into a boulder');
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(19)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._pending_message,
+        'You feel much better!  The medallion crumbles to dust!  You skillfully catch the boomerang.');
+    assert.equal(game.inventory.includes(boomerang), true);
+    assert.equal(game.level.objects.some(obj => obj.id === boomerang.id), false);
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(19)=0', 'rn2(20)=0', 'rn2(19)=0']);
+});
+
 test('underwater hero-thrown boomerang uses ordinary range one and generic auto-return', async () => {
     installNonShopFloorState();
     initRng(2);

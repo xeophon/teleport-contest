@@ -51556,6 +51556,13 @@ function consumeKickOuchLifeSavingRecoil() {
     return heroHorizontalThrowRecoilResult(queued.dir, rn1(2, 4));
 }
 
+function queueBoomerangPreRecoilLifeSavingContinuation(item, key) {
+    game._life_saving_boomerang_pre_recoil = {
+        key,
+        letter: item?.letter || game._throw_item_letter || null,
+    };
+}
+
 function finishLandminePitFalloutResult(messages, fatalResult, pitResult) {
     if (pitResult?.message) messages.push(pitResult.message);
     const lavaDeath = game._command_mode === 'lavaDeathMore' && game._death_cause === 'burned by molten lava';
@@ -57849,6 +57856,19 @@ export async function rhack(_cmd) {
                 const con = game.u.acurr?.a?.[A_CON] ?? 10;
                 const givehp = 50 + 10 * Math.trunc(con / 2);
                 game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
+            }
+            const boomerangPreRecoilContinuation = game._life_saving_boomerang_pre_recoil || null;
+            game._life_saving_boomerang_pre_recoil = null;
+            if (boomerangPreRecoilContinuation) {
+                game._skip_boomerang_pre_recoil_once = 1;
+                game._boomerang_pre_recoil_prefix_once = lifeSavingMessage;
+                game._command_mode = 'throwDirection';
+                if (boomerangPreRecoilContinuation.letter)
+                    game._throw_item_letter = boomerangPreRecoilContinuation.letter;
+                game._pending_message = '';
+                game._message_more = 0;
+                await rhack(boomerangPreRecoilContinuation.key || 'l');
+                return;
             }
             const postRecoil = consumeKickOuchLifeSavingRecoil();
             if (postRecoil?.message) {
@@ -73266,8 +73286,30 @@ export async function rhack(_cmd) {
         const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'
             && !heroIsUnderwaterForThrow();
         let boomerangPreRecoilMessage = '';
+        let boomerangPreRecoilMore = false;
         if (boomerangUsesCurvedFlight && heroHorizontalThrowAirRecoilActive()) {
-            boomerangPreRecoilMessage = heroHorizontalThrowRecoil(dir, 1);
+            const skipBoomerangPreRecoil = !!game._skip_boomerang_pre_recoil_once;
+            const boomerangPreRecoilPrefix = game._boomerang_pre_recoil_prefix_once || '';
+            game._skip_boomerang_pre_recoil_once = 0;
+            game._boomerang_pre_recoil_prefix_once = '';
+            if (skipBoomerangPreRecoil) {
+                boomerangPreRecoilMessage = boomerangPreRecoilPrefix;
+            } else {
+                const boomerangPreRecoilResult = heroHorizontalThrowRecoilResult(dir, 1);
+                boomerangPreRecoilMessage = boomerangPreRecoilResult?.message || '';
+                boomerangPreRecoilMore = !!boomerangPreRecoilResult?.more;
+                const preRecoilTrapResult = boomerangPreRecoilResult?.trapResult || null;
+                if (preRecoilTrapResult?.lifeSaving || preRecoilTrapResult?.fatal) {
+                    await setMessage(boomerangPreRecoilMessage, boomerangPreRecoilMore);
+                    if (preRecoilTrapResult.lifeSaving)
+                        queueBoomerangPreRecoilLifeSavingContinuation(item, ch);
+                    else {
+                        game._throw_item_letter = null;
+                        clearThrowCountState();
+                    }
+                    if (applyLifeSavingOrFatalCommandMode(preRecoilTrapResult)) return;
+                }
+            }
             ux = game.u?.ux || ux;
             uy = game.u?.uy || uy;
         }
@@ -73275,7 +73317,8 @@ export async function rhack(_cmd) {
         if (boomerangFlight.caught) {
             exerciseHeroProjectileHitDexterity();
             newsym(ux, uy);
-            await setMessage([boomerangPreRecoilMessage, 'You skillfully catch the boomerang.'].filter(Boolean).join('  '));
+            await setMessage([boomerangPreRecoilMessage, 'You skillfully catch the boomerang.'].filter(Boolean).join('  '),
+                boomerangPreRecoilMore);
             game._command_mode = null;
             game._throw_item_letter = null;
             clearThrowCountState();
