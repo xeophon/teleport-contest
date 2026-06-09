@@ -18612,7 +18612,12 @@ test('takeoff command prompts for facewear when no armor is worn', async () => {
     await rhack('T');
 
     assert.equal(game._command_mode, 'takeOffObject');
-    assert.equal(game._pending_message, 'What do you want to take off? [t or ?*]');
+    assert.equal(game._pending_message, 'What do you want to take off? [*]');
+
+    await rhack('?');
+
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /t - a towel/);
 
     await rhack('t');
 
@@ -18635,7 +18640,12 @@ test('remove command can prompt and take off armor fallback', async () => {
     await rhack('R');
 
     assert.equal(game._command_mode, 'takeOffObject');
-    assert.equal(game._pending_message, 'What do you want to remove? [a or ?*]');
+    assert.equal(game._pending_message, 'What do you want to remove? [*]');
+
+    await rhack('?');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /a - a \+0 small shield/);
 
     await rhack('a');
 
@@ -18834,9 +18844,20 @@ test('takeoff command blocks covered body armor before select-off checks', async
     installNonShopFloorState();
     const body = wornArmor(3057032, 'leather armor', 'b');
     const cloak = wornArmor(3057033, 'cloak', 'c');
-    game.inventory = [body, cloak];
+    const helm = wornArmor(3057041, 'helmet', 'h');
+    game.inventory = [body, cloak, helm];
 
     await rhack('T');
+
+    assert.equal(game._pending_message, 'What do you want to take off? [ch or ?*]');
+
+    await rhack('?');
+
+    const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.doesNotMatch(menuText, /b - a \+0 leather armor/);
+    assert.match(menuText, /c - a \+0 cloak/);
+    assert.match(menuText, /h - a \+0 helmet/);
+
     await rhack('b');
 
     assert.equal(game.context.move || 0, 0);
@@ -18850,9 +18871,13 @@ test('takeoff command blocks shirt covered by cloak and suit', async () => {
     const shirt = wornArmor(3057034, 'Hawaiian shirt', 'h');
     const body = wornArmor(3057035, 'leather armor', 'b');
     const cloak = wornArmor(3057036, 'cloak', 'c');
-    game.inventory = [shirt, body, cloak];
+    const gloves = wornArmor(3057042, 'leather gloves', 'g');
+    game.inventory = [shirt, body, cloak, gloves];
 
     await rhack('T');
+
+    assert.equal(game._pending_message, 'What do you want to take off? [cg or ?*]');
+
     await rhack('h');
 
     assert.equal(game.context.move || 0, 0);
@@ -18893,6 +18918,122 @@ test('takeoffall selected body armor observes welded two-handed weapon blocker',
     assert.equal(body.worn, true);
     assert.equal(weapon.bknown, true);
     assert.equal(game._pending_message, 'You cannot release your sword to take off the +0 leather armor.');
+});
+
+test('takeoff command reports direct non-worn inventory selection as not worn', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057043, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    const armor = wornArmor(3057044, 'leather armor', 'a');
+    armor.worn = false;
+    armor.owornmask = 0;
+    armor.line = 'a - a +0 leather armor';
+    game.inventory = [ring, armor];
+
+    await rhack('T');
+    await rhack('a');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(armor.worn || false, false);
+    assert.equal(game._command_mode, 'takeOffInvalidMore');
+    assert.equal(game._pending_message, 'You are not wearing that.');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'takeOffObject');
+    assert.equal(game._pending_message, 'What do you want to take off? [*]');
+});
+
+test('remove command reports direct non-worn inventory selection as not worn', async () => {
+    installNonShopFloorState();
+    const armor = wornArmor(3057045, 'small shield', 's');
+    const ring = metalRing(3057046, 'fire resistance', 17, 'r');
+    game.inventory = [armor, ring];
+
+    await rhack('R');
+    await rhack('r');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(ring.worn || false, false);
+    assert.equal(game._command_mode, 'takeOffInvalidMore');
+    assert.equal(game._pending_message, 'You are not wearing that.');
+});
+
+test('takeoff prompt suggests armor while downplayed accessories stay selectable', async () => {
+    installNonShopFloorState();
+    const shield = wornArmor(3057047, 'small shield', 's');
+    const gloves = wornArmor(3057048, 'leather gloves', 'g');
+    const ring = metalRing(3057049, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.inventory = [shield, gloves, ring];
+    game.u.uac = 9;
+
+    await rhack('T');
+
+    assert.equal(game._pending_message, 'What do you want to take off? [sg or ?*]');
+
+    await rhack('?');
+
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a \+0 small shield/);
+    assert.match(menuText, /g - a \+0 pair of leather gloves/);
+    assert.doesNotMatch(menuText, /r - an iron ring/);
+
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /r - an iron ring/);
+
+    await rhack('r');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(ring.worn, false);
+    assert.equal(game._pending_message, 'You were wearing an iron ring (on left hand).');
+});
+
+test('remove prompt suggests accessories while downplayed armor stays selectable', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057050, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        line: 'r - an iron ring (on left hand)',
+    });
+    const amulet = metalAmulet(3057051, 'amulet of magical breathing', 8, 'm', {
+        worn: true,
+        line: 'm - an octagonal amulet (being worn)',
+    });
+    const shield = wornArmor(3057052, 'small shield', 's');
+    game.inventory = [ring, amulet, shield];
+    game.u.uac = 9;
+
+    await rhack('R');
+
+    assert.equal(game._pending_message, 'What do you want to remove? [rm or ?*]');
+
+    await rhack('?');
+
+    let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /r - an iron ring/);
+    assert.match(menuText, /m - an octagonal amulet/);
+    assert.doesNotMatch(menuText, /s - a \+0 small shield/);
+
+    await rhack('*');
+
+    menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
+    assert.match(menuText, /s - a \+0 small shield/);
+
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(shield.worn, false);
+    assert.equal(game.u.uac, 10);
+    assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
 });
 
 test('unknown gray stone is suggested by apply and opens stone target prompt', async () => {

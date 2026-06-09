@@ -16646,6 +16646,52 @@ function takeOffCoveredArmorBlockerResult(item) {
     return null;
 }
 
+function takeOffPromptClass(item, action) {
+    if (!isWornEquipmentItem(item)) return 'inaccessible';
+    if (takeOffCoveredArmorBlockerResult(item)) return 'inaccessible';
+    const accessory = !!isWornAccessoryItem(item);
+    return (action === 'remove') === accessory ? 'suggest' : 'downplay';
+}
+
+function takeOffPromptItems(action, promptClass) {
+    return (game.inventory || []).filter(item => takeOffPromptClass(item, action) === promptClass);
+}
+
+function takeOffPromptLetters(action, promptClass = 'suggest') {
+    return takeOffPromptItems(action, promptClass).map(item => item.letter).filter(Boolean).join('');
+}
+
+function takeOffObjectPrompt(action) {
+    const verb = action === 'remove' ? 'remove' : 'take off';
+    const letters = takeOffPromptLetters(action);
+    return letters
+        ? `What do you want to ${verb}? [${getobjPromptLetters(letters)} or ?*]`
+        : `What do you want to ${verb}? [*]`;
+}
+
+function clearTakeOffPromptState() {
+    game._take_off_prompt = '';
+    game._take_off_action = '';
+    game._overlay_lines = null;
+    game._overlay_hide_status = 0;
+}
+
+function currentTakeOffPromptAction() {
+    if (game._take_off_action) return game._take_off_action;
+    const prompt = game._take_off_prompt || game._pending_message || '';
+    return prompt.startsWith('What do you want to remove?') ? 'remove' : 'takeoff';
+}
+
+function takeOffQuestionOverlayMatch(action) {
+    if (takeOffPromptLetters(action, 'suggest')) {
+        return item => takeOffPromptClass(item, action) === 'suggest';
+    }
+    if (takeOffPromptLetters(action, 'downplay')) {
+        return item => takeOffPromptClass(item, action) === 'downplay';
+    }
+    return () => false;
+}
+
 function wornRingHand(item) {
     const worn = String(item?.worn || '').toLowerCase();
     if (worn === 'left' || worn === 'right') return worn;
@@ -63591,17 +63637,41 @@ export async function rhack(_cmd) {
     }
 
     if (game._command_mode === 'takeOffObject') {
-        const item = (game.inventory || []).find(invItem =>
-            invItem.letter === ch
-            && isWornEquipmentItem(invItem));
-        game._command_mode = null;
+        if (objectPromptQuitKey(ch)) {
+            clearTakeOffPromptState();
+            await setMessage('Never mind.');
+            game._command_mode = null;
+            return;
+        }
+
+        const action = currentTakeOffPromptAction();
+        if (ch === '?') {
+            setOverlay(inventoryOverlayLines(0, false, takeOffQuestionOverlayMatch(action)), 24, true);
+            game._command_mode = 'takeOffObject';
+            return;
+        }
+        if (ch === '*') {
+            setOverlay(inventoryOverlayLines(0, false), 24, true);
+            game._command_mode = 'takeOffObject';
+            return;
+        }
+
+        const item = (game.inventory || []).find(invItem => invItem.letter === ch);
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
         if (!item) {
             await setMessage("You don't have that object.", true);
             game._command_mode = 'takeOffInvalidMore';
             return;
         }
+        if (!isWornEquipmentItem(item)) {
+            await setMessage('You are not wearing that.', true);
+            game._command_mode = 'takeOffInvalidMore';
+            return;
+        }
+        game._command_mode = null;
         const takeOffPrompt = game._take_off_prompt || game._pending_message || '';
-        game._take_off_prompt = '';
+        clearTakeOffPromptState();
         const visualPromptOverride = takeOffPrompt.startsWith('What do you want to take off?')
             && isWornArmorItem(item)
             && /\bshield\b/i.test(String(item.kind || item.actualKind || inventoryItemName(item)))
@@ -75338,42 +75408,38 @@ export async function rhack(_cmd) {
     }
 
     if (ch === 'R') {
-        const accessories = (game.inventory || []).filter(isWornAccessoryItem);
         const equipment = wornEquipmentItems();
         if (!equipment.length) {
             await setMessage('Not wearing any accessories or armor.');
             return;
         }
-        if (accessories.length === 1) {
-            await finishTakeOffEquipment(accessories[0]);
+        const suggestedItems = takeOffPromptItems('remove', 'suggest');
+        if (suggestedItems.length === 1) {
+            await finishTakeOffEquipment(suggestedItems[0]);
             return;
         }
-        const letters = inventoryLetters(accessories.length ? isWornAccessoryItem : isWornArmorItem);
-        const prompt = letters
-            ? `What do you want to remove? [${getobjPromptLetters(letters)} or ?*]`
-            : 'What do you want to remove? [*]';
+        const prompt = takeOffObjectPrompt('remove');
         game._take_off_prompt = prompt;
+        game._take_off_action = 'remove';
         await setMessage(prompt);
         game._command_mode = 'takeOffObject';
         return;
     }
 
     if (ch === 'T') {
-        const armorItems = wornArmorItems();
         const equipment = wornEquipmentItems();
         if (!equipment.length) {
             await setMessage('Not wearing any armor or accessories.');
             return;
         }
-        if (armorItems.length === 1) {
-            await finishTakeOffEquipment(armorItems[0]);
+        const suggestedItems = takeOffPromptItems('takeoff', 'suggest');
+        if (suggestedItems.length === 1) {
+            await finishTakeOffEquipment(suggestedItems[0]);
             return;
         }
-        const letters = inventoryLetters(armorItems.length ? isWornArmorItem : isWornAccessoryItem);
-        const prompt = letters
-            ? `What do you want to take off? [${getobjPromptLetters(letters)} or ?*]`
-            : 'What do you want to take off? [*]';
+        const prompt = takeOffObjectPrompt('takeoff');
         game._take_off_prompt = prompt;
+        game._take_off_action = 'takeoff';
         await setMessage(prompt);
         game._command_mode = 'takeOffObject';
         return;
