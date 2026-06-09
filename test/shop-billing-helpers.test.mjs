@@ -43521,6 +43521,33 @@ test('m-prefix lava does not whole-burn inventory when initial water walking wou
     assert.equal(game._command_mode, 'lavaDeathMore');
 });
 
+test('m-prefix water-walking lava survivor runs burn_stuff on scroll stack', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0, 1, 1]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+        waterWalking: true,
+    });
+    const rations = foodRationStack(330022, 2, 'f');
+    const scroll = { ...scrollOfCharging(330023, 's'), quan: 3, line: 's - 3 scrolls of charging' };
+    game.inventory = [rations, scroll];
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(rations), true);
+    assert.equal(game.inventory.includes(scroll), true);
+    assert.equal(scroll.quan, 2);
+    assert.match(pending, /The lava here burns you!/);
+    assert.match(pending, /scrolls? of charging .*catches fire and burns!/);
+    assert.doesNotMatch(pending, /Some items in your inventory have been destroyed|burn to a crisp|You die/);
+    assert.equal(game.u.uhp, 33);
+    assert.equal(game._command_mode || null, null);
+});
+
 test('m-prefix fatal lava consumes life saving and teleports to safety', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 19, 7]);
@@ -43600,6 +43627,33 @@ test('m-prefix into lava sinks fire-resistant hero after guarded water walking b
     assert.equal(game.u.utraptype, TT_LAVA);
     assert.ok((game.u.utrap || 0) > 0);
     assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+});
+
+test('m-prefix fire-resistant lava survivor runs burn_stuff on potion stack', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: true,
+    });
+    const rations = foodRationStack(330024, 2, 'f');
+    const potion = oilPotion(330025, 'o', 3);
+    game.inventory = [rations, potion];
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(rations), true);
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(potion.quan, 2);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.match(pending, /potions? of oil .*ignites and explodes!/);
+    assert.doesNotMatch(pending, /burn to a crisp|You die/);
+    assert.equal(game.u.uhp, 38);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.equal(game._command_mode || null, null);
 });
 
 test('m-prefix into lava burns away slime before fire-resistant sink message', async () => {

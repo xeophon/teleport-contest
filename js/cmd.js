@@ -6711,7 +6711,7 @@ function applyEarthquakeHeroLiquidEffects(x, y, typ, messages) {
     if (typ === LAVAPOOL) {
         const lavaEffect = heroLavaEntryEffect(LAVAPOOL);
         messages.push(...lavaEffect.messages);
-        if (lavaEffect.fatal) {
+        if (lavaEffect.lavaDeath) {
             game.u.uhp = 0;
             game.context ??= {};
             game.context.move = 0;
@@ -14931,6 +14931,32 @@ function lifeSaveHeroFromLavaSinking(messages) {
     return true;
 }
 
+function lavaSurvivorBurnStuff(messages, dmg) {
+    const fireInventory = fireDamageInventory(dmg, true, false, {
+        allowLifeSaving: true,
+        preburnedArmor: { message: '', bodyHit: false },
+    });
+    messages.push(...fireInventory.messages);
+    if (fireInventory.lifeSaving || fireInventory.fatal) {
+        game._death_cause = fireInventory.deathCause || 'burned by molten lava';
+        if (fireInventory.lifeSaving && game.u?.utraptype === TT_LAVA)
+            game._life_saving_lava_clear_trap = 1;
+        return {
+            lifeSaving: !!fireInventory.lifeSaving,
+            fatal: !!fireInventory.fatal,
+            more: true,
+        };
+    }
+    const damageResult = applyChestTrapFireDamage(
+        messages,
+        fireInventory.damage,
+        fireInventory.deathCause || 'burned by molten lava',
+    );
+    if (damageResult.lifeSaving && game.u?.utraptype === TT_LAVA)
+        game._life_saving_lava_clear_trap = 1;
+    return damageResult;
+}
+
 function heroLavaEntryEffect(targetMoveTyp) {
     const messages = [];
     const dmg = d(6, 6);
@@ -14944,7 +14970,13 @@ function heroLavaEntryEffect(targetMoveTyp) {
             messages.push('The lava here burns you!');
             if (dmg < (game.u?.uhp || 0)) {
                 game.u.uhp -= dmg;
-                return { messages, fatal: false, more: messages.length > 1 };
+                const burnStuff = lavaSurvivorBurnStuff(messages, dmg);
+                return {
+                    messages,
+                    fatal: !!burnStuff.fatal,
+                    lifeSaving: !!burnStuff.lifeSaving,
+                    more: !!burnStuff.more || messages.length > 1,
+                };
             }
         }
         if (!heroHasWaterWalking()) messages.push(polyselfLavaFallMessage(targetMoveTyp));
@@ -14961,7 +14993,7 @@ function heroLavaEntryEffect(targetMoveTyp) {
             return { messages, fatal: false, lifeSaving: true, more: true };
         game._command_mode = 'lavaDeathMore';
         game._polyself_lava_death_more = 1;
-        return { messages, fatal: true, more: true };
+        return { messages, fatal: true, lavaDeath: true, more: true };
     }
     if (!heroHasWaterWalking() && (!game.u?.utrap || game.u?.utraptype !== TT_LAVA)) {
         game.u.utrap = rn1(4, 4) + (rn1(4, 12) << 8);
@@ -14971,7 +15003,13 @@ function heroLavaEntryEffect(targetMoveTyp) {
             : 'You sink into the molten lava, but it only burns slightly!');
         if ((game.u.uhp || 0) > 1) game.u.uhp--;
     }
-    return { messages, fatal: false, more: messages.length > 1 };
+    const burnStuff = lavaSurvivorBurnStuff(messages, dmg);
+    return {
+        messages,
+        fatal: !!burnStuff.fatal,
+        lifeSaving: !!burnStuff.lifeSaving,
+        more: !!burnStuff.more || messages.length > 1,
+    };
 }
 
 export function processHeroLavaSinkingTurn() {
@@ -53181,8 +53219,10 @@ function queueBoomerangPreRecoilLifeSavingContinuation(item, key) {
 function finishLandminePitFalloutResult(messages, fatalResult, pitResult, terrainResult = null) {
     if (pitResult?.message) messages.push(pitResult.message);
     const lavaDeath = game._command_mode === 'lavaDeathMore' && game._death_cause === 'burned by molten lava';
+    const terrainFatal = !lavaDeath && !!terrainResult?.fatal;
     return {
         ...pitResult,
+        fatal: pitResult?.fatal ? !!pitResult.fatal : terrainFatal,
         lifeSaving: pitResult?.fatal ? !!pitResult.lifeSaving
             : !!fatalResult.lifeSaving || !!pitResult.lifeSaving || !!terrainResult?.lifeSaving,
         more: pitResult?.fatal ? !!pitResult.more
@@ -58397,7 +58437,7 @@ async function moveHero(dx, dy) {
         if (lavaEffect.fatal || lavaEffect.lifeSaving) {
             game.context.move = 0;
             game._pending_time_passed = 0;
-            if (lavaEffect.lifeSaving) applyLifeSavingOrFatalCommandMode(lavaEffect);
+            if (lavaEffect.lifeSaving || !lavaEffect.lavaDeath) applyLifeSavingOrFatalCommandMode(lavaEffect);
         } else {
             game.context.move = 1;
         }
