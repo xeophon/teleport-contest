@@ -14914,6 +14914,20 @@ function lifeSaveHeroFromFatalLava(messages) {
     return true;
 }
 
+function heroFloatingOverLavaRescue() {
+    return !!(game.u?.levitating || game.u?.levitation || game.u?.Levitation
+        || game.u?.flying || game.u?.Flying);
+}
+
+function lifeSaveHeroFromLavaSinking(messages) {
+    if (!consumeLifeSavingAmulet()) return false;
+    if (game.u) game.u.uhp = 0;
+    messages.push(`But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+    game._life_saving_lava_clear_trap = 1;
+    if (!heroFloatingOverLavaRescue()) game._life_saving_lava_safe_teleport = 1;
+    return true;
+}
+
 function heroLavaEntryEffect(targetMoveTyp) {
     const messages = [];
     const dmg = d(6, 6);
@@ -14978,6 +14992,12 @@ export function processHeroLavaSinkingTurn() {
         game.u.uhp = 0;
         game._death_cause = 'dissolved in molten lava';
         game._death_current_move = 1;
+        if (lifeSaveHeroFromLavaSinking(messages))
+            return {
+                message: messages.join('  '),
+                lifeSaving: true,
+                more: true,
+            };
         return {
             message: messages.join('  '),
             fatal: true,
@@ -59466,6 +59486,7 @@ export async function rhack(_cmd) {
             const skipRemainingMoreMessages = ch === '\x1b';
             const postContinuationHp = game._life_saving_post_continue_hp;
             const lavaSafeTeleport = !!game._life_saving_lava_safe_teleport;
+            const lavaClearTrap = !!game._life_saving_lava_clear_trap;
             const lifeSavingMessage = exploreLifeSaved || skipRemainingMoreMessages
                 ? 'You feel much better!'
                 : 'You feel much better!  The medallion crumbles to dust!';
@@ -59474,6 +59495,7 @@ export async function rhack(_cmd) {
             game._queued_explore_lifesaving_message = 0;
             game._life_saving_post_continue_hp = null;
             game._life_saving_lava_safe_teleport = 0;
+            game._life_saving_lava_clear_trap = 0;
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;
@@ -59521,6 +59543,10 @@ export async function rhack(_cmd) {
                 return;
             }
             if (postRecoil?.trapResult && applyLifeSavingOrFatalCommandMode(postRecoil.trapResult)) return;
+            if (lavaClearTrap && game.u) {
+                game.u.utrap = 0;
+                game.u.utraptype = null;
+            }
             if (lavaSafeTeleport) {
                 const teleportMessage = safeTeleportHeroSameLevel();
                 if (teleportMessage)

@@ -30164,6 +30164,86 @@ test('already lava-trapped hero dies when sinking countdown expires', async () =
     assert.match(game._pending_message || '', /Do you want your possessions identified\?/);
 });
 
+test('already lava-trapped countdown death uses life saving and safe teleport', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+        utrap: 1 << 8,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330019, 'a');
+    game.inventory = [amulet];
+    game.level.at = (x, y) => ({ roomno: ROOMOFFSET, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    installCoreRngValues([0, 19, 7]);
+
+    await spendOneTrapTurn();
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.match(pending, /You sink below the surface and die\./);
+    assert.match(pending, /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._death_cause, 'dissolved in molten lava');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.utraptype, TT_LAVA);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!  You materialize in a different location!');
+    const rescuedX = game.u.ux;
+    const rescuedY = game.u.uy;
+    assert.notDeepEqual([rescuedX, rescuedY], [5, 5]);
+    assert.equal(game.level.at(rescuedX, rescuedY).typ, ROOM);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+});
+
+test('already lava-trapped levitating life saving clears lava trap without teleport', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+        levitating: true,
+        utrap: 1 << 8,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330020, 'a');
+    game.inventory = [amulet];
+    game.level.at = (x, y) => ({ roomno: ROOMOFFSET, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    installCoreRngValues([0]);
+
+    await spendOneTrapTurn();
+
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.match(game._pending_message || '', /You sink below the surface and die\./);
+    assert.match(game._pending_message || '', /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.utrap, 0);
+    assert.equal(game.u.utraptype, null);
+});
+
 test('already lava-trapped hero clears trap state after leaving lava terrain', async () => {
     installStableNonSokobanTrapState();
     vision_reset();
