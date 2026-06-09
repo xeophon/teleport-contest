@@ -26,6 +26,7 @@
 ## Remaining follow-up
 
 - Boomerang pre-recoil obstacle death and life-saving continuation are covered by `880-boomerang-pre-recoil-lifesaving-continuation-2026-06-09.md`.
+- Recoil `wake_nearto()` buried-zombie disturbance is covered by `883-recoil-wake-nearto-buried-zombies-2026-06-09.md`.
 - Recoil monster collision is still non-damaging in both C and JS for the currently modeled path; deeper sensory and wake details remain broader `hurtle_step()` parity if hidden tests target them.
 
 ## Verification

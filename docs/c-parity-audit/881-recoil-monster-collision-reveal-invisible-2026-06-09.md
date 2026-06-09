@@ -28,4 +28,4 @@ node --test --test-reporter=dot --test-name-pattern "levitating hero-thrown ordi
 
 - Full `setmangry(FALSE)` parity is still broader than this slice: visible wake/anger/growl messages, alignment/priest/shopkeeper/quest-guardian side effects, and peaceful bystander response remain incomplete.
 - Bodily petrification on recoil monster collision is covered by `882-recoil-monster-collision-petrification-2026-06-09.md`.
-- `wake_nearto()` still lacks visible wake messages and buried-zombie disturbance behavior in this recoil path.
+- Recoil `wake_nearto()` buried-zombie disturbance is covered by `883-recoil-wake-nearto-buried-zombies-2026-06-09.md`; visible wake messages remain broader display/senses work.

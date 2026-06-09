@@ -19257,6 +19257,7 @@ function wakeNearbyMonstersAt(x, y, distance) {
         sleeper.msleeping = 0;
         if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
     }
+    disturbBuriedZombieCorpseTimersAt(x, y);
 }
 
 function wakeNearbyMonstersFromExplosion(x, y, damage) {

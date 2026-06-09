@@ -71472,6 +71472,46 @@ test('levitating hero-thrown ordinary weapon recoil bumps boulder with C damage 
     assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(100)=0']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil boulder collision disturbs buried zombies', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([2, 0]);
+    game.moves = 100;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(8761681, 'd');
+    const boulder = floorBoulder(8761682, { ox: 4, oy: 5 });
+    const listCorpse = zombieCorpse(8761683, 5, 5, { buried: false, zombifyTurn: 190, rotAwayTurn: 130 });
+    const floorBuried = zombieCorpse(8761684, 4, 6, { zombifyTurn: 160 });
+    const farBuried = zombieCorpse(8761685, 6, 5, { zombifyTurn: 190 });
+    const dueCorpse = zombieCorpse(8761686, 3, 5, { zombifyTurn: 100 });
+    game.inventory = [blade];
+    game.level.objects = [boulder, listCorpse, floorBuried, farBuried];
+    game.level.buriedobjlist = [listCorpse, dueCorpse];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.match(game._pending_message, /You float in the opposite direction\.  You bump into a boulder\.  Ouch!/);
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(listCorpse.rotAwayTurn, 130);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(dueCorpse.zombifyTurn, 100);
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(100)=0']);
+});
+
 test('levitating hero-thrown ordinary weapon recoil boulder collision can kill hero', async () => {
     installStableNonShopFloorState();
     installCoreRngValues([2, 0]);
@@ -71611,6 +71651,7 @@ test('levitating hero-thrown ordinary weapon recoil bumps monster without damage
 test('levitating hero-thrown ordinary weapon recoil cockatrice collision petrifies hero', async () => {
     installStableNonShopFloorState();
     installCoreRngValues([0]);
+    game.moves = 100;
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -71632,8 +71673,11 @@ test('levitating hero-thrown ordinary weapon recoil cockatrice collision petrifi
         mstrategy: 99,
         data: { name: 'cockatrice', mlevel: 5, mac: 10, touchPetrifies: true },
     });
+    const corpse = zombieCorpse(8761709, 5, 5, { buried: false, zombifyTurn: 190 });
     game.inventory = [blade];
     game.level.monsters = [cockatrice];
+    game.level.objects = [corpse];
+    game.level.buriedobjlist = [corpse];
     enableRngLog({ reset: true });
 
     await rhack('t');
@@ -71655,6 +71699,7 @@ test('levitating hero-thrown ordinary weapon recoil cockatrice collision petrifi
     assert.equal(cockatrice.msleeping, 0);
     assert.equal(cockatrice.mpeaceful, 0);
     assert.equal(cockatrice.mstrategy, 99);
+    assert.equal(corpse.zombifyTurn, 190);
     assert.deepEqual(getRngLog(), ['rn2(100)=0', 'rn2(1)=0']);
 });
 
@@ -71963,6 +72008,7 @@ test('levitating hero-thrown ordinary weapon recoil maps unspotted invisible mon
 test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bump square', async () => {
     installStableNonShopFloorState();
     installCoreRngValues([0]);
+    game.moves = 100;
     Object.assign(game.u, {
         ux: 5,
         uy: 5,
@@ -71990,8 +72036,14 @@ test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bu
         mpeaceful: true,
         mstrategy: STRAT_WAITFORU,
     });
+    const listCorpse = zombieCorpse(876174, 5, 5, { buried: false, zombifyTurn: 190 });
+    const floorBuried = zombieCorpse(876175, 4, 6, { zombifyTurn: 160 });
+    const farBuried = zombieCorpse(876176, 6, 5, { zombifyTurn: 190 });
+    const unburiedFloorCorpse = zombieCorpse(876177, 4, 5, { buried: false, zombifyTurn: 190 });
     game.inventory = [blade];
     game.level.monsters = [goblin, newt, jackal];
+    game.level.objects = [listCorpse, floorBuried, farBuried, unburiedFloorCorpse];
+    game.level.buriedobjlist = [listCorpse];
     enableRngLog({ reset: true });
 
     await rhack('t');
@@ -72007,6 +72059,10 @@ test('levitating hero-thrown ordinary weapon recoil wakes nearby sleeper from bu
     assert.equal(jackal.msleeping, 0);
     assert.equal(jackal.mpeaceful, true);
     assert.equal(jackal.mstrategy, 0);
+    assert.equal(listCorpse.zombifyTurn, 160);
+    assert.equal(floorBuried.zombifyTurn, 140);
+    assert.equal(farBuried.zombifyTurn, 190);
+    assert.equal(unburiedFloorCorpse.zombifyTurn, 190);
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
 });
 
