@@ -41959,11 +41959,23 @@ function updateWornArmorAcAfterChange(armor, oldAc) {
     updateArmorLine(armor);
 }
 
-function destroyWornArmorItem(armor) {
+function destroyWornArmorItem(armor, messages = null) {
     const oldAc = wornArmorAcValueGreatestErosion(armor);
-    if (game.u && isWornArmorItem(armor)) game.u.uac = (game.u.uac ?? 10) + oldAc;
-    updateGauntletsOfPowerStrength(armorKind(armor), false);
-    removeInventoryItem(armor, armor.quan || 1);
+    const wasWorn = isWornArmorItem(armor);
+    const kind = armorKind(armor);
+    if (game.u && wasWorn) game.u.uac = (game.u.uac ?? 10) + oldAc;
+    if (wasWorn) {
+        armor.worn = false;
+        armor.owornmask = 0;
+        armor.line = normalInventoryLine({ ...armor, line: '' });
+    }
+    if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
+        syncHeroSpeedState();
+    updateGauntletsOfPowerStrength(kind, false);
+    if (armorSlot(armor) === 'boots' && Array.isArray(messages))
+        addBootsOffSideEffects(armor, messages);
+    if ((game.inventory || []).includes(armor))
+        removeInventoryItem(armor, armor.quan || 1);
     updateReflectionFromInventory();
 }
 
@@ -42036,7 +42048,7 @@ function erodeDestroyArmor(armor, messages) {
         : `Your ${name} ${erosionVerb(armor, erosion.action)} away!`);
     const payment = costlyAlterationPaymentMessage(armor, erosionAlterationVerb(erosion.action));
     if (payment) messages.push(payment);
-    destroyWornArmorItem(armor);
+    destroyWornArmorItem(armor, messages);
     return 'destroyed';
 }
 
@@ -42167,7 +42179,7 @@ function disintegrateArm(target, messages) {
         delete armor.litRadius;
     }
     messages.push(disintegrateArmorMessage(armor));
-    destroyWornArmorItem(armor);
+    destroyWornArmorItem(armor, messages);
     return true;
 }
 
@@ -65583,8 +65595,9 @@ export async function rhack(_cmd) {
                 return;
             }
             const shouldCall = !result.skipCall && !alreadyKnown && !result.learned;
-            await setMessage(messages.join('  '), result.more || confusedReading || shouldCall);
-            game._command_mode = shouldCall ? 'callScrollAfterMore' : null;
+            const lavaDeath = game._command_mode === 'lavaDeathMore';
+            await setMessage(messages.join('  '), result.more || confusedReading || shouldCall || lavaDeath);
+            game._command_mode = lavaDeath ? 'lavaDeathMore' : (shouldCall ? 'callScrollAfterMore' : null);
             if (shouldCall) game._call_scroll_label = callLabel;
             game.context.move = shouldCall ? 0 : 1;
             return;

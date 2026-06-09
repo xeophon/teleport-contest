@@ -13359,6 +13359,136 @@ test('blessed destroy armor erosion ignores stale field-only unpaid armor', asyn
     assert.doesNotMatch(game._pending_message, /you pay for it/);
 });
 
+test('cursed destroy armor destroying water walking boots over pool triggers water fallout before useup', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+    });
+    const cells = new Map();
+    const key = (x, y) => `${x},${y}`;
+    game.level.at = (x, y) => cells.get(key(x, y)) || { roomno: 0, typ: ROOM };
+    cells.set(key(5, 5), { roomno: 0, typ: POOL });
+    for (const [dx, dy] of [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 1], [0, 1], [-1, 1]]) {
+        cells.set(key(5 + dx, 5 + dy), { roomno: 0, typ: POOL });
+    }
+    cells.set(key(6, 5), { roomno: 0, typ: ROOM });
+    vision_reset();
+    const scroll = scrollOfDestroyArmor(309041, 's', true);
+    const boots = wornArmor(309042, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [scroll, boots];
+
+    await rhack('r');
+    await rhack('s');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.match(pending, /Your boots disintegrate!/);
+    assert.match(pending, /You fall into the pool of water!/);
+    assert.match(pending, /You sink like a rock\./);
+    assert.equal(game._message_more, 1);
+    assert.deepEqual(game._relocate_after_more, { fromX: 5, fromY: 5, x: 6, y: 5 });
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._relocate_after_more, null);
+    assert.match(game._pending_message || '', /Pheew!  That was close\./);
+});
+
+test('cursed destroy armor destroying water walking boots over lava preserves fatal lava more', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const scroll = scrollOfDestroyArmor(309043, 's', true);
+    const boots = wornArmor(309044, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [scroll, boots];
+    enableRngLog({ reset: true });
+
+    await rhack('r');
+    await rhack('s');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.match(pending, /Your boots disintegrate!/);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
+
+    await rhack(' ');
+
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._polyself_lava_death_more || 0, 0);
+    assert.equal(game._command_mode, 'deathAttributesPrompt');
+    assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
+});
+
+test('cursed destroy armor destroying levitation boots over lava sinks after float down', async () => {
+    installNonShopFloorState();
+    initRng(1);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+        fireResistance: true,
+        levitating: true,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const scroll = scrollOfDestroyArmor(309045, 's', true);
+    const boots = wornArmor(309046, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [scroll, boots];
+    enableRngLog({ reset: true });
+
+    await rhack('r');
+    await rhack('s');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.u.levitating, false);
+    assert.match(pending, /Your boots disintegrate!/);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.equal(game.u.uhp, 39);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok((game.u.utrap || 0) > 0);
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
+});
+
 test('confused uncursed enchant armor adds proofing without used-up billing', async () => {
     const { shkp } = installCommandShopState();
     game.u._confusionTimeout = 10;
