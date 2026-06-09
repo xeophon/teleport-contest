@@ -26,7 +26,8 @@
 
 ## Remaining follow-up
 
-- Blind `feel_location(x, y)`, drawbridge-wall `The drawbridge is unaffected.` maploc fallout, and airlevel/levitation hurtle remain broader `kick_ouch()` work.
+- Nonfatal airlevel/levitation `kick_ouch()` hurtle is covered by `875-kick-ouch-levitation-hurtle-2026-06-09.md`.
+- Blind `feel_location(x, y)`, drawbridge-wall `The drawbridge is unaffected.` maploc fallout, and post-life-saving airlevel/levitation continuation remain broader `kick_ouch()` work.
 - Successful object-kick recoil on the air level remains separate from failed object `kick_ouch()`.
 
 ## Verification

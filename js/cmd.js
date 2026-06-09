@@ -34768,7 +34768,7 @@ function kickOuchDeathCause(x, y, kickObjectName = '') {
     return 'kicking something weird';
 }
 
-function applyKickOuchDamage(x, y, messages, { kickObjectName = '' } = {}) {
+function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null } = {}) {
     messages.push('Ouch!  That hurts!');
     const stats = game.u?.acurr?.a || [];
     rn2(2);
@@ -34785,8 +34785,16 @@ function applyKickOuchDamage(x, y, messages, { kickObjectName = '' } = {}) {
     }
     const damage = maybeHalfPhysicalDamage(rnd((stats[A_CON] ?? 10) > 15 ? 3 : 5));
     if (game.u) game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
-    if ((game.u?.uhp || 0) > 0) return null;
-    return heroDartTrapFatalResult(messages, kickOuchDeathCause(x, y, kickObjectName));
+    if ((game.u?.uhp || 0) > 0) {
+        if (dir && heroHorizontalThrowAirRecoilActive()) {
+            const recoil = heroHorizontalThrowRecoilResult(dir, rn1(2, 4));
+            if (recoil.message) messages.push(recoil.message);
+            if (recoil.trapResult) return recoil.trapResult;
+        }
+        return null;
+    }
+    const fatalResult = heroDartTrapFatalResult(messages, kickOuchDeathCause(x, y, kickObjectName));
+    return fatalResult;
 }
 
 function placeKickedFloorObject(obj, x, y, messages, options = {}) {
@@ -34912,7 +34920,7 @@ function billKickedLooseShopObject(obj, x, y, messages) {
     return { shkp: sourceShkp, billed: !!entry };
 }
 
-function tryKickLooseFloorObject(obj, x, y, messages) {
+function tryKickLooseFloorObject(obj, x, y, messages, dir) {
     if (!kickedObjectLooseSourceAt(x, y)) return null;
     const martial = heroUsesMartialKickRangeBonus();
     const dexterity = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
@@ -34926,6 +34934,7 @@ function tryKickLooseFloorObject(obj, x, y, messages) {
         if (!lowRangeKickedObjectAvoidsOuch()) {
             const trapResult = applyKickOuchDamage(x, y, messages, {
                 kickObjectName: kickedFloorObjectKickName(obj),
+                dir,
             });
             return { handled: true, messages, moved: false, trapResult };
         }
@@ -35195,11 +35204,12 @@ function scatterKickedGoldStack(obj, sx, sy, blastForce, messages) {
     return scattered;
 }
 
-function applyKickedObjectThumpOuch(messages, x, y, obj) {
+function applyKickedObjectThumpOuch(messages, x, y, obj, dir) {
     messages.push('Thump!');
     if (!lowRangeKickedObjectAvoidsOuch()) {
         return applyKickOuchDamage(x, y, messages, {
             kickObjectName: kickedFloorObjectKickName(obj),
+            dir,
         });
     }
     return null;
@@ -35380,12 +35390,13 @@ async function kickFloorObjectToward(dir, x, y) {
             const messages = [];
             const trapResult = applyKickOuchDamage(x, y, messages, {
                 kickObjectName: kickedFloorObjectKickName(obj),
+                dir,
             });
             return { handled: true, messages, moved: false, trapResult };
         }
         const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
         kickFloorObjectRange(obj, x, y, dir);
-        return tryKickLooseFloorObject(obj, x, y, messages);
+        return tryKickLooseFloorObject(obj, x, y, messages, dir);
     }
     if (!kickFloorObjectSupported(obj)) return { handled: false };
 
@@ -35414,7 +35425,7 @@ async function kickFloorObjectToward(dir, x, y) {
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
         return { handled: true, messages, moved: false, broke: true };
     if (range < 2) {
-        const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj);
+        const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj, dir);
         return { handled: true, messages, moved: false, trapResult };
     }
     if (!gate && !canHandleMonsterImpact && !ordinarySameLevelFlight)
@@ -35429,7 +35440,7 @@ async function kickFloorObjectToward(dir, x, y) {
             return { handled: true, messages, moved: true, scattered: true };
         }
         if (quantity > 300) {
-            const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj);
+            const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj, dir);
             return { handled: true, messages, moved: false, trapResult };
         }
     }
@@ -71228,7 +71239,7 @@ export async function rhack(_cmd) {
         }
         if (!target || IS_OBSTRUCTED(target.typ) || target.typ === STAIRS || target.typ === LADDER) {
             const messages = [];
-            const trapResult = applyKickOuchDamage(x, y, messages);
+            const trapResult = applyKickOuchDamage(x, y, messages, { dir });
             await setMessage(messages.join('  '), messages.length > 1 || !!trapResult?.more);
             game._command_mode = null;
             if (trapResult && applyLifeSavingOrFatalCommandMode(trapResult)) return;
