@@ -12938,11 +12938,11 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         const event = { text: '', damage: 0 };
         const vaporMessages = [];
         const message = `${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`;
-        if (cls === 'potion' || cls === 'slime') {
+        if (cls === 'slime') {
             event.damage = itemDamage;
             damage += itemDamage;
             deathCause = fireInventoryDeathCause(cls, item, plural);
-        } else if (!game.u?.fireResistance) {
+        } else if (cls !== 'potion' && !game.u?.fireResistance) {
             event.damage = 1;
             damage += 1;
             deathCause = fireInventoryDeathCause(cls, item, plural);
@@ -12967,6 +12967,13 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
                     const insertAfter = vaporMessages.map(text => ({ text, more: true }));
                     recordedEvent.insertAfter = insertAfter;
                 }
+                if (vaporMessages.fatal && !vaporMessages.lifeSaving) {
+                    if (vaporMessages.length) messages.push(...vaporMessages);
+                    return fireInventoryDamageResult(messages, events, damage, deathCause);
+                }
+                recordedEvent.damage = itemDamage;
+                damage += itemDamage;
+                deathCause = fireInventoryDeathCause(cls, item, plural);
             }
             useUpInventoryItem(item, destroyed);
             if (cls === 'potion') rn2(2);

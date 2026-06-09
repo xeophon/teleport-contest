@@ -16039,6 +16039,55 @@ test('blessed water vapor rehumanize old form death from destroyed inventory pot
     assert.doesNotMatch(message, /You feel purified|peculiar odor|eyes water/);
 });
 
+test('fatal inventory fire water vapor stops before potion use-up without lifesaving', () => {
+    installShopState();
+    installCoreRngValues([0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 5,
+        uhpmax: 8,
+        uen: 3,
+        uenmax: 4,
+        uac: 6,
+        ulevel: 2,
+        ulycn: 'werewolf',
+        lycanthrope: true,
+        _polyself_base: { uhp: 0, uhpmax: 15, uen: 7, uenmax: 9, uac: 4, ulevel: 3 },
+        _polyself_form: { name: 'werewolf', mlet: 'd', glyph: 'd', wereBeast: true, nohands: true },
+    });
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
+    const potion = waterPotion(30993, 'w', { blessed: true, bknown: true });
+    const scroll = scrollOfCharging(30994, 's');
+    game.inventory = [potion, scroll];
+    enableRngLog({ reset: true });
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+        allowLifeSaving: false,
+    });
+
+    const message = result.messages.join(' ');
+    assert.equal(game.inventory.includes(potion), true);
+    assert.equal(game.inventory.includes(scroll), true);
+    assert.equal(potion.quan, 1);
+    assert.equal(potion.letter, 'w');
+    assert.equal(result.messages[0], 'Your potion of holy water boils and explodes!');
+    assert.match(message, /You return to human form!/);
+    assert.match(message, /Your old form was not healthy enough to survive\./);
+    assert.doesNotMatch(message, /medallion begins to glow|You feel purified|peculiar odor|eyes water/);
+    assert.equal(result.lifeSaving, false);
+    assert.equal(result.fatal, true);
+    assert.equal(result.more, true);
+    assert.equal(result.damage, 0);
+    assert.equal(result.events[0].fatal, true);
+    assert.equal(result.events[0].lifeSaving || false, false);
+    assert.equal(result.events[0].more, true);
+    assert.match(result.events[0].insertAfter.map(entry => entry.text).join(' '),
+        /old form was not healthy enough to survive/);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)', 'rnd(6)', 'rn2(3)']);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(2)'), []);
+});
+
 test('wizard or explore lifesaving continuation omits amulet crumble wording', async () => {
     installNonShopFloorState();
     game.u.uhp = 0;
