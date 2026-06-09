@@ -12638,6 +12638,7 @@ const LAVA_DIRECT_BURN_MATERIALS = new Set([
 const LAVA_FATAL_ORGANIC_MATERIALS = new Set([
     'liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather', 'wood',
 ]);
+const LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE = 'The Book of the Dead glows a strange dark red, but remains intact.';
 const LIQUID_FLOW_RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
 
 function liquidFlowRiderCorpse(obj) {
@@ -12879,8 +12880,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         const cls = fireDestroyableInventoryClass(item);
         if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
             if (!game.u?.blind)
-                addFireInventoryMessage(messages, events,
-                    'The Book of the Dead glows a strange dark red, but remains intact.',
+                addFireInventoryMessage(messages, events, LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE,
                     { damage: 0 }, armor, joinState);
             continue;
         }
@@ -14925,10 +14925,18 @@ function destroyLavaFatalInventorySelection(selection, {
 } = {}) {
     let destroyed = 0;
     let burnMessages = 0;
-    for (const item of selection || []) {
+    const selected = new Set(selection || []);
+    const inventorySnapshot = [...(game.inventory || [])];
+    const canMessage = surviving && Array.isArray(messages);
+    for (const item of inventorySnapshot) {
         if (!(game.inventory || []).includes(item)) continue;
+        if (isBookOfTheDeadItem(item)) {
+            if (canMessage && !game.u?.blind) messages.push(LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE);
+            continue;
+        }
+        if (!selected.has(item)) continue;
         if (isWornArmorItem(item)) {
-            if (surviving && Array.isArray(messages)) {
+            if (canMessage) {
                 messages.push(`${armorSubject(item)} ${armorVerb(item, 'bursts', 'burst')} into flame!`);
                 burnMessages++;
             }

@@ -24,6 +24,7 @@ const POT_OIL = 252;
 const CRYSTAL_BALL = 10088;
 const CANDELABRUM_OF_INVOCATION = 10076;
 const BELL = 358;
+const BOOK_OF_THE_DEAD = 10097;
 const POT_ACID = 238;
 const POT_CONFUSION = 239;
 const POT_BLINDNESS = 242;
@@ -1170,6 +1171,20 @@ function bellOfOpening(id, letter = 'b', spe = 3) {
         known: false,
         dknown: true,
         line: `${letter} - a silver bell`,
+    };
+}
+
+function bookOfTheDead(id, letter = 'B') {
+    return {
+        id,
+        otyp: BOOK_OF_THE_DEAD,
+        cls: 'spellbook',
+        glyph: '+',
+        kind: 'Book of the Dead',
+        actualKind: 'Book of the Dead',
+        quan: 1,
+        letter,
+        line: `${letter} - the Book of the Dead`,
     };
 }
 
@@ -43717,16 +43732,7 @@ test('m-prefix fatal lava preserves invocation objects without obj_resists rng',
     const amulet = realAmuletOfYendor(330033, 'a');
     const bell = bellOfOpening(330034, 'b');
     const candles = candelabrum(330035, 'c', 7);
-    const book = {
-        id: 330036,
-        cls: 'spellbook',
-        glyph: '+',
-        kind: 'Book of the Dead',
-        actualKind: 'Book of the Dead',
-        quan: 1,
-        letter: 'B',
-        line: 'B - the Book of the Dead',
-    };
+    const book = bookOfTheDead(330036, 'B');
     game.inventory = [amulet, bell, candles, book];
     enableRngLog({ reset: true });
 
@@ -43738,8 +43744,71 @@ test('m-prefix fatal lava preserves invocation objects without obj_resists rng',
     assert.equal(game.inventory.includes(candles), true);
     assert.equal(game.inventory.includes(book), true);
     assert.match(game._pending_message || '', /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.doesNotMatch(game._pending_message || '', /Book of the Dead glows/);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
     assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
+test('m-prefix fatal lava life saving shows Book of the Dead glow before burning', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 42]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        blind: false,
+        fireResistance: false,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330041, 'a');
+    const rations = foodRationStack(330042, 2, 'f');
+    const book = bookOfTheDead(330043, 'B');
+    game.inventory = [amulet, rations, book];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(rations), false);
+    assert.equal(game.inventory.includes(book), true);
+    assert.match(pending, /You fall into the molten lava!/);
+    assert.match(pending, /The Book of the Dead glows a strange dark red, but remains intact\./);
+    assert.match(pending, /An item in your inventory has been destroyed\./);
+    assert.match(pending, /You burn to a crisp\.\.\./);
+    assert.match(pending, /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.ok(pending.indexOf('You fall into the molten lava!') < pending.indexOf('The Book of the Dead glows'));
+    assert.ok(pending.indexOf('The Book of the Dead glows') < pending.indexOf('An item in your inventory'));
+    assert.ok(pending.indexOf('An item in your inventory') < pending.indexOf('You burn to a crisp...'));
+    assert.ok(pending.indexOf('You burn to a crisp...') < pending.indexOf('But wait...'));
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [42]);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+});
+
+test('blind m-prefix fatal lava life saving suppresses Book of the Dead glow', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        blind: true,
+        fireResistance: false,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330044, 'a');
+    const book = bookOfTheDead(330045, 'B');
+    game.inventory = [amulet, book];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(book), true);
+    assert.doesNotMatch(pending, /Book of the Dead glows/);
+    assert.match(pending, /You burn to a crisp\.\.\./);
+    assert.match(pending, /But wait\.\.\.  Your medallion feels warm!/);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.equal(game._command_mode, 'lifeSavingMore');
 });
 
 test('m-prefix fatal lava treats bone horns as non-organic but burns wooden harp', async () => {
@@ -43780,7 +43849,8 @@ test('explore m-prefix fatal lava reports survivor inventory burn before prompt'
     });
     const rations = foodRationStack(330026, 2, 'f');
     const potion = oilPotion(330027, 'o');
-    game.inventory = [rations, potion];
+    const book = bookOfTheDead(330046, 'B');
+    game.inventory = [rations, potion, book];
 
     await rhack('m');
     await rhack('l');
@@ -43788,9 +43858,12 @@ test('explore m-prefix fatal lava reports survivor inventory burn before prompt'
     const pending = game._pending_message || '';
     assert.equal(game.inventory.includes(rations), false);
     assert.equal(game.inventory.includes(potion), false);
+    assert.equal(game.inventory.includes(book), true);
     assert.match(pending, /You fall into the molten lava!/);
+    assert.match(pending, /The Book of the Dead glows a strange dark red, but remains intact\./);
     assert.match(pending, /Some items in your inventory have been destroyed\./);
     assert.match(pending, /You burn to a crisp\.\.\./);
+    assert.ok(pending.indexOf('The Book of the Dead glows') < pending.indexOf('Some items in your inventory'));
     assert.ok(pending.indexOf('Some items in your inventory') < pending.indexOf('You burn to a crisp...'));
     assert.equal(game._command_mode, 'lavaDeathMore');
 });

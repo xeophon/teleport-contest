@@ -44,4 +44,3 @@ Result: focused fatal-lava inventory set passed; broader lava-name slice passed;
 - Generic `fireDamageInventory()` still lacks C's fire inventory resistance chance.
 - Generic `fireDamageInventory()` still uses full selected `in_use` stack quantity instead of subtracting one first.
 - Potion vapor effects still happen before the destruction message in the JS generic helper.
-- The Book of the Dead survives fatal carried lava, but the survivor-only dark-red glow feedback line is not modeled yet.
