@@ -46774,6 +46774,60 @@ test('command kick ordinary same-level floor object stacks at landing square', a
     assert.deepEqual(getRngLog(), []);
 });
 
+test('air-level command kick successful floor object recoils after object flight', async () => {
+    installNonShopFloorState();
+    game.air_level = { dnum: 0, dlevel: 1 };
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: false, flying: false, uhp: 20, uhpmax: 20 });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512130), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You kick a dagger.  You float in the opposite direction.');
+    assert.equal(game._message_more, 1);
+    assert.equal(game.u.ux, 4);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved, true);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 15);
+    assert.equal(blade.oy, 5);
+    assert.deepEqual(getRngLog(), ['rnd(3)=1']);
+});
+
+test('levitating command kick successful floor object does not get air-level success recoil', async () => {
+    installNonShopFloorState();
+    game.air_level = null;
+    game.u.uz = { dnum: 0, dlevel: 1 };
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true, uhp: 20, uhpmax: 20 });
+    game.u.acurr.a[A_STR] = 18;
+    const blade = { ...dagger(512131), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+
+    await rhack('\x04');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game._pending_message, 'You kick a dagger.');
+    assert.equal(game._message_more || 0, 0);
+    assert.doesNotMatch(game._pending_message, /float in the opposite direction|hurtle in the opposite direction/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.umoved || false, false);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 14);
+    assert.equal(blade.oy, 5);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('command kick low-range ordinary floor object thumps in place', async () => {
     installNonShopFloorState();
     game.u.acurr.a[A_STR] = 2;

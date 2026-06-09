@@ -34634,6 +34634,7 @@ function trappedKickedFloorObjectRefusal(obj, x, y) {
         handled: true,
         messages,
         moved: false,
+        kickObjectSucceeded: true,
     };
 }
 
@@ -34966,9 +34967,9 @@ function tryKickLooseFloorObject(obj, x, y, messages, dir) {
                 kickObjectName: kickedFloorObjectKickName(obj),
                 dir,
             });
-            return { handled: true, messages, moved: false, trapResult };
+            return { handled: true, messages, moved: false, trapResult, kickObjectSucceeded: false };
         }
-        return { handled: true, messages, moved: false };
+        return { handled: true, messages, moved: false, kickObjectSucceeded: true };
     }
 
     if (heroIsBlind())
@@ -34979,7 +34980,7 @@ function tryKickLooseFloorObject(obj, x, y, messages, dir) {
     newsym(x, y);
     billKickedLooseShopObject(obj, x, y, messages);
     placeKickedFloorObject(obj, game.u?.ux, game.u?.uy, messages);
-    return { handled: true, messages, moved: true };
+    return { handled: true, messages, moved: true, kickObjectSucceeded: true };
 }
 
 function kickedCoinFlightStopPileAt(obj, x, y) {
@@ -35237,12 +35238,20 @@ function scatterKickedGoldStack(obj, sx, sy, blastForce, messages) {
 function applyKickedObjectThumpOuch(messages, x, y, obj, dir) {
     messages.push('Thump!');
     if (!lowRangeKickedObjectAvoidsOuch()) {
-        return applyKickOuchDamage(x, y, messages, {
+        const trapResult = applyKickOuchDamage(x, y, messages, {
             kickObjectName: kickedFloorObjectKickName(obj),
             dir,
         });
+        return { kickObjectSucceeded: false, trapResult };
     }
-    return null;
+    return { kickObjectSucceeded: true, trapResult: null };
+}
+
+function appendSuccessfulKickObjectAirRecoil(dir, messages) {
+    if (!Is_airlevel(game.u?.uz)) return null;
+    const recoil = heroHorizontalThrowRecoilResult(dir, 1);
+    if (recoil.message) messages.push(recoil.message);
+    return recoil;
 }
 
 function kickedObjectIronBarsBreakChance(obj) {
@@ -35422,7 +35431,7 @@ async function kickFloorObjectToward(dir, x, y) {
                 kickObjectName: kickedFloorObjectKickName(obj),
                 dir,
             });
-            return { handled: true, messages, moved: false, trapResult };
+            return { handled: true, messages, moved: false, trapResult, kickObjectSucceeded: false };
         }
         const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
         kickFloorObjectRange(obj, x, y, dir);
@@ -35450,16 +35459,28 @@ async function kickFloorObjectToward(dir, x, y) {
     if (localBoxImpact) {
         const boxImpact = applyKickedBoxImpact(obj, range, messages);
         if (boxImpact.handled)
-            return { handled: true, messages, moved: false, trapResult: boxImpact.trapResult };
+            return {
+                handled: true,
+                messages,
+                moved: false,
+                trapResult: boxImpact.trapResult,
+                kickObjectSucceeded: true,
+            };
     }
     if (fragileBreakKind && await breakKickedFragileFloorObject(obj, x, y, messages))
-        return { handled: true, messages, moved: false, broke: true };
+        return { handled: true, messages, moved: false, broke: true, kickObjectSucceeded: true };
     if (range < 2) {
-        const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj, dir);
-        return { handled: true, messages, moved: false, trapResult };
+        const thump = applyKickedObjectThumpOuch(messages, x, y, obj, dir);
+        return {
+            handled: true,
+            messages,
+            moved: false,
+            trapResult: thump.trapResult,
+            kickObjectSucceeded: thump.kickObjectSucceeded,
+        };
     }
     if (!gate && !canHandleMonsterImpact && !ordinarySameLevelFlight)
-        return { handled: true, messages, moved: false };
+        return { handled: true, messages, moved: false, kickObjectSucceeded: true };
 
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     if (shopBillableGold(obj) && quantity > 1) {
@@ -35467,11 +35488,17 @@ async function kickFloorObjectToward(dir, x, y) {
             if (!heroIsDeaf()) messages.push('Thwwpingg!');
             messages.push(`You ${FLYING_COIN_MESSAGES[rn2(FLYING_COIN_MESSAGES.length)]}!`);
             scatterKickedGoldStack(obj, x, y, rnd(3), messages);
-            return { handled: true, messages, moved: true, scattered: true };
+            return { handled: true, messages, moved: true, scattered: true, kickObjectSucceeded: true };
         }
         if (quantity > 300) {
-            const trapResult = applyKickedObjectThumpOuch(messages, x, y, obj, dir);
-            return { handled: true, messages, moved: false, trapResult };
+            const thump = applyKickedObjectThumpOuch(messages, x, y, obj, dir);
+            return {
+                handled: true,
+                messages,
+                moved: false,
+                trapResult: thump.trapResult,
+                kickObjectSucceeded: thump.kickObjectSucceeded,
+            };
         }
     }
 
@@ -35489,7 +35516,14 @@ async function kickFloorObjectToward(dir, x, y) {
         messages.push(...(monsterImpact.messages || []));
         if (!monsterImpact.mulched && !monsterImpact.consumed)
             placeKickedFloorObject(obj, landX, landY, messages, { ohit: !!monsterImpact.hit, passiveTarget: targetMon });
-        return { handled: true, messages, moved: true, target: targetMon, hit: !!monsterImpact.hit };
+        return {
+            handled: true,
+            messages,
+            moved: true,
+            target: targetMon,
+            hit: !!monsterImpact.hit,
+            kickObjectSucceeded: true,
+        };
     }
     if (ordinarySameLevelFlight) {
         const flight = kickedSameLevelFlightStop(obj, x, y, dir, range, messages);
@@ -35497,9 +35531,15 @@ async function kickFloorObjectToward(dir, x, y) {
         newsym(x, y);
         const resolved = resolveKickedFlightGateShipping(obj, flight, dir, messages);
         if (resolved.migrated)
-            return { handled: true, messages, moved: true, shipObject: resolved.shipObject };
+            return {
+                handled: true,
+                messages,
+                moved: true,
+                shipObject: resolved.shipObject,
+                kickObjectSucceeded: true,
+            };
         finishKickedFlightLanding(obj, x, y, resolved.flight, messages);
-        const result = { handled: true, messages, moved: true };
+        const result = { handled: true, messages, moved: true, kickObjectSucceeded: true };
         if (resolved.shipObject) result.shipObject = resolved.shipObject;
         return result;
     }
@@ -35516,9 +35556,15 @@ async function kickFloorObjectToward(dir, x, y) {
         remainingSteps: Math.max(0, range - 2),
     }, dir, messages);
     if (resolved.migrated)
-        return { handled: true, messages, moved: true, shipObject: resolved.shipObject };
+        return {
+            handled: true,
+            messages,
+            moved: true,
+            shipObject: resolved.shipObject,
+            kickObjectSucceeded: true,
+        };
     finishKickedFlightLanding(obj, x, y, resolved.flight, messages);
-    return { handled: true, messages, moved: true, shipObject: resolved.shipObject };
+    return { handled: true, messages, moved: true, shipObject: resolved.shipObject, kickObjectSucceeded: true };
 }
 
 function carriedDropDownGateAt(obj, x, y, { allowGold = false } = {}) {
@@ -71214,16 +71260,27 @@ export async function rhack(_cmd) {
         const statueTrap = statueObj ? statueTrapAt(x, y) : null;
         if (statueTrap) {
             const message = await activateStatueTrap(statueTrap, x, y, { normal: true }) || '';
-            await setMessage(message);
+            const messages = message ? [message] : [];
+            const recoil = appendSuccessfulKickObjectAirRecoil(dir, messages);
+            await setMessage(messages.join('  '), messages.length > 1 || !!recoil?.more || !!recoil?.trapResult);
             game._command_mode = null;
+            if (recoil?.trapResult && applyLifeSavingOrFatalCommandMode(recoil.trapResult)) return;
             game.context.move = 1;
             return;
         }
         const kickedObject = await kickFloorObjectToward(dir, x, y);
         if (kickedObject.handled) {
-            const trapResult = kickedObject.trapResult;
+            let trapResult = kickedObject.trapResult;
+            const fatalNoSave = trapResult && typeof trapResult === 'object'
+                && trapResult.fatal && !trapResult.lifeSaving;
+            let more = kickedObject.messages.length > 1 || !!(trapResult && typeof trapResult === 'object');
+            if (kickedObject.kickObjectSucceeded && !fatalNoSave) {
+                const recoil = appendSuccessfulKickObjectAirRecoil(dir, kickedObject.messages);
+                more ||= kickedObject.messages.length > 1 || !!recoil?.more;
+                trapResult = recoil?.trapResult || trapResult;
+            }
             const trapObjectResult = trapResult && typeof trapResult === 'object';
-            await setMessage(kickedObject.messages.join('  '), kickedObject.messages.length > 1 || !!trapObjectResult);
+            await setMessage(kickedObject.messages.join('  '), more || !!trapObjectResult);
             game._command_mode = null;
             if (trapObjectResult && applyLifeSavingOrFatalCommandMode(trapResult)) return;
             game.context.move = 1;
