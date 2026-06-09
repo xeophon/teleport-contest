@@ -34793,12 +34793,60 @@ function kickedLooseObjectDoesNotVerb(obj) {
     return Math.max(1, Math.trunc(Number(obj?.quan || 1))) > 1 ? "don't" : "doesn't";
 }
 
+function kickFloorObjectLooseSupported(obj) {
+    if (!obj || obj === game.u?.uball || obj === game.u?.uchain) return false;
+    return !isBoulderObject(obj);
+}
+
+function addKickedLooseContainerAndContentsToShopBill(obj, shkp, x, y, messages) {
+    if (!obj || !shkp) return { itemPrice: 0, billEntries: [], goldCharged: 0 };
+    if (shopBillIsFull(shkp)) {
+        messages.push('You got that for free!');
+        return { itemPrice: 0, billEntries: [], goldCharged: 0, free: true };
+    }
+
+    let itemPrice = 0;
+    const billEntries = [];
+    if (!obj.no_charge) {
+        const topPrice = shopItemPrice(obj, x, y);
+        if (topPrice > 0) {
+            itemPrice += topPrice;
+            const entry = addShopBillEntryOrMark(shkp, obj, topPrice, { messages });
+            if (entry) billEntries.push(entry);
+        }
+    }
+
+    const nested = addContainedObjectsToShopBill(shkp, obj, x, y, new Set(), messages);
+    itemPrice += nested.price;
+    billEntries.push(...nested.billEntries);
+
+    const gold = containedShopGold(obj);
+    if (gold > 0) {
+        const charged = costlyGoldToShopkeeper(shkp, gold);
+        messages.push(...costlyGoldMessages(charged));
+    }
+    clearNoChargeRecursively(obj);
+    if (itemPrice > 0)
+        messages.push(floorUsedUpShopBillMessage(obj, itemPrice));
+    return { itemPrice, billEntries, goldCharged: gold };
+}
+
 function billKickedLooseShopObject(obj, x, y, messages) {
-    if (!obj || shopBillableGold(obj)) return null;
+    if (!obj) return null;
     const sourceShkp = shopkeeperForCostlySpot(x, y);
     if (!shopkeeperInHisShop(sourceShkp)) return null;
     const heroShkp = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
     if (sameShopkeeper(sourceShkp, heroShkp)) return null;
+    if (shopBillableGold(obj)) {
+        const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
+        const charged = costlyGoldToShopkeeper(sourceShkp, quantity);
+        messages.push(...costlyGoldMessages(charged));
+        return { shkp: sourceShkp, billed: false, goldCharged: quantity };
+    }
+    if (globContents(obj).length) {
+        const billing = addKickedLooseContainerAndContentsToShopBill(obj, sourceShkp, x, y, messages);
+        return { shkp: sourceShkp, billed: !!billing.billEntries?.length, billing };
+    }
     if (obj.no_charge) {
         obj.no_charge = false;
         return { shkp: sourceShkp, billed: false };
@@ -35272,13 +35320,15 @@ async function kickFloorObjectToward(dir, x, y) {
     const landX = x + dir.dx;
     const landY = y + dir.dy;
     const gate = remoteProjectileDownGateAt(obj, landX, landY, { allowGold: shopBillableGold(obj) });
-    if (!kickFloorObjectSupported(obj)) return { handled: false };
-
-    const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
     if (kickedObjectLooseSourceAt(x, y)) {
+        if (!kickFloorObjectLooseSupported(obj)) return { handled: false };
+        const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
         kickFloorObjectRange(obj, x, y, dir);
         return tryKickLooseFloorObject(obj, x, y, messages);
     }
+    if (!kickFloorObjectSupported(obj)) return { handled: false };
+
+    const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
 
     const targetMon = (game.level?.monsters || []).find(mon =>
         mon && !mon.dead && mon.mx === landX && mon.my === landY

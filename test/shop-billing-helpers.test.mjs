@@ -45029,6 +45029,145 @@ test('command kicked shop object on closed door failed loose roll leaves object 
     assert.deepEqual(getRngLog(), ['rn2(20)=19', 'rn2(3)=0']);
 });
 
+test('command kicked paid container on closed door comes loose and bills top plus contents live', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const bag = sack(512150);
+    delete bag.letter;
+    delete bag.line;
+    Object.assign(bag, { ox: 6, oy: 5 });
+    const blade = putObjectInContainer(bag, dagger(512151));
+    game.level.objects = [bag];
+    const bagPrice = shop.shopItemPrice(bag, 6, 5);
+    const bladePrice = shop.shopItemPrice(blade, 6, 5);
+    shop.addObjectToShopBill(shkp, blade, bladePrice);
+    assert.equal(blade.unpaid, true);
+    assert.equal(shkp.billct, 1);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(bag), true);
+    assert.equal(bag.ox, 5);
+    assert.equal(bag.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(bag.contents.includes(blade), true);
+    assert.equal(bag.unpaid, true);
+    assert.equal(blade.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag) != null, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade) != null, true);
+    assert.equal(shkp.billct, 2);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick a bag\./);
+    assert.match(game._pending_message, /The bag comes loose\./);
+    assert.match(game._pending_message,
+        new RegExp(`The bag will cost you ${bagPrice + bladePrice} zorkmids?\\.`));
+    assert.doesNotMatch(game._pending_message, /goods lost|You owe|Thief|crashes open|shatters/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0']);
+});
+
+test('command kicked paid container with gold on closed door comes loose and charges contained gold', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const bag = sack(512152);
+    delete bag.letter;
+    delete bag.line;
+    Object.assign(bag, { ox: 6, oy: 5 });
+    const gold = putObjectInContainer(bag, goldPieces(512153, 6));
+    game.level.objects = [bag];
+    const bagPrice = shop.shopItemPrice(bag, 6, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(bag), true);
+    assert.equal(bag.ox, 5);
+    assert.equal(bag.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(bag.contents.includes(gold), true);
+    assert.equal(bag.unpaid, true);
+    assert.equal(gold.unpaid || false, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, bag) != null, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, gold), null);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.debit, 6);
+    assert.equal(shkp.loan, 6);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick a bag\./);
+    assert.match(game._pending_message, /The bag comes loose\./);
+    assert.match(game._pending_message, /You owe Izchak 6 zorkmids?\./);
+    assert.match(game._pending_message,
+        new RegExp(`The bag will cost you ${bagPrice} zorkmids?\\.`));
+    assert.equal(game._pending_message.indexOf('You owe Izchak 6')
+        < game._pending_message.indexOf('The bag will cost you'), true);
+    assert.doesNotMatch(game._pending_message, /goods lost|Thief|crashes open|shatters/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0']);
+});
+
+test('command kicked shop gold on closed door comes loose and charges gold debt', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const gold = { ...goldPieces(512154, 7), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [gold];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(gold), true);
+    assert.equal(gold.ox, 5);
+    assert.equal(gold.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(gold.unpaid || false, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, gold), null);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal(shkp.debit, 7);
+    assert.equal(shkp.loan, 7);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick 7 gold pieces\./);
+    assert.match(game._pending_message, /come loose\./);
+    assert.match(game._pending_message, /You owe Izchak 7 zorkmids?\./);
+    assert.doesNotMatch(game._pending_message, /will cost|goods lost|Thief|crashes open|shatters/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0']);
+});
+
 test('command kicked paid box with unpaid contents same-shop flight preserves bill row', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 4, my: 5, shk: { x: 4, y: 5 } });
