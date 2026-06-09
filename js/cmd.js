@@ -22022,12 +22022,14 @@ function heroHorizontalThrowRecoilObstacleCollision(loc, x, y, remainingRange, d
 
     if (!why) return { blocked: false };
     const damage = maybeHalfPhysicalDamage(rnd(2 + Math.max(0, Math.trunc(Number(remainingRange || 0)))));
+    let trapResult = null;
     if (game.u) {
         game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
-        if ((game.u.uhp || 0) <= 0) game._death_cause = why;
+        if ((game.u.uhp || 0) <= 0)
+            trapResult = heroDartTrapFatalResult(messages, why);
     }
     wakeNearbyMonstersAt(x, y, 10);
-    return { blocked: true, messages };
+    return { blocked: true, messages, trapResult };
 }
 
 function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
@@ -22082,11 +22084,13 @@ function heroHorizontalThrowRecoilResult(dir, range) {
             || heroHorizontalThrowRecoilBoulderAt(nx, ny);
         if (blockedByObstacle) {
             const collision = heroHorizontalThrowRecoilObstacleCollision(loc, nx, ny, recoilRange - step, dx, dy);
-            if (collision.blocked)
+            if (collision.blocked) {
+                trapResult ||= collision.trapResult || null;
                 return heroHorizontalThrowRecoilResultFromMessages(
                     [...messages, ...(collision.messages || [])],
-                    { more, trapResult },
+                    { more: more || !!collision.trapResult?.more, trapResult },
                 );
+            }
             break;
         }
         if (monster) {
@@ -72465,8 +72469,8 @@ export async function rhack(_cmd) {
         game._fire_launcher_letter = null;
         game._fire_count = null;
         game.context.move = 1;
-        if (fireRecoilResult?.lifeSaving || fireRecoilResult?.fatal) {
-            if (applyLifeSavingOrFatalCommandMode(fireRecoilResult)) return;
+        if (fireRecoilResult?.trapResult?.lifeSaving || fireRecoilResult?.trapResult?.fatal) {
+            if (applyLifeSavingOrFatalCommandMode(fireRecoilResult.trapResult)) return;
         }
         return;
     }

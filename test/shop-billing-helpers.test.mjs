@@ -45185,6 +45185,96 @@ test('levitating command kicked object ouch hurtles after nonfatal damage', asyn
     assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=4', 'rn2(2)=0']);
 });
 
+test('levitating command kicked object ouch recoil wall collision can be fatal', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    const wallLoc = { roomno: 0, typ: STONE, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        if (x === 4 && y === 5) return wallLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true, uhp: 7, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.acurr.a[A_CON] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512174 };
+    game.level.objects = [boulder];
+    game.inventory = [];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 0, 0, 5]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.match(game._pending_message, /You hurtle in the opposite direction\./);
+    assert.match(game._pending_message, /Ouch!  You die\.\.\./);
+    assert.equal(game._pending_message.indexOf('You hurtle in the opposite direction.')
+        < game._pending_message.lastIndexOf('Ouch!'), true);
+    assert.equal(game._death_cause, 'bumping into a wall');
+    assert.deepEqual(getRngLog(),
+        ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=1', 'rn2(2)=0', 'rnd(6)=6', 'rn2(1)=0']);
+});
+
+test('levitating command kicked object ouch recoil wall collision uses life saving', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    const wallLoc = { roomno: 0, typ: STONE, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        if (x === 4 && y === 5) return wallLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    Object.assign(game.u, { ux: 5, uy: 5, levitating: true, uhp: 7, uhpmax: 10 });
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    game.u.acurr.a[A_CON] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512175 };
+    const amulet = wornHeroLifeSavingAmulet(512176, 'a');
+    game.level.objects = [boulder];
+    game.inventory = [amulet];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 0, 0, 5, 0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.match(game._pending_message, /You hurtle in the opposite direction\./);
+    assert.match(game._pending_message, /Ouch!  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._death_cause, 'bumping into a wall');
+    assert.deepEqual(getRngLog(),
+        ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=1', 'rn2(2)=0', 'rnd(6)=6', 'rn2(19)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+});
+
 test('levitating fatal command kicked object ouch does not consume recoil range', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
@@ -71281,6 +71371,95 @@ test('levitating hero-thrown ordinary weapon recoil bumps boulder with C damage 
     assert.equal(landed.ox, 9);
     assert.equal(landed.oy, 5);
     assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(100)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil boulder collision can kill hero', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([2, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 3,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(8761691, 'd');
+    const boulder = floorBoulder(8761692, { ox: 4, oy: 5 });
+    const newt = ordinaryThrowTarget('newt', 4, 6, {
+        mhp: 4,
+        mhpmax: 4,
+        msleeping: 1,
+        mstrategy: 99,
+    });
+    game.inventory = [blade];
+    game.level.objects = [boulder];
+    game.level.monsters = [newt];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a boulder\.  Ouch!  You die\.\.\./);
+    assert.equal(game._death_cause, 'bumping into a boulder');
+    assert.equal(newt.msleeping, 0);
+    assert.equal(newt.mstrategy, 0);
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(100)=0', 'rn2(1)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil boulder collision uses life saving', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([2, 0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 3,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.acurr.a[A_CON] = 10;
+    const amulet = wornHeroLifeSavingAmulet(8761693, 'a');
+    const blade = dagger(8761694, 'd');
+    const boulder = floorBoulder(8761695, { ox: 4, oy: 5 });
+    game.inventory = [amulet, blade];
+    game.level.objects = [boulder];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a boulder\.  Ouch!  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._death_cause, 'bumping into a boulder');
+    assert.deepEqual(getRngLog(), ['rnd(3)=3', 'rn2(19)=0', 'rn2(100)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
 });
 
 test('levitating hero-thrown ordinary weapon recoil bumps monster without damage', async () => {

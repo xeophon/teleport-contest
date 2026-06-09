@@ -23,7 +23,7 @@
 
 ## Remaining follow-up
 
-- Recoil obstacle collisions can still damage the hero after life saving, but the existing JS recoil collision helper does not yet route those collision deaths through a full `losehp()`/`done()` command-mode result. That is broader `hurtle_step()` parity, not specific to `kick_ouch()`.
+- Standard recoil obstacle collision deaths and life saving are covered by `879-recoil-obstacle-collision-death-lifesaving-2026-06-09.md`. Boomerang pre-recoil still needs a separate source-backed slice because it resumes into curved `boomhit()` flow after life saving.
 
 ## Verification
 
