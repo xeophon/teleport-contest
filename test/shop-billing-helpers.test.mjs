@@ -29592,6 +29592,8 @@ test('#untrap known-box fire payload can burn carried scrolls', async () => {
     setupUntrapDestinationWeb([scroll], { rng: [74, 0, 1, 9, 3, 3, 1, 1, 0, 1, 4, 0, 0] });
     game.u.fireResistance = false;
     game.u.uinvulnerable = false;
+    game.u.slimed = true;
+    game.u._statusSuffix = ' Slimed';
     game.level.traps = [];
     const box = shopFloorContainer(881046);
     Object.assign(box, {
@@ -29624,10 +29626,12 @@ test('#untrap known-box fire payload can burn carried scrolls', async () => {
         'rn2(3)=0',
         'rn2(19)=0',
     ]);
-    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!  Your scroll of charging catches fire and burns!');
+    assert.equal(game._pending_message, 'You set it off!  A tower of flame bursts from the large box!  The slime that covers you is burned away!  Your scroll of charging catches fire and burns!');
     assert.equal(box.otrapped, false);
     assert.equal(box.tknown, true);
     assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.u.slimed, false);
+    assert.equal(/\bSlime(?:d)?\b/.test(game.u._statusSuffix || ''), false);
     assert.equal(game.u.uhp, 15);
     assert.equal(game.context.move, 1);
 });

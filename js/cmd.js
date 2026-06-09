@@ -825,6 +825,7 @@ function applyChestTrapFirePayload(box, messages) {
     const directResult = applyChestTrapFireDamage(messages, damage, 'killed by a tower of flame');
     if (directResult.fatal || directResult.lifeSaving) return directResult;
 
+    burnAwayHeroSlime(messages);
     const fireInventory = fireDamageInventory(origDamage, false, false, { allowLifeSaving: true });
     messages.push(...fireInventory.messages);
     if (fireInventory.lifeSaving || fireInventory.fatal) {
