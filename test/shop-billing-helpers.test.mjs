@@ -43072,6 +43072,157 @@ test('m-prefix into raised drawbridge over lava uses lava fallout', async () => 
     assert.match(game._pending_message, /You fall into the molten lava!  You burn to a crisp\.\.\./);
 });
 
+test('m-prefix into lava burns non-fireproof water walking boots before fatal lava', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+        fireResistance: false,
+    });
+    const boots = wornArmor(330001, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, false);
+    assert.equal(game.u.uac, 10);
+    assert.equal(game.level.objects.length, 0);
+    assert.match(pending, /Your .*boots burst into flame!/);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.ok(pending.search(/Your .*boots burst into flame!/) < pending.indexOf('You fall into the molten lava!'));
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+
+    await rhack(' ');
+
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._polyself_lava_death_more || 0, 0);
+    assert.equal(game._command_mode, 'deathAttributesPrompt');
+});
+
+test('m-prefix into lava sinks fire-resistant hero after guarded water walking boot burn', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+        fireResistance: true,
+    });
+    const boots = wornArmor(330002, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, false);
+    assert.equal(game.u.uac, 10);
+    assert.match(pending, /Your .*boots burst into flame!/);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.ok(pending.search(/Your .*boots burst into flame!/) < pending.indexOf('You sink into the molten lava'));
+    assert.doesNotMatch(pending, /burn to a crisp/);
+    assert.equal((pending.match(/sink into the molten lava/g) || []).length, 1);
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._polyself_lava_death_more || 0, 0);
+    assert.equal(game.u.uhp, 39);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.ok((game.u.utrap || 0) > 0);
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+});
+
+test('m-prefix into lava clears burned levitation boots without recursive lava fallout', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+        fireResistance: true,
+        levitating: true,
+    });
+    const boots = wornArmor(330004, 'levitation boots', 'b', 0, {
+        otyp: LEVITATION_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    enableRngLog({ reset: true });
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.u.levitating, false);
+    assert.equal(game.u.uac, 10);
+    assert.match(pending, /Your .*boots burst into flame!/);
+    assert.match(pending, /You sink into the molten lava, but it only burns slightly!/);
+    assert.doesNotMatch(pending, /float gently|burn to a crisp/);
+    assert.equal((pending.match(/sink into the molten lava/g) || []).length, 1);
+    assert.equal(game.u.uhp, 39);
+    assert.equal(game.u.utraptype, TT_LAVA);
+    assert.equal(getRngLog().filter(entry => rngCallName(entry) === 'd(6,6)').length, 1);
+});
+
+test('m-prefix into lava marks unpaid burned water walking boots as used-up', async () => {
+    const { shkp } = installCommandShopState();
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 9,
+        fireResistance: true,
+    });
+    shkp.mx = 10;
+    shkp.my = 10;
+    shkp.shk = { x: 10, y: 10 };
+    game.level.monsters = [shkp];
+    game.level.objects = [];
+    game.level.at = (x, y) => ({ roomno: ROOMOFFSET, typ: x === 6 && y === 5 ? LAVAPOOL : ROOM, lit: true });
+    vision_reset();
+    const boots = wornArmor(330003, 'water walking boots', 'b', 0, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [boots];
+    shop.addObjectToShopBill(shkp, boots, 50);
+
+    await rhack('m');
+    await rhack('l');
+
+    const usedRows = shkp.bill.filter(entry => entry.useup && shop.shopBillEntryTotal(entry) === 50);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.unpaid, false);
+    assert.equal(boots.unpaidPrice, undefined);
+    assert.equal(shkp.billct, 1);
+    assert.equal(usedRows.length, 1);
+    assert.equal((game._usedUpShopBills || []).some(entry => entry.bo_id === usedRows[0].bo_id), true);
+    assert.match(game._pending_message || '', /Your .*boots burst into flame!/);
+    assert.match(game._pending_message || '', /You sink into the molten lava, but it only burns slightly!/);
+});
+
 test('movement compares raised drawbridge under-terrain transitions', async () => {
     installDrawbridgeMoveState(DB_MOAT, { oldUnder: DB_FLOOR });
 

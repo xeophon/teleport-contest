@@ -14783,6 +14783,69 @@ function polyselfLavaFalloutMessage(targetMoveTyp) {
         : 'You fall into the molten lava!  You burn to a crisp...';
 }
 
+const LAVA_ORGANIC_BOOT_KINDS = new Set([
+    'low boots', 'high boots', 'speed boots', 'water walking boots', 'jumping boots',
+    'elven boots', 'fumble boots', 'levitation boots',
+]);
+
+function heroHasWaterWalking() {
+    return !!(game.u?.waterWalking || game.u?.Wwalking
+        || (game.inventory || []).some(item => isWornInventoryItem(item)
+            && objectKindKey(item) === 'water walking boots'));
+}
+
+function lavaBurnsWornBoots(item) {
+    if (!item || armorSlot(item) !== 'boots') return false;
+    if (item.oerodeproof || item.fireResistance || item.fireResistant) return false;
+    if (item.in_use || item.inUse) return true;
+    const kind = objectKindKey(item);
+    if (LAVA_ORGANIC_BOOT_KINDS.has(kind)) return true;
+    const material = String(item.material || item.oc_material || '').toLowerCase();
+    return LAVA_DIRECT_BURN_MATERIALS.has(material);
+}
+
+function burnLavaWornBootsFirst(messages) {
+    const boots = wornArmorItemsBySlotOrder(['boots'])[0];
+    if (!lavaBurnsWornBoots(boots)) return false;
+    messages.push(`${armorSubject(boots)} ${armorVerb(boots, 'bursts', 'burst')} into flame!`);
+    game._in_lava_effects = (game._in_lava_effects || 0) + 1;
+    try {
+        destroyWornArmorItem(boots, messages);
+    } finally {
+        game._in_lava_effects = Math.max(0, (game._in_lava_effects || 1) - 1);
+    }
+    return true;
+}
+
+function heroLavaEntryEffect(targetMoveTyp) {
+    const messages = [];
+    const dmg = d(6, 6);
+    burnLavaWornBootsFirst(messages);
+    if (!heroHasFireResistance()) {
+        if (heroHasWaterWalking()) {
+            messages.push('The lava here burns you!');
+            if (dmg < (game.u?.uhp || 0)) {
+                game.u.uhp -= dmg;
+                return { messages, fatal: false, more: messages.length > 1 };
+            }
+        }
+        messages.push(polyselfLavaFalloutMessage(targetMoveTyp));
+        game._death_cause = 'burned by molten lava';
+        game._command_mode = 'lavaDeathMore';
+        game._polyself_lava_death_more = 1;
+        return { messages, fatal: true, more: true };
+    }
+    if (!heroHasWaterWalking() && (!game.u?.utrap || game.u?.utraptype !== TT_LAVA)) {
+        game.u.utrap = rn1(4, 4) + (rn1(4, 12) << 8);
+        game.u.utraptype = TT_LAVA;
+        messages.push(targetMoveTyp === LAVAWALL
+            ? 'You sink into the wall of lava, but it only burns slightly!'
+            : 'You sink into the molten lava, but it only burns slightly!');
+        if ((game.u.uhp || 0) > 1) game.u.uhp--;
+    }
+    return { messages, fatal: false, more: messages.length > 1 };
+}
+
 function addBootsOffLavaFallout(item, messages, targetMoveTyp, discoveryKind = objectKindKey(item)) {
     item.known = true;
     recordKnownArmorDiscovery(discoveryKind, false);
@@ -14811,6 +14874,7 @@ function addPolyselfWaterWalkingBootsOffSideEffects(item, messages) {
     const loc = game.level?.at(x, y);
     const targetMoveTyp = movementSurfaceTerrain(loc);
     if (movementIsLavaAt(x, y, loc)) {
+        if (game._in_lava_effects) return;
         addBootsOffLavaFallout(item, messages, targetMoveTyp, 'water walking boots');
         return;
     }
@@ -14875,6 +14939,7 @@ function addPolyselfLevitationLavaFallout(item, messages, x, y, loc) {
     if (!movementIsLavaAt(x, y, loc)) return false;
     const targetMoveTyp = movementSurfaceTerrain(loc);
     clearPolyselfLevitationBootSource(item);
+    if (game._in_lava_effects) return true;
     addBootsOffLavaFallout(item, messages, targetMoveTyp, 'levitation boots');
     return true;
 }
@@ -58149,14 +58214,14 @@ async function moveHero(dx, dy) {
         newsym(guard.mx, guard.my);
     const steppedTrap = game.level?.traps?.find(trap => trap.tx === newx && trap.ty === newy);
     if (liquidTarget && nopick && (targetMoveTyp === LAVAPOOL || targetMoveTyp === LAVAWALL)) {
-        d(6, 6);
-        await setMessage(targetMoveTyp === LAVAWALL
-            ? 'You fall into the wall of lava!  You burn to a crisp...'
-            : 'You fall into the molten lava!  You burn to a crisp...', true);
-        game._death_cause = 'burned by molten lava';
-        game._command_mode = 'lavaDeathMore';
-        game.context.move = 0;
-        game._pending_time_passed = 0;
+        const lavaEffect = heroLavaEntryEffect(targetMoveTyp);
+        if (lavaEffect.messages.length) await setMessage(lavaEffect.messages.join('  '), lavaEffect.more);
+        if (lavaEffect.fatal) {
+            game.context.move = 0;
+            game._pending_time_passed = 0;
+        } else {
+            game.context.move = 1;
+        }
         return;
     }
     if (liquidTarget && nopick && targetMoveTyp !== LAVAPOOL && targetMoveTyp !== LAVAWALL) {
