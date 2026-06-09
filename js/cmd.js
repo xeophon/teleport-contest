@@ -16565,18 +16565,33 @@ function clearTakeOffAllSelectionState() {
     game._takeoff_all_queue = null;
     game._takeoff_all_disrobing = '';
     game._takeoff_all_prompt = '';
+    game._takeoff_all_preflight_messages = null;
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
 }
 
+function isTakeOffWornRingItem(item) {
+    return wornRingItem(item) || isWornMeatRingItem(item);
+}
+
 function queueTakeOffAllItems(items) {
     const wanted = new Set(items);
-    game._takeoff_all_queue = takeOffAllItems()
-        .filter(item => wanted.has(item))
-        .map(item => item.letter)
-        .filter(Boolean);
-    game._takeoff_all_disrobing = items.some(item => !['primary', 'alternate', 'quiver'].includes(takeOffAllSlot(item)))
+    const queuedItems = [];
+    const blockedMessages = [];
+    for (const item of takeOffAllItems()) {
+        if (!wanted.has(item)) continue;
+        const blocker = takeOffAllSelectionBlockerResult(item);
+        if (blocker) {
+            blockedMessages.push(...(blocker.messages || []));
+            continue;
+        }
+        queuedItems.push(item);
+    }
+    game._takeoff_all_queue = queuedItems.map(item => item.letter).filter(Boolean);
+    game._takeoff_all_preflight_messages = blockedMessages;
+    game._takeoff_all_disrobing = queuedItems.some(item => !['primary', 'alternate', 'quiver'].includes(takeOffAllSlot(item)))
         ? 'disrobing' : 'disarming';
+    return blockedMessages;
 }
 
 function facewearBaseName(item) {
@@ -16724,7 +16739,7 @@ function takeOffWeaponBlockerName(weapon) {
 }
 
 function takeOffRingBlockerResult(item) {
-    if (!wornRingItem(item)) return null;
+    if (!isTakeOffWornRingItem(item)) return null;
     if (polyselfNoHands()) return { messages: ['The ring is stuck.'], move: 0 };
 
     const weapon = primaryWeldedTakeoffWeapon();
@@ -16813,6 +16828,45 @@ function takeOffSelectBlockerResult(item) {
         || takeOffSuitOrShirtBlockerResult(item);
 }
 
+function takeOffCursedKnown(item) {
+    return item?.bknown === true
+        || (item?.bknown !== false && /\bcursed\b/i.test(String(item?.line || '')));
+}
+
+function takeOffCursedPair(item) {
+    return /(?:boots|gloves|lenses)$/.test(pickupObjectName(item))
+        || Math.trunc(Number(item?.quan || 1)) > 1;
+}
+
+function takeOffCursedSlipperyRetryMessage(item, options = {}) {
+    if (!heroHasSlipperyFingers() || !takeOffCursedKnown(item)) return '';
+    const gloves = wornGlovesItem();
+    if (gloves) return options.primaryWeapon ? "Despite your slippery gloves, you can't." : '';
+    return (options.primaryWeapon || isTakeOffWornRingItem(item))
+        ? "Despite your slippery fingers, you can't." : '';
+}
+
+function takeOffCursedBlockerResult(item, options = {}) {
+    const slipperyMessage = takeOffCursedSlipperyRetryMessage(item, options);
+    if (options.primaryWeapon && item?.welded === true) item.cursed = true;
+    item.bknown = true;
+    if (options.primaryWeapon) item.line = heroWieldedLineForItem(item);
+    return {
+        messages: [slipperyMessage || `You can't.  ${takeOffCursedPair(item) ? 'They are' : 'It is'} cursed.`],
+        move: 0,
+        blocked: true,
+    };
+}
+
+function takeOffAllSelectionBlockerResult(item) {
+    const slot = takeOffAllSlot(item);
+    if (slot === 'primary' && readyPrimaryWillWeld(item))
+        return takeOffCursedBlockerResult(item, { primaryWeapon: true });
+    if (!isWornEquipmentItem(item)) return null;
+    return takeOffSelectBlockerResult(item)
+        || (item.cursed ? takeOffCursedBlockerResult(item) : null);
+}
+
 function setBlindfoldedState(active) {
     if (!game.u) return;
     game.u.blindfolded = !!active;
@@ -16894,11 +16948,7 @@ async function takeOffEquipment(item, options = {}) {
     const selectBlocker = takeOffSelectBlockerResult(item);
     if (selectBlocker) return selectBlocker;
 
-    if (item.cursed) {
-        item.bknown = true;
-        const pair = /(?:boots|gloves|lenses)$/.test(pickupObjectName(item)) || Math.trunc(Number(item.quan || 1)) > 1;
-        return { messages: [`You can't.  ${pair ? 'They are' : 'It is'} cursed.`], move: 0 };
-    }
+    if (item.cursed) return takeOffCursedBlockerResult(item);
 
     const facewearOff = await takeOffFacewear(item);
     if (facewearOff) return { ...facewearOff, move: 1 };
@@ -16960,10 +17010,7 @@ async function takeOffReadiedItem(item) {
     const slot = takeOffAllSlot(item);
     if (slot === 'primary') {
         if (readyPrimaryWillWeld(item)) {
-            if (item.welded === true) item.cursed = true;
-            item.bknown = true;
-            item.line = heroWieldedLineForItem(item);
-            return { messages: [readyWeldedPrimaryMessage(item)], move: 0 };
+            return takeOffCursedBlockerResult(item, { primaryWeapon: true });
         }
         const wasTwoweap = !!game._twoweapon;
         item.wielded = false;
@@ -17004,6 +17051,9 @@ async function takeOffAllItem(item) {
 
 async function continueTakeOffAllQueue() {
     const queue = game._takeoff_all_queue || [];
+    const pendingMessages = game._takeoff_all_preflight_messages || [];
+    game._takeoff_all_preflight_messages = null;
+    const zeroMoveMessages = [];
     while (queue.length) {
         const letter = queue.shift();
         const item = (game.inventory || []).find(invItem => invItem.letter === letter);
@@ -17014,13 +17064,23 @@ async function continueTakeOffAllQueue() {
             game._takeoff_all_queue = null;
             game._takeoff_all_disrobing = '';
         }
-        if (result.messages.length)
-            await setMessage(result.messages.join('  '), !!result.more);
+        const messages = [...pendingMessages, ...zeroMoveMessages, ...(result.messages || [])];
+        if ((result.move || 0) === 0 && result.blocked && queue.length) {
+            if (result.messages?.length) zeroMoveMessages.push(...result.messages);
+            continue;
+        }
+        if (messages.length)
+            await setMessage(messages.join('  '), !!result.more);
         game.context.move = result.move ?? 1;
         if (result.more) game._process_time_with_more = 1;
         return true;
     }
     clearTakeOffAllSelectionState();
+    if (pendingMessages.length || zeroMoveMessages.length) {
+        await setMessage([...pendingMessages, ...zeroMoveMessages].join('  '));
+        game.context.move = 0;
+        return true;
+    }
     return false;
 }
 

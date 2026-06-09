@@ -18584,6 +18584,46 @@ test('remove command auto-removes lone worn ring with hand wording', async () =>
     assert.equal(game._pending_message, 'You were wearing an iron ring (on left hand).');
 });
 
+test('remove command uses slippery retry wording for known cursed bare-finger ring', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057053, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        cursed: true,
+        bknown: true,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.u._glibTimeout = 3;
+    game.inventory = [ring];
+
+    await rhack('R');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(ring.worn, 'left');
+    assert.equal(ring.bknown, true);
+    assert.equal(game._pending_message, "Despite your slippery fingers, you can't.");
+});
+
+test('remove command first learns unknown cursed slippery ring with generic wording', async () => {
+    installNonShopFloorState();
+    const ring = metalRing(3057054, 'fire resistance', 17, 'r', {
+        worn: 'left',
+        owornmask: 1,
+        cursed: true,
+        bknown: false,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.u._glibTimeout = 3;
+    game.inventory = [ring];
+
+    await rhack('R');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(ring.worn, 'left');
+    assert.equal(ring.bknown, true);
+    assert.equal(game._pending_message, "You can't.  It is cursed.");
+});
+
 test('remove command auto-removes lone worn amulet', async () => {
     installNonShopFloorState();
     const amulet = metalAmulet(3057015, 'amulet of magical breathing', 8, 'a', {
@@ -18735,6 +18775,68 @@ test('takeoffall command removes all selected items in C takeoff order', async (
     assert.equal(missile.line, 'q - an arrow');
     assert.equal(game._pending_message, 'You no longer have ammunition readied.');
     assert.equal(game._takeoff_all_queue, null);
+});
+
+test('takeoffall selected known welded primary uses slippery fingers retry wording', async () => {
+    installNonShopFloorState();
+    const weapon = wieldedWeapon(3057055, 'dagger', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = true;
+    game.u._glibTimeout = 3;
+    game.inventory = [weapon];
+
+    await rhack('A');
+    await rhack('w');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(weapon.wielded, true);
+    assert.equal(weapon.bknown, true);
+    assert.equal(game._takeoff_all_queue, null);
+    assert.equal(game._pending_message, "Despite your slippery fingers, you can't.");
+});
+
+test('takeoffall selected known welded primary uses slippery gloves retry wording', async () => {
+    installNonShopFloorState();
+    const weapon = wieldedWeapon(3057056, 'dagger', 'w', 0);
+    weapon.cursed = true;
+    weapon.bknown = true;
+    const gloves = wornArmor(3057057, 'leather gloves', 'g');
+    game.u._glibTimeout = 3;
+    game.inventory = [weapon, gloves];
+
+    await rhack('A');
+    await rhack('w');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(weapon.wielded, true);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._takeoff_all_queue, null);
+    assert.equal(game._pending_message, "Despite your slippery gloves, you can't.");
+});
+
+test('takeoffall filters blocked selections out of the continuation queue', async () => {
+    installNonShopFloorState();
+    const shield = wornArmor(3057058, 'small shield', 's');
+    const cloak = wornArmor(3057059, 'cloak', 'c', 0, {
+        cursed: true,
+        bknown: false,
+    });
+    const body = wornArmor(3057060, 'leather armor', 'b');
+    game.inventory = [shield, cloak, body];
+    game.u.uac = 9;
+
+    await rhack('A');
+    await rhack('A');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(shield.worn, false);
+    assert.equal(cloak.worn, true);
+    assert.equal(body.worn, true);
+    assert.equal(cloak.bknown, true);
+    assert.equal(game._takeoff_all_queue, null);
+    assert.match(game._pending_message, /You can't\.  It is cursed\./);
+    assert.match(game._pending_message, /You cannot remove your cloak to take off the \+0 leather armor\./);
+    assert.match(game._pending_message, /You were wearing a \+0 small shield\./);
 });
 
 test('takeoffall command treats lowercase a as an inventory letter when present', async () => {
