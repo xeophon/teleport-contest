@@ -37,5 +37,4 @@ Result: focused inventory-fire vapor tests passed; broader fire/inventory and qu
 ## Remaining Gaps
 
 - Fatal unsaved vapor in `fireDamageInventory()` still consumes the destroyed potion in JS because C's `done()` does not return from `potionbreathe()` when life saving does not resume.
-- Hallucinated `hcolor("dark red")` variation for Book glow feedback remains fixed to `dark red`.
 - Direct fatal lava rescue still lacks C's repeated `safe_teleds()` failure countermeasures and manual landing `spoteffects(FALSE)` detail.

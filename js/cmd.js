@@ -12646,7 +12646,34 @@ const LAVA_DIRECT_BURN_MATERIALS = new Set([
 const LAVA_FATAL_ORGANIC_MATERIALS = new Set([
     'liquid', 'wax', 'veggy', 'vegetable', 'flesh', 'paper', 'cloth', 'leather', 'wood',
 ]);
-const LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE = 'The Book of the Dead glows a strange dark red, but remains intact.';
+const HALLUCINATED_COLORS = [
+    'ultraviolet', 'infrared', 'bluish-orange', 'reddish-green', 'dark white',
+    'light black', 'sky blue-pink', 'pinkish-cyan', 'indigo-chartreuse',
+    'salty', 'sweet', 'sour', 'bitter', 'umami',
+    'striped', 'spiral', 'swirly', 'plaid', 'checkered', 'argyle', 'paisley',
+    'blotchy', 'guernsey-spotted', 'polka-dotted', 'square', 'round',
+    'triangular', 'cabernet', 'sangria', 'fuchsia', 'wisteria', 'lemon-lime',
+    'strawberry-banana', 'peppermint', 'romantic', 'incandescent',
+    'octarine',
+    'excitingly dull', 'mauve', 'electric',
+    'neon', 'fluorescent', 'phosphorescent', 'translucent', 'opaque',
+    'psychedelic', 'iridescent', 'rainbow-colored', 'polychromatic',
+    'colorless', 'colorless green',
+    'dancing', 'singing', 'loving', 'loudy', 'noisy', 'clattery', 'silent',
+    'apocyan', 'infra-pink', 'opalescent', 'violant', 'tuneless',
+    'viridian', 'aureolin', 'cinnabar', 'purpurin', 'gamboge', 'madder',
+    'bistre', 'ecru', 'fulvous', 'tekhelet', 'selective yellow',
+];
+
+function hcolor(colorpref) {
+    return heroIsHallucinating() || !colorpref
+        ? HALLUCINATED_COLORS[rn2_on_display_rng(HALLUCINATED_COLORS.length)]
+        : colorpref;
+}
+
+function bookOfTheDeadGlowMessage() {
+    return `The Book of the Dead glows a strange ${hcolor('dark red')}, but remains intact.`;
+}
 const LIQUID_FLOW_RIDER_CORPSE_NAMES = new Set(['death', 'pestilence', 'famine']);
 
 function liquidFlowRiderCorpse(obj) {
@@ -12889,7 +12916,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         if (fireInventoryItemProtected()) continue;
         if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
             if (!game.u?.blind)
-                addFireInventoryMessage(messages, events, LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE,
+                addFireInventoryMessage(messages, events, bookOfTheDeadGlowMessage(),
                     { damage: 0 }, armor, joinState);
             continue;
         }
@@ -14941,7 +14968,7 @@ function destroyLavaFatalInventorySelection(selection, {
     for (const item of inventorySnapshot) {
         if (!(game.inventory || []).includes(item)) continue;
         if (isBookOfTheDeadItem(item)) {
-            if (canMessage && !game.u?.blind) messages.push(LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE);
+            if (canMessage && !game.u?.blind) messages.push(bookOfTheDeadGlowMessage());
             continue;
         }
         if (!selected.has(item)) continue;
@@ -34645,7 +34672,7 @@ export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
     for (const item of selected.filter(Boolean)) {
         const cls = fireDestroyableInventoryClass(item);
         if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
-            if (visible) messages.push('The Book of the Dead glows a strange dark red, but remains intact.');
+            if (visible) messages.push(bookOfTheDeadGlowMessage());
             continue;
         }
         const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));

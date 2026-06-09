@@ -174,6 +174,20 @@ function installCoreRngValues(values) {
     game.rng.core = game.coreCtx;
 }
 
+function installDisplayRngValues(values) {
+    const raw = [...values, ...Array(100).fill(0)].map(value => BigInt(value));
+    game.displayCtx = {
+        n: raw.length,
+        r: raw.slice().reverse(),
+        m: [],
+        a: 0n,
+        b: 0n,
+        c: 0n,
+    };
+    game.rng ??= {};
+    game.rng.display = game.displayCtx;
+}
+
 async function drainQueuedMessagesAfterMore(limit = 20) {
     const messages = [];
     for (let i = 0; i < limit && (game._queued_message_after_more
@@ -15762,6 +15776,31 @@ test('inventory fire still uses Book of the Dead branch when locally artifact ta
     assert.equal(game.inventory.includes(book), true);
     assert.deepEqual(result.messages, ['The Book of the Dead glows a strange dark red, but remains intact.']);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+});
+
+test('hallucinating inventory fire Book glow uses hcolor display rng', () => {
+    installShopState();
+    installCoreRngValues([0]);
+    installDisplayRngValues([2]);
+    Object.assign(game.u, { blind: false, hallucinating: true, _statusSuffix: ' Hallu' });
+    const book = bookOfTheDead(309836, 'B');
+    game.inventory = [book];
+    enableRngLog({ reset: true });
+    enableDisplayRngLog(true);
+
+    let result;
+    try {
+        result = shop.fireDamageInventoryForTest(20, true, false, {
+            preburnedArmor: { bodyHit: true, message: '' },
+        });
+    } finally {
+        enableDisplayRngLog(false);
+    }
+
+    assert.equal(game.inventory.includes(book), true);
+    assert.deepEqual(result.messages, ['The Book of the Dead glows a strange bluish-orange, but remains intact.']);
+    assert.deepEqual(rngValuesForCall(getRngLog(), '~drn2(74)'), [2]);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
 });
 
@@ -43886,6 +43925,44 @@ test('blind m-prefix fatal lava life saving suppresses Book of the Dead glow', a
     assert.match(pending, /You burn to a crisp\.\.\./);
     assert.match(pending, /But wait\.\.\.  Your medallion feels warm!/);
     assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+});
+
+test('hallucinating fatal lava Book glow uses hcolor display rng', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 42]);
+    installDisplayRngValues([2]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        blind: false,
+        hallucinating: true,
+        _statusSuffix: ' Hallu',
+        fireResistance: false,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330047, 'a');
+    const rations = foodRationStack(330048, 2, 'f');
+    const book = bookOfTheDead(330049, 'B');
+    game.inventory = [amulet, rations, book];
+    enableRngLog({ reset: true });
+    enableDisplayRngLog(true);
+
+    try {
+        await rhack('m');
+        await rhack('l');
+    } finally {
+        enableDisplayRngLog(false);
+    }
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(rations), false);
+    assert.equal(game.inventory.includes(book), true);
+    assert.match(pending, /The Book of the Dead glows a strange bluish-orange, but remains intact\./);
+    assert.match(pending, /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.ok(pending.indexOf('The Book of the Dead glows') < pending.indexOf('An item in your inventory'));
+    assert.deepEqual(rngValuesForCall(getRngLog(), '~drn2(74)'), [2]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [42]);
     assert.equal(game._command_mode, 'lifeSavingMore');
 });
 
