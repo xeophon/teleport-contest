@@ -18928,6 +18928,98 @@ test('takeoff command blocks slippery glove removal', async () => {
     assert.equal(game._pending_message, 'Your leather gloves are too slippery to take off.');
 });
 
+test('takeoff command prompts before removing gloves while carrying cockatrice corpse', async () => {
+    installNonShopFloorState();
+    const gloves = wornArmor(3057061, 'leather gloves', 'g');
+    const body = corpse(3057062, 'c', 'cockatrice');
+    game.inventory = [gloves, body];
+
+    await rhack('T');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._command_mode, 'takeOffGlovesCorpsePrompt');
+    assert.equal(game._pending_message, 'Take off your gloves despite carrying a dead cockatrice? [yes|n] (n)');
+
+    await rhack('n');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._command_mode, null);
+});
+
+test('takeoff command requires full yes for petrifying corpse glove prompt', async () => {
+    installNonShopFloorState();
+    const gloves = wornArmor(3057063, 'leather gloves', 'g');
+    const body = corpse(3057064, 'c', 'cockatrice');
+    game.inventory = [gloves, body];
+
+    await rhack('T');
+    await rhack('y');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._command_mode, 'takeOffGlovesCorpsePrompt');
+    assert.equal(game._pending_message, 'Take off your gloves despite carrying a dead cockatrice? [yes|n] (n) y');
+
+    await rhack('\r');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._command_mode, null);
+});
+
+test('takeoffall command prompts before queued gloves removal with cockatrice corpse', async () => {
+    installNonShopFloorState();
+    const gloves = wornArmor(3057067, 'leather gloves', 'g');
+    const body = corpse(3057068, 'c', 'cockatrice');
+    game.inventory = [gloves, body];
+
+    await rhack('A');
+    await rhack('A');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._command_mode, 'takeOffGlovesCorpsePrompt');
+    assert.equal(game._pending_message, 'Take off your gloves despite carrying a dead cockatrice? [yes|n] (n)');
+
+    await rhack('n');
+
+    assert.equal(game.context.move || 0, 0);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._command_mode, null);
+    assert.equal(game._takeoff_all_queue, null);
+});
+
+test('takeoff command confirmed gloves removal can petrify wielded cockatrice corpse', async () => {
+    installNonShopFloorState();
+    const gloves = wornArmor(3057065, 'leather gloves', 'g');
+    const body = corpse(3057066, 'c', 'cockatrice');
+    body.wielded = true;
+    body.line = 'c - a cockatrice corpse (weapon in right hand)';
+    game.u.uhp = 20;
+    game.inventory = [gloves, body];
+
+    await rhack('T');
+    await rhack('yes');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(gloves.worn, true);
+    assert.equal(game._armor_wear_occupation?.action, 'takeoff');
+
+    game._pending_time_passed = (game._pending_time_passed || 0) + (game.context.move || 0);
+    pushKey('\x1b');
+    await moveloop_core();
+    resetInputState();
+
+    assert.equal(gloves.worn, false);
+    assert.equal(game.u.uhp, 0);
+    assert.match(game._pending_message, /You finish taking off your leather gloves\./);
+    assert.match(game._pending_message, /You now wield a cockatrice corpse in your bare hands\./);
+    assert.match(game._pending_message, /You turn to stone\.\.\./);
+    assert.equal(game._death_cause, 'petrified by removing gloves while wielding a cockatrice corpse');
+});
+
 test('takeoff command blocks boots caught in bear trap', async () => {
     installNonShopFloorState();
     const boots = wornArmor(3057031, 'low boots', 'b');

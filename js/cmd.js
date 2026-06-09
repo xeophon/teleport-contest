@@ -16625,6 +16625,10 @@ function takeOffSimpleArmorName(item) {
     return pickupObjectName(item).replace(/^pair of /i, '');
 }
 
+function takeOffGlovesSimpleName(item) {
+    return /\bgauntlets\b/i.test(pickupObjectName(item)) ? 'gauntlets' : 'gloves';
+}
+
 function takeOffCloakSimpleName(item) {
     const name = takeOffSimpleArmorName(item);
     if (/\brobe\b/i.test(name)) return 'robe';
@@ -16689,6 +16693,13 @@ function clearTakeOffPromptState() {
     game._take_off_action = '';
     game._overlay_lines = null;
     game._overlay_hide_status = 0;
+}
+
+function clearTakeOffGlovesCorpsePromptState() {
+    game._takeoff_gloves_corpse_letter = '';
+    game._takeoff_gloves_corpse_prompt = '';
+    game._takeoff_gloves_corpse_text = '';
+    game._takeoff_gloves_corpse_from_all = 0;
 }
 
 function currentTakeOffPromptAction() {
@@ -16760,7 +16771,15 @@ function takeOffRingBlockerResult(item) {
     return null;
 }
 
-function takeOffGlovesBlockerResult(item) {
+function carriedPetrifyingCorpseForGloveRemoval() {
+    return (game.inventory || []).find(isPetrifyingCorpseObject) || null;
+}
+
+function takeOffGlovesCorpsePrompt(item, corpse) {
+    return `Take off your ${takeOffGlovesSimpleName(item)} despite carrying a dead ${corpseMonsterName(corpse) || 'cockatrice'}? [yes|n] (n)`;
+}
+
+function takeOffGlovesBlockerResult(item, options = {}) {
     if (!isWornArmorItem(item) || armorSlot(item) !== 'gloves') return null;
     const weapon = primaryWeldedTakeoffWeapon();
     if (weapon) {
@@ -16773,6 +16792,14 @@ function takeOffGlovesBlockerResult(item) {
     if (heroHasSlipperyFingers()) {
         return {
             messages: [`${item.unpaid ? 'The' : 'Your'} ${takeOffSimpleArmorName(item)} are too slippery to take off.`],
+            move: 0,
+        };
+    }
+    const corpse = carriedPetrifyingCorpseForGloveRemoval();
+    if (corpse && !options.confirmedGlovesCorpse && options.allowGlovesCorpsePrompt !== false) {
+        return {
+            prompt: takeOffGlovesCorpsePrompt(item, corpse),
+            item,
             move: 0,
         };
     }
@@ -16821,9 +16848,9 @@ function takeOffSuitOrShirtBlockerResult(item) {
     return null;
 }
 
-function takeOffSelectBlockerResult(item) {
+function takeOffSelectBlockerResult(item, options = {}) {
     return takeOffRingBlockerResult(item)
-        || takeOffGlovesBlockerResult(item)
+        || takeOffGlovesBlockerResult(item, options)
         || takeOffBootsBlockerResult(item)
         || takeOffSuitOrShirtBlockerResult(item);
 }
@@ -16863,7 +16890,7 @@ function takeOffAllSelectionBlockerResult(item) {
     if (slot === 'primary' && readyPrimaryWillWeld(item))
         return takeOffCursedBlockerResult(item, { primaryWeapon: true });
     if (!isWornEquipmentItem(item)) return null;
-    return takeOffSelectBlockerResult(item)
+    return takeOffSelectBlockerResult(item, { allowGlovesCorpsePrompt: false })
         || (item.cursed ? takeOffCursedBlockerResult(item) : null);
 }
 
@@ -16945,7 +16972,7 @@ async function takeOffEquipment(item, options = {}) {
         if (coveredBlocker) return coveredBlocker;
     }
 
-    const selectBlocker = takeOffSelectBlockerResult(item);
+    const selectBlocker = takeOffSelectBlockerResult(item, options);
     if (selectBlocker) return selectBlocker;
 
     if (item.cursed) return takeOffCursedBlockerResult(item);
@@ -16971,6 +16998,7 @@ async function takeOffEquipment(item, options = {}) {
     }
 
     const acBonus = (ARMOR_AC_BONUS[String(item.kind || '').toLowerCase()] ?? 0) + (item.spe ?? 0);
+    const slot = armorSlot(item);
     const kind = String(item.kind || '').toLowerCase();
     const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
     if (delay) {
@@ -16999,7 +17027,38 @@ async function takeOffEquipment(item, options = {}) {
         syncHeroSpeedState();
     updateGauntletsOfPowerStrength(kind, false);
     updateWornDisplacement();
-    return { messages: [`You were wearing ${baseName}.`], move: 1 };
+    const messages = [`You were wearing ${baseName}.`];
+    const gloveFallout = slot === 'gloves' ? takeOffGlovesPetrifyingSelfTouchMessages(item) : [];
+    messages.push(...gloveFallout);
+    return {
+        messages,
+        move: 1,
+        more: !!gloveFallout.more,
+        fatal: !!gloveFallout.fatal,
+        lifeSaving: !!gloveFallout.lifeSaving,
+    };
+}
+
+export function takeOffGlovesPetrifyingSelfTouchMessages(gloves) {
+    if (game.u?.stoneResistance || heroPolyselfResistsStoning()) return [];
+    const corpse = (game.inventory || []).find(item =>
+        isPetrifyingCorpseObject(item) && (itemIsPrimaryWielded(item) || (game._twoweapon && itemIsAlternateWeapon(item))));
+    if (!corpse) return [];
+    if (game.u) game.u.uhp = 0;
+    game._death_cause = `petrified by removing ${takeOffGlovesSimpleName(gloves)} while wielding ${petrifyingCorpseArticleName(corpse)}`;
+    game._death_bones_body = 'statue';
+    const messages = [
+        `You now wield ${petrifyingCorpseArticleName(corpse)} in your bare hands.`,
+        'You turn to stone...',
+    ];
+    if (consumeLifeSavingAmulet({ clearStoning: true })) {
+        messages.push('You die...  But wait...  Your medallion begins to glow!');
+        messages.lifeSaving = true;
+    } else {
+        messages.fatal = true;
+    }
+    messages.more = true;
+    return messages;
 }
 
 function unwieldedBaseLine(item) {
@@ -17060,6 +17119,13 @@ async function continueTakeOffAllQueue() {
         if (!item || !isTakeOffAllCandidateItem(item)) continue;
         const result = await takeOffAllItem(item);
         if (!result) continue;
+        if (result.prompt) {
+            await beginTakeOffGlovesCorpsePrompt(result.item || item, result.prompt, {
+                fromAll: true,
+                prefixMessages: [...pendingMessages, ...zeroMoveMessages],
+            });
+            return true;
+        }
         if (!queue.length) {
             game._takeoff_all_queue = null;
             game._takeoff_all_disrobing = '';
@@ -17073,6 +17139,8 @@ async function continueTakeOffAllQueue() {
             await setMessage(messages.join('  '), !!result.more);
         game.context.move = result.move ?? 1;
         if (result.more) game._process_time_with_more = 1;
+        if (result.fatal || result.lifeSaving)
+            applyLifeSavingOrFatalCommandMode(result);
         return true;
     }
     clearTakeOffAllSelectionState();
@@ -17084,10 +17152,45 @@ async function continueTakeOffAllQueue() {
     return false;
 }
 
+async function beginTakeOffGlovesCorpsePrompt(item, prompt, options = {}) {
+    game._takeoff_gloves_corpse_letter = item?.letter || '';
+    game._takeoff_gloves_corpse_prompt = prompt;
+    game._takeoff_gloves_corpse_text = '';
+    game._takeoff_gloves_corpse_from_all = options.fromAll ? 1 : 0;
+    const messages = [...(options.prefixMessages || []), prompt].filter(Boolean);
+    await setMessage(messages.join('  '));
+    game._command_mode = 'takeOffGlovesCorpsePrompt';
+}
+
+async function finishTakeOffGlovesCorpsePrompt(answer) {
+    const fromAll = !!game._takeoff_gloves_corpse_from_all;
+    const letter = game._takeoff_gloves_corpse_letter;
+    const item = (game.inventory || []).find(invItem => invItem.letter === letter);
+    clearTakeOffGlovesCorpsePromptState();
+    game._command_mode = null;
+    if (answer === 'yes' && item) {
+        await finishTakeOffEquipment(item, { confirmedGlovesCorpse: true });
+        if (fromAll && !(game._takeoff_all_queue || []).length)
+            clearTakeOffAllSelectionState();
+        return;
+    }
+    if (fromAll && (game._takeoff_all_queue || []).length) {
+        await continueTakeOffAllQueue();
+        return;
+    }
+    if (fromAll) clearTakeOffAllSelectionState();
+    game.context.move = 0;
+    game._keep_pending_message = 1;
+}
+
 async function finishTakeOffEquipment(item, options = {}) {
     const result = await takeOffEquipment(item, { ...options, coveredArmorBlock: true });
     if (!result) return false;
-    if (result.messages.length) {
+    if (result.prompt) {
+        await beginTakeOffGlovesCorpsePrompt(result.item || item, result.prompt);
+        return true;
+    }
+    if (result.messages?.length) {
         const message = result.messages.join('  ');
         await setMessage(message, !!result.more);
         if (options.visualPromptOverride && !result.more && result.move !== 0
@@ -17098,6 +17201,8 @@ async function finishTakeOffEquipment(item, options = {}) {
     }
     game.context.move = result.move ?? 1;
     if (result.more) game._process_time_with_more = 1;
+    if (result.fatal || result.lifeSaving)
+        applyLifeSavingOrFatalCommandMode(result);
     return true;
 }
 
@@ -62027,6 +62132,7 @@ export async function rhack(_cmd) {
                         }
                     }
                 }
+                let armorTakeoffFatalResult = null;
                 if (game._armor_takeoff_after_more && next.startsWith('You finish taking off your ')) {
                     const occupation = game._armor_takeoff_after_more;
                     game._armor_takeoff_after_more = null;
@@ -62040,6 +62146,21 @@ export async function rhack(_cmd) {
                             syncHeroSpeedState();
                         updateGauntletsOfPowerStrength(occupation.kind, false);
                         updateWornDisplacement();
+                        const armorName = String(`${occupation.kind || ''} ${occupation.simpleName || ''} ${pickupObjectName(item)}`).toLowerCase();
+                        if (/\b(?:gloves?|gauntlets?)\b/.test(armorName)) {
+                            const fallout = takeOffGlovesPetrifyingSelfTouchMessages(item);
+                            if (fallout.length) {
+                                next = [next, ...fallout].join('  ');
+                                queuedMore ||= !!fallout.more;
+                                if (fallout.fatal || fallout.lifeSaving) {
+                                    armorTakeoffFatalResult = {
+                                        fatal: !!fallout.fatal,
+                                        lifeSaving: !!fallout.lifeSaving,
+                                        more: !!fallout.more,
+                                    };
+                                }
+                            }
+                        }
                     }
                 }
                 if (game._nymph_steal_after_more?.stolenMessage === next) {
@@ -62084,6 +62205,8 @@ export async function rhack(_cmd) {
                 }
                 if (next === 'You die...' || next === 'You die.') prepareDeathBones();
                 await setMessage(next, queuedMore);
+                if (armorTakeoffFatalResult)
+                    applyLifeSavingOrFatalCommandMode(armorTakeoffFatalResult);
                 if (game._queued_room_entry_after_queued_more) {
                     const roomEntryText = game._queued_room_entry_after_queued_more;
                     game._queued_room_entry_after_queued_more = '';
@@ -63656,6 +63779,34 @@ export async function rhack(_cmd) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             await setMessage(game._takeoff_all_prompt || takeOffAllPrompt());
             game._command_mode = 'takeOffAllObject';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'takeOffGlovesCorpsePrompt') {
+        const prompt = game._takeoff_gloves_corpse_prompt || 'Take off your gloves? [yes|n] (n)';
+        const code = typeof key === 'number' ? key : String(ch || '').charCodeAt(0);
+        if (ch === '\x1b' || ch === 'q' || ch === 'n' || ch === ' ' || ch === '\r' || ch === '\n') {
+            const text = String(game._takeoff_gloves_corpse_text || '').trim().toLowerCase();
+            await finishTakeOffGlovesCorpsePrompt(text === 'yes' ? 'yes' : 'n');
+            return;
+        }
+        if (code === 8 || code === 127) {
+            game._takeoff_gloves_corpse_text = String(game._takeoff_gloves_corpse_text || '').slice(0, -1);
+            const text = game._takeoff_gloves_corpse_text || '';
+            await setMessage(`${prompt}${text ? ` ${text}` : ''}`);
+            return;
+        }
+        if (String(ch).trim().toLowerCase() === 'yes') {
+            await finishTakeOffGlovesCorpsePrompt('yes');
+            return;
+        }
+        if (code >= 32) {
+            game._takeoff_gloves_corpse_text = `${game._takeoff_gloves_corpse_text || ''}${ch}`;
+            const text = game._takeoff_gloves_corpse_text || '';
+            await setMessage(`${prompt}${text ? ` ${text}` : ''}`);
             return;
         }
         game._keep_pending_message = 1;
