@@ -29739,9 +29739,10 @@ test('#untrap known-box explosion destroys box and floor objects', async () => {
     delete floorScroll.letter;
     delete floorScroll.line;
     game.level.objects = [box, floorScroll];
-    const nearbySleeper = { id: 881057, mx: 6, my: 5, msleeping: 1, mstrategy: 7, data: {} };
-    const farSleeper = { id: 881058, mx: 30, my: 30, msleeping: 1, mstrategy: 7, data: {} };
+    const nearbySleeper = { id: 881057, mx: 6, my: 5, msleeping: 1, mstrategy: STRAT_WAITFORU, data: { name: 'jackal' } };
+    const farSleeper = { id: 881058, mx: 30, my: 30, msleeping: 1, mstrategy: STRAT_WAITFORU, data: { name: 'gecko' } };
     game.level.monsters = [nearbySleeper, farSleeper];
+    markSquareVisible(6, 5);
 
     await enterUntrapDirection();
     await rhack('.');
@@ -29763,7 +29764,7 @@ test('#untrap known-box explosion destroys box and floor objects', async () => {
         'rn2(2)=0',
         'rn2(19)=0',
     ]);
-    assert.equal(game._pending_message, 'You set it off!  The large box explodes!');
+    assert.equal(game._pending_message, 'You set it off!  The large box explodes!  The jackal wakes up.');
     assert.equal(game.level.objects.includes(box), false);
     assert.equal(game.level.objects.includes(floorScroll), false);
     assert.equal(game.level.objects.includes(potion), false);
@@ -29773,7 +29774,7 @@ test('#untrap known-box explosion destroys box and floor objects', async () => {
     assert.equal(nearbySleeper.msleeping, 0);
     assert.equal(nearbySleeper.mstrategy, 0);
     assert.equal(farSleeper.msleeping, 1);
-    assert.equal(farSleeper.mstrategy, 7);
+    assert.equal(farSleeper.mstrategy, STRAT_WAITFORU);
     assert.equal(game.u.uhp, 14);
     assert.equal(game.context.move, 1);
 });
@@ -29838,6 +29839,10 @@ test('#untrap known-box fatal explosion enters death more', async () => {
         cknown: false,
     });
     game.level.objects = [box];
+    const sleeper = sleepingMonster('jackal', 6, 5);
+    sleeper.mstrategy = STRAT_WAITFORU;
+    game.level.monsters = [sleeper];
+    markSquareVisible(6, 5);
 
     await enterUntrapDirection();
     await rhack('.');
@@ -29858,10 +29863,12 @@ test('#untrap known-box fatal explosion enters death more', async () => {
         'd(6,6)=36',
     ]);
     assert.equal(fatalLog.some(entry => rngCallName(entry) === 'rn2(19)'), false);
-    assert.equal(game._pending_message, 'You set it off!  The large box explodes!  You die...');
+    assert.equal(game._pending_message, 'You set it off!  The large box explodes!  The jackal wakes up.  You die...');
     assert.equal(game.level.objects.includes(box), false);
     assert.equal(box.otrapped, false);
     assert.equal(box.tknown, false);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
     assert.equal(game.u.uhp, 0);
     assert.equal(game._death_cause, 'killed by an exploding large box');
     assert.equal(game.context.move || 0, 0);
@@ -29871,7 +29878,9 @@ test('#untrap known-box explosion charges shop loss after surviving blast', asyn
     setupUntrapDestinationWeb([], { rng: [74, 0, 0, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
     const shkp = makeShopkeeper(881056, 'Izchak', 6, 5, { shoproom: ROOMOFFSET, shoptype: SHOPBASE });
     game.level.rooms = [{ rtype: SHOPBASE, resident: shkp }];
-    game.level.monsters = [shkp];
+    const sleeper = sleepingMonster('jackal', 7, 5);
+    sleeper.mstrategy = STRAT_WAITFORU;
+    game.level.monsters = [shkp, sleeper];
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
     Object.assign(game.u, {
         uhp: 50,
@@ -29895,6 +29904,7 @@ test('#untrap known-box explosion charges shop loss after surviving blast', asyn
     const expectedLoss = 2 * shop.shopItemPrice({ ...box, contents: [], cobj: [] }, 5, 5)
         + shop.shopItemPrice(potion, 5, 5)
         + shop.shopItemPrice(floorScroll, 5, 5);
+    markSquareVisible(7, 5);
 
     await enterUntrapDirection();
     await rhack('.');
@@ -29916,9 +29926,11 @@ test('#untrap known-box explosion charges shop loss after surviving blast', asyn
         'rn2(2)=0',
         'rn2(19)=0',
     ]);
-    assert.equal(game._pending_message, `You set it off!  The large box explodes!  You owe ${expectedLoss} zorkmids for objects destroyed.`);
+    assert.equal(game._pending_message, `You set it off!  The large box explodes!  The jackal wakes up.  You owe ${expectedLoss} zorkmids for objects destroyed.`);
     assert.equal(shkp.debit, expectedLoss);
     assert.equal(shkp.billct, 0);
+    assert.equal(sleeper.msleeping, 0);
+    assert.equal(sleeper.mstrategy, 0);
     assert.equal(game.level.objects.includes(box), false);
     assert.equal(game.level.objects.includes(floorScroll), false);
     assert.equal(game.u.uhp, 44);

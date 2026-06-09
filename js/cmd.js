@@ -890,17 +890,9 @@ function chestTrapExplosionObjectResistsDeletion(obj) {
     return false;
 }
 
-function wakeNearbyMonstersFromChestTrapExplosion() {
+function wakeNearbyMonstersFromChestTrapExplosion(messages = null) {
     const distance = Math.max(0, Math.trunc(Number(game.u?.ulevel || 1))) * 20;
-    for (const sleeper of game.level?.monsters || []) {
-        if (!sleeper || sleeper.dead || (sleeper.mhp != null && sleeper.mhp <= 0)) continue;
-        const dx = (sleeper.mx || 0) - (game.u?.ux || 0);
-        const dy = (sleeper.my || 0) - (game.u?.uy || 0);
-        if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
-        sleeper.msleeping = 0;
-        if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq))
-            sleeper.mstrategy = 0;
-    }
+    wakeNearbyMonstersAt(game.u?.ux || 0, game.u?.uy || 0, distance, messages);
 }
 
 function deleteChestTrapExplosionObjects(box, floorObjects) {
@@ -921,7 +913,7 @@ function applyChestTrapExplosionPayload(box, messages) {
     const floorObjects = chestTrapExplosionObjectsAt(box);
     const shopContext = chestTrapExplosionShopContext(box, floorObjects);
     const boxDestroyed = deleteChestTrapExplosionObjects(box, floorObjects);
-    wakeNearbyMonstersFromChestTrapExplosion();
+    wakeNearbyMonstersFromChestTrapExplosion(messages);
 
     const damage = maybeHalfPhysicalDamage(d(6, 6));
     const damageResult = applyChestTrapFireDamage(messages, damage, `killed by an exploding ${chestTrapObjectName(box)}`);
@@ -18865,7 +18857,7 @@ function wakeNearbyMonstersFromPotionHit(mon) {
         const dy = (sleeper.my || 0) - (mon?.my || 0);
         if (distance !== 0 && dx * dx + dy * dy >= distance) continue;
         sleeper.msleeping = 0;
-        if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
+        if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
     }
 }
 
