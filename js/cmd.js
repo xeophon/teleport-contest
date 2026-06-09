@@ -4493,21 +4493,24 @@ function applyAccessoryHunger(accessorytime) {
 }
 
 function safeTeleportHeroSameLevel(options = {}) {
+    const { returnResult = false, ...teleportOptions } = options;
+    const success = message => returnResult ? { ok: true, message } : message;
+    const failure = () => returnResult ? { ok: false, message: '' } : '';
     for (let tcnt = 0; tcnt < 40; tcnt++) {
         const x = rnd(COLNO - 1);
         const y = rn2(ROWNO);
         if (sameLevelTeleportOk(x, y, false))
-            return teleportHeroSameLevel(x, y, options);
+            return success(teleportHeroSameLevel(x, y, teleportOptions));
     }
 
     let backup = null;
     for (const pos of collectSameLevelTeleportCoords(game.u?.ux || 0, game.u?.uy || 0)) {
         if (sameLevelTeleportOk(pos.x, pos.y, false))
-            return teleportHeroSameLevel(pos.x, pos.y, options);
+            return success(teleportHeroSameLevel(pos.x, pos.y, teleportOptions));
         if (!backup && sameLevelTeleportTrapAt(pos.x, pos.y) && sameLevelTeleportOk(pos.x, pos.y, true))
             backup = pos;
     }
-    return backup ? teleportHeroSameLevel(backup.x, backup.y, options) : '';
+    return backup ? success(teleportHeroSameLevel(backup.x, backup.y, teleportOptions)) : failure();
 }
 
 function startControlledTeleportPrompt() {
@@ -15003,6 +15006,7 @@ function lifeSaveHeroFromFatalLava(messages) {
     if (game.u) game.u.uhp = 0;
     messages.push(`But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
     game._life_saving_lava_safe_teleport = 1;
+    game._life_saving_lava_fatal_entry = 1;
     return true;
 }
 
@@ -15018,6 +15022,56 @@ function lifeSaveHeroFromLavaSinking(messages) {
     game._life_saving_lava_clear_trap = 1;
     if (!heroFloatingOverLavaRescue()) game._life_saving_lava_safe_teleport = 1;
     return true;
+}
+
+function armFatalLavaRescueState(dmg) {
+    game._fatal_lava_rescue_failures = 0;
+    game._fatal_lava_rescue_damage = dmg;
+}
+
+function clearFatalLavaRescueState() {
+    game._fatal_lava_rescue_failures = 0;
+    game._fatal_lava_rescue_damage = 0;
+    game._life_saving_lava_fatal_entry = 0;
+    game._wizard_lava_refusal_fatal_entry = 0;
+}
+
+function grantFatalLavaRescueCountermeasures() {
+    if (!game.u) return;
+    if (!heroHasFireResistance()) {
+        game.u._temporaryFireResistanceBase = !!game.u.fireResistance;
+        game.u._temporaryFireResistanceTimeout = Math.max(game.u._temporaryFireResistanceTimeout || 0, 5);
+        game.u.fireResistance = true;
+    }
+    if (!heroHasWaterWalking()) {
+        game.u._temporaryWaterWalkingBase = !!(game.u.waterWalking || game.u.Wwalking);
+        game.u._temporaryWaterWalkingTimeout = Math.max(game.u._temporaryWaterWalkingTimeout || 0, 5);
+        game.u.waterWalking = true;
+        game.u.Wwalking = true;
+    }
+}
+
+function handleFatalLavaSafeTeleportFailure(messages) {
+    game._fatal_lava_rescue_failures = (game._fatal_lava_rescue_failures || 0) + 1;
+    messages.push("You're still burning.");
+    if (game._fatal_lava_rescue_failures < 2) {
+        messages.push(polyselfLavaBurnMessage());
+        game._death_cause = 'burned by molten lava';
+        game._command_mode = 'lavaDeathMore';
+        game._polyself_lava_death_more = 1;
+        if (game.u) game.u.uhp = 0;
+        return { retry: true, more: true };
+    }
+
+    grantFatalLavaRescueCountermeasures();
+    const burnStuff = lavaSurvivorBurnStuff(messages, game._fatal_lava_rescue_damage || 0);
+    clearFatalLavaRescueState();
+    return {
+        retry: false,
+        lifeSaving: !!burnStuff.lifeSaving,
+        fatal: !!burnStuff.fatal,
+        more: !!burnStuff.more || messages.length > 1,
+    };
 }
 
 function lavaSurvivorBurnStuff(messages, dmg) {
@@ -15079,6 +15133,7 @@ function heroLavaEntryEffect(targetMoveTyp) {
         });
         messages.push(polyselfLavaBurnMessage());
         game._death_cause = 'burned by molten lava';
+        armFatalLavaRescueState(dmg);
         if (lifeSaveHeroFromFatalLava(messages))
             return { messages, fatal: false, lifeSaving: true, more: true };
         game._command_mode = 'lavaDeathMore';
@@ -59649,6 +59704,8 @@ export async function rhack(_cmd) {
             game._life_saving_post_continue_hp = null;
             game._life_saving_lava_safe_teleport = 0;
             game._life_saving_lava_clear_trap = 0;
+            const lavaFatalEntry = !!game._life_saving_lava_fatal_entry;
+            game._life_saving_lava_fatal_entry = 0;
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;
@@ -59701,10 +59758,26 @@ export async function rhack(_cmd) {
                 game.u.utraptype = null;
             }
             if (lavaSafeTeleport) {
-                const teleportMessage = safeTeleportHeroSameLevel();
-                if (teleportMessage)
+                const teleport = safeTeleportHeroSameLevel({ returnResult: true });
+                if (teleport.ok) {
+                    clearFatalLavaRescueState();
+                    const teleportMessage = teleport.message;
                     game._pending_message = [game._pending_message || lifeSavingMessage, teleportMessage]
                         .filter(Boolean).join('  ');
+                } else if (lavaFatalEntry) {
+                    const messages = [game._pending_message || lifeSavingMessage];
+                    const failedRescue = handleFatalLavaSafeTeleportFailure(messages);
+                    game._pending_message = messages.join('  ');
+                    game._message_more = failedRescue.retry || failedRescue.more ? 1 : 0;
+                    if (failedRescue.retry) {
+                        game._keep_pending_message = 1;
+                        return;
+                    }
+                    if (failedRescue.lifeSaving || failedRescue.fatal) {
+                        applyLifeSavingOrFatalCommandMode(failedRescue);
+                        return;
+                    }
+                }
             }
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._suppress_monster_attack_messages = 1;
@@ -63140,6 +63213,7 @@ export async function rhack(_cmd) {
                 game._death_moves ||= game._death_current_move ? deathTurn : Math.max(1, deathTurn - 1);
                 game._death_current_move = 0;
                 game._wizard_lava_refusal_safe_teleport = 1;
+                game._wizard_lava_refusal_fatal_entry = 1;
                 await setMessage('Die? [yn] (n)');
                 game._command_mode = 'wizardDieConfirm';
                 return;
@@ -63498,8 +63572,10 @@ export async function rhack(_cmd) {
         if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             const lavaRefusalClearTrap = !!game._wizard_lava_refusal_clear_trap;
             const lavaRefusalSafeTeleport = !!game._wizard_lava_refusal_safe_teleport;
+            const lavaRefusalFatalEntry = !!game._wizard_lava_refusal_fatal_entry;
             game._wizard_lava_refusal_clear_trap = 0;
             game._wizard_lava_refusal_safe_teleport = 0;
+            game._wizard_lava_refusal_fatal_entry = 0;
             restoreHeroHpAfterLifeSaving();
             clearLifeSavedDeathState();
             if (lavaRefusalClearTrap || game.u?.utraptype === TT_LAVA) {
@@ -63523,9 +63599,21 @@ export async function rhack(_cmd) {
             }
             const survivalMessages = ["OK, so you don't die."];
             if (lavaRefusalSafeTeleport) {
-                const teleportMessage = safeTeleportHeroSameLevel();
-                if (teleportMessage) survivalMessages.push(teleportMessage);
+                const teleport = safeTeleportHeroSameLevel({ returnResult: true });
+                if (teleport.ok) {
+                    clearFatalLavaRescueState();
+                    if (teleport.message) survivalMessages.push(teleport.message);
+                } else if (lavaRefusalFatalEntry) {
+                    const failedRescue = handleFatalLavaSafeTeleportFailure(survivalMessages);
+                    await setMessage(survivalMessages.join('  '), failedRescue.retry || failedRescue.more);
+                    if (failedRescue.lifeSaving || failedRescue.fatal)
+                        applyLifeSavingOrFatalCommandMode(failedRescue);
+                    else if (!failedRescue.retry)
+                        game._command_mode = null;
+                    return;
+                }
             }
+            game._command_mode = null;
             await setMessage(survivalMessages.join('  '));
             if (game._deferred_raven_blind_after_more) {
                 const ravenAttack = game._deferred_raven_blind_after_more;

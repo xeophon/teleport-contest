@@ -39,6 +39,5 @@ Result: focused terrain-created lava set passed 4 matching tests; broader land-m
 ## Remaining Gaps
 
 - Wizard/explore-mode lava death refusal is still not implemented.
-- Failed `safe_teleds()` countermeasures after repeated lava rescue are not modeled.
 - Survivor `burn_stuff` inventory fire for water-walking and fire-resistant lava outcomes remains incomplete.
 - Earthquake-drum pit fills use the same liquid helper but still need separate end-to-end life-saving coverage before claiming full non-land-mine terrain-created lava parity.

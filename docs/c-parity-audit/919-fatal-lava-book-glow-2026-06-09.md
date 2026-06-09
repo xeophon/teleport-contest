@@ -37,6 +37,5 @@ Result: focused fatal-lava Book set passed; broader lava-name slice passed; `git
 
 ## Remaining Gaps
 
-- Failed `safe_teleds()` countermeasures after repeated lava rescue are not modeled.
-- Direct fatal lava rescue still uses the shared same-level teleport helper rather than modeling C's suppressed landing `spoteffects(TRUE)` followed by manual `spoteffects(FALSE)` in detail.
+- Direct fatal lava rescue still lacks C's suppressed landing `spoteffects(TRUE)` followed by manual `spoteffects(FALSE)` detail.
 - Potion vapor effects still happen before the destruction message in the JS generic helper.

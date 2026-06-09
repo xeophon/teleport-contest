@@ -39,6 +39,5 @@ Result: focused lava countdown/entry set passed 7 matching tests; full `test/sho
 ## Remaining Gaps
 
 - Wizard/explore-mode lava death refusal is still not implemented.
-- Failed `safe_teleds()` countermeasures after repeated lava rescue are not modeled.
 - Terrain-created lava, such as land-mine liquid fill, still flattens lava-entry fallout through its own path and needs separate life-saving propagation.
 - Survivor `burn_stuff` inventory fire for water-walking and fire-resistant lava outcomes remains incomplete.

@@ -39,8 +39,7 @@ Result: focused fatal-lava inventory set passed; broader lava-name slice passed;
 
 ## Remaining Gaps
 
-- Failed `safe_teleds()` countermeasures after repeated lava rescue are not modeled.
-- Direct fatal lava rescue still uses the shared same-level teleport helper rather than modeling C's suppressed landing `spoteffects(TRUE)` followed by manual `spoteffects(FALSE)` in detail.
+- Direct fatal lava rescue still lacks C's suppressed landing `spoteffects(TRUE)` followed by manual `spoteffects(FALSE)` detail.
 - Generic `fireDamageInventory()` still lacks C's fire inventory resistance chance.
 - Generic `fireDamageInventory()` still uses full selected `in_use` stack quantity instead of subtracting one first.
 - Potion vapor effects still happen before the destruction message in the JS generic helper.

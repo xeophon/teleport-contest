@@ -44210,6 +44210,65 @@ test('explore m-prefix fatal lava prompts and decline teleports to safety', asyn
     assert.equal(game._survived_death_count, 1);
 });
 
+test('explore m-prefix fatal lava failed safe teleports twice grants temporary countermeasures', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues(Array(220).fill(0));
+    game.flags.explore = true;
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+        waterWalking: false,
+        Wwalking: false,
+    });
+    game.inventory = [];
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+
+    game.level.at = () => ({ roomno: 0, typ: STONE, lit: true });
+    game.level.traps = [];
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.match(game._pending_message || '', /OK, so you don't die\./);
+    assert.match(game._pending_message || '', /You're still burning\./);
+    assert.match(game._pending_message || '', /You burn to a crisp\.\.\./);
+    assert.doesNotMatch(game._pending_message || '', /materialize/);
+    assert.equal(game._fatal_lava_rescue_failures, 1);
+    assert.equal(game.u.uhp, 0);
+
+    await rhack(' ');
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.match(game._pending_message || '', /OK, so you don't die\./);
+    assert.match(game._pending_message || '', /You're still burning\./);
+    assert.doesNotMatch(game._pending_message || '', /materialize/);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game.u.fireResistance, true);
+    assert.equal(game.u.waterWalking, true);
+    assert.equal(game.u.Wwalking, true);
+    assert.equal(game.u._temporaryFireResistanceTimeout, 5);
+    assert.equal(game.u._temporaryWaterWalkingTimeout, 5);
+    assert.equal(game._fatal_lava_rescue_failures || 0, 0);
+    assert.deepEqual([game.u.ux, game.u.uy], [6, 5]);
+});
+
 test('m-prefix into lava sinks fire-resistant hero after guarded water walking boot burn', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);

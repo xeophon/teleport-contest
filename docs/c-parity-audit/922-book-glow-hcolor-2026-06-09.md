@@ -34,4 +34,4 @@ Result: focused Book hcolor tests passed; broader fire/lava/Book pattern passed;
 
 ## Remaining Gaps
 
-- Direct fatal lava rescue still lacks C's repeated `safe_teleds()` failure countermeasures and manual landing `spoteffects(FALSE)` detail.
+- Direct fatal lava rescue still lacks C's manual landing `spoteffects(FALSE)` detail.

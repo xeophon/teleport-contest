@@ -48,7 +48,6 @@ Result: focused drum lava set passed 2 matching tests; broader instrument/lava s
 ## Remaining Gaps
 
 - Wizard/explore-mode lava death refusal is still not implemented.
-- Failed `safe_teleds()` countermeasures after repeated lava rescue are not modeled.
 - Generic `fireDamageInventory()` still lacks C's fire inventory resistance chance.
 - Generic `fireDamageInventory()` still uses full selected `in_use` stack quantity instead of subtracting one first.
 - Potion vapor effects still happen before the destruction message in the JS generic helper.

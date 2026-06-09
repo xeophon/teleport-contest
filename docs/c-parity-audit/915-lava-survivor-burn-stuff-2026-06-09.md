@@ -51,7 +51,6 @@ Result: focused lava survivor burn set passed 6 matching tests; full `test/shop-
 ## Remaining Gaps
 
 - Wizard/explore-mode lava death refusal is still not implemented.
-- Failed `safe_teleds()` countermeasures after repeated lava rescue are not modeled.
 - Earthquake-drum terrain-created lava still needs end-to-end life-saving coverage.
 - Generic `fireDamageInventory()` still lacks C's fire inventory resistance chance.
 - Generic `fireDamageInventory()` still uses full selected `in_use` stack quantity instead of subtracting one first.

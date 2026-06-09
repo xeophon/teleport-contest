@@ -42,4 +42,4 @@ Result: focused fatal-vapor/life-saving/unpaid-potion tests passed; broader fire
 
 ## Remaining Gaps
 
-- Direct fatal lava rescue still lacks C's repeated `safe_teleds()` failure countermeasures and manual landing `spoteffects(FALSE)` detail.
+- Direct fatal lava rescue still lacks C's manual landing `spoteffects(FALSE)` detail.
