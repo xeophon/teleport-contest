@@ -30164,6 +30164,48 @@ test('already lava-trapped hero dies when sinking countdown expires', async () =
     assert.match(game._pending_message || '', /Do you want your possessions identified\?/);
 });
 
+test('explore lava-trapped countdown death decline clears trap and teleports', async () => {
+    installStableNonSokobanTrapState();
+    vision_reset();
+    game.flags.explore = true;
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 20,
+        uhpmax: 20,
+        fireResistance: true,
+        utrap: 1 << 8,
+        utraptype: TT_LAVA,
+        umoved: false,
+    });
+    game.inventory = [];
+    game.level.at = (x, y) => ({ roomno: ROOMOFFSET, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    installCoreRngValues([19, 7]);
+
+    await spendOneTrapTurn();
+
+    assert.match(game._pending_message || '', /You sink below the surface and die\./);
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game._death_cause, 'dissolved in molten lava');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._pending_message, "OK, so you don't die.  You materialize in a different location!");
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game.u.utrap || 0, 0);
+    assert.equal(game.u.utraptype || null, null);
+    assert.notDeepEqual([game.u.ux, game.u.uy], [5, 5]);
+    assert.equal(game.level.at(game.u.ux, game.u.uy).typ, ROOM);
+    assert.equal(game._survived_death_count, 1);
+});
+
 test('already lava-trapped countdown death uses life saving and safe teleport', async () => {
     installStableNonSokobanTrapState();
     vision_reset();
@@ -40299,8 +40341,17 @@ test('successful centaur polyself losing water walking boots over lava burns bef
 
     assert.equal(game.u.uhp, 0);
     assert.equal(game._polyself_lava_death_more || 0, 0);
-    assert.equal(game._command_mode, 'deathAttributesPrompt');
-    assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.match(game._pending_message || '', /OK, so you don't die\./);
+    assert.match(game._pending_message || '', /You materialize in a different location!/);
+    assert.notDeepEqual([game.u.ux, game.u.uy], [5, 5]);
 });
 
 test('successful centaur polyself losing water walking boots over lava with fire resistance sinks', async () => {
@@ -43593,6 +43644,32 @@ test('m-prefix fatal lava burns initial non-survivor organic and potion inventor
     assert.equal(game._command_mode, 'lavaDeathMore');
 });
 
+test('explore m-prefix fatal lava reports survivor inventory burn before prompt', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0]);
+    game.flags.explore = true;
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const rations = foodRationStack(330026, 2, 'f');
+    const potion = oilPotion(330027, 'o');
+    game.inventory = [rations, potion];
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(rations), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(pending, /You fall into the molten lava!/);
+    assert.match(pending, /Some items in your inventory have been destroyed\./);
+    assert.match(pending, /You burn to a crisp\.\.\./);
+    assert.ok(pending.indexOf('Some items in your inventory') < pending.indexOf('You burn to a crisp...'));
+    assert.equal(game._command_mode, 'lavaDeathMore');
+});
+
 test('m-prefix lava does not whole-burn inventory when initial water walking would survive', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0]);
@@ -43692,6 +43769,43 @@ test('m-prefix fatal lava consumes life saving and teleports to safety', async (
     assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!  You materialize in a different location!');
     assert.equal(game.u.ux, 20);
     assert.equal(game.u.uy, 7);
+});
+
+test('explore m-prefix fatal lava prompts and decline teleports to safety', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 19, 7]);
+    game.flags.explore = true;
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+
+    await rhack(' ');
+
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    await rhack('n');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._pending_message, "OK, so you don't die.  You materialize in a different location!");
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._polyself_lava_death_more || 0, 0);
+    assert.deepEqual([game.u.ux, game.u.uy], [20, 7]);
+    assert.equal(game.level.at(game.u.ux, game.u.uy).typ, ROOM);
+    assert.equal(game._wizard_lava_refusal_safe_teleport || 0, 0);
+    assert.equal(game._survived_death_count, 1);
 });
 
 test('m-prefix into lava sinks fire-resistant hero after guarded water walking boot burn', async () => {

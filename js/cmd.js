@@ -15008,7 +15008,8 @@ function heroLavaEntryEffect(targetMoveTyp) {
             }
         }
         if (!heroHasWaterWalking()) messages.push(polyselfLavaFallMessage(targetMoveTyp));
-        const willSurviveFatalLava = heroHasWornLifeSavingAmulet();
+        const willSurviveFatalLava = heroHasWornLifeSavingAmulet()
+            || !!(game.flags?.debug || game.flags?.explore);
         destroyLavaFatalInventorySelection(fatalInventoryBurn, {
             messages,
             surviving: willSurviveFatalLava,
@@ -15067,6 +15068,11 @@ export function processHeroLavaSinkingTurn() {
                 lifeSaving: true,
                 more: true,
             };
+        if (game.flags?.debug || game.flags?.explore) {
+            game._wizard_lava_refusal_clear_trap = 1;
+            if (!heroFloatingOverLavaRescue())
+                game._wizard_lava_refusal_safe_teleport = 1;
+        }
         return {
             message: messages.join('  '),
             fatal: true,
@@ -63061,6 +63067,20 @@ export async function rhack(_cmd) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game._polyself_lava_death_more = 0;
             game.u.uhp = 0;
+            if (game.flags?.debug || game.flags?.explore) {
+                game._pending_time_passed = 0;
+                game.context.move = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                game._death_status_hp_before_zero = null;
+                const deathTurn = game.moves || 1;
+                game._death_moves ||= game._death_current_move ? deathTurn : Math.max(1, deathTurn - 1);
+                game._death_current_move = 0;
+                game._wizard_lava_refusal_safe_teleport = 1;
+                await setMessage('Die? [yn] (n)');
+                game._command_mode = 'wizardDieConfirm';
+                return;
+            }
             await setMessage('Do you want to see your attributes? [ynq] (n)');
             game._command_mode = 'deathAttributesPrompt';
             return;
@@ -63398,6 +63418,8 @@ export async function rhack(_cmd) {
 
     if (game._command_mode === 'wizardDieConfirm') {
         if (ch === 'y') {
+            game._wizard_lava_refusal_clear_trap = 0;
+            game._wizard_lava_refusal_safe_teleport = 0;
             game._death_moves = game.moves || 1;
             game._bones_ok = canMakeBones();
             if (game._bones_ok) {
@@ -63411,8 +63433,16 @@ export async function rhack(_cmd) {
             return;
         }
         if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            const lavaRefusalClearTrap = !!game._wizard_lava_refusal_clear_trap;
+            const lavaRefusalSafeTeleport = !!game._wizard_lava_refusal_safe_teleport;
+            game._wizard_lava_refusal_clear_trap = 0;
+            game._wizard_lava_refusal_safe_teleport = 0;
             restoreHeroHpAfterLifeSaving();
             clearLifeSavedDeathState();
+            if (lavaRefusalClearTrap || game.u?.utraptype === TT_LAVA) {
+                game.u.utrap = 0;
+                game.u.utraptype = null;
+            }
             game._death_no_bones = 0;
             game._death_bones_prepared = 0;
             game._death_corpse_created = 0;
@@ -63428,7 +63458,12 @@ export async function rhack(_cmd) {
                 await beginEscapedGame(["OK, so you don't die.", escapeMessage]);
                 return;
             }
-            await setMessage("OK, so you don't die.");
+            const survivalMessages = ["OK, so you don't die."];
+            if (lavaRefusalSafeTeleport) {
+                const teleportMessage = safeTeleportHeroSameLevel();
+                if (teleportMessage) survivalMessages.push(teleportMessage);
+            }
+            await setMessage(survivalMessages.join('  '));
             if (game._deferred_raven_blind_after_more) {
                 const ravenAttack = game._deferred_raven_blind_after_more;
                 game._deferred_raven_blind_after_more = null;
