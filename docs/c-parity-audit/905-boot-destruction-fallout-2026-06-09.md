@@ -41,6 +41,6 @@ Date: 2026-06-09
 ## Remaining gaps
 
 - `lava_effects()` still needs its guarded worn-boot pre-pass: burst-into-flame message, `Boots_off()` while recursive lava fallout is suppressed, boot useup, then the lava fall/sink handling.
-- Over-enchant armor evaporation still needs a separate pass through the worn-armor destruction helper for boot fallout and gauntlets-of-power cleanup.
+- Over-enchant armor evaporation was addressed in `docs/c-parity-audit/906-overenchant-armor-evaporation-fallout-2026-06-09.md`.
 - Full `lava_effects()` parity still has unmodeled inventory destruction, lifesaving/explore rescue, fireproof item, and recursive in-use object details.
 - Full `remove_worn_item()` parity for theft/seduction/non-scroll forced removal remains broader than this destruction-only slice.

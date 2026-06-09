@@ -77,6 +77,7 @@ const WEAPON_CLASS = 1;
 const SCROLL_CLASS = 8;
 const KEY_BACKSPACE = 8;
 const KEY_DELETE = 127;
+const GAUNTLETS_OF_POWER = 10112;
 const WATER_WALKING_BOOTS = 10132;
 const LEVITATION_BOOTS = 10137;
 const QUEST_PAGER_LOAD_RNG = ['rn2(3)', 'rn2(2)'];
@@ -13487,6 +13488,157 @@ test('cursed destroy armor destroying levitation boots over lava sinks after flo
     assert.ok((game.u.utrap || 0) > 0);
     assert.equal(game.level.objects.length, 0);
     assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
+});
+
+test('uncursed enchant armor evaporating unpaid worn armor preserves a used-up bill', async () => {
+    const { shkp } = installCommandShopState();
+    installCoreRngValues([0, 1]);
+    game.u.uac = 4;
+    const scroll = scrollOfEnchantArmor(309053, 's', false);
+    const armor = wornArmor(309054, 'leather armor', 'a', 4);
+    game.inventory = [scroll, armor];
+    shop.addObjectToShopBill(shkp, armor, 100);
+
+    await rhack('r');
+    await rhack('s');
+
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(armor), false);
+    assert.equal(game.u.uac, 10);
+    assert.equal(armor.unpaid, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, armor)?.useup, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.bill[0].useup, true);
+    assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
+    assert.equal((game._usedUpShopBills || []).length, 1);
+    assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
+    assert.match(game._pending_message, /Your leather armor violently glows silver for a while, then evaporates\./);
+});
+
+test('uncursed enchant armor evaporating gauntlets of power restores strength before useup', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 1]);
+    Object.assign(game.u, {
+        uac: 5,
+        acurr: { a: [125, 10, 10, 10, 10, 10] },
+        amax: { a: [18, 10, 10, 10, 10, 10] },
+        _baseStrengthBeforeGauntlets: 18,
+    });
+    const scroll = scrollOfEnchantArmor(309047, 's', false);
+    const gloves = wornArmor(309048, 'gauntlets of power', 'g', 4, {
+        otyp: GAUNTLETS_OF_POWER,
+        known: false,
+    });
+    game.inventory = [scroll, gloves];
+
+    await rhack('r');
+    await rhack('s');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.context.move, 1);
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(gloves), false);
+    assert.equal(game.u.uac, 10);
+    assert.equal(game.u.acurr.a[A_STR], 18);
+    assert.equal(game.u._baseStrengthBeforeGauntlets, undefined);
+    assert.match(pending, /violently glows? silver for a while, then evaporates?\./);
+    assert.ok((game._discoveries || []).some(entry =>
+        entry.section === 'Armor'
+        && entry.name === 'pair of gauntlets of power'));
+});
+
+test('uncursed enchant armor evaporating water walking boots over pool triggers water fallout before useup', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 5,
+    });
+    const cells = new Map();
+    const key = (x, y) => `${x},${y}`;
+    game.level.at = (x, y) => cells.get(key(x, y)) || { roomno: 0, typ: ROOM };
+    cells.set(key(5, 5), { roomno: 0, typ: POOL });
+    for (const [dx, dy] of [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 1], [0, 1], [-1, 1]]) {
+        cells.set(key(5 + dx, 5 + dy), { roomno: 0, typ: POOL });
+    }
+    cells.set(key(6, 5), { roomno: 0, typ: ROOM });
+    vision_reset();
+    const scroll = scrollOfEnchantArmor(309049, 's', false);
+    const boots = wornArmor(309050, 'water walking boots', 'b', 4, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [scroll, boots];
+
+    await rhack('r');
+    await rhack('s');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.equal(game.u.uac, 10);
+    assert.match(pending, /violently glow silver for a while, then evaporate\./);
+    assert.match(pending, /You fall into the pool of water!/);
+    assert.match(pending, /You sink like a rock\./);
+    assert.ok(pending.indexOf('evaporate') < pending.indexOf('You fall into the pool of water!'));
+    assert.equal(game._message_more, 1);
+    assert.deepEqual(game._relocate_after_more, { fromX: 5, fromY: 5, x: 6, y: 5 });
+    assert.equal(game.level.objects.length, 0);
+
+    await rhack(' ');
+
+    assert.equal(game.u.ux, 6);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game._relocate_after_more, null);
+    assert.match(game._pending_message || '', /Pheew!  That was close\./);
+});
+
+test('uncursed enchant armor evaporating water walking boots over lava preserves fatal lava more', async () => {
+    installNonShopFloorState();
+    installCoreRngValues([0, 1, 1, 1, 1, 1, 1, 1]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        uhp: 40,
+        uhpmax: 40,
+        uac: 5,
+    });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 5 && y === 5 ? LAVAPOOL : ROOM });
+    vision_reset();
+    const scroll = scrollOfEnchantArmor(309051, 's', false);
+    const boots = wornArmor(309052, 'water walking boots', 'b', 4, {
+        otyp: WATER_WALKING_BOOTS,
+        known: false,
+    });
+    game.inventory = [scroll, boots];
+    enableRngLog({ reset: true });
+
+    await rhack('r');
+    await rhack('s');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(scroll), false);
+    assert.equal(game.inventory.includes(boots), false);
+    assert.equal(boots.known, true);
+    assert.match(pending, /violently glow silver for a while, then evaporate\./);
+    assert.match(pending, /You fall into the molten lava!  You burn to a crisp\.\.\./);
+    assert.equal(game._message_more, 1);
+    assert.equal(game._command_mode, 'lavaDeathMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.level.objects.length, 0);
+    assert.ok(getRngLog().some(entry => entry.startsWith('d(6,6)')));
+
+    await rhack(' ');
+
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._polyself_lava_death_more || 0, 0);
+    assert.equal(game._command_mode, 'deathAttributesPrompt');
+    assert.match(game._pending_message || '', /Do you want to see your attributes\?/);
 });
 
 test('confused uncursed enchant armor adds proofing without used-up billing', async () => {

@@ -41971,11 +41971,14 @@ function destroyWornArmorItem(armor, messages = null) {
     }
     if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
         syncHeroSpeedState();
-    updateGauntletsOfPowerStrength(kind, false);
+    if (armorSlot(armor) === 'gloves')
+        addPolyselfGlovesOffSideEffects(armor);
+    else
+        updateGauntletsOfPowerStrength(kind, false);
     if (armorSlot(armor) === 'boots' && Array.isArray(messages))
         addBootsOffSideEffects(armor, messages);
     if ((game.inventory || []).includes(armor))
-        removeInventoryItem(armor, armor.quan || 1);
+        useUpInventoryItem(armor, armor.quan || 1);
     updateReflectionFromInventory();
 }
 
@@ -42362,12 +42365,10 @@ function enchantArmorScrollEffect(item) {
     if (s > (specialArmor ? 5 : 3) && rn2(s)) {
         const subject = armorSubject(armor);
         const color = enchantArmorColorWord(armor, item.cursed, game.u?.blind);
-        const oldAc = wornArmorAcValue(armor);
-        if (game.u) game.u.uac = (game.u.uac ?? 10) + oldAc;
-        removeInventoryItem(armor);
-        updateReflectionFromInventory();
+        const messages = [`${subject} violently ${armorVerb(armor, game.u?.blind ? 'vibrates' : 'glows', game.u?.blind ? 'vibrate' : 'glow')}${color} for a while, then ${armorVerb(armor, 'evaporates', 'evaporate')}.`];
+        destroyWornArmorItem(armor, messages);
         return {
-            messages: [`${subject} violently ${armorVerb(armor, game.u?.blind ? 'vibrates' : 'glows', game.u?.blind ? 'vibrate' : 'glow')}${color} for a while, then ${armorVerb(armor, 'evaporates', 'evaporate')}.`],
+            messages,
             known: !!armor.known,
         };
     }
@@ -65550,8 +65551,9 @@ export async function rhack(_cmd) {
             if (result.known) learnScrollByName('enchant armor', item, 0);
             const messages = scrollReadMessages(confusedReading);
             messages.push(...result.messages);
+            const lavaDeathMore = game._command_mode === 'lavaDeathMore';
             await setMessage(messages.join('  '), true);
-            game._command_mode = null;
+            game._command_mode = lavaDeathMore ? 'lavaDeathMore' : null;
             game.context.move = 1;
             return;
         }
