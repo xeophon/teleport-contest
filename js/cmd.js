@@ -11925,6 +11925,11 @@ function fireInventoryDestroyVerb(cls, item, plural) {
     return plural ? 'catch fire and burn' : 'catches fire and burns';
 }
 
+function fireInventoryItemProtected() {
+    const chance = passiveObjectInventoryResistanceChance('fire');
+    return chance ? rn2(100) < chance : false;
+}
+
 function coldDestroyablePotion(item) {
     return isPotionObject(item)
         && !isPotionOfOil(item)
@@ -12878,13 +12883,14 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
 
     for (const item of selected.filter(Boolean)) {
         const cls = fireDestroyableInventoryClass(item);
+        if (fireInventoryItemProtected()) continue;
         if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
             if (!game.u?.blind)
                 addFireInventoryMessage(messages, events, LAVA_BOOK_OF_THE_DEAD_GLOW_MESSAGE,
                     { damage: 0 }, armor, joinState);
             continue;
         }
-        const quan = item.quan || 1;
+        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
         const itemDamage = fireInventoryItemDamage(item, cls);
         let destroyed = 0;
         for (let i = 0; i < quan; i++)
@@ -34604,7 +34610,9 @@ function fireDestroyableInventoryClass(item) {
 
 function fireInventoryItemImmune(item, cls) {
     const name = String(item?.actualKind || item?.kind || item?.line || '').toLowerCase();
-    if (item?.artifact || item?.oartifact || (item?.in_use && (item?.quan || 1) === 1)) return true;
+    if (item?.in_use && (item?.quan || 1) === 1) return true;
+    if (cls === 'spellbook' && isBookOfTheDeadItem(item)) return false;
+    if (item?.artifact || item?.oartifact) return true;
     if (cls === 'scroll' && (item?.scrollIndex === 16 || /\bscroll of fire\b/.test(name))) return true;
     if (cls === 'spellbook' && /\bfireball\b/.test(name)) return true;
     return false;
@@ -34636,7 +34644,7 @@ export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
             if (visible) messages.push('The Book of the Dead glows a strange dark red, but remains intact.');
             continue;
         }
-        const quan = item.quan || 1;
+        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
         const itemDamage = cls === 'potion' ? rnd(6)
             : cls === 'slime' ? Math.trunc(((item.owt || 20) + 19) / 20)
                 : resistsFire ? 0 : 1;

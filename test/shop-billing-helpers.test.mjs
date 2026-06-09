@@ -15707,6 +15707,83 @@ test('inventory fire destroying an unpaid carried potion applies vapor before us
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(potion.id)), true);
 });
 
+test('active fire resistance gear can protect carried inventory from fire destruction', () => {
+    installShopState();
+    installCoreRngValues([0, 98]);
+    const scroll = scrollOfCharging(309831, 's');
+    const ring = metalRing(309832, 'fire resistance', 17, 'r', {
+        worn: true,
+        line: 'r - an iron ring (on left hand)',
+    });
+    game.inventory = [scroll, ring];
+    enableRngLog({ reset: true });
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(scroll), true);
+    assert.deepEqual(result.messages, []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), [98]);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+});
+
+test('inventory fire subtracts one in-use stack item before destruction rolls', () => {
+    installShopState();
+    installCoreRngValues([0, 0, 0]);
+    const scroll = { ...scrollOfCharging(309833, 's'), quan: 3, in_use: true, line: 's - 3 scrolls of charging' };
+    game.inventory = [scroll];
+    enableRngLog({ reset: true });
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(scroll), true);
+    assert.equal(scroll.quan, 1);
+    assert.deepEqual(result.messages, ['Both of your scrolls of charging catch fire and burn!']);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), [0, 0]);
+});
+
+test('inventory fire still uses Book of the Dead branch when locally artifact tagged', () => {
+    installShopState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, { blind: false });
+    const book = bookOfTheDead(309834, 'B');
+    book.artifact = 'Book of the Dead';
+    game.inventory = [book];
+    enableRngLog({ reset: true });
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(book), true);
+    assert.deepEqual(result.messages, ['The Book of the Dead glows a strange dark red, but remains intact.']);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+});
+
+test('inventory fire skips single in-use Book of the Dead before glow branch', () => {
+    installShopState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, { blind: false });
+    const book = bookOfTheDead(309835, 'B');
+    book.in_use = true;
+    book.artifact = 'Book of the Dead';
+    game.inventory = [book];
+    enableRngLog({ reset: true });
+
+    const result = shop.fireDamageInventoryForTest(20, true, false, {
+        preburnedArmor: { bodyHit: true, message: '' },
+    });
+
+    assert.equal(game.inventory.includes(book), true);
+    assert.deepEqual(result.messages, []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(100)'), []);
+    assert.deepEqual(rngValuesForCall(getRngLog(), 'rn2(3)'), []);
+});
+
 test('wet worn towel blocks inventory fire potion vapor effects', () => {
     installShopState();
     initRng(1);
