@@ -12742,21 +12742,7 @@ function wakeNearbyFromForceLock(messages) {
     const ux = game.u?.ux || 0;
     const uy = game.u?.uy || 0;
     const distance = Math.max(0, Math.trunc(Number(game.u?.ulevel || 1)) * 20);
-    for (const mon of game.level?.monsters || []) {
-        if (!mon || mon.dead || (mon.mhp || 1) <= 0) continue;
-        const dx = (mon.mx || 0) - ux;
-        const dy = (mon.my || 0) - uy;
-        if (dx * dx + dy * dy >= distance) continue;
-        if (mon.msleeping && monsterCanBeSeenForPotionEffect(mon))
-            messages.push(`${potionHitMonsterName(mon)} wakes up.`);
-        mon.msleeping = 0;
-        if (!(mon.unique || mon.data?.unique)) {
-            if (typeof mon.mstrategy === 'number') mon.mstrategy &= ~STRAT_WAITMASK;
-            else if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
-            mon.waiting = false;
-        }
-    }
-    disturbBuriedZombieCorpseTimersAt(ux, uy);
+    wakeNearbyMonstersAt(ux, uy, distance, messages);
 }
 
 export function processForceLockOccupationTick(force) {
@@ -19276,7 +19262,10 @@ function wakeNearbyMonstersAt(x, y, distance, messages = null) {
         if (messages && sleeper.msleeping && directMeleeMonsterCanBeSeen(sleeper))
             messages.push(directMeleeWakeMessage(sleeper, false));
         sleeper.msleeping = 0;
-        if (!(sleeper.data?.unique || sleeper.data?.uniq)) sleeper.mstrategy = 0;
+        if (!(sleeper.unique || sleeper.data?.unique || sleeper.data?.uniq)) {
+            sleeper.mstrategy = 0;
+            sleeper.waiting = false;
+        }
     }
     disturbBuriedZombieCorpseTimersAt(x, y);
 }
