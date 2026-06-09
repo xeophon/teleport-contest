@@ -44210,6 +44210,52 @@ test('explore m-prefix fatal lava prompts and decline teleports to safety', asyn
     assert.equal(game._survived_death_count, 1);
 });
 
+test('explore m-prefix fatal lava rescue triggers landing trap without pickup', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues(Array(260).fill(0));
+    game.flags.explore = true;
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    game._autopickup = true;
+    game._autopickup_types = 'all';
+
+    await rhack('m');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lavaDeathMore');
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode, 'wizardDieConfirm');
+    assert.equal(game._pending_message, 'Die? [yn] (n)');
+
+    const landingX = 8;
+    const landingY = 5;
+    const bearTrap = { ttyp: BEAR_TRAP, tx: landingX, ty: landingY, tseen: false, madeby_u: false };
+    const floorScroll = scrollOfCharging(330024, 's');
+    Object.assign(floorScroll, { ox: landingX, oy: landingY });
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === landingX && y === landingY ? ROOM : STONE, lit: true });
+    game.level.traps = [bearTrap];
+    game.level.objects = [floorScroll];
+    game.level.monsters = [];
+
+    await rhack('n');
+
+    const pending = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(pending, /OK, so you don't die\./);
+    assert.match(pending, /You materialize in a different location!/);
+    assert.match(pending, /A bear trap closes on your foot!/);
+    assert.deepEqual([game.u.ux, game.u.uy], [landingX, landingY]);
+    assert.equal(bearTrap.tseen, true);
+    assert.equal(game.u.utraptype, 'beartrap');
+    assert.equal(game.level.objects.includes(floorScroll), true);
+    assert.equal(game.inventory.includes(floorScroll), false);
+});
+
 test('explore m-prefix fatal lava failed safe teleports twice grants temporary countermeasures', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues(Array(220).fill(0));

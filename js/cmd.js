@@ -23334,8 +23334,12 @@ function heroDropBallTrapState(type) {
     return '';
 }
 
-function heroDropBallTrapAt(x, y) {
+function heroTrapAt(x, y) {
     return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y) || null;
+}
+
+function heroDropBallTrapAt(x, y) {
+    return heroTrapAt(x, y);
 }
 
 function heroDropBallMonsterAt(x, y) {
@@ -23366,8 +23370,8 @@ function heroDropBallPoolRelocationEffect(x, y, messages) {
     return { more: true, trapResult: null };
 }
 
-async function heroDropBallTrapRelocationEffect(x, y, messages) {
-    const trap = heroDropBallTrapAt(x, y);
+async function heroLandingTrapEffectAt(x, y, messages) {
+    const trap = heroTrapAt(x, y);
     if (!trap) return { more: false, trapResult: null };
 
     let result = null;
@@ -23399,6 +23403,10 @@ async function heroDropBallTrapRelocationEffect(x, y, messages) {
         more: !!result.more,
         trapResult: result.fatal || result.lifeSaving ? result : null,
     };
+}
+
+async function heroDropBallTrapRelocationEffect(x, y, messages) {
+    return heroLandingTrapEffectAt(x, y, messages);
 }
 
 async function heroDropBallPostRelocationEffects(x, y, messages) {
@@ -59761,9 +59769,11 @@ export async function rhack(_cmd) {
                 const teleport = safeTeleportHeroSameLevel({ returnResult: true });
                 if (teleport.ok) {
                     clearFatalLavaRescueState();
-                    const teleportMessage = teleport.message;
-                    game._pending_message = [game._pending_message || lifeSavingMessage, teleportMessage]
-                        .filter(Boolean).join('  ');
+                    const messages = [game._pending_message || lifeSavingMessage, teleport.message].filter(Boolean);
+                    const landing = await heroLandingTrapEffectAt(game.u?.ux || 0, game.u?.uy || 0, messages);
+                    game._pending_message = messages.join('  ');
+                    game._message_more = landing.more || landing.trapResult ? 1 : 0;
+                    if (landing.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
                 } else if (lavaFatalEntry) {
                     const messages = [game._pending_message || lifeSavingMessage];
                     const failedRescue = handleFatalLavaSafeTeleportFailure(messages);
@@ -63598,11 +63608,13 @@ export async function rhack(_cmd) {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
+            let landing = null;
             if (lavaRefusalSafeTeleport) {
                 const teleport = safeTeleportHeroSameLevel({ returnResult: true });
                 if (teleport.ok) {
                     clearFatalLavaRescueState();
                     if (teleport.message) survivalMessages.push(teleport.message);
+                    landing = await heroLandingTrapEffectAt(game.u?.ux || 0, game.u?.uy || 0, survivalMessages);
                 } else if (lavaRefusalFatalEntry) {
                     const failedRescue = handleFatalLavaSafeTeleportFailure(survivalMessages);
                     await setMessage(survivalMessages.join('  '), failedRescue.retry || failedRescue.more);
@@ -63614,7 +63626,8 @@ export async function rhack(_cmd) {
                 }
             }
             game._command_mode = null;
-            await setMessage(survivalMessages.join('  '));
+            await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult);
+            if (landing?.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
             if (game._deferred_raven_blind_after_more) {
                 const ravenAttack = game._deferred_raven_blind_after_more;
                 game._deferred_raven_blind_after_more = null;
