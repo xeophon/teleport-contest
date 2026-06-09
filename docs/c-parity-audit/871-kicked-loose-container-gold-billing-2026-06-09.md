@@ -29,8 +29,7 @@
 
 ## Remaining follow-up
 
-- A full-bill loose-container canary should pin the C early return before contained gold or contents are inspected.
-- `costly_adjacent()` ownership for unpaid objects kicked loose from shared/adjacent shop squares remains broader than this source-room slice.
+- Full-bill loose-container early return and `costly_adjacent()` ownership for shop-edge loose kicks are covered in audit `872`.
 - Obstructed non-door terrain should get a dedicated canary if terrain-object placement or source-square support changes again.
 
 ## Verification

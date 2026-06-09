@@ -33955,6 +33955,33 @@ function shopkeeperForStrictCostlySpot(x, y, obj = null) {
     return shkp;
 }
 
+function costlyAdjacentToShopkeeper(shkp, x, y) {
+    if (!shopkeeperInHisShop(shkp) || x == null || y == null) return false;
+    const loc = game.level?.at?.(x, y);
+    return !!loc?.edge || (shkp.shk && x === shkp.shk.x && y === shkp.shk.y);
+}
+
+function kickedLooseShopSource(obj, x, y) {
+    const source = findShopObjectOwnerAt(obj, x, y);
+    const strictShkp = shopkeeperForStrictCostlySpot(x, y, obj);
+    const shkp = source.shkp || strictShkp;
+    if (!shopkeeperInHisShop(shkp)) {
+        return { shkp: null, costly: false, roomnos: source.roomnos || [] };
+    }
+    const strictCostly = sameShopkeeper(strictShkp, shkp);
+    const adjacent = costlyAdjacentToShopkeeper(shkp, x, y);
+    const costly = strictCostly || (adjacent && !!obj?.unpaid);
+    return { shkp, costly, strictCostly, adjacent, roomnos: source.roomnos || [] };
+}
+
+function kickedLooseStillInSourceShop(source) {
+    if (!source?.shkp) return false;
+    const heroShkp = shopkeeperForStrictCostlySpot(game.u?.ux, game.u?.uy);
+    if (!sameShopkeeper(source.shkp, heroShkp)) return false;
+    const heroRooms = shopRoomnosAt(game.u?.ux, game.u?.uy, SHOPBASE);
+    return !source.roomnos?.length || source.roomnos.some(roomno => heroRooms.includes(roomno));
+}
+
 function alterShopBillCostIfHigher(obj, amount = 0) {
     const entry = shopkeeperOwningBillEntry(obj).entry;
     if (!entry || entry.useup) return false;
@@ -34798,7 +34825,7 @@ function kickFloorObjectLooseSupported(obj) {
     return !isBoulderObject(obj);
 }
 
-function addKickedLooseContainerAndContentsToShopBill(obj, shkp, x, y, messages) {
+function addKickedLooseContainerAndContentsToShopBill(obj, shkp, x, y, messages, { chargeContainedGold = true } = {}) {
     if (!obj || !shkp) return { itemPrice: 0, billEntries: [], goldCharged: 0 };
     if (shopBillIsFull(shkp)) {
         messages.push('You got that for free!');
@@ -34821,7 +34848,7 @@ function addKickedLooseContainerAndContentsToShopBill(obj, shkp, x, y, messages)
     billEntries.push(...nested.billEntries);
 
     const gold = containedShopGold(obj);
-    if (gold > 0) {
+    if (gold > 0 && chargeContainedGold) {
         const charged = costlyGoldToShopkeeper(shkp, gold);
         messages.push(...costlyGoldMessages(charged));
     }
@@ -34833,23 +34860,27 @@ function addKickedLooseContainerAndContentsToShopBill(obj, shkp, x, y, messages)
 
 function billKickedLooseShopObject(obj, x, y, messages) {
     if (!obj) return null;
-    const sourceShkp = shopkeeperForCostlySpot(x, y);
-    if (!shopkeeperInHisShop(sourceShkp)) return null;
-    const heroShkp = shopkeeperForCostlySpot(game.u?.ux, game.u?.uy);
-    if (sameShopkeeper(sourceShkp, heroShkp)) return null;
+    const source = kickedLooseShopSource(obj, x, y);
+    if (!source.costly) return null;
+    const sourceShkp = source.shkp;
+    if (kickedLooseStillInSourceShop(source)) return null;
+    if (obj.no_charge) {
+        obj.no_charge = false;
+        return { shkp: sourceShkp, billed: false };
+    }
     if (shopBillableGold(obj)) {
+        if (!source.strictCostly) return { shkp: sourceShkp, billed: false, goldCharged: 0 };
         const quantity = Math.max(1, Math.trunc(Number(obj.quan || 1)));
         const charged = costlyGoldToShopkeeper(sourceShkp, quantity);
         messages.push(...costlyGoldMessages(charged));
         return { shkp: sourceShkp, billed: false, goldCharged: quantity };
     }
+    if (shopBillEntryForObject(sourceShkp, obj))
+        return { shkp: sourceShkp, billed: false, alreadyBilled: true };
     if (globContents(obj).length) {
-        const billing = addKickedLooseContainerAndContentsToShopBill(obj, sourceShkp, x, y, messages);
+        const billing = addKickedLooseContainerAndContentsToShopBill(
+            obj, sourceShkp, x, y, messages, { chargeContainedGold: source.strictCostly });
         return { shkp: sourceShkp, billed: !!billing.billEntries?.length, billing };
-    }
-    if (obj.no_charge) {
-        obj.no_charge = false;
-        return { shkp: sourceShkp, billed: false };
     }
     const price = shopItemPrice(obj, x, y);
     if (!(price > 0)) return { shkp: sourceShkp, billed: false };
