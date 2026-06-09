@@ -15695,6 +15695,7 @@ test('inventory fire destroying an unpaid carried potion applies vapor before us
     assert.equal(result.messages[1], 'You feel somewhat dizzy.');
     assert.ok(game.u._confusionTimeout > 0);
     assert.match(game.u._statusSuffix || '', /Conf/);
+    assert.equal(result.events[0].text, 'Your potion of confusion boils and explodes!');
     assert.equal(result.events[0].damage, result.damage);
     assert.equal(result.events[0].insertAfter[0].text, 'You feel somewhat dizzy.');
     assert.equal(result.events[0].insertAfter[0].damageAfter, undefined);

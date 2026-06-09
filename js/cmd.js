@@ -11884,12 +11884,15 @@ function fireInventoryNameVerb(name, singular, plural) {
 function addFireInventoryMessage(messages, events, text, event, armor, joinState) {
     if (!joinState.joinedArmorMessage && messages.length === 1 && armor.message) {
         messages[0] = `${messages[0]}  ${text}`;
-        events.push({ ...event, text: messages[0] });
+        const entry = { ...event, text: messages[0] };
+        events.push(entry);
         joinState.joinedArmorMessage = true;
-        return;
+        return entry;
     }
     messages.push(text);
-    events.push({ ...event, text });
+    const entry = { ...event, text };
+    events.push(entry);
+    return entry;
 }
 
 function isGreenSlimeGlobItem(item) {
@@ -12909,39 +12912,40 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
         const vaporMessages = [];
         const message = `${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`;
         if (cls === 'potion' || cls === 'slime') {
+            event.damage = itemDamage;
+            damage += itemDamage;
+            deathCause = fireInventoryDeathCause(cls, item, plural);
+        } else if (!game.u?.fireResistance) {
+            event.damage = 1;
+            damage += 1;
+            deathCause = fireInventoryDeathCause(cls, item, plural);
+        }
+        const recordedEvent = addFireInventoryMessage(messages, events, message, event, armor, joinState);
+        if (cls === 'potion' || cls === 'slime') {
             if (cls === 'potion') {
                 potionBreathe(item, vaporMessages, { allowLifeSaving });
                 if (vaporMessages.lifeSaving) {
                     messages.lifeSaving = true;
-                    event.lifeSaving = true;
+                    recordedEvent.lifeSaving = true;
                 }
                 if (vaporMessages.fatal) {
                     messages.fatal = true;
-                    event.fatal = true;
+                    recordedEvent.fatal = true;
                 }
                 if (vaporMessages.more) {
                     messages.more = true;
-                    event.more = true;
+                    recordedEvent.more = true;
                 }
                 if (vaporMessages.length) {
                     const insertAfter = vaporMessages.map(text => ({ text, more: true }));
-                    event.insertAfter = insertAfter;
+                    recordedEvent.insertAfter = insertAfter;
                 }
             }
-            event.damage = itemDamage;
-            damage += itemDamage;
-            deathCause = fireInventoryDeathCause(cls, item, plural);
             useUpInventoryItem(item, destroyed);
             if (cls === 'potion') rn2(2);
         } else {
             useUpInventoryItem(item, destroyed);
-            if (!game.u?.fireResistance) {
-                event.damage = 1;
-                damage += 1;
-                deathCause = fireInventoryDeathCause(cls, item, plural);
-            }
         }
-        addFireInventoryMessage(messages, events, message, event, armor, joinState);
         if (vaporMessages.length) messages.push(...vaporMessages);
     }
     if (rollIgniteAfterDestroy) igniteItems = !rn2(3);

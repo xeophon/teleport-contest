@@ -17,7 +17,7 @@ Date: 2026-06-09
 - Kept the Book-of-the-Dead fire branch reachable when local JS metadata tags the Book as an artifact, while still skipping a single `in_use` Book before that branch.
 - Changed hero `fireDamageInventory()` to destroy at most `quan - 1` items from multi-item `in_use` stacks.
 - Changed `monsterFireInventoryDamage()` to use the same effective `quan - 1` destruction count for `in_use` stacks.
-- Left potion vapor ordering for a separate slice because the JS helper still computes vapor side effects before adding the destruction event metadata.
+- Left fatal unsaved vapor continuation, hallucinated Book glow color, and direct fatal lava rescue countermeasures for separate slices.
 
 ## Tests
 
@@ -39,7 +39,6 @@ Result: focused resistance/in-use/Book tests passed; broader fire/inventory patt
 
 ## Remaining Gaps
 
-- Potion vapor effects still happen before the destruction message/event in the JS generic helper, even though rendered `messages` currently place vapor text after the destruction text.
 - Fatal unsaved vapor in `fireDamageInventory()` still consumes the destroyed potion in JS because C's `done()` does not return from `potionbreathe()`.
 - Hallucinated `hcolor("dark red")` variation for Book glow feedback remains fixed to `dark red`.
 - Direct fatal lava rescue still lacks C's repeated `safe_teleds()` failure countermeasures and manual landing `spoteffects(FALSE)` detail.
