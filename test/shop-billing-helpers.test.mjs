@@ -3296,6 +3296,122 @@ test('zero-charge unpaid Bell of Opening use adds no usage fee', () => {
     assert.equal(messages.length, 0);
 });
 
+test('zero-charge Bell of Opening petcalls like an ordinary bell', async () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.moves = 126;
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 2 });
+    markSquareVisible(6, 5);
+    const bell = bellOfOpening(3051301, 'b', 0);
+    const dog = {
+        mx: 6,
+        my: 5,
+        m_id: 3051302,
+        msleeping: 1,
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        mtame: 10,
+        pet: true,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'dog', mlet: 'dog', mlevel: 4 },
+        mextra: { edog: { apport: 3, hungrytime: 1000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        mtrack: [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }],
+    };
+    game.inventory = [bell];
+    game.level.monsters = [dog];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._pending_message, 'You ring the silver bell.  The dog wakes up.');
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 0);
+    assert.equal(bell.known, false);
+    assert.equal(dog.msleeping, 0);
+    assert.equal(dog.waiting, false);
+    assert.equal(dog.mstrategy, 0);
+    assert.equal(dog.mextra.edog.whistletime, 126);
+    assert.deepEqual(dog.mtrack, [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('charged invocation Bell of Opening petcalls after shrill sound', async () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.moves = 127;
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 2 });
+    game.level.invocationPosition = { x: 5, y: 5 };
+    markSquareVisible(6, 5);
+    const bell = bellOfOpening(3051303, 'b', 1);
+    const dog = {
+        mx: 6,
+        my: 5,
+        m_id: 3051304,
+        msleeping: 1,
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        mtame: 10,
+        pet: true,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'dog', mlet: 'dog', mlevel: 4 },
+        mextra: { edog: { apport: 3, hungrytime: 1000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        mtrack: [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }],
+    };
+    game.inventory = [bell];
+    game.level.monsters = [dog];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._pending_message, 'You ring the silver bell.  The silver bell issues an unsettling shrill sound...  The dog wakes up.');
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 0);
+    assert.equal(bell.age, 127);
+    assert.equal(bell.known, true);
+    assert.equal(dog.mextra.edog.whistletime, 127);
+    assert.deepEqual(dog.mtrack, [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+    assert.deepEqual(getRngLog(), []);
+});
+
+test('cursed charged Bell of Opening petcalls after no-effect ring', async () => {
+    installNonShopFloorState();
+    enableRngLog({ reset: true });
+    game.moves = 128;
+    Object.assign(game.u, { ux: 5, uy: 5, ulevel: 2 });
+    markSquareVisible(6, 5);
+    const bell = { ...bellOfOpening(3051305, 'b', 1), cursed: true, blessed: false };
+    const dog = {
+        mx: 6,
+        my: 5,
+        m_id: 3051306,
+        msleeping: 1,
+        waiting: true,
+        mstrategy: STRAT_WAITFORU,
+        mtame: 10,
+        pet: true,
+        mhp: 10,
+        mhpmax: 10,
+        data: { name: 'dog', mlet: 'dog', mlevel: 4 },
+        mextra: { edog: { apport: 3, hungrytime: 1000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        mtrack: [{ x: 9, y: 9 }, { x: 8, y: 8 }, { x: 7, y: 7 }, { x: 6, y: 6 }],
+    };
+    game.inventory = [bell];
+    game.level.monsters = [dog];
+
+    await rhack('a');
+    await rhack('b');
+
+    assert.equal(game._pending_message, 'You ring the silver bell.  Nothing happens.  The dog wakes up.');
+    assert.equal(game.context.move, 1);
+    assert.equal(bell.spe, 0);
+    assert.equal(bell.age ?? bell.invocationAge ?? bell._invocation_rung_turn, undefined);
+    assert.equal(dog.mextra.edog.whistletime, 128);
+    assert.deepEqual(dog.mtrack, [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
+    assert.deepEqual(getRngLog(), []);
+});
+
 test('applying unpaid Bell of Opening spends a charge and keeps the live bill', async () => {
     const { shkp } = installCommandShopState();
     const bell = bellOfOpening(30514, 'b', 3);

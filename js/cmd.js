@@ -16462,13 +16462,7 @@ function applyTinWhistle(item) {
     messages.push(heroIsDeaf()
         ? 'You feel rushing air tickle your nose.'
         : `You produce a ${item?.cursed ? 'shrill' : 'high'} whistling sound.`);
-    wakeNearbyMonstersAt(
-        game.u?.ux || 0,
-        game.u?.uy || 0,
-        Math.max(0, Math.trunc(Number(game.u?.ulevel || 1)) * 20),
-        messages,
-        { petcall: true },
-    );
+    wakeNearbyMonstersFromHeroPetcall(messages);
     return messages;
 }
 
@@ -19680,6 +19674,16 @@ function wakeNearbyMonstersAt(x, y, distance, messages = null, { petcall = false
 
 function wakeNearbyMonstersFromExplosion(x, y, damage, messages = null) {
     wakeNearbyMonstersAt(x, y, Math.max(damage * damage, 50), messages);
+}
+
+function wakeNearbyMonstersFromHeroPetcall(messages = null) {
+    wakeNearbyMonstersAt(
+        game.u?.ux || 0,
+        game.u?.uy || 0,
+        Math.max(0, Math.trunc(Number(game.u?.ulevel || 1)) * 20),
+        messages,
+        { petcall: true },
+    );
 }
 
 function burningOilExplosionVisible(x, y) {
@@ -50197,6 +50201,8 @@ function applyBellOfOpening(item) {
         if (invoking) {
             messages.push('But it makes no sound.');
             identifyBellOfOpening(item);
+        } else {
+            wakeNearbyMonstersFromHeroPetcall(messages);
         }
         return messages;
     }
@@ -50205,15 +50211,19 @@ function applyBellOfOpening(item) {
     spendChargedToolUse(item, messages);
     if (item.unpaid) syncUnpaidBillLine(item);
 
+    let wakePets = false;
     if (item.cursed) {
         messages.push('Nothing happens.');
+        wakePets = true;
     } else if (invoking) {
         messages.push(`The ${bellName} issues an unsettling shrill sound...`);
         item.age = game.moves || 0;
         identifyBellOfOpening(item);
+        wakePets = true;
     } else {
         messages.push('Nothing happens.');
     }
+    if (wakePets) wakeNearbyMonstersFromHeroPetcall(messages);
     return messages;
 }
 
