@@ -30,7 +30,7 @@
 ## Remaining follow-up
 
 - Full-bill loose-container early return and `costly_adjacent()` ownership for shop-edge loose kicks are covered in audit `872`.
-- Obstructed non-door terrain should get a dedicated canary if terrain-object placement or source-square support changes again.
+- Obstructed non-door terrain is covered in audit `873`.
 
 ## Verification
 

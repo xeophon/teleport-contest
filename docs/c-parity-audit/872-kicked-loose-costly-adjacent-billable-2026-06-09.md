@@ -27,7 +27,7 @@
 
 ## Remaining follow-up
 
-- Obstructed non-door terrain still deserves a direct command canary if terrain-object placement or source-square support is touched again.
+- Obstructed non-door terrain and unsupported loose-source object fall-through are covered in audit `873`.
 - Shared walls involving multiple candidate shopkeepers remain broader than this single-owner shop-edge slice.
 
 ## Verification

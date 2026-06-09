@@ -35352,7 +35352,11 @@ async function kickFloorObjectToward(dir, x, y) {
     const landY = y + dir.dy;
     const gate = remoteProjectileDownGateAt(obj, landX, landY, { allowGold: shopBillableGold(obj) });
     if (kickedObjectLooseSourceAt(x, y)) {
-        if (!kickFloorObjectLooseSupported(obj)) return { handled: false };
+        if (!obj) return { handled: false };
+        if (!kickFloorObjectLooseSupported(obj)) {
+            applyKickedObjectOuchDamage();
+            return { handled: true, messages: ['Ouch!  That hurts!'], moved: false };
+        }
         const messages = [`You kick ${kickedFloorObjectKickName(obj)}.`];
         kickFloorObjectRange(obj, x, y, dir);
         return tryKickLooseFloorObject(obj, x, y, messages);

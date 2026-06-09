@@ -30,8 +30,7 @@
 ## Remaining follow-up
 
 - Recursive `addtobill()` coverage for containers, contained gold, and top-level gold is covered in audit `871`; full-bill and `costly_adjacent()` loose-source edges are covered in audit `872`.
-- Obstructed non-door terrain has the same source-square branch and should get a dedicated canary if a later slice touches terrain-object creation or wall/object placement edge cases.
-- The failure ouch tail reuses JS's existing kick-ouch damage helper; deeper C parity could split a stricter kick-object ouch helper if RNG-perfect failure damage becomes needed.
+- Obstructed non-door terrain, failed-loose ouch, and unsupported loose-source object fall-through are covered in audit `873`.
 
 ## Verification
 

@@ -45029,6 +45029,124 @@ test('command kicked shop object on closed door failed loose roll leaves object 
     assert.deepEqual(getRngLog(), ['rn2(20)=19', 'rn2(3)=0']);
 });
 
+test('command kicked shop object on obstructed wall comes loose to hero and gets live bill', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const wallLoc = { roomno: ROOMOFFSET, typ: STONE, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return wallLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const blade = { ...dagger(512160), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    const expectedPrice = shop.shopItemPrice(blade, 6, 5);
+    enableRngLog({ reset: true });
+    installCoreRngValues([0]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 5);
+    assert.equal(blade.oy, 5);
+    assert.equal(wallLoc.typ, STONE);
+    assert.equal(blade.unpaid, true);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade) != null, true);
+    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /The dagger comes loose\./);
+    assert.match(game._pending_message,
+        new RegExp(`The dagger will cost you ${expectedPrice} zorkmids?\\.`));
+    assert.doesNotMatch(game._pending_message, /doesn't come loose|goods lost|You owe|Thief|crashes open|shatters|Ouch/);
+    assert.deepEqual(getRngLog(), ['rn2(20)=0']);
+});
+
+test('command kicked shop object on closed door failed loose roll may hurt hero', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 3;
+    const blade = { ...dagger(512161), letter: undefined, line: undefined, ox: 6, oy: 5 };
+    game.level.objects = [blade];
+    enableRngLog({ reset: true });
+    installCoreRngValues([19, 1, 0, 0, 0, 1, 2]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(blade), true);
+    assert.equal(blade.ox, 6);
+    assert.equal(blade.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(blade.unpaid || false, false);
+    assert.equal(shop.shopBillEntryForObject(shkp, blade), null);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.loan || 0, 0);
+    assert.equal(shkp.robbed || 0, 0);
+    assert.equal(game.u.uhp, 7);
+    assert.equal(game.u._woundedLegTurns, 7);
+    assert.equal(game.u._woundedLegSide, 'right');
+    assert.match(game._pending_message, /You kick a dagger\./);
+    assert.match(game._pending_message, /The dagger doesn't come loose\./);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.doesNotMatch(game._pending_message, /will cost|goods lost|You owe|Thief|crashes open|shatters/);
+    assert.deepEqual(getRngLog(), [
+        'rn2(20)=19', 'rn2(3)=1', 'rn2(2)=0', 'rn2(2)=0',
+        'rn2(3)=0', 'rnd(5)=2', 'rnd(5)=3',
+    ]);
+});
+
+test('command kicked boulder on closed door uses object ouch instead of door kick', async () => {
+    const { shkp } = installCommandShopState();
+    Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
+    const doorLoc = { roomno: ROOMOFFSET, typ: DOOR, doormask: D_CLOSED, flags: D_CLOSED, lit: true };
+    game.level.at = (x, y) => {
+        if (x === 6 && y === 5) return doorLoc;
+        return { roomno: x >= 6 ? ROOMOFFSET : 0, typ: ROOM, lit: true };
+    };
+    game.u.acurr.a[A_STR] = 18;
+    game.u.acurr.a[A_DEX] = 10;
+    const boulder = { otyp: BOULDER, cls: 'rock', glyph: '`', quan: 1, ox: 6, oy: 5, id: 512162 };
+    game.level.objects = [boulder];
+    enableRngLog({ reset: true });
+    installCoreRngValues([0, 1, 1, 3]);
+
+    await rhack('\x04');
+    assert.equal(game._command_mode, 'kickDirection');
+    await rhack('l');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
+    assert.equal(game.level.objects.includes(boulder), true);
+    assert.equal(boulder.ox, 6);
+    assert.equal(boulder.oy, 5);
+    assert.equal(doorLoc.doormask, D_CLOSED);
+    assert.equal(shop.shopBillEntryForObject(shkp, boulder), null);
+    assert.equal(shkp.billct || 0, 0);
+    assert.equal(game.u.uhp, 6);
+    assert.equal(game.u._woundedLegTurns || 0, 0);
+    assert.match(game._pending_message, /Ouch!  That hurts!/);
+    assert.doesNotMatch(game._pending_message, /You kick|crashes open|The door|WHAMMM|smashes through|comes loose|doesn't come loose|will cost/);
+    assert.deepEqual(getRngLog(), ['rn2(2)=0', 'rn2(2)=1', 'rn2(3)=1', 'rnd(5)=4']);
+});
+
 test('command kicked paid container on closed door comes loose and bills top plus contents live', async () => {
     const { shkp } = installCommandShopState();
     Object.assign(shkp, { mx: 7, my: 5, shk: { x: 7, y: 5 } });
