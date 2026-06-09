@@ -14777,9 +14777,17 @@ function polyselfWaterFallLanding(x, y, targetMoveTyp) {
 }
 
 function polyselfLavaFalloutMessage(targetMoveTyp) {
+    return `${polyselfLavaFallMessage(targetMoveTyp)}  ${polyselfLavaBurnMessage()}`;
+}
+
+function polyselfLavaFallMessage(targetMoveTyp) {
     return targetMoveTyp === LAVAWALL
-        ? 'You fall into the wall of lava!  You burn to a crisp...'
-        : 'You fall into the molten lava!  You burn to a crisp...';
+        ? 'You fall into the wall of lava!'
+        : 'You fall into the molten lava!';
+}
+
+function polyselfLavaBurnMessage() {
+    return 'You burn to a crisp...';
 }
 
 const LAVA_ORGANIC_BOOT_KINDS = new Set([
@@ -14855,15 +14863,55 @@ function lavaFatalInventoryBurnSelection() {
     return selected;
 }
 
-function destroyLavaFatalInventorySelection(selection) {
+function heroHasWornLifeSavingAmulet() {
+    return (game.inventory || []).some(item =>
+        item.worn && String(item.kind || item.actualKind || item.line || '').includes('life saving'));
+}
+
+function lavaDestroyedInventorySummary(burnCount, burnMessageCount) {
+    const silentCount = burnCount - burnMessageCount;
+    if (silentCount <= 0) return '';
+    const prefix = burnMessageCount
+        ? silentCount === 1 ? 'Another' : 'Other'
+        : burnCount === 1 ? 'An' : 'Some';
+    return `${prefix} item${silentCount === 1 ? '' : 's'} in your inventory ${silentCount === 1 ? 'has' : 'have'} been destroyed.`;
+}
+
+function destroyLavaFatalInventorySelection(selection, {
+    messages = null,
+    surviving = false,
+    priorBurnCount = 0,
+    priorBurnMessageCount = 0,
+} = {}) {
     let destroyed = 0;
+    let burnMessages = 0;
     for (const item of selection || []) {
         if (!(game.inventory || []).includes(item)) continue;
-        if (isWornArmorItem(item)) destroyWornArmorItem(item);
+        if (isWornArmorItem(item)) {
+            if (surviving && Array.isArray(messages)) {
+                messages.push(`${armorSubject(item)} ${armorVerb(item, 'bursts', 'burst')} into flame!`);
+                burnMessages++;
+            }
+            destroyWornArmorItem(item);
+        }
         else useUpInventoryItem(item, item.quan || 1);
         destroyed++;
     }
+    const totalBurnCount = priorBurnCount + destroyed;
+    const totalBurnMessageCount = priorBurnMessageCount + burnMessages;
+    if (surviving && Array.isArray(messages)) {
+        const summary = lavaDestroyedInventorySummary(totalBurnCount, totalBurnMessageCount);
+        if (summary) messages.push(summary);
+    }
     return destroyed;
+}
+
+function lifeSaveHeroFromFatalLava(messages) {
+    if (!consumeLifeSavingAmulet()) return false;
+    if (game.u) game.u.uhp = 0;
+    messages.push(`But wait...  Your medallion ${game.u?.blind ? 'feels warm' : 'begins to glow'}!`);
+    game._life_saving_lava_safe_teleport = 1;
+    return true;
 }
 
 function heroLavaEntryEffect(targetMoveTyp) {
@@ -14873,7 +14921,7 @@ function heroLavaEntryEffect(targetMoveTyp) {
     const initiallySurvivesLava = heroHasFireResistance()
         || (heroHasWaterWalking() && dmg < (game.u?.uhp || 0));
     const fatalInventoryBurn = initiallySurvivesLava ? [] : lavaFatalInventoryBurnSelection();
-    burnLavaWornBootsFirst(messages);
+    const bootsBurned = burnLavaWornBootsFirst(messages);
     if (!heroHasFireResistance()) {
         if (heroHasWaterWalking()) {
             messages.push('The lava here burns you!');
@@ -14882,9 +14930,18 @@ function heroLavaEntryEffect(targetMoveTyp) {
                 return { messages, fatal: false, more: messages.length > 1 };
             }
         }
-        destroyLavaFatalInventorySelection(fatalInventoryBurn);
-        messages.push(polyselfLavaFalloutMessage(targetMoveTyp));
+        if (!heroHasWaterWalking()) messages.push(polyselfLavaFallMessage(targetMoveTyp));
+        const willSurviveFatalLava = heroHasWornLifeSavingAmulet();
+        destroyLavaFatalInventorySelection(fatalInventoryBurn, {
+            messages,
+            surviving: willSurviveFatalLava,
+            priorBurnCount: bootsBurned ? 1 : 0,
+            priorBurnMessageCount: bootsBurned ? 1 : 0,
+        });
+        messages.push(polyselfLavaBurnMessage());
         game._death_cause = 'burned by molten lava';
+        if (lifeSaveHeroFromFatalLava(messages))
+            return { messages, fatal: false, lifeSaving: true, more: true };
         game._command_mode = 'lavaDeathMore';
         game._polyself_lava_death_more = 1;
         return { messages, fatal: true, more: true };
@@ -58305,9 +58362,10 @@ async function moveHero(dx, dy) {
     if (liquidTarget && nopick && (targetMoveTyp === LAVAPOOL || targetMoveTyp === LAVAWALL)) {
         const lavaEffect = heroLavaEntryEffect(targetMoveTyp);
         if (lavaEffect.messages.length) await setMessage(lavaEffect.messages.join('  '), lavaEffect.more);
-        if (lavaEffect.fatal) {
+        if (lavaEffect.fatal || lavaEffect.lifeSaving) {
             game.context.move = 0;
             game._pending_time_passed = 0;
+            if (lavaEffect.lifeSaving) applyLifeSavingOrFatalCommandMode(lavaEffect);
         } else {
             game.context.move = 1;
         }
@@ -59407,6 +59465,7 @@ export async function rhack(_cmd) {
                 || game._queued_explore_lifesaving_message);
             const skipRemainingMoreMessages = ch === '\x1b';
             const postContinuationHp = game._life_saving_post_continue_hp;
+            const lavaSafeTeleport = !!game._life_saving_lava_safe_teleport;
             const lifeSavingMessage = exploreLifeSaved || skipRemainingMoreMessages
                 ? 'You feel much better!'
                 : 'You feel much better!  The medallion crumbles to dust!';
@@ -59414,6 +59473,7 @@ export async function rhack(_cmd) {
             game._pending_explore_lifesaving_message = 0;
             game._queued_explore_lifesaving_message = 0;
             game._life_saving_post_continue_hp = null;
+            game._life_saving_lava_safe_teleport = 0;
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;
@@ -59461,6 +59521,12 @@ export async function rhack(_cmd) {
                 return;
             }
             if (postRecoil?.trapResult && applyLifeSavingOrFatalCommandMode(postRecoil.trapResult)) return;
+            if (lavaSafeTeleport) {
+                const teleportMessage = safeTeleportHeroSameLevel();
+                if (teleportMessage)
+                    game._pending_message = [game._pending_message || lifeSavingMessage, teleportMessage]
+                        .filter(Boolean).join('  ');
+            }
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._suppress_monster_attack_messages = 1;
         }

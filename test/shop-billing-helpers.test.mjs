@@ -43390,6 +43390,49 @@ test('m-prefix lava does not whole-burn inventory when initial water walking wou
     assert.equal(game._command_mode, 'lavaDeathMore');
 });
 
+test('m-prefix fatal lava consumes life saving and teleports to safety', async () => {
+    installDrawbridgeMoveState(DB_LAVA);
+    installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 19, 7]);
+    Object.assign(game.u, {
+        uhp: 40,
+        uhpmax: 40,
+        fireResistance: false,
+    });
+    const amulet = wornHeroLifeSavingAmulet(330016, 'a');
+    const rations = foodRationStack(330017, 2, 'f');
+    const potion = oilPotion(330018, 'o');
+    game.inventory = [amulet, rations, potion];
+
+    await rhack('m');
+    await rhack('l');
+
+    const pending = game._pending_message || '';
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.equal(game.inventory.includes(rations), false);
+    assert.equal(game.inventory.includes(potion), false);
+    assert.match(pending, /You fall into the molten lava!/);
+    assert.match(pending, /Some items in your inventory have been destroyed\./);
+    assert.match(pending, /You burn to a crisp\.\.\./);
+    assert.match(pending, /But wait\.\.\.  Your medallion begins to glow!/);
+    assert.ok(pending.indexOf('You fall into the molten lava!') < pending.indexOf('Some items in your inventory'));
+    assert.ok(pending.indexOf('Some items in your inventory') < pending.indexOf('You burn to a crisp...'));
+    assert.ok(pending.indexOf('You burn to a crisp...') < pending.indexOf('But wait...'));
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game._death_cause, 'burned by molten lava');
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.context.move, 0);
+    assert.equal(game._pending_time_passed, 1);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!  You materialize in a different location!');
+    assert.equal(game.u.ux, 20);
+    assert.equal(game.u.uy, 7);
+});
+
 test('m-prefix into lava sinks fire-resistant hero after guarded water walking boot burn', async () => {
     installDrawbridgeMoveState(DB_LAVA);
     installCoreRngValues([0, 0, 0, 0, 0, 0, 0, 0]);
