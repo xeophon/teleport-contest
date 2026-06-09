@@ -22037,8 +22037,54 @@ function heroHorizontalThrowRecoilCanSpotMonster(mon) {
     return !(mon.minvis || mon.invis || mon.invisible) || game.u?.seeInvisible;
 }
 
+function heroHorizontalThrowRecoilBodyArmorBlocksPetrification() {
+    return !!(wornArmorInSlot('shirt') || wornArmorInSlot('body') || wornArmorInSlot('cloak'));
+}
+
+function monsterHorizontalThrowRecoilBodyArmorBlocksPetrification(mon) {
+    return (mon?.minvent || []).some(item =>
+        isWornArmorItem(item) && ['shirt', 'body', 'cloak'].includes(armorSlot(item)));
+}
+
+function heroHorizontalThrowRecoilHeroPetrification(mon, messages) {
+    if (!monsterTouchPetrifies(mon) || heroHorizontalThrowRecoilBodyArmorBlocksPetrification())
+        return null;
+    if (game.u?.stoneResistance || heroPolyselfResistsStoning()) return null;
+    const rescue = maybeTurnPolyselfIntoStoneGolem();
+    if (rescue) {
+        messages.push(rescue);
+        return null;
+    }
+
+    messages.push('You turn to stone...');
+    if (game.u) game.u.uhp = 0;
+    const name = String(mon?.data?.name || mon?.name || 'monster').toLowerCase();
+    game._death_cause = `petrified by bumping into ${articleFor(name)}`;
+    game._death_bones_body = 'statue';
+    const result = { lifeSaving: false, fatal: false, more: true };
+    if (consumeLifeSavingAmulet({ clearStoning: true })) {
+        messages.push('You die...  But wait...  Your medallion begins to glow!');
+        result.lifeSaving = true;
+    } else {
+        result.fatal = true;
+    }
+    return result;
+}
+
+function heroHorizontalThrowRecoilCurrentFormTouchPetrifies() {
+    const form = polyselfForm();
+    return !!form && monsterTouchPetrifies({ data: form, touchPetrifies: form.touchPetrifies });
+}
+
+function heroHorizontalThrowRecoilPetrifyMonsterByTouch(mon, messages) {
+    if (!heroHorizontalThrowRecoilCurrentFormTouchPetrifies()
+        || monsterHorizontalThrowRecoilBodyArmorBlocksPetrification(mon))
+        return false;
+    return petrifyMonsterFromThrownEgg(mon, messages);
+}
+
 function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
-    if (!mon) return '';
+    if (!mon) return { messages: [], trapResult: null };
     const loc = game.level?.at?.(x, y);
     const preGlyphInvisible = !!(loc?.map_invisible || loc?.remembered_glyph?.ch === 'I');
     const appearance = M_AP_TYPE(mon);
@@ -22057,10 +22103,15 @@ function heroHorizontalThrowRecoilMonsterCollision(mon, x, y) {
     revealHeroProjectileHitMimicAppearance(mon);
     if (!heroHorizontalThrowRecoilCanSpotMonster(mon)) mapInvisibleMonsterAt(mon);
     setHeroObjectHitMonsterAngry(mon);
+    const messages = [!preGlyphMonster && !preGlyphInvisible
+        ? `You find ${name} by bumping into ${pronoun}.`
+        : `You bump into ${name}.`];
+    const trapResult = heroHorizontalThrowRecoilHeroPetrification(mon, messages);
+    if (trapResult?.fatal && !trapResult.lifeSaving)
+        return { messages, trapResult };
+    heroHorizontalThrowRecoilPetrifyMonsterByTouch(mon, messages);
     wakeNearbyMonstersAt(x, y, 10);
-    if (!preGlyphMonster && !preGlyphInvisible)
-        return `You find ${name} by bumping into ${pronoun}.`;
-    return `You bump into ${name}.`;
+    return { messages, trapResult };
 }
 
 function heroHorizontalThrowRecoilResult(dir, range) {
@@ -22114,10 +22165,11 @@ function heroHorizontalThrowRecoilResult(dir, range) {
             break;
         }
         if (monster) {
-            const collisionMessage = heroHorizontalThrowRecoilMonsterCollision(monster, nx, ny);
+            const collision = heroHorizontalThrowRecoilMonsterCollision(monster, nx, ny);
+            trapResult ||= collision.trapResult || null;
             return heroHorizontalThrowRecoilResultFromMessages(
-                [...messages, collisionMessage],
-                { more, trapResult },
+                [...messages, ...(collision.messages || [])],
+                { more: more || !!collision.trapResult?.more, trapResult },
             );
         }
         game.u.ux0 = oldx;

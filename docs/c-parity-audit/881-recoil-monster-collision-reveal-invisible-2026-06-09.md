@@ -27,5 +27,5 @@ node --test --test-reporter=dot --test-name-pattern "levitating hero-thrown ordi
 ## Remaining Follow-Up
 
 - Full `setmangry(FALSE)` parity is still broader than this slice: visible wake/anger/growl messages, alignment/priest/shopkeeper/quest-guardian side effects, and peaceful bystander response remain incomplete.
-- Bodily petrification on recoil monster collision remains unimplemented: C can petrify the hero when bumping an unarmored touch-petrifying monster and can petrify the monster when the hero's polyform touch petrifies.
+- Bodily petrification on recoil monster collision is covered by `882-recoil-monster-collision-petrification-2026-06-09.md`.
 - `wake_nearto()` still lacks visible wake messages and buried-zombie disturbance behavior in this recoil path.

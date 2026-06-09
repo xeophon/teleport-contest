@@ -71608,6 +71608,259 @@ test('levitating hero-thrown ordinary weapon recoil bumps monster without damage
     assert.deepEqual(getRngLog(), ['rn2(100)=0']);
 });
 
+test('levitating hero-thrown ordinary weapon recoil cockatrice collision petrifies hero', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(8761701, 'd');
+    const cockatrice = ordinaryThrowTarget('cockatrice', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        mstrategy: 99,
+        data: { name: 'cockatrice', mlevel: 5, mac: 10, touchPetrifies: true },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [cockatrice];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode, 'deathDieMore');
+    assert.equal(game.context.move, 0);
+    assert.match(message, /You float in the opposite direction\.  You bump into a cockatrice\./);
+    assert.match(message, /You turn to stone\.\.\./);
+    assert.doesNotMatch(message, /You die\.\.\.  But wait/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game._death_cause, 'petrified by bumping into a cockatrice');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(cockatrice.mhp, 20);
+    assert.equal(cockatrice.msleeping, 0);
+    assert.equal(cockatrice.mpeaceful, 0);
+    assert.equal(cockatrice.mstrategy, 99);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0', 'rn2(1)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil cockatrice collision uses life saving', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0, 0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    game.u.acurr.a[A_CON] = 10;
+    const amulet = wornHeroLifeSavingAmulet(8761702, 'a');
+    const blade = dagger(8761703, 'd');
+    const cockatrice = ordinaryThrowTarget('cockatrice', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        data: { name: 'cockatrice', mlevel: 5, mac: 10, touchPetrifies: true },
+    });
+    game.inventory = [amulet, blade];
+    game.level.monsters = [cockatrice];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.context.move, 0);
+    assert.equal(game.u.uhp, 0);
+    assert.equal(game.inventory.includes(amulet), false);
+    assert.match(game._pending_message,
+        /You float in the opposite direction\.  You bump into a cockatrice\.  You turn to stone\.\.\.  You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.equal(game._death_cause, 'petrified by bumping into a cockatrice');
+    assert.equal(game._death_bones_body, 'statue');
+    assert.equal(cockatrice.msleeping, 0);
+    assert.equal(cockatrice.mpeaceful, 0);
+    assert.deepEqual(getRngLog(), ['rn2(19)=0', 'rn2(100)=0']);
+
+    await rhack(' ');
+
+    assert.equal(game._command_mode || null, null);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(game._death_bones_body || '', '');
+    assert.equal(game._pending_message, 'You feel much better!  The medallion crumbles to dust!');
+});
+
+test('levitating hero-thrown ordinary weapon recoil cockatrice collision is blocked by body armor', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const armor = wornArmor(8761704, 'leather armor', 'a');
+    const blade = dagger(8761705, 'd');
+    const cockatrice = ordinaryThrowTarget('cockatrice', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        mstrategy: 99,
+        data: { name: 'cockatrice', mlevel: 5, mac: 10, touchPetrifies: true },
+    });
+    game.inventory = [armor, blade];
+    game.level.monsters = [cockatrice];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You float in the opposite direction\.  You bump into a cockatrice\./);
+    assert.doesNotMatch(message, /turn to stone|medallion|You die/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game._death_cause || '', '');
+    assert.equal(cockatrice.mhp, 20);
+    assert.equal(cockatrice.msleeping, 0);
+    assert.equal(cockatrice.mpeaceful, 0);
+    assert.equal(cockatrice.mstrategy, 0);
+    assert.equal(game.inventory.includes(armor), true);
+    assert.equal(armor.worn, true);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
+test('levitating hero-thrown ordinary weapon recoil cockatrice form petrifies unarmored monster', async () => {
+    installStableNonShopFloorState();
+    initRng(2);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+        _polyself_form: { name: 'cockatrice', mlevel: 5, touchPetrifies: true },
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(8761706, 'd');
+    const goblin = ordinaryThrowTarget('goblin', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        data: { name: 'goblin', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You float in the opposite direction\.  You bump into a goblin\./);
+    assert.match(message, /The goblin turns to stone\./);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.monsters.includes(goblin), false);
+    assert.equal(goblin.dead, true);
+    const statue = game.level.objects.find(obj => obj.otyp === STATUE);
+    assert.ok(statue);
+    assert.equal(statue.ox, 4);
+    assert.equal(statue.oy, 5);
+    assert.equal(statue.corpsenm?.name, 'goblin');
+    assert.equal(getRngLog().some(entry => rngCallName(entry) === 'rn2(100)'), true);
+});
+
+test('levitating hero-thrown ordinary weapon recoil monster body armor blocks cockatrice-form touch', async () => {
+    installStableNonShopFloorState();
+    installCoreRngValues([0]);
+    Object.assign(game.u, {
+        ux: 5,
+        uy: 5,
+        levitating: true,
+        ulevel: 20,
+        uluck: 10,
+        uhitinc: 10,
+        uhp: 20,
+        uhpmax: 20,
+        _polyself_form: { name: 'cockatrice', mlevel: 5, touchPetrifies: true },
+    });
+    game.u.acurr.a[A_STR] = 10;
+    game.u.acurr.a[A_DEX] = 25;
+    const blade = dagger(8761707, 'd');
+    const armor = wornArmor(8761708, 'leather armor', 'a', 0, { worn: false, owornmask: 1 });
+    const goblin = ordinaryThrowTarget('goblin', 4, 5, {
+        mhp: 20,
+        mhpmax: 20,
+        msleeping: 1,
+        mpeaceful: true,
+        minvent: [armor],
+        data: { name: 'goblin', mlevel: 1, humanoid: true },
+    });
+    game.inventory = [blade];
+    game.level.monsters = [goblin];
+    enableRngLog({ reset: true });
+
+    await rhack('t');
+    await rhack('d');
+    await rhack('l');
+
+    const message = game._pending_message || '';
+    assert.equal(game._command_mode || null, null);
+    assert.match(message, /You float in the opposite direction\.  You bump into a goblin\./);
+    assert.doesNotMatch(message, /turns to stone/);
+    assert.equal(game.u.ux, 5);
+    assert.equal(game.u.uy, 5);
+    assert.equal(game.u.uhp, 20);
+    assert.equal(game.level.monsters.includes(goblin), true);
+    assert.equal(goblin.dead, undefined);
+    assert.equal(goblin.mhp, 20);
+    assert.equal(goblin.msleeping, 0);
+    assert.equal(goblin.mpeaceful, 0);
+    assert.equal(goblin.minvent.includes(armor), true);
+    assert.deepEqual(getRngLog(), ['rn2(100)=0']);
+});
+
 test('levitating hero-thrown ordinary weapon recoil reveals object mimic by bumping', async () => {
     installStableNonShopFloorState();
     installCoreRngValues([0]);
