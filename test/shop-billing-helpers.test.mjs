@@ -30403,6 +30403,96 @@ test('#tip trapped source lucky dud uses chest trap payload and keeps contents',
     assert.equal(game.context.move, 1);
 });
 
+test('#tip carried trapped box fire uses underwater steam despite dry stale coordinates', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 1, 9, 3, 3, 0] });
+    Object.assign(game.u, {
+        underwater: true,
+        uunderwater: true,
+        fireResistance: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(8810661, 7, 7);
+    Object.assign(box, {
+        letter: 'b',
+        line: 'b - a large box',
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.inventory = [box];
+    game.level.objects = [];
+    game.level.at = () => ({ roomno: 0, typ: ROOM });
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'rnd(3)=1',
+    ]);
+    assert.equal(game._pending_message, 'You trigger a trap!  A cascade of steamy bubbles erupts from the large box!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 19);
+    assert.equal(game.context.move, 1);
+});
+
+test('#tip carried trapped box fire ignores stale pool coordinates when hero is dry', async () => {
+    setupUntrapDestinationWeb([], { rng: [0, 1, 9, 3, 3, 3, 3, 0, 1, 4, 0] });
+    Object.assign(game.u, {
+        underwater: false,
+        uunderwater: false,
+        fireResistance: false,
+        uinvulnerable: false,
+    });
+    game.level.traps = [];
+    const box = shopFloorContainer(8810662, 7, 7);
+    Object.assign(box, {
+        letter: 'b',
+        line: 'b - a large box',
+        otrapped: true,
+        tknown: true,
+        dknown: true,
+        cknown: false,
+    });
+    game.inventory = [box];
+    game.level.objects = [];
+    game.level.at = (x, y) => ({ roomno: 0, typ: x === 7 && y === 7 ? POOL : ROOM });
+
+    await enterTipCommand();
+
+    assert.equal(game._command_mode, 'tipContainerObject');
+
+    await rhack('b');
+
+    assert.equal(game._command_mode, null);
+    assert.deepEqual(getRngLog(), [
+        'rn2(13)=0',
+        'rn2(20)=1',
+        'rn2(13)=9',
+        'd(2,4)=8',
+        'd(2,4)=8',
+        'rn2(9)=0',
+        'rn2(5)=1',
+        'rn2(5)=4',
+    ]);
+    assert.equal(game._pending_message, 'You trigger a trap!  A tower of flame bursts from the large box!');
+    assert.equal(box.otrapped, false);
+    assert.equal(box.tknown, true);
+    assert.equal(game.u.uhp, 12);
+    assert.equal(game.u.uhpmax, 20);
+    assert.equal(game.context.move, 1);
+});
+
 test('#tip trapped target fires before transferring source contents', async () => {
     setupUntrapDestinationWeb([], { rng: [8, 0] });
     game.level.traps = [];
