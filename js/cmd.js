@@ -50189,7 +50189,39 @@ function identifyBellOfOpening(item) {
     if (item.unpaid) syncUnpaidBillLine(item);
 }
 
-function applyBellOfOpening(item) {
+async function mkundeadAroundHero({ flags = NO_MINVENT, reviveCorpses = false } = {}) {
+    const x = game.u?.ux || 0;
+    const y = game.u?.uy || 0;
+    const count = Math.trunc((level_difficulty() + 1) / 10) + rnd(5);
+    let spawned = 0;
+    let revived = 0;
+
+    for (let i = 0; i < count; i++) {
+        const data = morgueMonster();
+        if (!data) continue;
+        const spot = enextoMonsterSpot(x, y, data);
+        if (!spot) continue;
+
+        const corpse = reviveCorpses ? deadbookFloorCorpseAt(spot.x, spot.y) : null;
+        if (corpse && await reviveDeadbookCorpseItem(corpse, 'floor')) {
+            revived++;
+            continue;
+        }
+
+        const mon = await makemon(data, spot.x, spot.y, flags);
+        if (mon) {
+            spawned++;
+            newsym(mon.mx, mon.my);
+        }
+    }
+
+    game.level ??= {};
+    game.level.flags ??= {};
+    game.level.flags.graveyard = true;
+    return { spawned, revived };
+}
+
+async function applyBellOfOpening(item) {
     const messages = [`You ring the ${pickupObjectName(item)}.`];
     if (game.u?.underwater || game.u?.uunderwater) {
         messages.push('But the sound is muffled.');
@@ -50213,7 +50245,9 @@ function applyBellOfOpening(item) {
 
     let wakePets = false;
     if (item.cursed) {
-        messages.push('Nothing happens.');
+        const result = await mkundeadAroundHero({ flags: NO_MINVENT });
+        game._bell_mkundead_spawned = (game._bell_mkundead_spawned || 0) + result.spawned;
+        game._bell_mkundead_revived = (game._bell_mkundead_revived || 0) + result.revived;
         wakePets = true;
     } else if (invoking) {
         messages.push(`The ${bellName} issues an unsettling shrill sound...`);
@@ -55216,34 +55250,7 @@ function deadbookFloorCorpseAt(x, y) {
 }
 
 async function mkundeadFromBook() {
-    const x = game.u?.ux || 0;
-    const y = game.u?.uy || 0;
-    const count = Math.trunc((level_difficulty() + 1) / 10) + rnd(5);
-    let spawned = 0;
-    let revived = 0;
-
-    for (let i = 0; i < count; i++) {
-        const data = morgueMonster();
-        if (!data) continue;
-        const spot = enextoMonsterSpot(x, y, data);
-        if (!spot) continue;
-
-        const corpse = deadbookFloorCorpseAt(spot.x, spot.y);
-        if (corpse && await reviveDeadbookCorpseItem(corpse, 'floor')) {
-            revived++;
-            continue;
-        }
-
-        const mon = await makemon(data, spot.x, spot.y, NO_MINVENT);
-        if (mon) {
-            spawned++;
-            newsym(mon.mx, mon.my);
-        }
-    }
-
-    game.level ??= {};
-    game.level.flags ??= {};
-    game.level.flags.graveyard = true;
+    const { spawned, revived } = await mkundeadAroundHero({ flags: NO_MINVENT, reviveCorpses: true });
     game._deadbook_mkundead_spawned = (game._deadbook_mkundead_spawned || 0) + spawned;
     game._deadbook_mkundead_revived = (game._deadbook_mkundead_revived || 0) + revived;
 }
@@ -67055,7 +67062,7 @@ export async function rhack(_cmd) {
             return;
         }
         if (isBellOfOpeningItem(item)) {
-            const messages = applyBellOfOpening(item);
+            const messages = await applyBellOfOpening(item);
             await setMessage(messages.join('  '), messages.length > 1);
             game.context.move = 1;
             return;

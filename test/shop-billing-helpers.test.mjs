@@ -3375,7 +3375,7 @@ test('charged invocation Bell of Opening petcalls after shrill sound', async () 
     assert.deepEqual(getRngLog(), []);
 });
 
-test('cursed charged Bell of Opening petcalls after no-effect ring', async () => {
+test('cursed charged Bell of Opening summons undead before petcall wake', async () => {
     installNonShopFloorState();
     enableRngLog({ reset: true });
     game.moves = 128;
@@ -3403,13 +3403,24 @@ test('cursed charged Bell of Opening petcalls after no-effect ring', async () =>
     await rhack('a');
     await rhack('b');
 
-    assert.equal(game._pending_message, 'You ring the silver bell.  Nothing happens.  The dog wakes up.');
+    const undead = game.level.monsters.filter(mon => mon !== dog);
+    assert.equal(game._pending_message, 'You ring the silver bell.  The dog wakes up.');
     assert.equal(game.context.move, 1);
     assert.equal(bell.spe, 0);
     assert.equal(bell.age ?? bell.invocationAge ?? bell._invocation_rung_turn, undefined);
+    assert.ok(undead.length > 0);
+    assert.equal(game._bell_mkundead_spawned, undead.length);
+    assert.equal(game._bell_mkundead_revived || 0, 0);
+    assert.equal(game.level.flags.graveyard, true);
+    for (const mon of undead) {
+        assert.notDeepEqual([mon.mx, mon.my], [game.u.ux, game.u.uy]);
+        assert.ok(Math.abs(mon.mx - game.u.ux) <= 1);
+        assert.ok(Math.abs(mon.my - game.u.uy) <= 1);
+        assert.equal(mon.minvent?.length || 0, 0);
+    }
     assert.equal(dog.mextra.edog.whistletime, 128);
     assert.deepEqual(dog.mtrack, [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }]);
-    assert.deepEqual(getRngLog(), []);
+    assert.ok(getRngLog().some(entry => entry.startsWith('rnd(5)=')));
 });
 
 test('applying unpaid Bell of Opening spends a charge and keeps the live bill', async () => {
@@ -3508,9 +3519,11 @@ test('cursed charged Bell of Opening on invocation square bills without priming'
     assert.equal(bell.spe, 0);
     assert.equal(shkp.debit, expectedFee);
     assert.equal(bell.age ?? bell.invocationAge ?? bell._invocation_rung_turn, undefined);
+    assert.equal(game.level.flags.graveyard, true);
     assert.equal(shop.shopBillEntryForObject(shkp, bell).useup, false);
     assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.doesNotMatch(game._pending_message, /unsettling shrill sound/);
+    assert.doesNotMatch(game._pending_message, /Nothing happens/);
 });
 
 test('tipping into an unpaid unknown bag of tricks bills target before locked source checks', async () => {
