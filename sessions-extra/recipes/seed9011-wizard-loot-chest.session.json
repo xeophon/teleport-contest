@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9011,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Looter,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#wizwish\nlarge box\n do #wizwish\nskeleton key\nap.y #loot\nia\ng\n #loot\noa\nc\n ap.y "
+  }
+ ]
+}

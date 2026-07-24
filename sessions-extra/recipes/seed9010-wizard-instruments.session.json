@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9010,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Music,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#wizwish\ntooled horn\n#wizwish\nleather drum\n#wizwish\nbugle\n#wizwish\nhorn of plenty\n#wizwish\nfrost horn\n#wizwish\namulet of reflection\nPt aoy aqnABCDE\n asy l   ar ap ar ap "
+  }
+ ]
+}

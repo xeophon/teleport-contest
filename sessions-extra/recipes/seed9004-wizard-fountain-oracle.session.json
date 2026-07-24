@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9004,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Fountain,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "\u00168\n#wizmap\n khhy hhjjjjjjbhhbbhhhkkk n #wizwish\n5 uncursed scrolls of genocide\n ro  little dog\n ro  grid bug\n ro  newt\n ro  water moccasin\n ro  water nymph\n kkyyhhhhj jlqy qy bqy qy #wizkill\n  n. \u001b nqy qy #wizkill\n  u. \u001b uqy qy nyqy nqy n#dip\nayn "
+  }
+ ]
+}

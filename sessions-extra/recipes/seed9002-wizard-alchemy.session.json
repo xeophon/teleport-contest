@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9002,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Alchemy,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#wizwish\npotion of healing\n #wizwish\n2 potions of gain level\n #wizwish\npotion of booze\n #wizwish\npotion of fruit juice\n #wizwish\npotion of water\n #wizwish\nblessed potion of water\n #wizwish\npotion of enlightenment\n #wizwish\nalchemy smock\n Tb  Wv  #dip\nru  #dip\npq  #dip\nhq  #dip\nst  \n#dip\nlp "
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9009,
+   "datetime": "20000101080000",
+   "nethackrc": "OPTIONS=name:Descent,role:Valkyrie,race:human,gender:female,align:lawful\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none\nOPTIONS=symset:DECgraphics\n",
+   "moves": "_  x. _x. _x. _x.okokok _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.ohohoh _x. _x. _x. _x. _x. _x. _x.ohohoh _x. _x.u _x. _x.kkkk _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.ojojoj _x. _x. _x. _x. _x. _x.uu _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x._>.y _>.hh _>.hh _>. > _x.oh\u0004h\u0004h\u0004h _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.oh\u0004h\u0004h _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.okok _x. _x. _x. _x.ohoh _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.ohoh _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. jj _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.jjjj _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x._>. > _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x.hh _x. _x.h h h h _x. _x. _x. _x. _x. _x. _x. _x.okok _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x. _x._>. > _x. _x. "
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9008,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Polyself,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#levelchange\n3\n   #wizwish\nring of polymorph control\n#wizwish\nwand of polymorph\n#wizwish\nsilver dagger\nPor #polyself\nxorn\n eq h l zp.human\n df dg dh zp> "
+  }
+ ]
+}

@@ -308,8 +308,11 @@ Current validation snapshot:
 - The fake `/bones-marker` and `/bones-state` restore path has been removed.
   Wizard-mode death now leaves only a per-level VFS bones presence file, and
   `getbones()` follows the C `rn2(3)`, `Get bones?`, and `Unlink bones?`
-  prompt shape. Actual bones map/object/monster loading remains outstanding,
-  so seed5006 now diverges where C restores the saved bones level.
+  prompt shape. Bones map/object/monster loading is now ported: the stored
+  level replaces the fresh one wholesale (terrain, ghost, corpse, dropped
+  inventory), `getbones()` runs the C post-load fixup (defunct-monster
+  removal, peaceful/malign reset against the new hero, artifact dedup, name
+  sanitizing), and normal games unlink the file after a successful load.
 - Death scoring no longer has a Tourist/grid-bug fallback. The visible score
   now follows the C `end.c` shape for net gold gain, including the death
   penalty before the existing depth/experience contribution.

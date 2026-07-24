@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9003,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Genocide,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#wizwish\n2 blessed scrolls of genocide\n #wizwish\ncursed scroll of genocide\n ro  L\n      #genocided\n  ro  n\n    #genocided\n  rp  newt\n    #genocided\n   "
+  }
+ ]
+}
