@@ -57,6 +57,45 @@ Wizard mode is enabled via `WIZARDS=*` in the installed sysconf and
 - `a`pply on an unwielded pick-axe wields it (ECMD_TIME), then a canned
   re-apply gives the dig direction prompt next turn.
 
+## More move-writing mechanics (learned in the 9004/9005 sessions)
+
+- `^V` by NAME only resolves levels in the current branch
+  (`dlev_in_current_branch`): "soko1" by name fails even in wizard mode,
+  and "sokoban" lands on the main-dungeon level containing the branch
+  stair, not in sokoban. To reach another branch use `^V?` + menu pages
+  (space pages the menu; soko1..soko4 were letters B..E on page 2) or a
+  numeric depth within the current dungeon.
+- Stepping onto a KNOWN trap asks "Really step onto that X trap? [yn] (n)"
+  — answer `y` or movement keys get eaten by the prompt.
+- Wizard mode adds prompts: "Die? [yn]" before every death (answer `n` to
+  cheat death, full HP) and "Dry up fountain? [yn]" before a fountain
+  dries (answer `n` to keep it; the dry roll itself is 1/3 per use).
+- `#wizkill\n` → "Pick first monster to slay:--More--" + a one-time
+  "Tip: Farlooking…" --More-- (dismiss BOTH), then getpos cursor starts
+  on the hero: move it onto the target, `.` to slay, "Next monster:"
+  chains (cursor persists), ESC to exit. Works across the whole map,
+  even on sleeping/unseen monsters at known positions.
+- Ungenocideable: "water demon" and all were-creatures ("You aren't
+  permitted…" / "No, mortal! That will not be done.").
+- Reading an unidentified scroll prints TWO --More-- ("As you read the
+  scroll, it disappears." + "You have found a scroll of X!") before the
+  genocide prompt; later reads of the same scroll print only the first.
+  A leading space typed at the genocide getlin is trimmed (mungspaces),
+  so `ro  <species>\n ` is robust either way.
+- Class genocide prints one --More-- per wiped species (~8 for `d`);
+  species genocide prints one line.
+- Sokoban: diagonal moves BETWEEN two boulders are rejected
+  ("You cannot pass that way."). A successful push moves the hero INTO
+  the boulder's old tile — including when the boulder plugs a hole (hero
+  stops on the tile before the plugged hole). Failed pushes ("…but in
+  vain.") consume no turn and do not move the hero.
+- Standing on a tile with 2+ items prints "Things that are here:" with a
+  trailing --More--; one-item tiles print a single line, no more.
+- Quaff/#dip on a fountain requires standing ON the fountain tile
+  (5.0 dodrink/dodip check `IS_FOUNTAIN(levl[u.ux][u.uy].typ)`); there is
+  no direction prompt. Delphi (oracle.lua) has a walkable opening in its
+  NW wall — no digging needed.
+
 ## Inspect a recording
 
 `node /tmp/inspect-session.mjs <file> [firstStep] [lastStep]`

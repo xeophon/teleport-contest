@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9005,
+   "datetime": "20260720093000",
+   "nethackrc": "OPTIONS=name:Sokoban,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "\u0016?\n B#wizmap\n lljlhjjljhhhkljlkkkhkljlkkk jjllljlllhhhkhhhhjjjljllklllhhhhjhhkkkklkkllllllk< qf #wizwish\nfood ration\n eo "
+  }
+ ]
+}
