@@ -23662,7 +23662,7 @@ test('already-trapped monster can pull free and fill pit with boulder', async ()
     assert.deepEqual(result, { handled: true, caught: false });
     assert.match(messages, /The goblin pulls free\.\.\./);
     assert.match(messages, /The boulder fills a pit\./);
-    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)', 'rn2(2)']);
+    assert.deepEqual(getRngLog().map(rngCallName), ['rn2(40)', 'rn2(2)', 'rn2(100)']);
     assert.equal(goblin.mtrapped || 0, 0);
     assert.equal(game.level.traps.includes(trap), false);
     assert.equal(game.level.objects.includes(boulder), false);
@@ -29510,6 +29510,10 @@ test('known sleep gas trap can be escaped before gas effects', async () => {
     installCoreRngValues([0]);
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
     assert.equal(game._pending_message, 'You escape a sleeping gas trap.');
@@ -29561,6 +29565,10 @@ test('known anti-magic field always drains energy without escape roll', async ()
     enableRngLog({ reset: true });
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     const log = getRngLog();
     const energy = antiMagicEnergyDrainFromLog(log, { initialEnergy: 20, initialMax: 40 });
@@ -29916,6 +29924,10 @@ test('known web can be escaped before entanglement', async () => {
     installCoreRngValues([0]);
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
     assert.equal(game._pending_message, 'You escape a web.');
@@ -34626,6 +34638,10 @@ test('ordinary movement into a seen web with Sting still uses web movement', asy
     installCoreRngValues([0]);
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
     assert.equal(game._pending_message, 'You escape a web.');
@@ -35746,7 +35762,7 @@ test('deferred hero land mine scatter breaks acid before boulder pit fill', asyn
     await rhack(' ');
 
     assert.deepEqual(getRngLog().map(rngCallName),
-        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(10)', 'rn2(100)', 'rn2(2)', 'rn2(2)']);
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(10)', 'rn2(100)', 'rn2(2)', 'rn2(2)', 'rn2(100)']);
     assert.equal(game._pending_message,
         'KAABLAMM!!!  You triggered a land mine!  A potion of acid shatters!  You smell a peculiar odor...  The boulder fills a pit.');
     assert.equal(targetLoc.typ, ROOM);
@@ -35918,7 +35934,7 @@ test('deferred hero land mine scatter moves dagger before boulder pit fill', asy
     await rhack(' ');
 
     assert.deepEqual(getRngLog().map(rngCallName),
-        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(10)', 'rn2(8)', 'rnd(4)']);
+        ['rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)', 'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)', 'rn2(10)', 'rn2(8)', 'rnd(4)', 'rn2(100)']);
     assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You hear a boulder settle.');
     assert.equal(game._pending_landmine_trap || null, null);
     assert.equal(game.u.uhp, 15);
@@ -35977,7 +35993,7 @@ test('deferred hero land mine scatter splits dagger stack before boulder pit fil
         'rn2(10)', 'rn2(10)', 'rn2(8)', 'rnd(1)',
         'rnd(2)', 'rnd(2)', 'rn2(10)', 'rn2(8)', 'rnd(4)',
         'rnd(1)', 'rnd(2)', 'rn2(10)', 'rn2(8)', 'rnd(4)',
-        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(4)', 'rn2(100)',
     ]);
     assert.equal(game._pending_message, 'KAABLAMM!!!  You triggered a land mine!  You hear a boulder settle.');
     assert.equal(game._pending_landmine_trap || null, null);
@@ -36905,6 +36921,10 @@ test('known bear trap can be escaped before damage', async () => {
     installCoreRngValues([0]);
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)']);
     assert.equal(game._pending_message, 'You escape a bear trap.');
@@ -37110,6 +37130,10 @@ test('hero known spent arrow trap can vanish before generating an arrow', async 
     installCoreRngValues([1, 0]);
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)', 'rn2(15)']);
     assert.equal(game._pending_message, 'You hear a loud click!');
@@ -37665,6 +37689,10 @@ test('hero known spent dart trap can vanish before generating a dart', async () 
     installCoreRngValues([1, 0]);
 
     await rhack('l');
+    // C ref: paranoid_confirmation:trap is default-on (options.c:7173); stepping
+    // onto a seen harmful trap confirms first (hack.c:2552-2579).
+    assert.equal(game._command_mode, 'confirmTrapStep');
+    await rhack('y');
 
     assert.deepEqual(getRngLog().map(rngCallName), ['rn2(5)', 'rn2(15)']);
     assert.match(game._pending_message, /soft click/);
@@ -77055,7 +77083,7 @@ test('attached ball throw pull-out lets old-square boulder fill pit', async () =
     assert.equal(game.u.uy, 5);
     assert.equal(chain.ox, 9);
     assert.equal(chain.oy, 5);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)']);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(100)', 'rn2(100)']);
 });
 
 test('attached ball throw pulls hero out of lava trap state', async () => {
