@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { rhack, __shopBillingTestHooks as shop, heroCarryCapacity } from '../js/cmd.js';
 import { game, resetGame } from '../js/gstate.js';
 import {
     A_LAWFUL, ALTAR, Align2amask, BEAR_TRAP, CLOUD, CORR, DB_EAST, DB_FLOOR,
     DB_ICE, DB_LAVA, DB_MOAT, DB_UNDER, DOOR, DRAWBRIDGE_DOWN, D_BROKEN,
     D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, FOUNTAIN, F_LOOTED,
     GRAVE, HWALL, ICE, ICED_POOL, IRONBARS, LANDMINE, LAVAPOOL, LAVAWALL,
-    MOAT, PIT, POOL, ROOM, SCORR, SDOOR, SINK, S_LDWASHER, S_LPUDDING,
+    MAX_CARR_CAP, MOAT, PIT, POOL, ROOM, SCORR, SDOOR, SINK, S_LDWASHER, S_LPUDDING,
     S_LRING, THRONE, TREE, TREE_LOOTED, TREE_SWARM, T_LOOTED, WATER,
 } from '../js/const.js';
 import { enableRngLog, getRngLog, initRng } from '../js/rng.js';
@@ -2799,4 +2799,52 @@ test('signed wish charge suffix is invalid and stripped like C', async () => {
     assert.equal(game.inventory[0].kind, 'magic marker');
     assert.equal(game.inventory[0].spe, generatedSpe);
     assert.equal(game.inventory[0].cursed || false, false);
+});
+
+// C ref: src/hack.c:4313-4323 weight_cap() Upolyd branch — while polymorphed,
+// carry capacity scales with the new form's body weight before the
+// MAX_CARR_CAP clamp (seed0108 step 165: red dragon form, weight 938,
+// C capacity 1000, so no encumbrance message after the chest wish).
+test('polymorphed red dragon scales carry capacity by body weight', () => {
+    const g = installWishState();
+    g.u.acurr.a = [8, 18, 10, 18, 12, 9]; // base = 25*(8+12)+50 = 550
+    g.u._polyself_form = { name: 'red dragon', mlet: 'D', strong: true };
+    // strong && cwt 4500 (WT_DRAGON) > 1450 (WT_HUMAN): 550*4500/1450 -> clamp 1000
+    assert.equal(heroCarryCapacity(), MAX_CARR_CAP);
+});
+
+test('polymorphed flesh golem keeps base capacity (strong, cwt <= WT_HUMAN)', () => {
+    const g = installWishState();
+    g.u.acurr.a = [8, 18, 10, 18, 12, 9];
+    g.u._polyself_form = { name: 'flesh golem', mlet: "'", strong: true };
+    assert.equal(heroCarryCapacity(), 550);
+});
+
+test('polymorphed stone golem scales capacity by golem body weight', () => {
+    const g = installWishState();
+    g.u.acurr.a = [8, 18, 10, 18, 12, 9];
+    g.u._polyself_form = { name: 'stone golem', mlet: "'", strong: true };
+    // strong && 1900 > 1450: trunc(550*1900/1450) = 720
+    assert.equal(heroCarryCapacity(), 720);
+});
+
+test('unlisted weak polyself form leaves capacity unchanged', () => {
+    const g = installWishState();
+    g.u.acurr.a = [8, 18, 10, 18, 12, 9];
+    g.u._polyself_form = { name: 'newt', mlet: ':' };
+    // unknown forms default to WT_HUMAN: 550*1450/1450
+    assert.equal(heroCarryCapacity(), 550);
+});
+
+test('nymph polyself form maxes carry capacity (S_NYMPH)', () => {
+    const g = installWishState();
+    g.u.acurr.a = [8, 18, 10, 18, 12, 9];
+    g.u._polyself_form = { name: 'wood nymph', mlet: 'n' };
+    assert.equal(heroCarryCapacity(), MAX_CARR_CAP);
+});
+
+test('carry capacity without a polyself form is the 25*(Str+Con)+50 base', () => {
+    const g = installWishState();
+    g.u.acurr.a = [8, 18, 10, 18, 12, 9];
+    assert.equal(heroCarryCapacity(), 550);
 });
