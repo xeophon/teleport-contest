@@ -181,14 +181,19 @@ Two notes for the record:
   call-for-call through both shop layouts and the maps are byte-identical;
   seed9009's shopkeeper divergence was entirely the (f) freeze hack.
 
-## Verification status at time of writing
+## Verification status (final, 2026-07-26)
 
-- `node tools/compare-one-session.mjs sessions-extra/seed9009-normal-descent.session.json`:
-  JS 1160 C 1160, all screens match.
+- **seed9009: PASS (RNG 19012/19012, Screen 1160/1160)** —
+  `node frozen/ps_test_runner.mjs sessions-extra/seed9009-normal-descent.session.json`,
+  verified on `git archive HEAD` (1add271) plus this slice's complete hunk set
+  (the 2026-07-26 follow-up increments 1-4 below), and earlier on the live
+  working tree before the corruption incident noted there.
 - `node frozen/ps_test_runner.mjs sessions-extra/seed9001-wizard-dig-pilot.session.json`: PASS.
 - `node --test test/getpos-travel.test.mjs`: 16/16.
-- `bash frozen/score.sh`: 43/44 - seed0014 red per (h); all 43 others green,
-  including seed4500 (RNG 108275/108275) and seed0200.
-- `node --test test/*.test.mjs`: 3526 pass, 2 fail - both failures are in
-  `test/shop-billing-helpers.test.mjs` (food/polyself), the same concurrent
-  work area as (h), unrelated to this slice.
+- Public suite: see the 2026-07-26 follow-up for the gate history
+  (44/44 at f4bfb32; the tree-wide red later that week was bisected to
+  concurrent uncommitted allmain.js work, not this slice: HEAD alone and
+  HEAD + this slice's hunks both pass seed0077, working-tree allmain.js
+  fails it).
+
+## 2026-07-26 follow-up: seed9009 to FULL PASS (RNG 19012/19012, screens 1160/1160)
