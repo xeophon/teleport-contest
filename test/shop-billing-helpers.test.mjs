@@ -1536,6 +1536,10 @@ function wornHeroLifeSavingAmulet(id, letter = 'a') {
 }
 
 async function enterGenocideResponse(name) {
+    // C ref: doread() plines the disappearance/discovery messages before
+    // seffect_genocide() prompts via getlin (read.c:1722-1737); tty forces a
+    // --More-- for each, so drain the queued messages to reach the prompt.
+    await drainQueuedMessagesAfterMore();
     for (const ch of name) await rhack(ch);
     await rhack('\n');
 }
@@ -13796,14 +13800,22 @@ test('self-genocide consumes life saving but still dies', async () => {
 
     await rhack('r');
     await rhack('s');
+    // C ref: tty forces a --More-- for the disappearance/discovery plines
+    // before getlin shows the genocide prompt (read.c:1722-1737,
+    // win/tty/getline.c:53).
+    await drainQueuedMessagesAfterMore();
     assert.equal(game._command_mode, 'genocideText');
     await enterGenocideResponse('dwarf');
 
     assert.equal(game._command_mode, 'deathDieMore');
-    assert.match(game._pending_message, /Wiped out all dwarves\./);
-    assert.match(game._pending_message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
-    assert.match(game._pending_message, /You feel much better!  The medallion crumbles to dust!/);
-    assert.match(game._pending_message, /Unfortunately you are still genocided\.\.\./);
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /Wiped out all dwarves\./);
+    assert.match(message, /You die\.\.\.  But wait\.\.\.  Your medallion begins to glow!/);
+    assert.match(message, /You feel much better!  The medallion crumbles to dust!/);
+    assert.match(message, /Unfortunately you are still genocided\.\.\./);
     assert.equal(game.inventory.includes(scroll), false);
     assert.equal(game.inventory.includes(amulet), false);
     assert.equal(game._death_cause, 'scroll of genocide');
@@ -13876,7 +13888,10 @@ test('caveman role genocide of cave dweller follows C self-genocide before refus
     await rhack('s');
     await enterGenocideResponse('cavemen');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game._command_mode, 'deathDieMore');
     assert.match(message, /Wiped out all cave dwellers\./);
     assert.match(message, /You die\.\.\./);
@@ -14669,7 +14684,10 @@ test('blessed genocide catalogs C Kop class', async () => {
     await rhack('s');
     await enterGenocideResponse('kop');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     for (const expected of [
         /Wiped out all Keystone Kops\./,
         /Wiped out all Kop Sergeants\./,
@@ -14723,7 +14741,10 @@ test('blessed genocide skips C non-G_GENO elemental class members', async () => 
     await rhack('s');
     await enterGenocideResponse('E');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.match(message, /Wiped out all stalkers\./);
     assert.doesNotMatch(message, /You aren't permitted to genocide such monsters\./);
     assert.equal(game._command_mode || null, null);
@@ -14820,7 +14841,10 @@ test('blessed genocide skips C non-G_GENO titan in giant class', async () => {
     await rhack('s');
     await enterGenocideResponse('H');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.match(message, /Wiped out all stone giants\./);
     assert.match(message, /Wiped out all minotaurs\./);
     assert.match(message, /You aren't permitted to genocide titans\./);
@@ -14858,7 +14882,10 @@ test('blessed genocide skips C non-G_GENO salamander in lizard class', async () 
     await rhack('s');
     await enterGenocideResponse(':');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.match(message, /Wiped out all newts\./);
     assert.match(message, /You aren't permitted to genocide salamanders\./);
     assert.equal(game._command_mode || null, null);
@@ -14929,7 +14956,10 @@ test('genociding shifted vampire base reverts before named wipeout then rehumani
     await rhack('s');
     await enterGenocideResponse('vampire');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game._command_mode || null, null);
     assert.match(message, /You turn into a vampire!/);
     assert.match(message, /Wiped out all vampires\./);
@@ -14952,7 +14982,10 @@ test('class-genociding shifted vampire visible class reverts after wipeout', asy
     await rhack('s');
     await enterGenocideResponse('B');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game._command_mode || null, null);
     assert.match(message, /Wiped out all vampire bats\./);
     assert.match(message, /You turn into a vampire!/);
@@ -15127,7 +15160,10 @@ test('genocide cleanup lets shifted base target consume monster life saving', as
     await rhack('s');
     await enterGenocideResponse('doppelganger');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game.level.monsters.includes(monster), true);
     assert.equal(monster.dead, false);
     assert.equal(monster.mhp, 10);
@@ -15166,7 +15202,10 @@ test('genocide cleanup restores shifted true form after failed life saving', asy
     await rhack('s');
     await enterGenocideResponse('doppelganger');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game.level.monsters.includes(monster), false);
     assert.equal(monster.dead, true);
     assert.equal(monster.mhp, 0);
@@ -15206,7 +15245,10 @@ test('genocide cleanup consumes monster life saving before current-form removal'
     await rhack('s');
     await enterGenocideResponse('goblin');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game.level.monsters.includes(monster), false);
     assert.equal(monster.dead, true);
     assert.equal(monster.mhp, 0);
@@ -15402,7 +15444,10 @@ test('genocide cleanup restores shifted vampire true form after failed life savi
     await rhack('s');
     await enterGenocideResponse('vampire');
 
-    const message = game._pending_message || '';
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game.level.monsters.includes(monster), false);
     assert.equal(monster.dead, true);
     assert.equal(monster.mhp, 0);
@@ -20377,13 +20422,11 @@ test('dipping a rusty weapon into unpaid oil repairs rust without fuel tax', asy
     await rhack('\n');
     await rhack('d');
 
-    assert.equal(game._command_mode, 'dipConfirm');
-    assert.match(game._pending_message, /Dip a rusty dagger into the fountain\? \[yn\] \(n\)/);
-
-    await rhack('n');
-
-    assert.equal(game._command_mode, 'dipOilSource');
-    assert.match(game._pending_message, /What do you want to dip a rusty dagger into\? \[o or \?\*\]/);
+    // C ref: dodip() (potion.c:2310-2364) only offers the fountain when the
+    // hero stands on one; otherwise it prompts for a potion source, and the
+    // recorded sessions run !verbose so the prompt uses "it".
+    assert.equal(game._command_mode, 'dipPotionSource');
+    assert.match(game._pending_message, /What do you want to dip it into\? \[o or \?\*\]/);
 
     await rhack('o');
 
@@ -20415,7 +20458,6 @@ test('dipping a rusty corroded weapon into oil repairs both erosion counters', a
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('o');
 
     assert.equal(game._command_mode, null);
@@ -20436,7 +20478,6 @@ test('dipping a clean weapon into oil consumes oil without greasing it', async (
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('o');
 
     assert.equal(game._command_mode, null);
@@ -20466,7 +20507,6 @@ test('dipping a rusty weapon-tool into oil repairs it', async () => {
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('p');
-    await rhack('n');
     await rhack('o');
 
     assert.equal(game._command_mode, null);
@@ -20488,7 +20528,6 @@ test('dipping an unpaid oil stack into a weapon preserves residual billing witho
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('o');
 
     assert.equal(game._command_mode, null);
@@ -20521,7 +20560,6 @@ test('dipping a weapon into cursed oil spills before repairing rust', async () =
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('o');
 
     assert.equal(game._command_mode, null);
@@ -20542,10 +20580,11 @@ test('dipping a dagger into acid corrodes it and consumes the potion', async () 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
 
-    assert.equal(game._command_mode, 'dipOilSource');
-    assert.match(game._pending_message, /What do you want to dip a dagger into\? \[a or \?\*\]/);
+    // C ref: dodip() (potion.c:2310-2364) prompts directly for a potion
+    // source when the hero is not on a fountain/sink/pool.
+    assert.equal(game._command_mode, 'dipPotionSource');
+    assert.match(game._pending_message, /What do you want to dip it into\? \[a or \?\*\]/);
 
     await rhack('a');
 
@@ -20568,7 +20607,6 @@ test('dipping an already thoroughly corroded dagger into acid does not consume t
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('a');
 
     assert.equal(game._command_mode, null);
@@ -20589,7 +20627,6 @@ test('dipping a greased dagger into acid consumes acid without corrosion', async
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('a');
 
     assert.equal(game._command_mode, null);
@@ -20609,7 +20646,6 @@ test('dipping greased non-corrodeable armor into acid consumes acid before mater
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('a');
 
     assert.equal(game._command_mode, null);
@@ -20630,7 +20666,6 @@ test('dipping a corrodeproof dagger into acid does not consume acid and reveals 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('a');
 
     assert.equal(game._command_mode, null);
@@ -20638,8 +20673,14 @@ test('dipping a corrodeproof dagger into acid does not consume acid and reveals 
     assert.equal(target.oeroded2 || 0, 0);
     assert.equal(target.rknown, true);
     assert.equal(game.inventory.includes(potion), true);
-    assert.match(game._pending_message, /not affected by the corrosion/);
-    assert.match(game._pending_message, /Interesting\.\.\./);
+    // C ref: each dip message gets its own --More-- when it does not fit on
+    // the line with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /not affected by the corrosion/);
+    assert.match(message, /Interesting\.\.\./);
 });
 
 test('dipping an unpaid acid stack into a dagger preserves residual billing without usage debit', async () => {
@@ -20653,7 +20694,6 @@ test('dipping an unpaid acid stack into a dagger preserves residual billing with
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('a');
 
     assert.equal(game._command_mode, null);
@@ -20739,7 +20779,6 @@ test('dipping unicorn horn into sickness stack neutralizes one potion into fruit
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('u');
-    await rhack('n');
     await rhack('s');
 
     assert.equal(game._command_mode, null);
@@ -20773,7 +20812,6 @@ test('unicorn horn turns confusion blindness and hallucination into uncursed und
         for (const ch of 'dip') await rhack(ch);
         await rhack('\n');
         await rhack('u');
-        await rhack('n');
         await rhack(letter);
 
         assert.equal(game._command_mode, null, name);
@@ -20799,7 +20837,6 @@ test('cursed unicorn horn makes sickness neutralization fruit juice cursed', asy
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('u');
-    await rhack('n');
     await rhack('s');
 
     assert.equal(potion.kind, 'fruit juice');
@@ -20818,7 +20855,6 @@ test('amethyst turns booze into fruit juice with amethyst curse state', async ()
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('a');
-    await rhack('n');
     await rhack('b');
 
     assert.equal(game._command_mode, null);
@@ -20841,7 +20877,6 @@ test('nonmatching horn dip is Interesting and does not mutate source', async () 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('u');
-    await rhack('n');
     await rhack('b');
 
     assert.equal(game._command_mode, null);
@@ -20862,7 +20897,6 @@ test('unpaid sickness stack neutralization preserves residual and used-up bills'
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('u');
-    await rhack('n');
     await rhack('s');
 
     assert.equal(game._command_mode, null);
@@ -20879,8 +20913,14 @@ test('unpaid sickness stack neutralization preserves residual and used-up bills'
     const debts = shop.collectPayableShopDebts(shkp);
     assert.equal(debts.some(debt => debt.billPortion === 'fullyUsedUp' && debt.price === 50), true);
     assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 50), true);
-    assert.match(game._pending_message, /You neutralize that potion of sickness, you pay for it!/);
-    assert.match(game._pending_message, /The potion that you dipped into turns/);
+    // C ref: each dip message gets its own --More-- when it does not fit on
+    // the line with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /You neutralize that potion of sickness, you pay for it!/);
+    assert.match(message, /The potion that you dipped into turns/);
 });
 
 test('blind unicorn horn neutralization mutates without visible transformation text', async () => {
@@ -20894,7 +20934,6 @@ test('blind unicorn horn neutralization mutates without visible transformation t
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('u');
-    await rhack('n');
     await rhack('c');
 
     assert.equal(game._command_mode, null);
@@ -20924,6 +20963,10 @@ test('dipping a known poisoned dart prompts with doname poison ordering', async 
     const target = dartStack(30970, 'd', 1, { opoisoned: true, spe: 0, line: 'd - a +0 poisoned dart' });
     const potion = healingPotion(30971, 'h');
     game.inventory = [target, potion];
+    // C ref: dodip() (potion.c:2314-2325) only asks "Dip <obj> into the
+    // fountain?" when the hero stands on one, so stand on a fountain to
+    // exercise the doname ordering in that prompt.
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: FOUNTAIN });
 
     await rhack('#');
     for (const ch of 'dip') await rhack(ch);
@@ -20946,13 +20989,11 @@ test('dipping poisonable darts into sickness coats the stack', async () => {
     await rhack('\n');
     await rhack('d');
 
-    assert.equal(game._command_mode, 'dipConfirm');
-    assert.match(game._pending_message, /Dip 3 darts into the fountain\? \[yn\] \(n\)/);
-
-    await rhack('n');
-
-    assert.equal(game._command_mode, 'dipOilSource');
-    assert.match(game._pending_message, /What do you want to dip 3 darts into\? \[s or \?\*\]/);
+    // C ref: dodip() (potion.c:2310-2364) prompts directly for a potion
+    // source when not on a floor feature; !verbose sessions name the target
+    // as "them" for a plural stack.
+    assert.equal(game._command_mode, 'dipPotionSource');
+    assert.match(game._pending_message, /What do you want to dip them into\? \[s or \?\*\]/);
 
     await rhack('s');
 
@@ -20975,10 +21016,9 @@ test('ordinary dip offers non-effect potion sources and keeps them after Interes
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
 
-    assert.equal(game._command_mode, 'dipOilSource');
-    assert.match(game._pending_message, /What do you want to dip a dagger into\? \[h or \?\*\]/);
+    assert.equal(game._command_mode, 'dipPotionSource');
+    assert.match(game._pending_message, /What do you want to dip it into\? \[h or \?\*\]/);
 
     await rhack('h');
 
@@ -21024,7 +21064,6 @@ test('dipping a polymorph potion target into another potion polymorphs the carri
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('p');
-    await rhack('n');
     await rhack('h');
 
     assert.equal(game._command_mode, null);
@@ -21049,7 +21088,6 @@ test('dipping an unpolyable object into polymorph potion keeps the potion', asyn
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('w');
-    await rhack('n');
     await rhack('p');
 
     assert.equal(game._command_mode, null);
@@ -41432,7 +41470,6 @@ test('potion alchemy mixes healing and speed into diluted extra healing', async 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('h');
-    await rhack('n');
     await rhack('s');
 
     assert.equal(game._command_mode, null);
@@ -41446,8 +41483,16 @@ test('potion alchemy mixes healing and speed into diluted extra healing', async 
     assert.equal(target.blessed, false);
     assert.equal(target.cursed, false);
     assert.equal(target.bknown, false);
-    assert.match(game._pending_message, /potion of healing mixes with potion of speed/);
-    assert.match(game._pending_message, /The mixture looks/);
+    // C ref: the mix pline uses appearance names for undiscovered potions
+    // (potion.c:2517-2519, "The clear potion mixes with the clear
+    // potion..."), and each dip message gets its own --More-- when it does
+    // not fit with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /The clear potion mixes with the clear potion\.\.\./);
+    assert.match(message, /The mixture looks/);
 });
 
 test('cursed potion alchemy explodes after consuming the source potion', async () => {
@@ -41462,7 +41507,6 @@ test('cursed potion alchemy explodes after consuming the source potion', async (
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('c');
-    await rhack('n');
     await rhack('b');
 
     assert.equal(game._command_mode, null);
@@ -41472,8 +41516,14 @@ test('cursed potion alchemy explodes after consuming the source potion', async (
     assert.ok(game.u._confusionTimeout > 0);
     assert.match(game.u._statusSuffix || '', /Conf/);
     assert.ok(game.u.uhp < 50);
-    assert.match(game._pending_message, /You feel somewhat dizzy\./);
-    assert.match(game._pending_message, /BOOM!  They explode!/);
+    // C ref: each alchemy message gets its own --More-- when it does not fit
+    // on the line with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /You feel somewhat dizzy\./);
+    assert.match(message, /BOOM!  They explode!/);
 });
 
 test('wet worn towel blocks alchemy explosion vapor effects', async () => {
@@ -41493,7 +41543,6 @@ test('wet worn towel blocks alchemy explosion vapor effects', async () => {
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('c');
-    await rhack('n');
     await rhack('b');
 
     assert.equal(game._command_mode, null);
@@ -41503,7 +41552,13 @@ test('wet worn towel blocks alchemy explosion vapor effects', async () => {
     assert.equal(game.u._confusionTimeout || 0, 0);
     assert.doesNotMatch(game.u._statusSuffix || '', /Conf/);
     assert.ok(game.u.uhp < 50);
-    assert.match(game._pending_message, /Some vapor passes harmlessly around you\./);
+    // C ref: each alchemy message gets its own --More-- when it does not fit
+    // on the line with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /Some vapor passes harmlessly around you\./);
 });
 
 test('known blindness vapor from alchemy explosion discovers the potion', async () => {
@@ -41518,7 +41573,6 @@ test('known blindness vapor from alchemy explosion discovers the potion', async 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('b');
-    await rhack('n');
     await rhack('z');
 
     assert.equal(game._command_mode, null);
@@ -41526,7 +41580,13 @@ test('known blindness vapor from alchemy explosion discovers the potion', async 
     assert.equal(game.inventory.includes(target), false);
     assert.equal(game.u.blind, true);
     assert.ok(game.u._blindTimeout > 0);
-    assert.match(game._pending_message, /It suddenly gets dark\./);
+    // C ref: each alchemy message gets its own --More-- when it does not fit
+    // on the line with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /It suddenly gets dark\./);
     assert.equal(game._discoveries?.some(entry => entry.section === 'Potions' && entry.name === 'potion of blindness'), true);
 });
 
@@ -41541,13 +41601,18 @@ test('alchemy explosion holy water vapor uses lifesaving for old-form death', as
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('w');
-    await rhack('n');
     await rhack('b');
 
-    const message = game._pending_message;
+    // C ref: the mix pline uses appearance names for undiscovered potions
+    // (potion.c:2517-2519), and each alchemy message gets its own --More--
+    // when it does not fit with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
     assert.equal(game._command_mode, 'lifeSavingMore');
     assert.equal(game.context.move, 0);
-    assert.match(message, /potion of water mixes with potion of booze/);
+    assert.match(message, /The clear potion mixes with the clear potion\.\.\./);
     assert.match(message, /BOOM!  They explode!/);
     assert.match(message, /You return to human form!/);
     assert.match(message, /Your old form was not healthy enough to survive\./);
@@ -41587,7 +41652,6 @@ test('dipping poisoned darts into healing-family potions removes the coating', a
         for (const ch of 'dip') await rhack(ch);
         await rhack('\n');
         await rhack('d');
-        await rhack('n');
         await rhack(name[0]);
 
         assert.equal(game._command_mode, null, name);
@@ -41609,7 +41673,6 @@ test('dipping already poisoned darts into sickness does not consume the potion',
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('s');
 
     assert.equal(game._command_mode, null);
@@ -41653,7 +41716,6 @@ test('dipping unpaid sickness stack into darts preserves residual billing withou
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('s');
 
     assert.equal(game._command_mode, null);
@@ -41691,7 +41753,6 @@ test('dipping permapoisoned Grimtooth into healing does not remove poison', asyn
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('g');
-    await rhack('n');
     await rhack('h');
 
     assert.equal(game._command_mode, null);
@@ -41711,16 +41772,23 @@ test('dipping cursed items into blessed water uncurses and consumes the water', 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
-    assert.equal(game._command_mode, null);
-    assert.equal(game.context.move, 1);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
     assert.equal(target.cursed, false);
     assert.equal(target.blessed, undefined);
     assert.equal(target.bknown, true);
     assert.equal(game.inventory.includes(water), false);
     assert.match(game._pending_message, /Your cursed dagger glows amber\./);
+
+    // C ref: poof() runs trycall() for the used-up water potion while its
+    // type is undiscovered (potion.c:2413-2417); answering with no name
+    // completes the dip command.
+    await rhack(' ');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('dipping uncursed items into blessed water blesses them', async () => {
@@ -41733,16 +41801,23 @@ test('dipping uncursed items into blessed water blesses them', async () => {
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
-    assert.equal(game._command_mode, null);
-    assert.equal(game.context.move, 1);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
     assert.equal(target.blessed, true);
     assert.equal(target.cursed, false);
     assert.equal(target.bknown, true);
     assert.equal(game.inventory.includes(water), false);
     assert.match(game._pending_message, /Your dagger glows with a light blue aura\./);
+
+    // C ref: poof() runs trycall() for the used-up water potion while its
+    // type is undiscovered (potion.c:2413-2417); answering with no name
+    // completes the dip command.
+    await rhack(' ');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('dipping already blessed items into blessed water keeps the water', async () => {
@@ -41755,7 +41830,6 @@ test('dipping already blessed items into blessed water keeps the water', async (
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -41775,16 +41849,23 @@ test('dipping blessed items into cursed water unblesses and consumes the water',
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
-    assert.equal(game._command_mode, null);
-    assert.equal(game.context.move, 1);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
     assert.equal(target.blessed, false);
     assert.equal(target.cursed, undefined);
     assert.equal(target.bknown, true);
     assert.equal(game.inventory.includes(water), false);
     assert.match(game._pending_message, /Your blessed dagger glows brown\./);
+
+    // C ref: poof() runs trycall() for the used-up water potion while its
+    // type is undiscovered (potion.c:2413-2417); answering with no name
+    // completes the dip command.
+    await rhack(' ');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('dipping uncursed items into cursed water curses them', async () => {
@@ -41797,16 +41878,23 @@ test('dipping uncursed items into cursed water curses them', async () => {
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
-    assert.equal(game._command_mode, null);
-    assert.equal(game.context.move, 1);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
     assert.equal(target.blessed, false);
     assert.equal(target.cursed, true);
     assert.equal(target.bknown, true);
     assert.equal(game.inventory.includes(water), false);
     assert.match(game._pending_message, /Your dagger glows with a black aura\./);
+
+    // C ref: poof() runs trycall() for the used-up water potion while its
+    // type is undiscovered (potion.c:2413-2417); answering with no name
+    // completes the dip command.
+    await rhack(' ');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('dipping unpaid holy water into cursed water preserves a used-up devaluation bill', async () => {
@@ -41820,11 +41908,9 @@ test('dipping unpaid holy water into cursed water preserves a used-up devaluatio
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('h');
-    await rhack('n');
     await rhack('c');
 
-    assert.equal(game._command_mode, null);
-    assert.equal(game.context.move, 1);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
     assert.equal(target.blessed, false);
     assert.equal(target.cursed, false);
     assert.equal(target.bknown, true);
@@ -41834,8 +41920,23 @@ test('dipping unpaid holy water into cursed water preserves a used-up devaluatio
     assert.equal(shkp.billct, 1);
     assert.equal(shkp.bill[0].useup, true);
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
-    assert.match(game._pending_message, /Your potion of holy water glows brown\./);
-    assert.match(game._pending_message, /You unbless that potion of holy water, you pay for it!/);
+    // C ref: each dip message gets its own --More-- when it does not fit on
+    // the line with the previous one (win/tty/topl.c:251).
+    const message = [
+        game._pending_message,
+        ...(game._queued_messages_after_more || []).map(entry => entry.text),
+    ].filter(Boolean).join('  ');
+    assert.match(message, /Your potion of holy water glows brown\./);
+    assert.match(message, /You unbless that potion of holy water, you pay for it!/);
+
+    // C ref: poof() runs trycall() for the used-up water potion while its
+    // type is undiscovered (potion.c:2413-2417); answering with no name
+    // completes the dip command.
+    await rhack(' ');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('dipping unpaid holy water stack into an item preserves residual source billing', async () => {
@@ -41849,11 +41950,9 @@ test('dipping unpaid holy water stack into an item preserves residual source bil
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
-    assert.equal(game._command_mode, null);
-    assert.equal(game.context.move, 1);
+    assert.equal(game._command_mode, 'callPotionAfterMore');
     assert.equal(target.cursed, false);
     assert.equal(water.quan, 1);
     assert.equal(game.inventory.includes(water), true);
@@ -41868,6 +41967,15 @@ test('dipping unpaid holy water stack into an item preserves residual source bil
     assert.equal(debts.some(debt => debt.billPortion === 'intact' && debt.price === 100), true);
     assert.match(game._pending_message, /Your cursed dagger glows amber\./);
     assert.doesNotMatch(game._pending_message, /Yendorian Fuel Tax|in addition to the cost/);
+
+    // C ref: poof() runs trycall() for the used-up water potion while its
+    // type is undiscovered (potion.c:2413-2417); answering with no name
+    // completes the dip command.
+    await rhack(' ');
+    await rhack('\n');
+
+    assert.equal(game._command_mode, null);
+    assert.equal(game.context.move, 1);
 });
 
 test('dipping a scroll into neutral water blanks it and consumes the water', async () => {
@@ -41880,7 +41988,6 @@ test('dipping a scroll into neutral water blanks it and consumes the water', asy
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('s');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -41902,7 +42009,6 @@ test('dipping a blank scroll into neutral water is Interesting and keeps the wat
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('s');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -41922,7 +42028,6 @@ test('dipping a spellbook into neutral water blanks spell data and consumes the 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('b');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -41946,7 +42051,6 @@ test('dipping unpaid acid into neutral water destroys acid and leaves a used-up 
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('a');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -41967,7 +42071,6 @@ test('dipping potions into neutral water dilutes then turns diluted potions into
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('h');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(potion.kind, 'healing');
@@ -41984,7 +42087,6 @@ test('dipping potions into neutral water dilutes then turns diluted potions into
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('h');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -42009,7 +42111,6 @@ test('dipping a greased scroll into neutral water protects it and consumes the w
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('s');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -42029,7 +42130,6 @@ test('dipping a rustable weapon into neutral water rusts it and consumes the wat
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('d');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -42050,7 +42150,6 @@ test('dipping a dry towel into neutral water wets it and consumes the water', as
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('t');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -42071,7 +42170,6 @@ test('dipping a sack into neutral water damages contained scrolls and consumes t
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('b');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -42092,7 +42190,6 @@ test('dipping a greased sack into neutral water protects contents and consumes t
     for (const ch of 'dip') await rhack(ch);
     await rhack('\n');
     await rhack('b');
-    await rhack('n');
     await rhack('w');
 
     assert.equal(game._command_mode, null);
@@ -45414,6 +45511,9 @@ test('carried food ration command starts victual with one C bite', async () => {
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     assert.equal(game.inventory.includes(ration), true);
     assert.equal(ration.oeaten, 640);
@@ -45450,6 +45550,9 @@ test('interrupted carried food ration resumes same victual without rebilling', a
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
     processEatingOccupationTick(game);
     interruptEatingOccupation(game);
 
@@ -45489,6 +45592,9 @@ test('interruption on carried food ration final bite finishes the meal', async (
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
     for (let i = 0; i < 4; i++) processEatingOccupationTick(game);
     interruptEatingOccupation(game);
 
@@ -45508,6 +45614,9 @@ test('carried food ration full warning sets finally-finished message without pro
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
     for (let i = 0; i < 3; i++) processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, "You're having a hard time getting all of it down.");
@@ -45534,6 +45643,9 @@ test('satiated carried food ration full warning prompts and declining pauses the
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     assert.equal(game._eating_canchoke, true);
     assert.equal(game.u.uhunger, 1360);
@@ -45573,8 +45685,14 @@ test('floor pancake full warning uses finally-finished message without continue 
 
     await rhack('e');
     await rhack('y');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
-    assert.equal(game._pending_message, "This pancake is delicious!  You're having a hard time getting all of it down.");
+    // C ref: the full-warning pline does not fit with the delicious message
+    // on the top line, so tty shows it after a --More-- (win/tty/topl.c:251).
+    assert.equal(game._pending_message, "This pancake is delicious!");
+    assert.equal(game._topline_after_more, "You're having a hard time getting all of it down.");
     assert.equal(game._command_mode || null, null);
     assert.equal(game._eating_canchoke, true);
     assert.equal(game._eating_fullwarn, 1);
@@ -45598,6 +45716,10 @@ test('satiated carried food ration can fatally choke on first bite over 2000', a
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified);
+    // the bite tips hunger past 2000 and triggers the choke (eat.c:3297).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'You choke over your food.  You die...');
     assert.equal(game._message_more, 1);
@@ -45630,6 +45752,10 @@ test('satiated carried food ration choking life-saving resets hunger', async () 
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified);
+    // the bite tips hunger past 2000 and triggers the choke (eat.c:3297).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'You choke over your food.  You die...  But wait...  Your medallion begins to glow!');
     assert.equal(game._command_mode, 'lifeSavingMore');
@@ -45668,6 +45794,10 @@ test('satiated carried food ration choking recovers with magical breathing', asy
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified);
+    // the bite tips hunger past 2000 and triggers the choke (eat.c:3297).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'You stuff yourself and then vomit voluminously.');
     assert.equal(game._command_mode || null, null);
@@ -45697,6 +45827,9 @@ test('hunger property skips full warning and recovers choking to 60 hunger', asy
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     assert.equal(game.u.uhunger, 1560);
     assert.equal(game._eating_fullwarn || 0, 0);
@@ -45711,6 +45844,10 @@ test('hunger property skips full warning and recovers choking to 60 hunger', asy
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified);
+    // the bite tips hunger past 2000 and triggers the choke (eat.c:3297).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'You stuff yourself and then vomit voluminously.');
     assert.equal(game._command_mode || null, null);
@@ -45743,6 +45880,9 @@ test('strangulation blocks random carried food choking recovery after eating sta
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
     processEatingOccupationTick(game);
 
     assert.equal(game._command_mode, 'continueEatingPrompt');
@@ -45772,6 +45912,10 @@ test('satiated carried food ration over 2000 can recover by vomiting', async () 
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified);
+    // the bite tips hunger past 2000 and triggers the choke (eat.c:3297).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'You stuff yourself and then vomit voluminously.');
     assert.equal(game._command_mode || null, null);
@@ -45796,6 +45940,9 @@ test('accepted carried food ration full-warning prompt preserves canchoke until 
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
     processEatingOccupationTick(game);
 
     assert.equal(game._command_mode, 'continueEatingPrompt');
@@ -45828,6 +45975,10 @@ test('floor food ration can fatally choke on first bite over 2000', async () => 
 
     await rhack('e');
     await rhack('y');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified);
+    // the bite tips hunger past 2000 and triggers the choke (eat.c:3297).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'You choke over your food.  You die...');
     assert.equal(game._command_mode, 'deathDieMore');
@@ -45848,6 +45999,9 @@ test('carried food ration command splits unpaid stack before victual bites', asy
 
     await rhack('e');
     await rhack('a');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     const touched = game._eating_inventory_object;
     assert.ok(touched);
@@ -45884,6 +46038,10 @@ test('carried delayed ordinary foods use C bite timing and messages', async () =
 
         await rhack('e');
         await rhack(entry.letter);
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         assert.equal(game._pending_message, entry.message, entry.kind);
         assert.equal(game.inventory.includes(food), true, entry.kind);
@@ -45922,6 +46080,10 @@ test('polyself diet overlay drives tripe first-bite wording', async () => {
 
         await rhack('e');
         await rhack('t');
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         assert.equal(game._pending_message, entry.message, entry.formName);
         assert.equal(game.inventory.includes(food), true, entry.formName);
@@ -45941,6 +46103,9 @@ test('carried enormous meatball starts C delayed flesh meal', async () => {
 
     await rhack('e');
     await rhack('n');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     assert.equal(game._pending_message, 'This enormous meatball is delicious!');
     assert.equal(game.inventory.includes(food), true);
@@ -45971,6 +46136,10 @@ test('carried delayed foods use C race-adjusted hunger before victual ticks', as
 
         await rhack('e');
         await rhack(entry.letter);
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         assert.equal(game._pending_message, entry.message, entry.race);
         assert.equal(food.oeaten, entry.firstOeaten, entry.race);
@@ -46008,6 +46177,11 @@ test('cursed carried delayed foods use C rotten first bite before victual ticks'
         await rhack(entry.letter);
 
         assert.equal(game._pending_message, 'Blecch!  Rotten food!', entry.kind);
+        // C ref: the rotten-food --More-- must be dismissed before the
+        // moveloop drives the first eatfood() bite (eat.c:519-540,
+        // session-verified).
+        acknowledgeMoreForOccupation();
+        processEatingOccupationTick(game);
         assert.equal(game.u.uhunger, entry.firstHunger, entry.kind);
         if (entry.firstOeaten == null) {
             assert.equal(game.inventory.includes(food), false, entry.kind);
@@ -46039,6 +46213,10 @@ test('old orotten carried delayed food halves before first C bite', async () => 
     await rhack('f');
 
     assert.match(game._pending_message, /^Blecch!  Rotten food!/);
+    // C ref: the rotten-food --More-- must be dismissed before the moveloop
+    // drives the first eatfood() bite (eat.c:519-540, session-verified).
+    acknowledgeMoreForOccupation();
+    processEatingOccupationTick(game);
     assert.equal(ration.oeaten, 267);
     assert.equal(game.u.uhunger, 1033);
     assert.equal(game._eating_turns_remaining, 3);
@@ -46063,6 +46241,10 @@ test('orotten carried delayed foods respect C nonrotting exemptions', async () =
 
         await rhack('e');
         await rhack(entry.letter);
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         assert.equal(game._pending_message, entry.rotten ? 'Blecch!  Rotten food!' : entry.message, entry.kind);
         assert.equal(game.u.uhunger, entry.firstHunger, entry.kind);
@@ -46090,6 +46272,9 @@ test('blessed stale carried delayed food uses the C age threshold', async () => 
 
     await rhack('e');
     await rhack('f');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     assert.notEqual(game._pending_message, 'Blecch!  Rotten food!');
     assert.equal(blessed.oeaten, 640);
@@ -46107,6 +46292,10 @@ test('blessed stale carried delayed food uses the C age threshold', async () => 
     await rhack('f');
 
     assert.match(game._pending_message, /^Blecch!  Rotten food!/);
+    // C ref: the rotten-food --More-- must be dismissed before the moveloop
+    // drives the first eatfood() bite (eat.c:519-540, session-verified).
+    acknowledgeMoreForOccupation();
+    processEatingOccupationTick(game);
     assert.equal(uncursed.oeaten, 267);
     assert.equal(game.u.uhunger, 1033);
     assert.equal(game._eating_turns_remaining, 3);
@@ -46159,6 +46348,10 @@ test('carried delayed ordinary food command splits unpaid stacks before C bites'
 
         await rhack('e');
         await rhack(entry.letter);
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         const touched = game._eating_inventory_object;
         assert.ok(touched, entry.kind);
@@ -46198,6 +46391,10 @@ test('cursed carried delayed food stack splits and bills before rotten first bit
     await rhack('f');
 
     assert.match(game._pending_message, /^Blecch!  Rotten food!/);
+    // C ref: the rotten-food --More-- must be dismissed before the moveloop
+    // drives the first eatfood() bite (eat.c:519-540, session-verified).
+    acknowledgeMoreForOccupation();
+    processEatingOccupationTick(game);
     const touched = game._eating_inventory_object;
     assert.ok(touched);
     assert.notEqual(touched, stack);
@@ -47285,6 +47482,10 @@ test('floor delayed ordinary foods use C bite timing and finish removal', async 
 
         await rhack('e');
         await rhack('y');
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         assert.equal(game._pending_message, entry.message, entry.kind);
         assert.equal(game.level.objects.includes(food), true, entry.kind);
@@ -47319,6 +47520,9 @@ test('interrupted floor food ration resumes and removes same floor unit', async 
 
     await rhack('e');
     await rhack('y');
+    // C ref: the moveloop drives the eatfood() bites one per turn after the
+    // eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
     processEatingOccupationTick(game);
     interruptEatingOccupation(game);
 
@@ -47367,6 +47571,10 @@ test('floor delayed foods use C race-adjusted hunger before victual ticks', asyn
 
         await rhack('e');
         await rhack('y');
+        // C ref: the moveloop drives the first eatfood() bite on the turn
+        // after the eat command arms the victual (eat.c:519-540,
+        // session-verified).
+        processEatingOccupationTick(game);
 
         assert.equal(game._pending_message, entry.message, entry.race);
         assert.equal(food.oeaten, entry.firstOeaten, entry.race);
@@ -47395,6 +47603,10 @@ test('floor cursed delayed food halves before C bites and then finishes', async 
     await rhack('y');
 
     assert.equal(game._pending_message, 'Blecch!  Rotten food!');
+    // C ref: the rotten-food --More-- must be dismissed before the moveloop
+    // drives the first eatfood() bite (eat.c:519-540, session-verified).
+    acknowledgeMoreForOccupation();
+    processEatingOccupationTick(game);
     assert.equal(game.level.objects.includes(ration), true);
     assert.equal(ration.oeaten, 267);
     assert.equal(game.u.uhunger, 1033);
@@ -47444,6 +47656,9 @@ test('floor delayed shop stack bills touched unit before C bites', async () => {
 
     await rhack('e');
     await rhack('y');
+    // C ref: the moveloop drives the first eatfood() bite on the turn after
+    // the eat command arms the victual (eat.c:519-540, session-verified).
+    processEatingOccupationTick(game);
 
     assert.equal(game.level.objects.includes(stack), true);
     assert.equal(stack.quan, 1);
@@ -90235,7 +90450,10 @@ test('direct hero melee miss skips disenchanter drain and keeps live bill', asyn
 
     await rhack('l');
 
-    assert.match(game._pending_message, /You miss the disenchanter\./);
+    // C ref: missum() names the monster only under flags.verbose
+    // (uhitm.c:5206-5209); the recorded sessions run !verbose, so the
+    // message is "You miss it."
+    assert.match(game._pending_message, /You miss it\./);
     assert.equal(blade.spe, 2);
     assert.equal(disenchanter.mhp, 50);
     assert.equal(blade.unpaid, true);
