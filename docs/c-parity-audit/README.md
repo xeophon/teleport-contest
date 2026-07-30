@@ -212,6 +212,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [804-generic-lifesaving-survival-death-state-2026-06-08.md](804-generic-lifesaving-survival-death-state-2026-06-08.md): generic successful life-saving and wizard/explore survival now clear immediate death metadata after the survival prompt resolves.
 - [805-genocide-lifesaving-still-terminal-2026-06-08.md](805-genocide-lifesaving-still-terminal-2026-06-08.md): hero self-genocide now consumes life saving and prints the still-genocided follow-up while remaining terminal unless wizard/explore death decline saves the hero.
 - [806-polymorphed-genocide-rehumanization-2026-06-08.md](806-polymorphed-genocide-rehumanization-2026-06-08.md): polymorphed base self-genocide now delays terminal genocide until rehumanization, while current-form genocide forces rehumanization.
+- [946-wizard-machinery-2026-07-30.md](946-wizard-machinery-2026-07-30.md): new js/wizard.js module ports wizard.c amulet()/intervene()/resurrect()/wizdeadorgone()/clonewiz()/nasty()/pick_nasty()/aggravate()/cuss machinery, with no_of_wizards bookkeeping in makemon, per-turn demigod harassment in moveloop order, and Double Trouble wiring for the clone-wizard spell.
 
 ## Cross-Cutting Themes
 

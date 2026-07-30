@@ -2,6 +2,7 @@
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
+import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
 import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
@@ -9959,7 +9960,17 @@ async function finishMonsterTurnTail() {
             }
         }
     }
+		    // C ref: allmain.c:358-368 — amulet(), then the u_wipe_engr roll,
+	    // then the demigod harassment driver, in moveloop_core order.
+	    if (game.u?.uhave?.amulet) {
+	        for (const amuMessage of wizardAmuletTurn())
+	            if (amuMessage) addToplineMessage(amuMessage);
+	    }
 	    if (!rn2(40 + ((game.u?.acurr?.a?.[3] ?? 14) * 3))) rnd(3);
+	    if (game.u?.uevent?.udemigod && !game.u?.uinvulnerable) {
+	        for (const harassMessage of await demigodTurnHook())
+	            if (harassMessage) addToplineMessage(harassMessage);
+	    }
     if (game._gauntlets_power_exercise_after_turn_tail) {
         game._gauntlets_power_exercise_after_turn_tail = 0;
         exerciseAttribute(A_CON, true);
@@ -13632,7 +13643,9 @@ function monsterSpellWouldBeUseless(mon, spell) {
 
     switch (spell.name) {
     case 'cloneWiz':
-        return !mon.iswiz;
+        // C ref: mcastu.c:941-945 — only the Wizard may clone, and only when
+        // at most one of him exists.
+        return !mon.iswiz || noOfWizards() > 1;
     case 'cureSelf':
         return (mon.mhp || 0) >= (mon.mhpmax || 0);
     case 'disappear':
@@ -13770,6 +13783,18 @@ async function maybeCastUndirectedMonsterSpell(mon) {
             mon.mspeed = 'fast';
         } else if (spell.name === 'cureSelf') {
             mon.mhp = Math.min(mon.mhpmax || mon.mhp || 1, (mon.mhp || 1) + Math.max(1, Math.trunc((mon.m_lev || 1) / 2) + 1));
+        } else if (spell.name === 'cloneWiz') {
+            // C ref: mcastu.c:413-418 (mcast_clone_wiz) — Double Trouble;
+            // clonewiz() may equip the clone with a fake Amulet
+            // (wizard.c:543-560).
+            if (mon.iswiz && noOfWizards() === 1) {
+                addToplineMessage('Double Trouble...');
+                await clonewiz();
+            }
+        } else if (spell.name === 'aggravation') {
+            // C ref: mcastu.c:826-830 (MCAST_AGGRAVATION/wizard.c:522 aggravate).
+            addToplineMessage('You feel that monsters are aware of your presence.');
+            wizardAggravate();
         }
         rn2(5);
         return true;
