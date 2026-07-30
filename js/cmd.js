@@ -6,7 +6,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DELPHI, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, GLOC_DOOR, GLOC_EXPLORE, GLOC_MONS, GLOC_OBJS, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, MAX_CARR_CAP, WT_BABY_DRAGON, WT_DRAGON, WT_HUMAN, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DELPHI, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, GLOC_DOOR, GLOC_EXPLORE, GLOC_MONS, GLOC_OBJS, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MON_LIMBO, MON_MIGRATING, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, MAX_CARR_CAP, WT_BABY_DRAGON, WT_DRAGON, WT_HUMAN, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_ARRIVE, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -32,7 +32,7 @@ import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
-import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore } from './metallivore.js';
+import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
 import { castSpellDirectionalEffect, castSpellNodirEffect, spellCastNeedsDirection } from './spell.js';
 import { altarAlignAt, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
@@ -6212,6 +6212,47 @@ function placeFollowerAfterLevelChange(follower, first = false) {
     resolveArrivalCollision(follower);
 }
 
+// C ref: src/dog.c losedogs() After_you pass + mon_arrive() — monsters that
+// migrated to this level on their own (e.g. fell through a trap door, see
+// migrateMonsterToLevelRandom) are placed when the hero arrives.  Only the
+// MIGR_RANDOM case can be queued today; it lands via rloc (teleport.c),
+// whose per-attempt rolls (rnd(COLNO-1), rn2(ROWNO)) must happen exactly
+// here, between obj_delivery and the fall-damage site (do.c:1816,1990).
+// mon_catchup_elapsed_time and the mnearto/xlocale modes consume no RNG and
+// are not needed for MIGR_RANDOM; on total placement failure the monster
+// goes back into limbo (dog.c failed_arrivals -> m_into_limbo).
+function arriveMigratingMonsters() {
+    const queue = game.migrating_mons;
+    if (!queue?.length || !game.level) return;
+    const dnum = game.u?.uz?.dnum ?? 0;
+    const dlevel = game.u?.uz?.dlevel ?? 0;
+    for (const mon of [...queue]) {
+        if (!mon || (mon.mux ?? -1) !== dnum || (mon.muy ?? -1) !== dlevel) continue;
+        const xyloc = mon.mtrack?.[0]?.x ?? -1;
+        if (xyloc !== MIGR_RANDOM) continue; // no other mode is queued today
+        queue.splice(queue.indexOf(mon), 1);
+        // C ref: dog.c mon_arrive() — inserts at the head of fmon, so the
+        // arrival is processed first; the port iterates level.monsters in
+        // reverse, so the equivalent here is the END of the array.
+        game.level.monsters.push(mon);
+        mon.mstate = ((mon.mstate || 0) & ~(MON_MIGRATING | MON_LIMBO));
+        if (Number.isInteger(mon.mstrategy)) mon.mstrategy |= STRAT_ARRIVE;
+        else mon.mstrategy = STRAT_ARRIVE;
+        mon.mux = game.u?.ux ?? 0;
+        mon.muy = game.u?.uy ?? 0;
+        mon.mtrack = [];
+        const placed = rlocNoMsg(mon, { allowUnset: true });
+        if (!placed || !mon.mx) {
+            // back into limbo: re-queue and remove from the map list
+            game.level.monsters = game.level.monsters.filter(other => other !== mon);
+            mon.mx = 0;
+            mon.my = 0;
+            mon.mstate = (mon.mstate || 0) | MON_MIGRATING;
+            queue.push(mon);
+        }
+    }
+}
+
 function arrivalObjectListRows(objects) {
     const sorted = [...objects]
         .map((obj, index) => ({ obj, index }))
@@ -7479,8 +7520,16 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     for (const follower of carriedFollowers)
         placeFollowerAfterLevelChange(follower);
     deliverQueuedImpactDroppedObjects(targetLevel);
+    // C ref: src/do.c:1815-1816 — losedogs() runs right after obj_delivery
+    // on every level arrival; migrating monsters land here (before vision
+    // and the fall-damage roll at do.c:1990).
+    arriveMigratingMonsters();
     if (game.level?.flags?.fumaroles) fumaroles();
     if (Is_airlevel(game.u?.uz)) movebubbles();
+    // C ref: src/cmd.c:1021 — goto_level resets the cached travel
+    // destination (iflags.travelcc) on every level change, so the next
+    // getpos starts at the hero instead of a stale cross-level target.
+    game._travel_previous_target = null;
     if (!savedTarget && !game._getbones_prompted) game._utrack = [];
     const promptedBones = !!game._getbones_prompted;
     game._getbones_prompted = 0;
@@ -14092,7 +14141,7 @@ function travelLocInteresting(x, y, gloc) {
 // included and sorts first, then every interesting spot ordered by
 // cmp_coord_distu (getpos.c:311-329): Chebyshev distance from the hero,
 // ties broken by y, then x.
-function gatherTravelLocs(gloc) {
+export function gatherTravelLocs(gloc) {
     const heroX = game.u?.ux || 0;
     const heroY = game.u?.uy || 0;
     const locs = [];
@@ -14250,7 +14299,7 @@ async function doOpenDoorInDirection(dx, dy) {
 // (hack.c:4156-4157), so travel ends after a single path step instead of
 // walking the whole path.  A target still holding its door fails
 // crawl_destination (hack.c:4095) and keeps normal multi-step travel.
-function travelStopsAfterOneStep(targetX, targetY) {
+export function travelStopsAfterOneStep(targetX, targetY) {
     const heroX = game.u?.ux || 0;
     const heroY = game.u?.uy || 0;
     if (Math.max(Math.abs(targetX - heroX), Math.abs(targetY - heroY)) !== 1) return false;
@@ -24370,6 +24419,84 @@ function shopArrivalGreetingMessage(x, y) {
     const shkp = shopRoom.resident || (game.level?.monsters || [])
         .find(mon => mon.isshk && mon.shoproom === roomno);
     return tendedShopGreeting(shopRoom, shkp);
+}
+
+// C ref: shk.c makekops() — a Keystone Kop swarm; the counts scale with the
+// level depth and each enexto() search starts from the previous Kop's spot.
+async function makekops(cx, cy) {
+    const kopNames = ['Keystone Kop', 'Kop Sergeant', 'Kop Lieutenant', 'Kop Kaptain'];
+    const base = Math.abs(depth_of_level(game.u?.uz)) + rnd(5);
+    const counts = [base, Math.trunc(base / 3) + 1, Math.trunc(base / 6), Math.trunc(base / 9)];
+    let mm = { x: cx, y: cy };
+    for (let k = 0; k < 4; k++) {
+        let cnt = counts[k];
+        if (!cnt) break;
+        const ptr = monsterByRndName(kopNames[k]);
+        if (!ptr) continue;
+        while (cnt-- > 0) {
+            const spot = enextoMonsterSpot(mm.x, mm.y, ptr.data || ptr);
+            if (!spot) continue;
+            mm = { x: spot.x, y: spot.y };
+            await makemon(ptr, spot.x, spot.y, MM_NOMSG);
+        }
+    }
+}
+
+// C ref: shk.c u_left_shop() + rob_shop() + call_kops() — the hero left a
+// shop carrying unpaid merchandise: settle the bill, report the robbery,
+// sound the alarm, anger the watch and call the Keystone Kops (deferred to
+// the dismissal of the "whistles" message, matching C's input boundaries).
+async function heroLeftShopTheftCheck(oldX, oldY, { alreadyMessaged = false } = {}) {
+    const oldRoomno = game.level?.at(oldX, oldY)?.roomno || 0;
+    const oldRoom = levelRoomByRoomno(oldRoomno);
+    if (!oldRoom || oldRoom.rtype < SHOPBASE) return false;
+    const shkp = oldRoom.resident || (game.level?.monsters || [])
+        .find(mon => mon.isshk && mon.shoproom === oldRoomno);
+    if (!shkp?.isshk || shkp.dead || (shkp.mhp != null && shkp.mhp <= 0)) return false;
+    const total = shopBillTotal(shkp) + Math.max(0, Math.trunc(Number(shkp.debit || 0)));
+    if (!(total > 0)) return false;
+
+    // rob_shop(): settle the bill; the hero keeps the merchandise.
+    const credit = Math.max(0, Math.trunc(Number(shkp.credit || 0)));
+    for (const item of [...(game.inventory || [])])
+        if (item.unpaid && shopBillEntryForObject(shkp, item))
+            removeObjectFromShopBill(shkp, item);
+    shkp.bill = [];
+    shkp.billct = 0;
+    shkp.debit = 0;
+    shkp.credit = 0;
+    if (credit >= total) {
+        await setMessage(`Your credit of ${credit} zorkmid${credit === 1 ? '' : 's'} is used to cover your shopping bill.`, true);
+        return true;
+    }
+    const stolen = total - credit;
+    shkp.robbed = Math.max(0, Math.trunc(Number(shkp.robbed || 0))) + stolen;
+    // hot_pursuit(): the shopkeeper gives chase, furious.
+    shkp.following = 1;
+    shkp.angry = true;
+    shkp.hostile = true;
+    shkp.mpeaceful = 0;
+    // angry_guards(): wake and anger the town watch.
+    const guardMessages = [];
+    directMeleeAngerTownWatch(guardMessages);
+    game._queued_messages_after_more ??= [];
+    game._queued_messages_after_more.push({
+        text: `You stole ${stolen} zorkmid${stolen === 1 ? '' : 's'} worth of merchandise.  An alarm sounds!`,
+        more: true,
+    });
+    game._queued_messages_after_more.push({
+        text: guardMessages.join('  '),
+        more: false,
+        shopTheftKops: { x: shkp.mx || oldX, y: shkp.my || oldY },
+    });
+    if (alreadyMessaged) {
+        game._queued_messages_after_more.unshift({
+            text: 'You escaped the shop without paying!', more: true,
+        });
+    } else {
+        await setMessage('You escaped the shop without paying!', true);
+    }
+    return true;
 }
 
 async function heroLandingSpecialRoomEffectsNoPickup(x, y, messages, options = {}) {
@@ -63951,6 +64078,13 @@ function tutorialEnterStash() {
             if (game._queued_messages_after_more?.length) {
                 const next = game._queued_messages_after_more.shift();
                 let nextText = next.text;
+                if (next.shopTheftKops) {
+                    // C ref: shk.c call_kops() — swarm near the down
+                    // staircase, then near the robbed shopkeeper.
+                    const stair = (() => { for (let s = game.stairs; s; s = s.next) if (!s.up) return s; return null; })();
+                    if (stair) await makekops(stair.sx, stair.sy);
+                    await makekops(next.shopTheftKops.x, next.shopTheftKops.y);
+                }
                 if (next.deferredMeleeWake) {
                     const action = next.deferredMeleeWake;
                     const target = action.target;
@@ -67439,8 +67573,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 let x = game.u?.ux || 0;
                 let y = game.u?.uy || 0;
                 const messages = [];
+                // C ref: teleport.c rloc_to_core() + display.h canspotmon() —
+                // vanish feedback is gated on the hero actually seeing the
+                // monster (cansee/IN_SIGHT, not merely couldsee/COULD_SEE).
                 const spotVisible = mon => !game.u?.blind && !mon.minvis
-                    && !mon.mundetected && couldsee(mon.mx, mon.my);
+                    && !mon.mundetected && cansee(mon.mx, mon.my);
                 while (range-- > 0) {
                     const nx = x + dir.dx;
                     const ny = y + dir.dy;
@@ -75434,7 +75571,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game._command_mode = 'wizkillKillMore';
                 return;
             }
-            await setMessage(wizkillAutoDescribe(targetX, targetY));
+            // C ref: wiz_kill() — selecting a spot with no monster prints
+            // "There is no monster there." and ends the targeting loop
+            // (wizcmds.c:318-320).
+            await setMessage('There is no monster there.');
+            game._command_mode = null;
             return;
         }
         const dir = movementDirection(ch);
@@ -75802,6 +75943,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     }
                 }
                 if (materializeMessage) await setMessage(materializeMessage, true);
+                // C ref: shk.c u_left_shop() via spoteffects() ->
+                // check_special_room() after a same-level teleport out of a
+                // shop with unpaid merchandise.
+                await heroLeftShopTheftCheck(oldX, oldY, { alreadyMessaged: !!materializeMessage });
                 return;
             }
             const up = game.level?.upstair?.x === targetX && game.level?.upstair?.y === targetY;
@@ -77240,9 +77385,20 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._travel_keys = [];
             game._travel_step_active = 1;
             game._travel_command_first_step = 1;
+            const firstStepX = (game.u?.ux || 0) + (DIR_DX[keys[0]] || 0);
+            const firstStepY = (game.u?.uy || 0) + (DIR_DY[keys[0]] || 0);
             await rhack(keys[0]);
             game._travel_step_active = 0;
             game._travel_command_first_step = 0;
+            // C ref: src/hack.c:1405-1414 — a travel step whose destination
+            // is the target tile ends travel and resets iflags.travelcc,
+            // even when the move itself fails (e.g. bumping a closed door).
+            if (game._travel_previous_target
+                && ((firstStepX === game._travel_previous_target.x
+                        && firstStepY === game._travel_previous_target.y)
+                    || ((game.u?.ux || 0) === game._travel_previous_target.x
+                        && (game.u?.uy || 0) === game._travel_previous_target.y)))
+                game._travel_previous_target = null;
             return;
         }
         if (pickTravelTarget && !game._travel_target) {
@@ -77266,12 +77422,19 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._travel_keys = travelStopsAfterOneStep(target.x, target.y) ? [] : keys.slice(1);
             game._travel_step_active = 1;
             game._travel_command_first_step = 1;
+            const firstStepX = (game.u?.ux || 0) + (DIR_DX[keys[0]] || 0);
+            const firstStepY = (game.u?.uy || 0) + (DIR_DY[keys[0]] || 0);
             await rhack(keys[0]);
             game._travel_step_active = 0;
             game._travel_command_first_step = 0;
+            // C ref: src/hack.c:1405-1414 — a travel step whose destination
+            // is the target tile ends travel and resets iflags.travelcc,
+            // even when the move itself fails (e.g. bumping a closed door).
             if (game._travel_previous_target
-                && (game.u?.ux || 0) === game._travel_previous_target.x
-                && (game.u?.uy || 0) === game._travel_previous_target.y)
+                && ((firstStepX === game._travel_previous_target.x
+                        && firstStepY === game._travel_previous_target.y)
+                    || ((game.u?.ux || 0) === game._travel_previous_target.x
+                        && (game.u?.uy || 0) === game._travel_previous_target.y)))
                 game._travel_previous_target = null;
             return;
         }
@@ -77298,12 +77461,19 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._travel_keys = travelStopsAfterOneStep(target.x, target.y) ? [] : keys.slice(1);
             game._travel_step_active = 1;
             game._travel_command_first_step = 1;
+            const firstStepX = (game.u?.ux || 0) + (DIR_DX[keys[0]] || 0);
+            const firstStepY = (game.u?.uy || 0) + (DIR_DY[keys[0]] || 0);
             await rhack(keys[0]);
             game._travel_step_active = 0;
             game._travel_command_first_step = 0;
+            // C ref: src/hack.c:1405-1414 — a travel step whose destination
+            // is the target tile ends travel and resets iflags.travelcc,
+            // even when the move itself fails (e.g. bumping a closed door).
             if (game._travel_previous_target
-                && (game.u?.ux || 0) === game._travel_previous_target.x
-                && (game.u?.uy || 0) === game._travel_previous_target.y)
+                && ((firstStepX === game._travel_previous_target.x
+                        && firstStepY === game._travel_previous_target.y)
+                    || ((game.u?.ux || 0) === game._travel_previous_target.x
+                        && (game.u?.uy || 0) === game._travel_previous_target.y)))
                 game._travel_previous_target = null;
             return;
         }
