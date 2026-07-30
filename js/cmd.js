@@ -2,6 +2,7 @@
 // C refs: src/cmd.c:rhack(), src/hack.c:domove().
 
 import { game } from './gstate.js';
+import { wizardCussMessage, wizdeadorgone } from './wizard.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
@@ -48076,22 +48077,8 @@ function tipHatGeneratedMonsterSound(name) {
     return TIPHAT_GENERATED_SOUND_BY_MONSTER_NAME.get(name) || '';
 }
 
-const TIPHAT_CUSS_RANDOM_INSULTS = [
-    'antic', 'blackguard', 'caitiff', 'chucklehead', 'coistrel', 'craven',
-    'cretin', 'cur', 'dastard', 'demon fodder', 'dimwit', 'dolt', 'fool',
-    'footpad', 'imbecile', 'knave', 'maledict', 'miscreant', 'niddering',
-    'poltroon', 'rattlepate', 'reprobate', 'scapegrace', 'varlet',
-    'villein', 'wittol', 'worm', 'wretch',
-];
-
-const TIPHAT_CUSS_RANDOM_MALEDICTIONS = [
-    'Hell shall soon claim thy remains,', 'I chortle at thee, thou pathetic',
-    'Prepare to die, thou', 'Resistance is useless,',
-    'Surrender or die, thou', 'There shall be no mercy, thou',
-    'Thou shalt repent of thy cunning,', 'Thou art as a flea to me,',
-    'Thou art doomed,', 'Thy fate is sealed,',
-    'Verily, thou shalt be one dead',
-];
+// C ref: wizard.c:819-838 — random_insult/random_malediction now live in js/wizard.js
+// (RANDOM_INSULT / RANDOM_MALEDICTION).
 
 const TIPHAT_ANGEL_CUSS_MESSAGES = [
     '"Repent, and thou shalt be saved!"',
@@ -48207,20 +48194,12 @@ function tipHatMonsterIsWizardCuss(mon, monName) {
 function tipHatHostileCussNoise(mon, name, monName) {
     const monHp = Number(mon?.mhp ?? mon?.hp ?? mon?.data?.mhp ?? NaN);
     let message = '';
+    // C ref: wizard.c:842-860 (cuss, iswiz branch) — ported to js/wizard.js;
+    // RNG roll order is rn2(5), [rn2(28) gate, rn2(28) pick], [rn2(2) gate,
+    // rn2(2) phrasing, rn2(28) insult], [rn2(2) gate, rn2(2) phrasing], or
+    // malediction rn2(11) then insult rn2(28).
     if (tipHatMonsterIsWizardCuss(mon, monName)) {
-        if (!rn2(5)) {
-            message = `${name} laughs fiendishly.`;
-        } else if (game.u?.uhave?.amulet && !rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)) {
-            message = `"Relinquish the amulet, ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}!"`;
-        } else if ((game.u?.uhp || 0) < 5 && !rn2(2)) {
-            message = rn2(2)
-                ? `"Even now thy life force ebbs, ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}!"`
-                : `"Savor thy breath, ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}, it be thy last!"`;
-        } else if (Number.isFinite(monHp) && monHp < 5 && !rn2(2)) {
-            message = rn2(2) ? '"I shall return."' : '"I\'ll be back."';
-        } else {
-            message = `"${TIPHAT_CUSS_RANDOM_MALEDICTIONS[rn2(TIPHAT_CUSS_RANDOM_MALEDICTIONS.length)]} ${TIPHAT_CUSS_RANDOM_INSULTS[rn2(TIPHAT_CUSS_RANDOM_INSULTS.length)]}!"`;
-        }
+        message = wizardCussMessage(mon, name) || '';
     } else if (tipHatMonsterIsLawfulMinion(mon)) {
         message = tipHatCommonPagerLine(TIPHAT_ANGEL_CUSS_MESSAGES);
     } else if (!rn2(tipHatMonsterIsMinion(mon) ? 100 : 5)) {
@@ -52268,6 +52247,12 @@ function monsterExperienceValue(mon) {
 }
 
 export function recordVanquished(mon, awardExperience = true) {
+    // C ref: mon.c:2762 (m_detach) — the Wizard of Yendor always triggers
+    // wizdeadorgone() bookkeeping when he leaves play (wizard.c:806-814).
+    if (mon?.iswiz && !mon._wizdeadorgone_done) {
+        mon._wizdeadorgone_done = 1;
+        wizdeadorgone();
+    }
     const name = mon?.data?.name || mon?.name || mon?.corpsenm?.name;
     if (!name) return;
     if (mon._vanquished_recorded) return;
