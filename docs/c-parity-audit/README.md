@@ -212,6 +212,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [804-generic-lifesaving-survival-death-state-2026-06-08.md](804-generic-lifesaving-survival-death-state-2026-06-08.md): generic successful life-saving and wizard/explore survival now clear immediate death metadata after the survival prompt resolves.
 - [805-genocide-lifesaving-still-terminal-2026-06-08.md](805-genocide-lifesaving-still-terminal-2026-06-08.md): hero self-genocide now consumes life saving and prints the still-genocided follow-up while remaining terminal unless wizard/explore death decline saves the hero.
 - [806-polymorphed-genocide-rehumanization-2026-06-08.md](806-polymorphed-genocide-rehumanization-2026-06-08.md): polymorphed base self-genocide now delays terminal genocide until rehumanization, while current-form genocide forces rehumanization.
+- [945-were-lycanthropy-2026-07-30.md](945-were-lycanthropy-2026-07-30.md): were.c port — were_change/new_were wired into the monster-turn loop with night/moon-phase RNG arity, were_summon pack tables, AD_WERE hero-infection helper, and you_were/you_unwere/set_ulycn hero cycle hooks.
 
 ## Cross-Cutting Themes
 
