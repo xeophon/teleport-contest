@@ -5815,6 +5815,19 @@ function monsterFromRndMeta(row) {
         ptr.attack = { dice: 1, sides: 3, verb: 'bites' };
     }
     if (name === 'coyote') ptr.attack = { dice: 1, sides: 4, verb: 'bites' };
+    // C ref: monsters.h dog/lycanthrope-summon bite cases —
+    // wolf: ATTK(AT_BITE, AD_PHYS, 2, 4); warg/winter wolf: 2,6;
+    // winter wolf cub: 1,8 (plus its breath attack).
+    if (name === 'wolf') ptr.attack = { dice: 2, sides: 4, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+    if (name === 'warg') ptr.attack = { dice: 2, sides: 6, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+    if (name === 'winter wolf') {
+        ptr.attack = { dice: 2, sides: 6, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+        ptr.breath = { dice: 2, sides: 6, adtyp: 'cold' };
+    }
+    if (name === 'winter wolf cub') {
+        ptr.attack = { dice: 1, sides: 8, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+        ptr.breath = { dice: 1, sides: 6, adtyp: 'cold' };
+    }
     if (name === 'soldier ant') ptr.attack = { dice: 2, sides: 4, verb: 'bites' };
     if (mlet === S_NYMPH) {
         ptr.attack = { dice: 0, sides: 0, verb: 'hits', aatyp: 'claw', adtyp: 'steal' };

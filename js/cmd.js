@@ -63182,7 +63182,6 @@ function tutorialEnterStash() {
                             game._death_moves = game.moves || 1;
                         }
                         game._queued_message_after_more = 'You die...';
-	                        restoreHeroHpForUnresolvedWizardDeath();
 	                        keepMore = true;
 	                    }
 	                }
@@ -63657,7 +63656,6 @@ function tutorialEnterStash() {
 	                        // article through an() (objnam.c:2143).
 	                        game._death_cause = `killed by ${an(name)}`;
 	                        game._queued_message_after_more = 'You die...';
-	                        restoreHeroHpForUnresolvedWizardDeath();
 	                        keepMore = true;
 	                    }
 	                }

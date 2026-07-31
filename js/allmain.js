@@ -10,7 +10,7 @@ import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, vie
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
-import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn } from './were.js';
+import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn, youWere } from './were.js';
 import {
     setMhitmHooks as setMonsterMonsterCombatHooks,
     mmAggression as monsterMonsterAggression,
@@ -2591,6 +2591,10 @@ function applyWereBiteInfection(mon, data) {
     if (dbg) console.error(`WEREDBG  feverish r10=${r10} armpro=${armproWere}`);
     setUlycn(String(data?.name || '').toLowerCase()); // uhitm.c:4282-4284
     addToplineMessage('You feel feverish.');
+    // uhitm.c:4283 exercise(A_CON, FALSE) — attrib.c:509 subtracts rn2(2)
+    // when |AEXE| < AVAL(50); no C-side AEXE accumulation exists in this port,
+    // so always roll (matches C for |AEXE(A_CON)| < 50).
+    rn2(2);
 }
 
 // C ref: end.c:2040-2068 savelife(): on refusing the wizard/explore "Die?"
@@ -5184,7 +5188,6 @@ export async function processMonsterTurns() {
                                 game._death_current_move = 1;
                                 game._death_moves = game.moves || 1;
                                 game._queued_message_after_more = 'You die...';
-                                restoreHeroHpForUnresolvedWizardDeath();
                                 game._message_more = 1;
                             }
                             if (game._message_more && !game._process_time_with_more) return false;
@@ -5438,7 +5441,6 @@ export async function processMonsterTurns() {
                                     game._death_cause = `killed by ${article} ${name}`;
                                     game._death_current_move = !!game._pending_time_passed;
                                     game._queued_message_after_more = 'You die...';
-                                restoreHeroHpForUnresolvedWizardDeath();
                                     game._message_more = 1;
                                     break;
                                 }
@@ -5595,7 +5597,6 @@ export async function processMonsterTurns() {
                                                     game._death_cause = `killed by ${/^[aeiou]/i.test(data.name || '') ? 'an' : 'a'} ${data.name || 'monster'}`;
                                                     game._death_current_move = true;
                                                     game._queued_message_after_more = 'You die...';
-                                restoreHeroHpForUnresolvedWizardDeath();
                                                     game._message_more = 1;
                                                     game._process_time_with_more = 0;
                                                     return false;
@@ -5776,7 +5777,6 @@ export async function processMonsterTurns() {
                                             game._death_cause = `killed by ${article} ${name}`;
                                             game._death_current_move = !!game._pending_time_passed;
                                             game._queued_message_after_more = 'You die...';
-                                restoreHeroHpForUnresolvedWizardDeath();
                                             if (hpBeforeDamage - damage === -1) game._death_status_hp_before_zero = hpBeforeDamage;
                                             else game.u.uhp = 0;
                                             game._message_more = 1;
@@ -6016,7 +6016,6 @@ if (attack.adtyp === 'steal') {
                                     }
 		                                game._death_current_move = 1;
 		                                game._queued_message_after_more = 'You die...';
-                                restoreHeroHpForUnresolvedWizardDeath();
 		                                if (activeWeapon && !hiddenBullwhip)
 		                                    game._death_moves = game.moves || 1;
 		                                game._message_more = 1;
@@ -6565,11 +6564,20 @@ if (attack.adtyp === 'steal') {
 	                        }
 	                        continue;
 	                    }
+                    // C ref: allmain.c:501-507 — after each hero action during an
+                    // active search occupation, monster_nearby() (hack.c:4106-4127:
+                    // an adjacent, visible, hostile, not-helpless monster) stops
+                    // the occupation with "You stop searching."
+                    const searchAdjacentHostile = Math.abs(mon.mx - (game.u?.ux || 0)) <= 1
+                        && Math.abs(mon.my - (game.u?.uy || 0)) <= 1;
+                    if (process.env.WEREDBG && /wolf|jackal/.test(mon.data?.name || ''))
+                        console.error(`WEREDBG stop-search-check mon=${mon.data?.name}@${mon.mx},${mon.my} moves=${game.moves} sao=${searchOccupationActive} spc=${game._search_pending_count} adjs=${searchAdjacentHostile} peace=${!!mon.mpeaceful} blind=${!!game.u?.blind} mind=${!!mon.mundetected} vis=${!!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)} csc=${couldSeeCoord(mon.mx, mon.my)}`);
                     if (searchOccupationActive && (game.level?.monsters || []).includes(mon)
                         && !mon.mpeaceful && mon.mcanmove !== false && !mon.mundetected
                         && !scaryObjectAt(mon, game.u?.ux || 0, game.u?.uy || 0)
-                        && (mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2 <= (BOLT_LIM + 1) ** 2
-                        && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2)
+                        && (searchAdjacentHostile
+                            || (((mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2) <= (BOLT_LIM + 1) ** 2
+                                && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2)))
                         && !game.u?.blind && (!mon.minvis || game.u?.seeInvisible)
                         && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
                         && couldSeeCoord(mon.mx, mon.my)) {
@@ -9586,6 +9594,17 @@ async function finishMonsterTurnTail() {
             game._counted_repeat_interruptible = 0;
             if (game.flags?.verbose !== false)
                 addToplineMessage(reachedFullHp ? 'You are in full health.' : 'You feel full of energy.');
+        }
+        // C ref: allmain.c:318-329 — hero lycanthropy flare check inside
+        // moveloop_core's deferred-poly block: each turn an infected,
+        // non-polymorphed hero rolls rn2(80 - 20*night()); on 0 the form
+        // change is queued (you_were, were.c:191-210).  Hero has no
+        // Polymorph intrinsic in this port's covered sessions, so the
+        // `Polymorph && !rn2(100)` branch takes no draw.
+        if (!game.u?.uinvulnerable && game.u?.ulycn && game.u.ulycn !== -1
+            && !game.u?._polyself_form) {
+            if (!rn2(80 - (nightNow(game) ? 20 : 0)))
+                youWere({ g: game, addToplineMessage: msg => addToplineMessage(msg) });
         }
         const canAutoSearch = !game._armor_wear_occupation
             && !game._eating_turns_remaining
@@ -16138,6 +16157,7 @@ export async function moveloop_core() {
             g._skip_pending_time_decrement = 1;
         }
         if (g._search_pending_count > 0) {
+            const searchCountBeforeTurn = g._search_pending_count;
             let foundSearchMonster = false;
             let foundMessage = '';
             let revealedSecretTerrain = false;
@@ -16217,6 +16237,27 @@ export async function moveloop_core() {
                 g._keep_pending_message = 1;
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
+            }
+            // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
+            // monster_nearby() (hack.c:4103-4127) stops an active search with
+            // "You stop searching." when a visible hostile non-helpless monster
+            // is adjacent to the hero.
+            if (!foundSearchMonster && searchCountBeforeTurn > 0
+                && g._search_pending_count > 0
+                && (game.level?.monsters || []).some(candidate =>
+                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
+                    && !candidate.mpeaceful && !candidate.data?.noattacks
+                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
+                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
+                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
+                    && !g.u?.blind && !candidate.mundetected
+                    && (!candidate.minvis || g.u?.seeInvisible)
+                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
+                    && couldSeeCoord(candidate.mx, candidate.my))) {
+                addToplineMessage('You stop searching.');
+                g._search_pending_count = 0;
+                g._pending_time_passed = Math.min(g._pending_time_passed, 1);
+                g._keep_pending_message = 1;
             }
         }
 
