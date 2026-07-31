@@ -13988,7 +13988,7 @@ export function finishForceLock(force) {
     return true;
 }
 
-function revealLevelMap({ confusedMap = false, revealSecretDoors = false } = {}) {
+export function revealLevelMap({ confusedMap = false, revealSecretDoors = false } = {}) {
     for (const obj of game.level?.objects || []) {
         if (obj.otyp === BOULDER && !obj.seen && !(game.viz_array?.[obj.oy]?.[obj.ox] & IN_SIGHT))
             obj._hide_until_seen = true;
@@ -13998,7 +13998,19 @@ function revealLevelMap({ confusedMap = false, revealSecretDoors = false } = {})
         for (let x = 1; x < COLNO; x++) {
             if (confusedMap && rn2(7)) continue;
             const loc = game.level?.at(x, y);
-            if (!loc || loc.typ === STONE) continue;
+            // C ref: detect.c:1372-1401 show_map_spot() sets seenv = SVALL
+            // for EVERY spot including solid stone, and display.c:233-258
+            // magic_map_background() records back_to_glyph() (S_stone for
+            // STONE, display.c:2292-2294) plus lastseentyp in hero memory —
+            // so a magic-mapped stone tile describes as "stone"
+            // (pager.c:779-795 case S_stone: seenv set -> "stone"), never as
+            // "unexplored area".
+            if (!loc) continue;
+            if (loc.typ === STONE) {
+                loc.seenv = 0xff;
+                loc.lastseentyp = loc.typ;
+                continue;
+            }
             if (revealSecretDoors && loc.typ === SDOOR) {
                 loc.typ = DOOR;
                 const mask = loc.doormask || 0;
@@ -14167,7 +14179,16 @@ async function setTravelCursorTarget(targetX, targetY) {
     game._farlook_x = targetX;
     game._farlook_y = targetY;
     const loc = game.level?.at(targetX, targetY);
-    const terrain = loc?.typ === STONE
+    // C ref: pager.c:737-802 do_screen_description — the description comes
+    // from the GLYPH known for the spot: live terrain glyph when in sight,
+    // the remembered glyph otherwise.  A spot magic-mapped while solid stone
+    // keeps the S_stone glyph even if the terrain later changes out of sight
+    // (e.g. dug into a corridor in the dark), and S_stone's explanation is
+    // "stone" (defsym.h:90), so it stays "stone" until seen again.
+    const memoryStone = loc && loc.lastseentyp === STONE
+        && (loc.seenv || loc.remembered_glyph || (loc.disp_ch || ' ') !== ' ')
+        && !(game.viz_array?.[targetY]?.[targetX] & IN_SIGHT);
+    const terrain = loc && (loc.typ === STONE || memoryStone)
         && (loc.seenv || loc.remembered_glyph || (loc.disp_ch || ' ') !== ' '
             || game._travel_previous_target) ? 'stone'
         : !loc || (!loc.seenv && !loc.remembered_glyph && (loc.disp_ch || ' ') === ' ') ? 'unexplored area'
@@ -14307,6 +14328,20 @@ export function travelStopsAfterOneStep(targetX, targetY) {
     if (targetX === heroX || targetY === heroY) return false; /* orthogonal: direct move is fine */
     if (travelDoorWithDoor(targetX, targetY)) return false; /* crawl_destination rejects door targets */
     return travelDoorWithDoor(heroX, heroY); /* test_move rejects diagonal out of a doorway */
+}
+
+// C ref: src/hack.c:1270-1289 (adjacent-target fast path) and
+// src/hack.c:1396-1416 (BFS path) — findtravelpath() clears
+// iflags.travelcc whenever the STEP it computes lands on the travel target,
+// before domove() ever attempts the move, and cmd.c:5354-5358 resets it too
+// once the hero is on the target.  So travel ends (and the cached target is
+// forgotten) when the step's destination equals the target EVEN IF the move
+// then fails (e.g. bumping a closed door), or whenever the hero is already
+// standing on the target.
+export function travelStepEndsAtTarget(prevTarget, stepX, stepY, heroX, heroY) {
+    return !!prevTarget
+        && ((stepX === prevTarget.x && stepY === prevTarget.y)
+            || (heroX === prevTarget.x && heroY === prevTarget.y));
 }
 
 export function travelPathKeys(targetX, targetY, ignorePeacefulNearTarget = false, allowGuess = false, allowBlockedTarget = false) {
@@ -69969,6 +70004,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             } else if (game._farlook_x === game.u?.ux && game._farlook_y === game.u?.uy) text = heroFarlookDescription();
             else if (trap) text = TRAP_NAMES[trap.ttyp] || 'trap';
             else if (loc?.typ === STONE) text = 'stone';
+            // C ref: pager.c:737-802 — description follows the remembered
+            // glyph: a spot mapped as stone (seenv, lastseentyp = STONE via
+            // display.c:251-257 magic_map_background / back_to_glyph) keeps
+            // the S_stone explanation "stone" (defsym.h:90) even after the
+            // terrain changed out of sight, until it is seen again.
+            else if (loc?.lastseentyp === STONE
+                && (loc.seenv || loc.remembered_glyph)
+                && !(game.viz_array?.[game._farlook_y]?.[game._farlook_x] & IN_SIGHT)) text = 'stone';
             else if (game.u?.blind && (polyselfForm()?.mmove ?? NORMAL_SPEED) === 0
                 && loc && !loc.seenv && !loc.remembered_glyph && loc.disp_ch === ' ') text = 'stone';
             else if (!loc || (!loc.seenv && !loc.remembered_glyph && loc.disp_ch === ' ')) text = 'unexplored area';
@@ -77378,11 +77421,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             // C ref: src/hack.c:1405-1414 — a travel step whose destination
             // is the target tile ends travel and resets iflags.travelcc,
             // even when the move itself fails (e.g. bumping a closed door).
-            if (game._travel_previous_target
-                && ((firstStepX === game._travel_previous_target.x
-                        && firstStepY === game._travel_previous_target.y)
-                    || ((game.u?.ux || 0) === game._travel_previous_target.x
-                        && (game.u?.uy || 0) === game._travel_previous_target.y)))
+            if (travelStepEndsAtTarget(game._travel_previous_target, firstStepX, firstStepY,
+                game.u?.ux || 0, game.u?.uy || 0))
                 game._travel_previous_target = null;
             return;
         }
@@ -77415,11 +77455,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             // C ref: src/hack.c:1405-1414 — a travel step whose destination
             // is the target tile ends travel and resets iflags.travelcc,
             // even when the move itself fails (e.g. bumping a closed door).
-            if (game._travel_previous_target
-                && ((firstStepX === game._travel_previous_target.x
-                        && firstStepY === game._travel_previous_target.y)
-                    || ((game.u?.ux || 0) === game._travel_previous_target.x
-                        && (game.u?.uy || 0) === game._travel_previous_target.y)))
+            if (travelStepEndsAtTarget(game._travel_previous_target, firstStepX, firstStepY,
+                game.u?.ux || 0, game.u?.uy || 0))
                 game._travel_previous_target = null;
             return;
         }
@@ -77454,11 +77491,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             // C ref: src/hack.c:1405-1414 — a travel step whose destination
             // is the target tile ends travel and resets iflags.travelcc,
             // even when the move itself fails (e.g. bumping a closed door).
-            if (game._travel_previous_target
-                && ((firstStepX === game._travel_previous_target.x
-                        && firstStepY === game._travel_previous_target.y)
-                    || ((game.u?.ux || 0) === game._travel_previous_target.x
-                        && (game.u?.uy || 0) === game._travel_previous_target.y)))
+            if (travelStepEndsAtTarget(game._travel_previous_target, firstStepX, firstStepY,
+                game.u?.ux || 0, game.u?.uy || 0))
                 game._travel_previous_target = null;
             return;
         }
