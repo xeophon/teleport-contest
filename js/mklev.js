@@ -46,6 +46,7 @@ import {
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     ARMORSHOP, WEAPONSHOP,
     NO_MINVENT, MM_NOGRP, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
+    STRAT_WAITFORU, STRAT_APPEARMSG,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     DB_EAST, DB_UNDER, DB_FLOOR, DB_MOAT,
@@ -2683,7 +2684,10 @@ const WIZARD1_FIXED_MONSTERS = [
 ];
 export const WIZARD_OF_YENDOR = {
     name: 'Wizard of Yendor', mlet: '@', glyph: '@', color: CLR_BRIGHT_MAGENTA,
-    mlevel: 30, hpLevel: 30, difficulty: 34, mmove: 12, maligntyp: 0,
+    // C ref: monsters.h:2847-2856 — LVL(30, 12, -8, 100, A_NONE): maligntyp is
+    // A_NONE (-128), which makemon's set_malign() maps to malign = 20 when
+    // non-peaceful (xkilled() then applies adjalign(20)).
+    mlevel: 30, hpLevel: 30, difficulty: 34, mmove: 12, maligntyp: -128,
     male: true, strong: true, nasty: true, covetous: true,
     noCorpse: true, alwaysHostile: true, randomInventory: true,
 };
@@ -4187,6 +4191,10 @@ export function mksobj(otyp, init, artif) {
 // C ref: mkobj.c mksobj initialization RNG consumption
 // This varies by object class. Keep this aligned with the C path used for
 // objects created during mklev.
+// C ref: mkobj.c — scroll identities implied by specific otyps; index is the
+// JS SCROLL_NAMES order (allmain.js:622), not the raw otyp value.
+const SCROLL_INDEX_BY_OTYP = new Map([[SCR_TELEPORTATION, 10]]);
+
 function mksobj_init(otmp, otyp, artif) {
     // For BOULDER, GOLD_PIECE: no extra init RNG
     // For scrolls: blessorcurse
@@ -4199,6 +4207,14 @@ function mksobj_init(otmp, otyp, artif) {
             otmp.glyph = '?';
             otmp.scrollIndex = 3;
             otmp.actualKind = 'scroll of scare monster';
+        } else if (SCROLL_INDEX_BY_OTYP.has(otyp)) {
+            // C ref: mkobj.c mksobj_init() for scrolls — a specific scroll
+            // otyp keeps its scroll identity (appearance resolved from the
+            // shuffled description table at description time); the JS port
+            // stores that identity as scrollIndex (SCROLL_NAMES order).
+            otmp.cls = 'scroll';
+            otmp.glyph = '?';
+            otmp.scrollIndex = SCROLL_INDEX_BY_OTYP.get(otyp);
         }
         blessorcurse(otmp, 4);
     } else if (otyp === POTION_CLASS || (otyp >= 230 && otyp < 270)) {
@@ -7751,6 +7767,11 @@ export async function makemon(mdat, x, y, mmflags) {
         mon.iswiz = true;
         const ctx = (game.context ??= {});
         ctx.noOfWizards = (ctx.noOfWizards || 0) + 1;
+        // C ref: makemon.c:1456-1463 — M3_WAITFORU|M3_COVETOUS set
+        // STRAT_WAITFORU and STRAT_APPEARMSG in mstrategy (the farlook /
+        // stethoscope description reads ", meditating", pager.c:463-464).
+        if (!(mmflags & MM_NOWAIT))
+            mon.mstrategy = (mon.mstrategy || 0) | STRAT_WAITFORU | STRAT_APPEARMSG;
     }
 
     game._mongets_target = previousMongetsTarget;
