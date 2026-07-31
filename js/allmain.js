@@ -4435,6 +4435,7 @@ export async function processMonsterTurns() {
 		            for (let monIndex = startIndex; monIndex < mons.length; monIndex++) {
 		                const mon = mons[monIndex];
 		                if (!(game.level?.monsters || []).includes(mon)) continue;
+                    if (process.env.PROCDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.PROCDBG_WIN || '6360,6480').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`PROC rng=${L} idx=${monIndex} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement} peace=${!!mon.mpeaceful} shk=${!!mon.isshk} fol=${!!mon.following} roomno=${game.level?.at(mon.mx, mon.my)?.roomno}`); }
 		                const resumingPetInventory = game._pet_inventory_resume === mon;
 	                const resumedAfterPreturn = resumeAfterPreturn && monIndex === startIndex;
 	                if (resumingSameMonster && monIndex === startIndex && mon._resume_web_after_more) {
@@ -6194,8 +6195,8 @@ if (attack.adtyp === 'steal') {
                                    (monmove.c:1891-1904) suppresses the search
                                    (and its roll) when a directly lined-up,
                                    in-throw-range target keeps appr==1. */
-                                const fudist = Math.max(Math.abs(oldx - heroX),
-                                    Math.abs(oldy - heroY));
+                                const fudist = (oldx - heroX) ** 2
+                                    + (oldy - heroY) ** 2; /* C distu() = dist2() (hack.h:1531) */
                                 if (mon.following && !mon.billct && fudist > 4
                                     && !game.level?.flags?.rogue_level
                                     && inShopBaseRoomAt(oldx, oldy)) {
@@ -13588,6 +13589,21 @@ function monsterPickStuff(mon, monIndex = null, somebodyCanMove = false, forceMo
     if (metallivoreEatFloorMetal(mon)) return true;
     if (gelatinousCubeEatFloorObjects(mon)) return true;
     if (corpseEaterEatFloorCorpse(mon)) return true;
+    /* C ref: mpickstuff() (mon.c:1847-1858), reached from postmov() only
+       when the mover can move and stands on at least one object
+       (monmove.c:1660-1661).  A shopkeeper inside its own shop returns
+       without a roll (mon.c:1853-1854); any other non-tame monster standing
+       in a shop room rolls rn2(25) and gives up unless it comes up 0
+       (mon.c:1856-1858).  The roll precedes the would-take scan, so it also
+       fires for untakable piles. */
+    const pickupStackHere = (game.level?.objects || []).some(item =>
+        !item.transientProjectile && item.ox === mon.mx && item.oy === mon.my);
+    if (pickupStackHere) {
+        if (mon.isshk && game.level?.at(mon.mx, mon.my)?.roomno === mon.shoproom)
+            return false;
+        if (!mon.mtame && inShopBaseRoomAt(mon.mx, mon.my) && rn2(25))
+            return false;
+    }
     if (mon.mpeaceful && !(mon.pet || mon.mtame) && !mon.isshk) return false;
     const objects = game.level?.objects || [];
     const obj = [...objects].reverse()
