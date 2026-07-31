@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9150,
+   "datetime": "20260720120000",
+   "nethackrc": "OPTIONS=name:Harass,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#wizgenesis\nWizard of Yendor\ny #wizkill\n   m.   \u001b #wizwish\nthe Amulet of Yendor\n  potion of gain level\n \u0016oracle\n    do  5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s "
+  }
+ ]
+}

@@ -96,6 +96,37 @@ Wizard mode is enabled via `WIZARDS=*` in the installed sysconf and
   no direction prompt. Delphi (oracle.lua) has a walkable opening in its
   NW wall — no digging needed.
 
+## More 91xx-era mechanics (harassment/lycanthropy/conflict sessions)
+
+- Wizard mode needs `WIZARDS=*` in `<install>/sysconf` (stock install says
+  `WIZARDS=root games` and silently demotes to explore mode). Wizard mode
+  then force-renames the player to "wizard" regardless of `name:`.
+- `#wizgenesis` places the created monster ADJACENT to the hero ("X appears
+  next to you."). Unique monsters ask "force <name>? [yn] (n)" — answer `y`,
+  or you get a doppelganger.
+- "#wizkill" getpos supports `m` to cycle the cursor through VISIBLE monsters
+  (`.`` to slay); slaying prints a --More-- per kill; chain continues.
+- Wishing for the Amulet of Yendor prints `o - the Amulet of Yendor.--More--`
+  AND a second `--More--` ("The Amulet is bestowing a wish upon you!") — first
+  ownership of the Amulet grants a FREE wish (moveloop allmain.c) whose getlin
+  cannot be escaped cleanly: always answer it.
+- Counted searches (`5s`) reliably burn 5 turns only while nobody attacks;
+  EVERY monster attack (even a miss) stops the occupation. Wizard/adjacent
+  combat scenarios accrue ~1 turn per `5s ` packet; hero paralysis does not
+  advance `svm.moves`/the T: counter at all.
+- `uhave.amulet` conveys aggravate-monster; carrying the Amulet turns whole
+  friendly populations (quest home, town) hostile. Dropping it de-aggravates.
+- Demigod harassment (`intervene()`): set ONLY by killing the Wizard
+  (`wizdeadorgone`, `udg_cnt=rn1(250,50)` — pick seeds by reading the
+  `rn2(250)` value from the rng log of a throwaway kill-recording) or by
+  succeeding at the invocation. Rearm is `rn1(200,50)` per event.
+- `^T` in wizard mode always asks for a cursor position (teleport control).
+- Monster genesis inventory: salamanders may spawn with a spear + wand and
+  will zap the wand via muse (`use_offensive`) — no hero setup needed.
+- A `#wizgenesis`d peaceful monster (nymph) can be angered by attacking it
+  (direction key; no confirmation in wizard mode) — its counterattack steals
+  a RANDOM inventory item.
+
 ## Inspect a recording
 
 `node /tmp/inspect-session.mjs <file> [firstStep] [lastStep]`

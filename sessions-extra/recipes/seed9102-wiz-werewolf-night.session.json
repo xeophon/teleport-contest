@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9102,
+   "datetime": "20260720230000",
+   "nethackrc": "OPTIONS=name:Howler,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#wizgenesis\nwerewolf\n  5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s "
+  }
+ ]
+}
