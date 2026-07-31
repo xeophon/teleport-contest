@@ -38876,7 +38876,10 @@ test('successful breakarm polyself destroys body armor and shirt but drops cloak
     assert.equal(game.inventory.includes(body), false);
     assert.equal(game.inventory.includes(cloak), false);
     assert.equal(game.inventory.includes(shirt), false);
-    assert.equal(game.u.uac, 10);
+    // C ref: find_ac() starts from mons[u.umonnum].ac (do_wear.c:2473-2475);
+    // the xorn row gives natural AC -2 (monsters.h:2358 LVL(8,9,-2,20,0)) and
+    // all worn armor was destroyed/dropped by break_armor(), so uac is -2.
+    assert.equal(game.u.uac, -2);
     assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), ['cloak of displacement']);
     assert.equal(game.level.objects[0].worn, false);
     assert.equal(game.level.objects[0].ox, game.u.ux);
@@ -40045,7 +40048,10 @@ test('successful whirly polyself slips out of body armor cloak and shirt', async
     assert.equal(game.inventory.includes(body), false);
     assert.equal(game.inventory.includes(cloak), false);
     assert.equal(game.inventory.includes(shirt), false);
-    assert.equal(game.u.uac, 10);
+    // C ref: fog cloud natural AC is 0 (monsters.h:1054 LVL(3,1,0,0,0)) and
+    // find_ac() starts from mons[u.umonnum].ac (do_wear.c:2473-2475); all
+    // armor slipped off, so uac is 0.
+    assert.equal(game.u.uac, 0);
     assert.deepEqual(game.level.objects.map(obj => obj.kind || obj.actualKind), [
         'leather armor',
         'cloak of displacement',
@@ -41013,7 +41019,10 @@ test('successful horned polyself pierces flimsy helm without dropping it', async
     assert.equal(game.inventory.includes(helm), true);
     assert.equal(helm.worn, true);
     assert.equal(game.level.objects.length, 0);
-    assert.equal(game.u.uac, 9);
+    // C ref: minotaur natural AC is 6 (monsters.h:1787 LVL(15,15,6,0,0));
+    // find_ac() (do_wear.c:2473-2475) subtracts ARM_BONUS of the still-worn
+    // +0 elven leather helm (AC bonus 1, objects.h:445-447): 6 - 1 = 5.
+    assert.equal(game.u.uac, 5);
 });
 
 test('successful horned polyself drops hard unpaid helm in shop', async () => {

@@ -4,6 +4,7 @@
 import { game } from './gstate.js';
 import { wizardCussMessage, wizdeadorgone } from './wizard.js';
 import { WERE_SPECIES } from './were.js';
+import { MONS } from './permonst.js'; // js port of include/monsters.h rows (natural AC via .ac)
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
@@ -15063,15 +15064,25 @@ async function advanceExperienceLevel(incremental = false) {
     game._command_mode = more ? 'levelChangeMore' : null;
 }
 
-// AC note: do_wear.c:2473-2475 find_ac() starts from mons[u.umonnum].ac for
-// the polymorphed hero, but the generated monster rows carry no armor class,
-// so forms resolve without a mac and recomputePolyselfArmorClass() bases the
-// hero's AC on 10 (minus still-worn armor bonuses) unless a form entry in
-// POLYSELF_EXTRA_FORMS supplies an explicit mac.  (An earlier patch injected
-// monsters.h:2358's xorn AC of -2 here; that regressed the unit contract for
-// breakarm fallout, which expects base AC 10 once all armor is gone.)
+// AC note: do_wear.c:2473-2475 find_ac() bases the polymorphed hero's AC on
+// mons[u.umonnum].ac (the form's natural armor class from include/monsters.h;
+// polymon() recomputes it via find_ac(), polyself.c:896-898).  The monster
+// rows returned by monsterByRndName() / RANDOM_MONSTER_BY_NAME usually carry
+// no mac, so attach the natural AC from js/permonst.js MONS (its .ac field
+// mirrors each monsters.h LVL row, e.g. xorn -2 at monsters.h:2358, fog cloud
+// 0 at monsters.h:1054) for the becomeMonster()/recomputePolyselfArmorClass()
+// `form.mac ?? 10` paths.  POLYSELF_EXTRA_FORMS entries keep their curated
+// mac-or-default behavior.  MONS lists werecreatures twice (beast form first);
+// polyself into a werecreature uses the beast form (polyself.c:782-792), which
+// is also the form the curated map covers, so first-name-match is right.
 function polyselfFormByName(name) {
-    const form = POLYSELF_EXTRA_FORMS.get(name) || monsterByRndName(name) || RANDOM_MONSTER_BY_NAME.get(name);
+    const curated = POLYSELF_EXTRA_FORMS.get(name);
+    if (curated) return curated;
+    const form = monsterByRndName(name) || RANDOM_MONSTER_BY_NAME.get(name);
+    if (form && form.mac == null) {
+        const pmRow = MONS.find(entry => entry.name === form.name);
+        if (pmRow) return { ...form, mac: pmRow.ac };
+    }
     return form;
 }
 
