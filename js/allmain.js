@@ -4725,6 +4725,21 @@ export async function processMonsterTurns() {
                                 .some(entry => entry.section === 'Wands' && entry.name === 'wand of striking');
                             const wandName = wandKnown ? 'wand of striking' : `${appearance} wand`;
                             const article = /^[aeiou]/i.test(wandName) ? 'an' : 'a';
+                            // C ref: allmain.c:493-507 — while an occupation is
+                            // active the game calls stop_occupation() when a hostile
+                            // monster is nearby (monster_nearby), before the forum's
+                            // own reaction; the message comes out ahead of the zap.
+                            if (game._search_pending_count > 0) {
+                                game._search_pending_count = 0;
+                                addToplineMessage('You stop searching.');
+                            }
+                            // C ref: allmain.c:493-507 stop_occupation()-via-
+                            // monster_nearby()-interrupted repeated searching at the
+                            // point the wand zap fires; the message precedes it.
+                            if (game._search_pending_count > 0) {
+                                game._search_pending_count = 0;
+                                addToplineMessage('You stop searching.');
+                            }
                             const zapMessage = couldSeeCoord(mon.mx, mon.my)
                                 ? `${monsterDisplayName(mon)} zaps ${article} ${wandName}!`
                                 : 'You hear a nearby zap.';
@@ -5164,11 +5179,16 @@ export async function processMonsterTurns() {
                         // the monster (mon._salAttackChain) so resuming the
                         // engine's monster phase continues C's loop mid-flight.
                         if (name === 'salamander') {
+                            const salDbg = msg => {
+                                if (!process.env.MATTACK_DBG) return;
+                                (globalThis.__salDbg ??= []).push(`rng#${(getRngLog?.() || []).length} ${msg} slot=${chain.slot} phase=${chain.phase} hits=${chain.hits} dmg=${chain.damage} mspec=${mon.mspec_used}`);
+                            };
                             let chain = mon.m_attack_chain;
                             if (!chain) {
                                 chain = { slot: 0, phase: 0, hits: [false, false, false, false], damage: 0 };
                                 mon.m_attack_chain = chain;
-                            }
+                                salDbg('new');
+                            } else salDbg('resume');
                             const salSubject = game.u?.blind ? 'It' : monsterDisplayName(mon);
                             const salamanderLevel = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
                             const salToHit = Math.max(1, (game.u?.uac ?? 10) + 10 + salamanderLevel
@@ -5176,6 +5196,7 @@ export async function processMonsterTurns() {
                             const salMagicNegation = (game.inventory || []).reduce((best, item) =>
                                 item.worn ? Math.max(best, ARMOR_MAGIC_NEGATION[item.kind] || 0) : best, 0);
                             const salPauseChain = () => {
+                                salDbg('pause');
                                 // The resume re-enters this monster's move block;
                                 // avoid re-running C's per-phase rolls
                                 // (mhitm.js monmove-cousins: distfleeck/monmove.c:538).
@@ -5203,6 +5224,7 @@ export async function processMonsterTurns() {
                                 return true;
                             };
                             const salFinishSlot = () => {
+                                salDbg('finish');
                                 chain.slot++;
                                 chain.phase = 0;
                                 chain.damage = 0;
@@ -5211,11 +5233,20 @@ export async function processMonsterTurns() {
                             // are consumed for every successful hit, then damage is
                             // applied (mdamageu), then stop_occupation().
                             const salAftermath = () => {
-                                if (chain.phase < 90) chain.phase = 90;
+                                if (chain.phase >= 91) {
+                                    // C ref: hitmu() continues past mdamageu(),
+                                    // and past done() when the hero's entry into
+                                    // it is refused ("Die?" -> 'n'): only the tail —
+                                    // stop_occupation() (mhitu.c:1281) — remains.
+                                    if (!salStopOccupation()) return false;
+                                    salFinishSlot();
+                                    return true;
+                                }
                                 rn2(3);   // mhitm_knockback knockdistance ...
                                 rn2(6);   // ... and the 1/6 knockback chance (the
                                           // salamander also has HUGS attacks, so no
                                           // knockback can actually occur, uhitm.c:5280)
+                                chain.phase = 91;
                                 if (chain.damage) {
                                     const hpBefore = game.u?.uhp || 0;
                                     if ((game.u?.uhp || 0) - chain.damage > 0) {
@@ -5235,7 +5266,6 @@ export async function processMonsterTurns() {
                                         return false;
                                     }
                                 }
-                                chain.phase = 91;
                                 if (!salStopOccupation()) return false;
                                 salFinishSlot();
                                 return true;
@@ -5263,26 +5293,35 @@ export async function processMonsterTurns() {
                                                 salFinishSlot();
                                                 continue;
                                             }
-                                            mon.mw = true; // no weapon: bare-handed weapon attack below
-                                            mon.mw = false;
                                         }
                                         chain.hits[0] = salToHit > rnd(20); // mhitu.c:912 rnd(20+i)
                                         if (chain.hits[0]) {
                                             chain.damage = d(2, 8); // hitmu() base (mhitu.c:1187)
-                                            if (mon.mw && mon.mw !== true)
-                                                chain.damage += rnd(6); // dmgval(spear): weapon.c:265
+                                            if (mon.mw && mon.mw !== true) {
+                                                // C ref: mhitm_ad_phys() mhitu weapon
+                                                // branch (uhitm.c:4065) ->
+                                                // dmgval(otmp, mdef) (weapon.c:265):
+                                                // for a normal spear, rnd(6) then
+                                                // +spe (weapon.c:297).
+                                                chain.damage += rnd(6)
+                                                    + Math.max(0, Number(mon.mw.spe) || 0);
+                                            }
                                         }
-                                        chain.phase = 1;
+                                        chain.phase = 2;
                                     }
                                     if (chain.phase === 1) {
+                                        // resumed after the wield message
+                                        salFinishSlot();
+                                        continue;
+                                    }
+                                    if (chain.phase === 2) {
                                         const msg = chain.hits[0]
                                             ? `${salSubject} hits!`
                                             : `${salSubject} misses!`;
-                                        chain.phase = 2;
+                                        chain.phase = 3;
                                         if (!salEmit(msg)) { chainDone = true; break; }
-                                        chain.phase = 2;
                                     }
-                                    if (chain.phase >= 2) {
+                                    if (chain.phase >= 3) {
                                         if (!chain.hits[0]) salFinishSlot();
                                         else if (!salAftermath()) { chainDone = true; break; }
                                     }
@@ -17443,3 +17482,5 @@ export const __allmainTestHooks = {
     maybeSpinMonsterWebForTest: maybeSpinMonsterWeb,
     maybePromptQueuedPickDigApplyForTest: maybePromptQueuedPickDigApply,
 };
+
+export function __getSalDbg() { return globalThis.__salDbg || []; }
