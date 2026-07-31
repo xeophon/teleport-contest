@@ -11,6 +11,13 @@ import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
 import { wereChange } from './were.js';
+import {
+    setMhitmHooks as setMonsterMonsterCombatHooks,
+    mmAggression as monsterMonsterAggression,
+    mMoveAggress as monsterMoveAggress,
+    resistConflict as monsterResistsConflict,
+    MM_AGGR as MONSTER_MM_AGGR_FLAG,
+} from './mhitm.js';
 import { DIGTYP_BOULDER, DIGTYP_DOOR, DIGTYP_ROCK, DIGTYP_STATUE, DIGTYP_TREE, DIGTYP_UNDIGGABLE, digBoulderAt, digCheckFailed, digCheckFailMessage, digCheckHero, digDbon, digEffortIncrement, digFumblingResult, digHardnessBlockMessage, digOccupationAborted, digTargetName, digTypeOf, digVerb, finishDigContext, finishWallDigTerrain, fractureDigBoulder, inShopBaseAt, pickDigDirectionPrompt, wakeNearbyForDig } from './dig.js';
 import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
@@ -13417,10 +13424,21 @@ function mfndpos(mon, flag) {
                 } else {
                     occupant = game.level?.monsters?.find(other => other !== mon && other.mx === nx && other.my === ny) || null;
                     if (occupant) {
-                        if (!(flag & ALLOW_M)) continue;
+                        /* C ref: mon.c:2301 — flag | mm_aggression(mon, mtmp2).
+                         * mm_aggression grants ALLOW_M for purple
+                         * worm-vs-shrieker and zombie-maker-vs-zombifiable
+                         * pairs even between hostile monsters; it is pure
+                         * data-level (no RNG).  MONSTER_MM_AGGR_FLAG marks
+                         * candidates granted by it so the move loop routes
+                         * them through the ported mattackm() core
+                         * (mhitm.c:293). */
+                        const mmAggr = monsterMonsterAggression(mon, occupant);
+                        const mmflag = flag | mmAggr;
+                        if (!(mmflag & ALLOW_M)) continue;
                         info |= ALLOW_M;
+                        if (!(flag & ALLOW_M) && (mmAggr & ALLOW_M)) info |= MONSTER_MM_AGGR_FLAG;
                         if (occupant.pet || occupant.mtame) {
-                            if (!(flag & ALLOW_TM)) continue;
+                            if (!(mmflag & ALLOW_TM)) continue;
                             info |= ALLOW_TM;
                         }
                     }
@@ -14317,6 +14335,20 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         return false;
     }
     if (next.target) {
+        /* C ref: monmove.c:2086-2126 m_move_aggress() — when mfndpos
+         * granted the attack square via mm_aggression() (mon.c:2301; in
+         * particular zombie-maker-vs-zombifiable and
+         * purple-worm-vs-shrieker pairs between non-tame monsters), C
+         * routes the strike through mattackm() with the rn2(4)/rn2(12)
+         * return-attack gate.  The legacy bespoke block below covers the
+         * tame/conflict candidates that recorded sessions exercise; this
+         * branch only fires for plane hostiles, where no JS combat path
+         * existed before. */
+        if ((nextInfo & MONSTER_MM_AGGR_FLAG) && !mon.pet && !mon.mtame
+            && (game.level?.monsters || []).includes(next.target)) {
+            monsterMoveAggress(mon, next.target);
+            return done();
+        }
         const weapon = mon.mw || mon.minvent?.find(item =>
             item.otyp === ORCISH_DAGGER || item.kind === 'orcish dagger' || item.kind === 'dagger');
         if (!mon.mw && weapon) {
@@ -16994,6 +17026,51 @@ export async function moveloop(_resuming) {
         if (game.program_state?.gameover) break;
     }
 }
+
+/* ------------------------------------------------------------------ *
+ * Monster-vs-monster combat (src/mhitm.c core port in js/mhitm.js).  *
+ * The hooks below bridge the ported mattackm/fightm core to the       *
+ * display/kill pipelines without creating a js/allmain.js import edge *
+ * in mhitm.js.  C refs: mhitm.c:41-71 (pre_mm_attack visibility),     *
+ * mon.c:3392 (monkilled), monmove.c:2086 (m_move_aggress).            *
+ * ------------------------------------------------------------------ */
+
+/* Kill reporting + removal for the mattackm() core ("S is killed!",
+ * inventory drop, optional corpse/glob, vanquished counter).  Mirrors
+ * the mondead() drop pipeline already used by pet-kill slices. */
+function monsterCombatKill(mdef /* , how */) {
+    if (monsterVisibleToHero(mdef))
+        addToplineMessage(`${monsterDisplayName(mdef)} is killed!`);
+    const explosion = queueGasSporeDeathExplosion(mdef);
+    const corpseData = corpseDataForMonster(mdef.data || {});
+    const dropCorpse = !explosion && monsterCorpseDropSucceeds(mdef, mdef.data || {});
+    dropMonsterInventory(mdef);
+    if (explosion) addToplineMessage(explosion.message);
+    else if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
+        createMonsterCorpseOrGlob(mdef, corpseData);
+    recordVanquished(mdef, false);
+    game.level.monsters = (game.level?.monsters || []).filter(other => other !== mdef);
+    mdef.mhp = 0;
+    mdef.dead = true;
+    newsym(mdef.mx, mdef.my);
+}
+
+setMonsterMonsterCombatHooks({
+    /* pline() -> topline message pipeline */
+    pline: (msg) => { addToplineMessage(msg); },
+    /* mhitm.c:327-329 gv.vis: either combatant visible to the hero */
+    vis: (magr, mdef) => monsterVisibleToHero(magr) || monsterVisibleToHero(mdef),
+    cansee: (x, y) => !game.u?.blind && couldSeeCoord(x, y),
+    canseemon: (m) => monsterVisibleToHero(m),
+    canspotmon: (m) => monsterVisibleToHero(m),
+    Monnam: (m) => monsterDisplayName(m),
+    mon_nam: (m) => (m.givenName || `the ${m.data?.name || 'creature'}`),
+    monkilled: (m, how) => monsterCombatKill(m, how),
+    monstone: (m) => stoneMonster(m, null, { awardExperience: false }),
+    newsym,
+    /* mdamagem() -> grow_up(magr, mdef): cmd.js growth bookkeeping */
+    growUp: (agr, def) => monsterGrowUp(agr, def),
+});
 
 export const __allmainTestHooks = {
     mfndposForTest: mfndpos,
