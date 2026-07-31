@@ -45,7 +45,7 @@ not proof. 940+ parity-audit docs confirm the "narrow parity slice" working styl
 | **were.c (~0.5k) lycanthropy** | Probe zero for were_change/counter_were; were-transformation/summon cycle not found (only string refs). |
 | **steal.c (~0.9k)** | `adtyp: 'steal'/'seduce'` wired for a few monsters; nymph item-theft chains, foocubus seduction attribute game, monkey pickpocket partial. |
 | **wizard.c (~0.6k)** | Wizard reappearance + covetous amulet chase partially ('tactics' 2 hits); clonewiz/Double Trouble, *interference, res* absent. |
-| **endgame depth (end.c ~2.2k, rip/topten)** | Death/disclose prompt exists; no `rip.js`/`topten.js` — tombstone rendering, epitaphs, score list, "diediedie" diagnostics missing. Ascension present but Riders/Astral dynamics static. |
+| **endgame depth (end.c ~2.2k, rip/topten)** | `js/end.js` (done()/really_done() tables, formatkiller-article attribution, score arithmetic), `js/rip.js` (text tombstone, C centering math), `js/topten.js` (record list, topten/outentry flow) ported and wired into cmd.js death/#quit flows — see `docs/c-parity-audit/948-endgame-rip-topten-2026-07-30.md`. Ascension present but Riders/Astral dynamics static. |
 | **trap.c (~5.9k)** | Many traps bespoke-ported (dart, bear, pits, rolling boulder, statue...); disarm/untrap breadth, trapdoors/teleport chains, magic trap effects, fire-trap damage queues partial; region-based effects (stinking cloud) minimal. |
 | **region.c (~1.9k)** | `region.js` is 59 lines — stinking clouds, levitation regions on planes are bespoke hacks, expiring regions/gas damage not systematic. |
 | **priest.c (~0.7k)** | Temples/priests placed; temple movement, shrine text, priest gifting/donation-absolution partial. |
@@ -57,7 +57,7 @@ not proof. 940+ parity-audit docs confirm the "narrow parity slice" working styl
 | C file (~lines) | Evidence |
 |---|---|
 | Monster AI data-driven core: full `mon.c` regrow/limbo/misc (~4.3k of unported detail) | meatmetal/msummon named fns absent; monsters use spawn-pool data only |
-| `end.c` pretty-death stack: introspective disclose, rip.c (~0.4k), topten.c (~1.0k) | no files; 'epitaph' only a const + data pool |
+| `end.c` pretty-death stack: introspective disclose, rip.c, topten.c | ported as `js/end.js` + `js/rip.js` + `js/topten.js` (audit 948); remaining: disclosure `+` letters, escape/ascension valuable listing, hero-grave creation text, tt_oname/tt_doppel wiring, prscore CLI |
 | `mcastu.c` full table, `muse.c` full AI, `mhitm.c` — see PARTIAL: systems unstarted, only hero-visible slices exist |
 | `weapon.c` skill training depth (~2.8k): #enhance exists superficially (`_enhanced_<skill>` flags), no practice/advancement math parity |
 | `dothrow.c`/`mthrowu.c` monster projectile AI depth (~2.6k+1.1k): bespoke per-throw slices; no generic launcher AI |

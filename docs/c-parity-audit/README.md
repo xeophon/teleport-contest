@@ -215,6 +215,7 @@ This folder records source-backed audits against `nethack-c/upstream`. The notes
 - [944-permonst-data-table-2026-07-30.md](944-permonst-data-table-2026-07-30.md): complete `mons[]` monster database (`js/permonst.js`) — all 383 PM entries with attacks/flags/sizes plus mondata.h predicates.
 - [946-wizard-machinery-2026-07-30.md](946-wizard-machinery-2026-07-30.md): new js/wizard.js module ports wizard.c amulet()/intervene()/resurrect()/wizdeadorgone()/clonewiz()/nasty()/pick_nasty()/aggravate()/cuss machinery, with no_of_wizards bookkeeping in makemon, per-turn demigod harassment in moveloop order, and Double Trouble wiring for the clone-wizard spell.
 - [945-were-lycanthropy-2026-07-30.md](945-were-lycanthropy-2026-07-30.md): were.c port — were_change/new_were wired into the monster-turn loop with night/moon-phase RNG arity, were_summon pack tables, AD_WERE hero-infection helper, and you_were/you_unwere/set_ulycn hero cycle hooks.
+- [948-endgame-rip-topten-2026-07-30.md](948-endgame-rip-topten-2026-07-30.md): end.c/rip.c/topten.c port — new js/end.js (done()/really_done() tables, killer attribution, formatkiller, score arithmetic, farewell/summary text), js/rip.js (text tombstone with C centering/wrap math), js/topten.js (record list, rank flow, outentry formatting); wired into the cmd.js death/#quit/escape flows.
 
 ## Cross-Cutting Themes
 
