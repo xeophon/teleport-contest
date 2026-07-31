@@ -4297,6 +4297,7 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[mt-turns] pend=${JSON.stringify(game._pending_message||'')} more=${game._message_more} moves=${game.moves}`);
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
         game._stale_queued_kill_pet = null;
@@ -16655,6 +16656,7 @@ export async function moveloop_core() {
     while (g._pending_time_passed
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
+        if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0}`);
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
@@ -16692,6 +16694,7 @@ export async function moveloop_core() {
             g._skip_pending_time_decrement = 1;
         }
         if (g._search_pending_count > 0) {
+            if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[srch-step-pre] pend=${JSON.stringify(g._pending_message||'')} moves=${g.moves}`);
             const searchCountBeforeTurn = g._search_pending_count;
             let foundSearchMonster = false;
             let foundMessage = '';
@@ -17412,6 +17415,7 @@ export async function moveloop_core() {
     } else if (g._queued_more_continue_monsters && !g._message_more) {
         g._queued_more_continue_monsters = 0;
     }
+    if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[mt-turns-tail] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} moves=${g.moves}`);
     g._running_continuation = 0;
     g._initial_run_command = 0;
 	    g._process_time_with_more = g._message_more && g._continue_monsters_after_more
