@@ -6180,6 +6180,36 @@ if (attack.adtyp === 'steal') {
                                 goalX = heroX;
                                 goalY = heroY;
                                 avoid = false;
+                                /* C ref: shk.c:4941-4950 shk_move() -- an angry
+                                   shopkeeper actively following the hero (udist
+                                   > 4 and no outstanding bill) returns -1, "let
+                                   m_move do it" (monmove.c:1807-1828 case -1
+                                   falls through to generic movement).  A keeper
+                                   still standing in a shop room then passes
+                                   through m_search_items(), whose shop rule
+                                   (monmove.c:1353-1356) rolls rn2(25); a
+                                   non-following angry keeper instead stops
+                                   inside shk_move()/move_special() and never
+                                   reaches it.  The generic getitems gate
+                                   (monmove.c:1891-1904) suppresses the search
+                                   (and its roll) when a directly lined-up,
+                                   in-throw-range target keeps appr==1. */
+                                const fudist = Math.max(Math.abs(oldx - heroX),
+                                    Math.abs(oldy - heroY));
+                                if (mon.following && !mon.billct && fudist > 4
+                                    && !game.level?.flags?.rogue_level
+                                    && inShopBaseRoomAt(oldx, oldy)) {
+                                    const tgtX = mon.mux ?? heroX;
+                                    const tgtY = mon.muy ?? heroY;
+                                    const tdx = Math.abs(oldx - tgtX);
+                                    const tdy = Math.abs(oldy - tgtY);
+                                    const linedUp = tdx === 0 || tdy === 0 || tdx === tdy;
+                                    const throwRange = game.u?._polyself_base?.throwsRocks
+                                        ? 20
+                                        : Math.trunc((game.u?.acurr?.a?.[A_STR] ?? 10) / 2) + 1;
+                                    const inLine = linedUp && Math.max(tdx, tdy) <= throwRange;
+                                    if (appr !== 1 || !inLine) rn2(25);
+                                }
                             }
 
                         if (mon.mconf) {
@@ -13509,6 +13539,13 @@ function monsterCanReachItem(mon, x, y) {
 }
 
 function monsterSearchItemGoal(mon) {
+    /* C ref: monmove.c:1353-1356 m_search_items() -- "in shop, usually skip":
+       before scanning for items, a monster standing in a shop room rolls
+       rn2(25) and, unless it comes up 0 (or the monster is a shopkeeper),
+       gives up the search entirely.  The roll happens for every monster
+       that reaches m_search_items (via the getitems gate, monmove.c:1891),
+       including one whose only shop contact is standing in it. */
+    if (inShopBaseRoomAt(mon.mx, mon.my) && rn2(25)) return null;
     if (mon.mpeaceful || !(game.level?.objects || []).length) return null;
 
     const heroDist = Math.max(Math.abs((mon.mux ?? game.u?.ux ?? mon.mx) - mon.mx),
