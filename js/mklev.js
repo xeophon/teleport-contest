@@ -1797,8 +1797,11 @@ const XLIM = 4;
 const YLIM = 3;
 
 // Direction deltas
+// C ref: decl.c xdir/ydir (compass-point delta tables)
 const xdir = [-1, -1, 0, 1, 1, 1, 0, -1];
 const ydir = [0, -1, -1, -1, 0, 1, 1, 1];
+const N_DIRS = 8; // C ref: hack.h N_DIRS (N_DIRS_Z minus up/down)
+function dir_clamp(dir) { return ((dir % N_DIRS) + N_DIRS) % N_DIRS; } // C ref: hack.h DIR_CLAMP
 
 // Trap constants
 const NO_TRAP = 0;
@@ -12547,6 +12550,13 @@ function flipValleyLevel(vertical, horizontal) {
         const point = { x: mon.mx, y: mon.my };
         flipPoint(point);
         mon.mx = point.x; mon.my = point.y;
+        // C ref: sp_lev.c flip_level() monsters loop — Flip_coord flips each
+        // monster's mgoal (sp_lev.c:649) and, for temple priests, the shrine
+        // position EPRI(mtmp)->shrpos (sp_lev.c:651-652); priests use shrpos
+        // as their milling goal (pri_move(), priest.c:190-196), so skipping
+        // the flip leaves the priest heading for the unflipped altar spot.
+        if (mon.mgoal) flipPoint(mon.mgoal);
+        if (mon.ispriest && mon.shrine) flipPoint(mon.shrine);
     }
     for (const trap of g.level.traps || []) {
         const point = { x: trap.tx, y: trap.ty };
@@ -15308,9 +15318,23 @@ async function make_valley_level() {
         altar.flags = Align2amask(A_NONE) | AM_SHRINE;
         altar.altarmask = altar.flags;
     }
-    rn2(8);
-    relocatePriestSpotOccupant(valleyX(2), valleyY(9));
-    const priest = await makemon(ALIGNED_CLERIC, valleyX(2), valleyY(9), MM_NOGRP);
+    // C ref: priest.c priestini() lines 226-243 — si = rn2(N_DIRS), then
+    // scan the 8 compass directions starting at si (xdir/ydir tables,
+    // decl.c:77-78, indexed by DIR_CLAMP) for the first pm_good_location()
+    // spot around the altar; if all 8 fail (i == N_DIRS), put the priest
+    // on the altar spot itself, relocating any occupant (MON_AT insurance).
+    const si = rn2(N_DIRS);
+    let px = valleyX(3), py = valleyY(10);
+    {
+        let i = 0;
+        for ( ; i < N_DIRS; i++) {
+            const tx = px + xdir[dir_clamp(i + si)];
+            const ty = py + ydir[dir_clamp(i + si)];
+            if (makemon_goodpos({}, tx, ty)) { px = tx; py = ty; break; }
+        }
+    }
+    relocatePriestSpotOccupant(px, py);
+    const priest = await makemon(ALIGNED_CLERIC, px, py, MM_NOGRP);
     if (priest) {
         initPriestMonster(priest, {
             room: (temple?.roomnoidx ?? 0) + ROOMOFFSET,
