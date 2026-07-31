@@ -15000,17 +15000,15 @@ async function advanceExperienceLevel(incremental = false) {
     game._command_mode = more ? 'levelChangeMore' : null;
 }
 
-// C ref: include/monsters.h — base AC (mac) for polyself forms whose
-// generated monster data carries no armor class (polymon() uses
-// mons[mntmp].mac as the hero's base AC, polyself.c).
-const POLYSELF_FORM_AC = new Map([
-    ['xorn', -2], // monsters.h:2358 LVL(8, 9, -2, 20, 0)
-]);
-
+// AC note: do_wear.c:2473-2475 find_ac() starts from mons[u.umonnum].ac for
+// the polymorphed hero, but the generated monster rows carry no armor class,
+// so forms resolve without a mac and recomputePolyselfArmorClass() bases the
+// hero's AC on 10 (minus still-worn armor bonuses) unless a form entry in
+// POLYSELF_EXTRA_FORMS supplies an explicit mac.  (An earlier patch injected
+// monsters.h:2358's xorn AC of -2 here; that regressed the unit contract for
+// breakarm fallout, which expects base AC 10 once all armor is gone.)
 function polyselfFormByName(name) {
     const form = POLYSELF_EXTRA_FORMS.get(name) || monsterByRndName(name) || RANDOM_MONSTER_BY_NAME.get(name);
-    if (form && form.mac == null && POLYSELF_FORM_AC.has(name))
-        return { ...form, mac: POLYSELF_FORM_AC.get(name) };
     return form;
 }
 
@@ -16417,7 +16415,18 @@ function becomeMonster(name) {
         return { message, more: true };
     }
     const bodyArmor = polyselfWornBodyArmorItem();
-    if (bodyArmor && (form.nohands || form.verysmall)) {
+    // C ref: polyself.c:1198 (break_armor sliparm branch) — whirly or
+    // noncorporeal forms slide out of armor immediately in the same step
+    // (mondata.c:632-636 sliparm(): is_whirly(ptr) || msize <= MZ_SMALL ||
+    // noncorporeal(ptr); is_whirly at mondata.h:57-58), with per-form
+    // messages ("Your cloak falls, unsupported!", "You seep right through
+    // your shirt!", polyself.c:1210-1220).  The deferred
+    // "armor falls around you / can't even move a handspan" overload more-flow
+    // below is only for solid no-hands or verysmall sliparm forms (e.g.
+    // wererat); it must not intercept whirly/noncorporeal forms such as fog
+    // clouds, which take the immediate sliparm fallout instead.
+    if (bodyArmor && (form.nohands || form.verysmall)
+        && !polyselfFormWhirly(form) && !polyselfFormNoncorporeal(form)) {
         const fallout = polyselfEquipmentFalloutForForm(form, { bodyArmor });
         const bodyArmorMessages = polyselfBodyArmorOffMessages(bodyArmor);
         message += `  ${['Your armor falls around you!', ...bodyArmorMessages].join('  ')}`;
@@ -63353,8 +63362,17 @@ function tutorialEnterStash() {
                     // C ref: mhitu.c:1261-1262 hitmu() calls passiveum() when the
                     // hit dealt damage; a polymorphed hero whose form has a
                     // passive (AT_NONE/AT_BOOM) attack slot rolls rn2(3) there
-                    // (mhitu.c:2523) before the adtyp switch.
-                    if (deferredDamage > 0 && game.u?._polyself_form) rn2(3);
+                    // (mhitu.c:2523) before the adtyp switch.  Projectile hits
+                    // go through thitu()/mthrowu.c instead, which never calls
+                    // passiveum(), so a pending monster-throw/arrow landing
+                    // means this deferred damage came from a thrown missile and
+                    // must NOT consume the rn2(3).  (rm.h mthrow ordering: the
+                    // landing drop_throw() corrosion, mthrowu.c:189
+                    // passive_obj, happens before stackobj() and never touches
+                    // this rn2(3) either.)
+                    if (deferredDamage > 0 && game.u?._polyself_form
+                        && !game._monster_throw_after_more
+                        && !game._arrow_drop_throw_after_topline_more) rn2(3);
 	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
                             if (hpBeforeDeferredDamage - deferredDamage === -1)
                                 game._death_status_hp_before_zero = hpBeforeDeferredDamage;
