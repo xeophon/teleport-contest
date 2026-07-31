@@ -39,7 +39,7 @@ import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, curre
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
 import { castSpellDirectionalEffect, castSpellNodirEffect, spellCastNeedsDirection } from './spell.js';
-import { altarAlignAt, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
+import { adjAlign, altarAlignAt, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -10409,6 +10409,7 @@ function heroFarlookDescription() {
 // and xkilled(mtmp, XKILL_NOMSG) reduces them to 0HP.  getpos() shows the
 // farlook tip only the first time (getpos.c:838 handle_tip(TIP_GETPOS)).
 async function beginWizKillFlow() {
+    game._wizkill_mon_locs = null;
     game._farlook_x = game.u?.ux || 0;
     game._farlook_y = game.u?.uy || 0;
     if (!game._getpos_tip_seen) {
@@ -10431,7 +10432,12 @@ function wizkillAutoDescribe(x, y) {
         !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
         && candidate.mx === x && candidate.my === y
         && !!(game.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT));
-    if (mon) return mon.data?.name || 'monster';
+    if (mon) return farlookMonsterDescription(mon);
+    // C ref: pager.c lookat()/do_look() — an object under the cursor is
+    // described by its topmost pile entry ("a scroll labeled ZLORFIK").
+    const object = (game.level?.objects || []).find(obj =>
+        !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
+    if (object) return pickupObjectPhrase(object);
     return '';
 }
 
@@ -10444,6 +10450,11 @@ function farlookMonsterDescription(mon) {
     else if (mon.pet || mon.mpeaceful) name = `${mon.pet ? 'tame' : 'peaceful'} ${name}`;
     const details = [];
     if (mon.msleeping) details.push('asleep');
+    else if ((Number.isInteger(mon.mstrategy) && (mon.mstrategy & STRAT_WAITMASK))
+            || mon.mstrategy === 'waitforu')
+        // C ref: pager.c:463-464 — monsters with mstrategy & STRAT_WAITMASK
+        // are described as "meditating".
+        details.push('meditating');
     if (mon.mundetected) details.push('hidden');
     if (mon.appearObj != null || mon.appearGlyph) details.push('mimicking something');
     return details.length ? `${name}, ${details.join(', ')}` : name;
@@ -26516,7 +26527,11 @@ function directMeleeNonlethalWrapperTail(mon, messages, {
 
 function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop) {
     if (!killAccessible || !treasureDrop) return;
-    if (corpseData.noCorpse || corpseData !== data) return;
+    // C ref: mon.c:3585-3591 — the "traditional treasure drop" gate is the
+    // geno G_NOCORPSE bit (mvitals[mndx].mvflags), NOT corpse drop-ability:
+    // the Wizard of Yendor (G_NOGEN|G_UNIQ, include/monsters.h:2847-2855)
+    // has no corpse bit, so he still drops treasure when #wizkilled.
+    if ((corpseData.noCorpse && !mon.iswiz && data.name !== 'Wizard of Yendor') || corpseData !== data) return;
     if (mon.mx === game.u?.ux && mon.my === game.u?.uy) return;
     if (data.mlet === 'Kop') return;
     if (mon.mcloned) return;
@@ -30299,6 +30314,85 @@ for (const [neutral, names] of GENDERED_CORPSTAT_MONSTER_NAMES) {
 const RANDOM_MONSTER_BY_LOWER_NAME = new Map(
     [...RANDOM_MONSTER_BY_NAME.entries()].map(([name, data]) => [String(name).toLowerCase(), data]),
 );
+
+// C ref: read.c:3245+ create_particular_parse() — monster names are matched
+// case-insensitively, but the special permonst objects (the Wizard of Yendor,
+// Medusa, ...) only register under their canonical capitalization, so map
+// them explicitly.
+const WIZGENESIS_SPECIAL_SPECS = new Map([
+    ['wizard of yendor', 'Wizard of Yendor'],
+    ['medusa', 'Medusa'],
+]);
+function wizgenesisMonsterspecPtr(spec) {
+    if (!spec) return null;
+    const lower = spec.toLowerCase();
+    const canon = WIZGENESIS_SPECIAL_SPECS.get(lower);
+    return monsterByRndName(canon || spec)
+        || RANDOM_MONSTER_BY_LOWER_NAME.get(lower)
+        || null;
+}
+
+// C ref: read.c:3112-3134 cant_revive(&mnum, FALSE, (struct obj *) 0) as used
+// by create_particular_creation() (read.c:3258-3269) for #wizgenesis —
+// special monsters that "can't exist here" resolve to a human zombie (guard,
+// shopkeeper, high cleric, aligned cleric, Angel), a long worm (long worm
+// tail), or a doppelganger (unique monsters via unique_corpstat(),
+// include/mondata.h:174); wizard mode then asks
+// "Creating <substitute> instead; force <name>? [yn] (n)" and only creates
+// the requested monster itself when the answer is 'y'.
+function wizgenesisCantReviveSubstitute(ptr) {
+    if (!ptr || !ptr.name) return null;
+    if (ptr.name === 'guard' || ptr.name === 'shopkeeper'
+        || ptr.name === 'high cleric' || ptr.name === 'aligned cleric'
+        || ptr.name === 'Angel')
+        return monsterByRndName('human zombie');
+    if (ptr.name === 'long worm tail')
+        return monsterByRndName('long worm');
+    if (ptr.unique || ptr.iswiz || ptr.name === 'Wizard of Yendor')
+        return monsterByRndName('doppelganger');
+    return null;
+}
+
+// C ref: read.c:3252-3361 create_particular_creation() — the actual spawn:
+// enexto-like spot next to the hero (makemon(makemon.c:1109-1131) relocates
+// from the hero's square), disposition overrides (read.c:3324-3330), then
+// makemon's MM_NOEXCLAM "appears next to you." message (makemon.c:1474-1496).
+async function finishWizgenesisSpawn(mdat, disposition, monspec) {
+    const spot = mdat ? enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, mdat) : null;
+    if (spot) {
+        const created = await makemon(mdat, spot.x, spot.y, 0);
+        if (created) {
+            created.msleeping = 0;
+            if (disposition === 'tame') {
+                created.mpeaceful = 1;
+                created.pet = true;
+                created.mtame = Math.max(created.mtame || 0,
+                    created.data?.domestic || created.data?.isDomestic ? 10 : 5);
+                created.mextra ??= {};
+                created.mextra.edog ??= {
+                    apport: game.u?.acurr?.a?.[A_CHA] ?? 3,
+                    hungrytime: (game.moves || 1) + 1000,
+                    dropdist: 10000,
+                    whistletime: 0,
+                    ogoal: { x: -1, y: -1 },
+                };
+            } else if (disposition === 'peaceful') {
+                created.mtame = 0;
+                created.mpeaceful = 1;
+            } else {
+                created.mpeaceful = 0;
+                if (disposition === 'hostile') created.mtame = 0;
+            }
+            newsym(created.mx, created.my);
+            const appearName = created.data?.name || monspec || 'monster';
+            const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
+                || /^[A-Z]/.test(appearName));
+            await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
+            return;
+        }
+    }
+    await setMessage('Nothing happens.');
+}
 
 const WISHED_MONSTER_FALLBACKS = new Map([
     ['human', { name: 'human', mlet: '@', glyph: '@', human: true, neuter: false }],
@@ -62436,6 +62530,8 @@ function tutorialEnterStash() {
         && game._command_mode !== 'deathDieMore'
         && game._command_mode !== 'wizkillIntroMore'
         && game._command_mode !== 'wizkillKillMore'
+        && game._command_mode !== 'amuletBestowMore'
+        && game._command_mode !== 'amuletBestowPrompt'
         && game._command_mode !== 'dryupFountainConfirm'
         && game._command_mode !== 'lavaDeathMore'
         && game._command_mode !== 'fountainDetectMore'
@@ -64926,6 +65022,8 @@ function tutorialEnterStash() {
         && game._command_mode !== 'deathDieMore'
         && game._command_mode !== 'wizkillIntroMore'
         && game._command_mode !== 'wizkillKillMore'
+        && game._command_mode !== 'amuletBestowMore'
+        && game._command_mode !== 'amuletBestowPrompt'
         && game._command_mode !== 'dryupFountainConfirm'
         && game._command_mode !== 'lavaDeathMore'
         && game._command_mode !== 'fountainDetectMore'
@@ -72653,7 +72751,21 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             item.owt = finalWishedWeight;
             godsNoticeWish();
-            await setWishResultMessage(`${item.line}.`);
+            // C ref: allmain.c:447-453 — once-per-player-input post-command
+            // check: when the hero newly holds the real Amulet of Yendor,
+            // u.uevent.amulet_wish is set and makewish() is invoked right away
+            // ("The Amulet is bestowing a wish upon you!").
+            const grantAmuletWish = !!item.realAmuletOfYendor
+                && !game.u?.uevent?.amulet_wish;
+            if (grantAmuletWish) {
+                game.u ??= {};
+                game.u.uhave ??= {};
+                game.u.uhave.amulet = 1;
+                game.u.uevent ??= {};
+                game.u.uevent.amulet_wish = 1;
+            }
+            await setWishResultMessage(`${item.line}.`, grantAmuletWish);
+            if (grantAmuletWish) game._command_mode = 'amuletBestowMore';
             return;
         }
         if (key === 8 || key === 127) game._wish_text = (game._wish_text || '').slice(0, -1);
@@ -75454,6 +75566,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             // C ref: getpos.c:861 — the tip overwrote the prompt, so the
             // goal message is reprinted when the tip is dismissed.
             await setMessage('Move cursor to a monster:');
+            game._wizkill_mon_locs = null;
             game._command_mode = 'wizkillCursor';
         }
         return;
@@ -75464,6 +75577,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             // C ref: wiz_kill() loops with prompt "Next monster"
             // (wizcmds.c:257); the getpos tip is not shown again.
             await setMessage('Next monster:');
+            game._wizkill_mon_locs = null;
             game._command_mode = 'wizkillCursor';
             return;
         }
@@ -75480,6 +75594,42 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._command_mode = null;
             return;
         }
+        if (ch === 'm' || ch === 'M') {
+            // C ref: getpos.c mMoOdDxX 'm'/'M' (NHKF_GETPOS_MON_NEXT/PREV):
+            // gather_locs(&mon.arr, &mon.count, GLOC_MONS) (getpos.c:511-558)
+            // collects the hero's spot plus every currently-displayed monster
+            // glyph, qsort()s by cmp_coord_distu() (getpos.c:571-585 —
+            // Chebyshev distance from the hero, then y, then x), and cycles
+            // the gidx cursor per press; the initial index is 0 (hero), so
+            // the first 'm' jumps to the nearest monster.
+            if (!game._wizkill_mon_locs) {
+                const ux = game.u?.ux || 0, uy = game.u?.uy || 0;
+                const spots = [{ x: ux, y: uy }];
+                for (const mon of game.level?.monsters || []) {
+                    if (mon.dead || (mon.mhp != null && mon.mhp <= 0) || mon.mundetected) continue;
+                    // invisible monsters don't show a glyph unless the hero
+                    // can see invisible (gather_locs_interesting GLOC_MONS,
+                    // getpos.c:452-457 uses glyph_at()).
+                    if ((mon.minvis || mon.perminvis) && !game.u?.seeInvisible) continue;
+                    spots.push({ x: mon.mx, y: mon.my });
+                }
+                spots.sort((a, b) => {
+                    const da = Math.max(Math.abs(ux - a.x), Math.abs(uy - a.y));
+                    const db = Math.max(Math.abs(ux - b.x), Math.abs(uy - b.y));
+                    return da - db || (a.y - b.y) || (a.x - b.x);
+                });
+                game._wizkill_mon_locs = spots;
+                game._wizkill_mon_idx = 0;
+            }
+            const locs = game._wizkill_mon_locs;
+            game._wizkill_mon_idx = ch === 'm'
+                ? (game._wizkill_mon_idx + 1) % locs.length
+                : (game._wizkill_mon_idx - 1 + locs.length) % locs.length;
+            game._farlook_x = locs[game._wizkill_mon_idx].x;
+            game._farlook_y = locs[game._wizkill_mon_idx].y;
+            await setMessage(wizkillAutoDescribe(game._farlook_x, game._farlook_y));
+            return;
+        }
         if (ch === '.') {
             const targetX = game._farlook_x || game.u?.ux || 0;
             const targetY = game._farlook_y || game.u?.uy || 0;
@@ -75492,6 +75642,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 const messages = [];
                 await killMonsterFromHeroProjectileHit(target, messages, `the ${target.data?.name || 'monster'}`);
                 await setMessage(messages.join('  '), true);
+                game._wizkill_mon_locs = null;
                 game._command_mode = 'wizkillKillMore';
                 return;
             }
@@ -76320,8 +76471,21 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 const beast = WERE_SPECIES.get(wereBeastNames[monspec])?.beast;
                 if (beast) mdat = { ...beast, hpLevel: undefined, alwaysHostile: true };
             }
-            if (!mdat) mdat = monsterByRndName(monspec)
+            if (!mdat) mdat = wizgenesisMonsterspecPtr(monspec)
+                || monsterByRndName(monspec)
                 || (monspec ? { name: monspec, mlet: monspec[0], mlevel: 0, mmove: 12, maligntyp: 0, hostile: true, neuter: false } : null);
+            // C ref: read.c:3256-3269 create_particular_creation() — a
+            // monster subject to cant_revive() (read.c:3112) is replaced by a
+            // doppelganger/zombie unless the player forces it at the prompt.
+            if (mdat) {
+                const substitute = wizgenesisCantReviveSubstitute(mdat);
+                if (substitute) {
+                    game._wizgenesis_force = { requested: mdat, substitute, disposition, monspec };
+                    game._command_mode = 'wizgenesisForce';
+                    await setMessage(`Creating ${substitute.name} instead; force ${mdat.name}? [yn] (n)`);
+                    return;
+                }
+            }
             const spot = mdat ? enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, mdat) : null;
             if (spot) {
                 const created = await makemon(mdat, spot.x, spot.y, 0);
@@ -76358,7 +76522,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                         game._message_more = 0;
                         game._keep_pending_message = 0;
                     } else {
-                        await setMessage(`A ${created.data?.name || monspec || 'monster'} appears next to you.`);
+                        // C ref: makemon.c:1474-1496 — makemon's MM_NOEXCLAM
+                    // message uses Amonnam() ("The <unique>/pname" vs
+                    // "a <generic>"); #wizgenesis (MM_NOEXCLAM via
+                    // read.c:3299) suppresses "suddenly" and uses '.'.
+                    const appearName = created.data?.name || monspec || 'monster';
+                    const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
+                        || /^[A-Z]/.test(appearName));
+                    await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
                     }
                     return;
                 }
@@ -76369,6 +76540,38 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         if (key === 8 || key === 127) game._wizgenesis_text = (game._wizgenesis_text || '').slice(0, -1);
         else if (key >= 32) game._wizgenesis_text = `${game._wizgenesis_text || ''}${ch}`;
         await setMessage(`Create what kind of monster?${game._wizgenesis_text ? ` ${game._wizgenesis_text}` : ''}`);
+        return;
+    }
+
+    if (game._command_mode === 'amuletBestowMore') {
+        // C ref: allmain.c:449-450 (urgent_pline) — the bestow message is
+        // followed by makewish()'s prompt, both pending behind --More--.
+        await setMessage('The Amulet is bestowing a wish upon you!', true);
+        game._command_mode = 'amuletBestowPrompt';
+        return;
+    }
+
+    if (game._command_mode === 'amuletBestowPrompt') {
+        // C ref: allmain.c:451 makewish() -> getlin("For what do you wish?")
+        // (zap.c:6329-6339).
+        await beginWishPrompt();
+        return;
+    }
+
+    if (game._command_mode === 'wizgenesisForce') {
+        // C ref: read.c:3262-3269 — answering 'y' forces the requested
+        // monster (d->which = firstchoice); any other accepted answer leaves
+        // the cant_revive() substitution (e.g. doppelganger) in place.
+        const force = game._wizgenesis_force;
+        if (!force) { game._command_mode = null; return; }
+        if (ch !== 'y' && ch !== 'n' && ch !== ' ' && ch !== '\x1b' && ch !== '\r' && ch !== '\n') {
+            game._keep_pending_message = 1;
+            return;
+        }
+        game._wizgenesis_force = null;
+        game._command_mode = null;
+        await finishWizgenesisSpawn(ch === 'y' ? force.requested : force.substitute,
+            ch === 'y' ? force.disposition : '', force.monspec);
         return;
     }
 
