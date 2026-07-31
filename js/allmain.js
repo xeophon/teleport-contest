@@ -18,6 +18,7 @@ import {
     resistConflict as monsterResistsConflict,
     MM_AGGR as MONSTER_MM_AGGR_FLAG,
 } from './mhitm.js';
+import { planMonsterSteal } from './steal.js';
 import { DIGTYP_BOULDER, DIGTYP_DOOR, DIGTYP_ROCK, DIGTYP_STATUE, DIGTYP_TREE, DIGTYP_UNDIGGABLE, digBoulderAt, digCheckFailed, digCheckFailMessage, digCheckHero, digDbon, digEffortIncrement, digFumblingResult, digHardnessBlockMessage, digOccupationAborted, digTargetName, digTypeOf, digVerb, finishDigContext, finishWallDigTerrain, fractureDigBoulder, inShopBaseAt, pickDigDirectionPrompt, wakeNearbyForDig } from './dig.js';
 import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
@@ -5686,90 +5687,70 @@ export async function processMonsterTurns() {
 	                                }
 	                                else damage = 0;
 	                            }
-		                            if (attack.adtyp === 'steal') {
-		                                let stealWeight = 0;
-		                                const stealable = [];
-		                                const inventoryForSteal = [...(game.inventory || [])]
-		                                    .sort((a, b) => inventoryLetterRank(a) - inventoryLetterRank(b));
-		                                const wornGloves = inventoryForSteal.find(item =>
-		                                    item.cls === 'armor' && (item.worn || item.line?.includes('being worn'))
-		                                    && /gloves|gauntlets/i.test(inventoryItemName(item)));
-		                                const wornCloak = inventoryForSteal.find(item =>
-		                                    item.cls === 'armor' && (item.worn || item.line?.includes('being worn'))
-		                                    && /cloak|robe|wrapping|smock|apron/i.test(inventoryItemName(item)));
-		                                const wornSuit = inventoryForSteal.find(item =>
-		                                    item.cls === 'armor' && (item.worn || item.line?.includes('being worn'))
-		                                    && /mail|armor|dragon scales|plate|shirt/i.test(inventoryItemName(item))
-		                                    && !/cloak|robe|wrapping|smock|apron/i.test(inventoryItemName(item)));
-		                                const wornShirt = inventoryForSteal.find(item =>
-		                                    item.cls === 'armor' && (item.worn || item.line?.includes('being worn'))
-		                                    && /shirt/i.test(inventoryItemName(item)));
-		                                const wieldedWeapon = inventoryForSteal.find(item =>
-		                                    item.wielded || item.line?.includes('weapon in') || item.line?.includes('wielded in'));
-		                                for (const item of inventoryForSteal) {
-		                                    if (item.cls === 'coin') continue;
-		                                    if (wornSuit && item === wornCloak) continue;
-		                                    const wornArmorOrAccessory = (item.worn || item.line?.includes('being worn') || /\(on (?:left|right) hand\)/.test(item.line || ''))
-		                                        && !(item.wielded || item.alternate || item.cls === 'weapon');
-		                                    const weight = wornArmorOrAccessory ? 5 : 1;
-		                                    stealWeight += weight;
-		                                    stealable.push({ item, weight });
-		                                }
-		                                if (stealWeight) {
-		                                    let pick = rn2(stealWeight);
-	                                    let stolen = stealable[stealable.length - 1].item;
-	                                    for (const entry of stealable) {
-	                                        pick -= entry.weight;
-	                                        if (pick < 0) {
-	                                            stolen = entry.item;
-		                                            break;
-		                                        }
-		                                    }
-		                                    if ((stolen.cls === 'ring' || /\(on (?:left|right) hand\)/.test(stolen.line || '')) && wornGloves)
-		                                        stolen = wornGloves;
-		                                    if (stolen === wornGloves && wieldedWeapon) stolen = wieldedWeapon;
-		                                    else if (stolen === wornSuit && wornCloak) stolen = wornCloak;
-		                                    else if (stolen === wornShirt && (wornCloak || wornSuit)) stolen = wornCloak || wornSuit;
-		                                    const stolenName = inventoryItemName(stolen);
-		                                    const bareStolenName = stolenName.replace(/^(?:a|an|the) /i, '');
-		                                    const wornPlace = stolen.worn === 'right' ? ' (from right hand)'
-		                                        : stolen.worn === 'left' ? ' (from left hand)' : '';
-		                                    const weaponStolen = stolen.wielded || stolen.alternate
-		                                        || /(?:weapon|wielded) in /.test(stolen.line || '')
-		                                        || /alternate weapon/.test(stolen.line || '');
-		                                    const accessoryStolen = wornPlace || stolen.cls === 'ring' || stolen.cls === 'amulet';
-		                                    const removeMessage = weaponStolen
-		                                        ? `${subject} disarms your ${bareStolenName}.`
-		                                        : accessoryStolen
-		                                            ? `${subject} removes your ${bareStolenName}${wornPlace}.`
-		                                            : (stolen.worn || stolen.line?.includes('being worn'))
-		                                                ? `${subject} takes off your ${bareStolenName}.`
-		                                                : '';
-		                                    const thief = mon.female ? 'She' : subject;
-		                                    const stolenMessage = `${removeMessage ? thief : subject} stole ${stolenName}.`;
-                                            const theftWidth = game.nhDisplay?.cols || 80;
-		                                    const theftMessage = removeMessage
-                                                && removeMessage.length + stolenMessage.length + 2 < theftWidth - 8
-                                                ? `${removeMessage}  ${stolenMessage}`
-                                                : removeMessage || stolenMessage;
-		                                    game._nymph_steal_after_more = {
-		                                        mon, itemLetter: stolen.letter, item: stolen, removeMessage, stolenMessage, theftMessage,
-		                                    };
-		                                    mon.mflee = 1;
-		                                    mon.mfleetim = 0;
-		                                    mon.mavenge = 1;
-		                                    clearMonsterTrack(mon);
-		                                    game._topline_after_more = theftMessage;
-		                                    if (removeMessage && theftMessage === removeMessage)
-		                                        game._queued_message_after_topline_more = stolenMessage;
-		                                    game._topline_more_after_more = 1;
-		                                    game._message_more = 1;
-		                                    game._process_time_with_more = 0;
-		                                    game._monster_resume_index = monIndex + 1;
-	                                    game._monster_resume_somebody_can_move = somebodyCanMove;
-	                                    return false;
-	                                }
-	                            }
+if (attack.adtyp === 'steal') {
+                                    // C ref: src/steal.c steal() (nymph/monkey AD_SITM and
+                                    // AD_SEDU theft; mhitu caller mhitm_ad_sedu uhitm.c:4709-4746).
+                                    // Selection/weighting/message logic lives in js/steal.js; the
+                                    // multi--More-- deferral plumbing below is shared with the
+                                    // pre-slice theft flow (see cmd.js _nymph_steal_after_more).
+                                    const theft = planMonsterSteal(mon, { subject, nameFor: inventoryItemName });
+                                    if (theft.kind === 'steal') {
+                                        const removeMessage = theft.removeMessage;
+                                        const stolenMessage = theft.stolenMessage;
+                                        const theftWidth = game.nhDisplay?.cols || 80;
+                                        const theftMessage = removeMessage
+                                            && removeMessage.length + stolenMessage.length + 2 < theftWidth - 8
+                                            ? `${removeMessage}  ${stolenMessage}`
+                                            : removeMessage || stolenMessage;
+                                        game._nymph_steal_after_more = {
+                                            mon, itemLetter: theft.stolen.letter, item: theft.stolen, removeMessage, stolenMessage, theftMessage,
+                                        };
+                                        // monflee(mon, 0, FALSE, FALSE) — monmove.c:462-533; mavenge set
+                                        // unless conflict distracts the thief (steal.c:543-547).
+                                        mon.mflee = 1;
+                                        mon.mfleetim = 0;
+                                        if (!game.u?.conflict) mon.mavenge = 1;
+                                        clearMonsterTrack(mon);
+                                        game._topline_after_more = theftMessage;
+                                        if (removeMessage && theftMessage === removeMessage)
+                                            game._queued_message_after_topline_more = stolenMessage;
+                                        game._topline_more_after_more = 1;
+                                        game._message_more = 1;
+                                        game._process_time_with_more = 0;
+                                        game._monster_resume_index = monIndex + 1;
+                                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                                        return false;
+                                    }
+                                    if (theft.kind === 'nothing' || (theft.kind === 'cantake' && theft.flees)) {
+                                        // steal() returned 1: nothing worth having / gave up and
+                                        // runs — steal.c:340-378 and :432-441; the shared deferred
+                                        // path relocates a non-animal thief and continues the turn.
+                                        game._nymph_steal_after_more = {
+                                            mon, itemLetter: null, item: null,
+                                            removeMessage: null, stolenMessage: theft.message, theftMessage: theft.message,
+                                        };
+                                        mon.mflee = 1;
+                                        mon.mfleetim = 0;
+                                        if (!game.u?.conflict && theft.kind === 'nothing') mon.mavenge = 1;
+                                        clearMonsterTrack(mon);
+                                        game._topline_after_more = theft.message;
+                                        game._topline_more_after_more = 1;
+                                        game._message_more = 1;
+                                        game._process_time_with_more = 0;
+                                        game._monster_resume_index = monIndex + 1;
+                                        game._monster_resume_somebody_can_move = somebodyCanMove;
+                                        return false;
+                                    }
+                                    if (theft.kind === 'cantake') {
+                                        // steal() returned 0 (steal.c:441): failed grab, thief
+                                        // sticks around; show the attempt and move to next attack.
+                                        addToplineMessage(theft.message);
+                                        continue;
+                                    }
+                                    // kind 'busy': steal() returned 0 without a message
+                                    // (steal.c:428-429, item mid multi-turn theft) — next attack.
+                                    continue;
+                                }
                                     const shownSubject = game.u?.blind || hiddenBullwhip ? 'It' : monsterDisplayName(mon, true);
                                     const shownWeaponPrefix = weaponPrefix ? weaponPrefix.replace(subject, shownSubject) : '';
                                 const unseenWarning = hiddenBullwhip && !game.u?.blind && !pendingBeforeAttack;
