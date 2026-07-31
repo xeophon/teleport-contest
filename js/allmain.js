@@ -5544,13 +5544,21 @@ export async function processMonsterTurns() {
                                         }
                                     }
                                     if (chain.phase === 1) {
-                                        chain.phase = 90;
+                                        // mspec-substitute claw attack (getmattk()
+                                        // mhitu.c:377-388): on a hit, C runs the
+                                        // full hitmu() tail — mhitm_knockback()
+                                        // consumes rn2(3)+rn2(6) (uhitm.c:5258/5269)
+                                        // before mdamageu() — so route through
+                                        // salAftermath() like the weapon attack.
+                                        chain.phase = chain.hits[2] ? 3 : 90;
                                         const msg = chain.hits[2]
                                             ? `${salSubject} hits!`
                                             : `${salSubject} misses!`;
                                         if (!salEmit(msg)) { chainDone = true; break; }
-                                        salFinishSlot();
-                                        continue;
+                                        if (!chain.hits[2]) {
+                                            salFinishSlot();
+                                            continue;
+                                        }
                                     }
                                     if (chain.phase === 2) {
                                         // C ref: uhitm.c:4024 — grab roll; the hero's
