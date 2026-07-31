@@ -26,7 +26,7 @@ for (let i=0;i<seg.steps.length;i++){
     const ga = decodeScreen(preDecode(c.screen)), gb = decodeScreen(preDecode(jsScreens[i]||''));
     for (let r=0;r<ROWS_24;r++){
       const ca = ga[r].map(c=>c.ch||' ').join(''), cb = gb[r].map(c=>c.ch||' ').join('');
-      if (ca!==cb) console.log('C :'+ca+'\nJS:'+cb);
+      if (ca!==cb) console.log('row',r,' C :'+ca+'\nrow',r+' JS:'+cb);
     }
   }
 }

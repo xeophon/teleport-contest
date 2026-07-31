@@ -15444,6 +15444,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 }
                 if (earlyScore != null) score = earlyScore;
                 else {
+                    if (process.env.PETDBG) console.error('PETDBG targ-score:', mon.data?.name, '@'+mon.mx+','+mon.my, 'vs', target.data?.name||'hero', '@'+target.mx+','+target.my, 'dir', dx, dy);
                     score += rnd(5);
                     if (mon.mconf && !rn2(3)) score -= 1000;
                 }

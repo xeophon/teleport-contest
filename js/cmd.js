@@ -38,7 +38,7 @@ import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, curre
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
 import { castSpellDirectionalEffect, castSpellNodirEffect, spellCastNeedsDirection } from './spell.js';
-import { altarAlignAt, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
+import { altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
 const DIR_DY = { h: 0, l: 0, j: 1, k: -1, y: -1, u: -1, b: 1, n: 1 };
@@ -50688,15 +50688,28 @@ function tendedTemplePriestIntone(roomno) {
     priest._intone_time = moves + d(10, 500);
     priest._enter_time = 0;
     const visible = !game.u?.blind && !priest.minvis && !priest.mundetected && couldsee(priest.mx, priest.my);
-    return `${visible ? `The ${priest.data?.name || 'priest'}` : 'A nearby voice'} intones:`;
+    // C ref: priest.c intemple() — pline("%s intones:", canseemon(priest)
+    // ? Monnam(priest) : "A nearby voice"); Monnam() of an ispriest monster
+    // resolves through priestname() (do_name.c:887-904 -> priest.c:302-355):
+    // "the priest of <god>" ("priestess" if female), god named from the
+    // shrine alignment via halu_gname(mon_aligntyp(mon)) (align_gname()'s
+    // A_NONE case yields Moloch; pray.c align_gname).  pline() upstarts the
+    // leading article to "The".
+    const what = priest.female ? 'priestess' : 'priest';
+    const shrineAlign = priest.shrine?.align ?? A_NEUTRAL;
+    const priestName = `The ${what} of ${alignGodName(shrineAlign)}`;
+    return `${visible ? priestName : 'A nearby voice'} intones:`;
 }
 
 function tendedTemplePriestHasShrine(priest) {
     const shrine = priest?.shrine;
     const loc = shrine ? game.level?.at(shrine.x, shrine.y) : null;
+    // C ref: priest.c has_shrine() — requires the shrine position to still
+    // hold an altar marked AM_SHRINE with matching alignment.
     if (!priest?.ispriest || !shrine || loc?.typ !== ALTAR) return false;
-    const altarMask = (loc.flags ?? loc.altarmask ?? 0) & ~AM_SHRINE;
-    return priest.shrine.align === Amask2align(altarMask);
+    const altarMask = (loc.flags ?? loc.altarmask ?? 0);
+    if (!(altarMask & AM_SHRINE)) return false;
+    return priest.shrine.align === Amask2align(altarMask & ~AM_SHRINE);
 }
 
 // C ref: priest.c intemple() tended branch — the "Pilgrim" greeting with
