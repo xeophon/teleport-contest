@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9160,
+   "datetime": "20260720120000",
+   "nethackrc": "OPTIONS=name:Probe,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#levelchange\n15\n              #wizmap\n\u0014  uuuuuuuuuuuuulllllllllllllllllllllllll.#untrap\nhyhy \u0014 nnj.#wizkill\n m. \u001bhy  lhy  lhy #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. #untrap\n. "
+  }
+ ]
+}
