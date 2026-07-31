@@ -3,12 +3,13 @@
 
 import { game } from './gstate.js';
 import { wizardCussMessage, wizdeadorgone } from './wizard.js';
+import { WERE_SPECIES } from './were.js';
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DELPHI, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, GLOC_DOOR, GLOC_EXPLORE, GLOC_MONS, GLOC_OBJS, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MON_LIMBO, MON_MIGRATING, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, MAX_CARR_CAP, WT_BABY_DRAGON, WT_DRAGON, WT_HUMAN, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_ARRIVE, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
-import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz } from './rng.js';
+import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz, getRngLog } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
 import { an, deathSummary, escapedSummaryLines, quitSummaryLines } from './end.js';
@@ -12192,6 +12193,19 @@ function applyLifeSavingConLoss() {
     if (game._life_saving_refresh_con && game.u?.acurr?.a)
         game.u.acurr.a[A_CON] = Math.max(3, game.u.acurr.a[A_CON] - 1);
     game._life_saving_refresh_con = 0;
+}
+
+// C ref: end.c:2040-2068 savelife() — same synchronous-heal helper as
+// allmain.js's restoreHeroHpForUnresolvedWizardDeath(); duplicated here because
+// cmd.js is the deferred-damage application site ((mhitu.c mdamageu path).
+function restoreHeroHpForUnresolvedWizardDeath() {
+    if (!(game.flags?.debug || game.flags?.explore)) return;
+    const u = game.u;
+    if (!u || !('uhp' in u)) return;
+    const con = u.acurr?.a?.[A_CON] ?? 10;
+    const givehp = 50 + 10 * Math.trunc(con / 2);
+    u.uhp = Math.min(u.uhpmax || 1, givehp);
+    game._death_pending_confirm = true; // cleared when the Die? prompt resolves
 }
 
 function restoreHeroHpAfterLifeSaving() {
@@ -63168,6 +63182,7 @@ function tutorialEnterStash() {
                             game._death_moves = game.moves || 1;
                         }
                         game._queued_message_after_more = 'You die...';
+	                        restoreHeroHpForUnresolvedWizardDeath();
 	                        keepMore = true;
 	                    }
 	                }
@@ -63642,6 +63657,7 @@ function tutorialEnterStash() {
 	                        // article through an() (objnam.c:2143).
 	                        game._death_cause = `killed by ${an(name)}`;
 	                        game._queued_message_after_more = 'You die...';
+	                        restoreHeroHpForUnresolvedWizardDeath();
 	                        keepMore = true;
 	                    }
 	                }
@@ -64499,6 +64515,7 @@ function tutorialEnterStash() {
                         game._resume_run_after_queued_dead_more = 1;
                 }
                 if (next === 'You die...' || next === 'You die.') {
+                    if (process.env.WEREDBG) console.error(`WEREDBG enter-deathDieMore moves=${game.moves} rngidx=${getRngLog().length}`);
                     if (!game._pending_time_passed) game._death_current_move = 0;
                     game._pending_time_passed = 0;
                     game.context.move = 0;
@@ -65282,6 +65299,8 @@ function tutorialEnterStash() {
     }
 
     if (game._command_mode === 'wizardDieConfirm') {
+        if (process.env.WEREDBG) console.error(`WEREDBG wizardDieConfirm key=${JSON.stringify(ch)} moves=${game.moves} rngidx=${getRngLog().length}`);
+        game._death_pending_confirm = false;
         if (ch === 'y') {
             game._gas_spore_explode_exercise_pending = 0;
             game._gas_spore_deferred_experience_mon = null;
@@ -76165,7 +76184,30 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             if (monspec.startsWith('tame ')) { disposition = 'tame'; monspec = monspec.slice(5).trim(); }
             else if (monspec.startsWith('peaceful ')) { disposition = 'peaceful'; monspec = monspec.slice(9).trim(); }
             else if (monspec.startsWith('hostile ')) { disposition = 'hostile'; monspec = monspec.slice(8).trim(); }
-            const mdat = monsterByRndName(monspec)
+            // C ref: mondata.c:1038-1072 name_to_monplus() — the exact-match
+            // scan walks mons[] from LOW_PM upward, so plain "werewolf"
+            // resolves to PM_WEREWOLF (beast form, monsters.h S_DOG section,
+            // NOT armed) rather than PM_HUMAN_WEREWOLF. The human forms are
+            // reached via the "human werewolf"/etc. prefix (mondata.c:983-985);
+            // "wolf werewolf"/"rat wererat"/"jackal werejackal" are explicit
+            // beast-form aliases (mondata.c:987-989).
+            const wereBeastNames = {
+                wererat: 'wererat', werejackal: 'werejackal', werewolf: 'werewolf',
+                'rat wererat': 'wererat', 'jackal werejackal': 'werejackal',
+                'wolf werewolf': 'werewolf',
+            };
+            const wereHumanNames = {
+                'human wererat': 'wererat', 'human werejackal': 'werejackal',
+                'human werewolf': 'werewolf',
+            };
+            let mdat = null;
+            if (wereHumanNames[monspec]) {
+                mdat = monsterByRndName(wereHumanNames[monspec]); // human-form entry in RNDMONST tables
+            } else if (wereBeastNames[monspec]) {
+                const beast = WERE_SPECIES.get(wereBeastNames[monspec])?.beast;
+                if (beast) mdat = { ...beast, hpLevel: undefined, alwaysHostile: true };
+            }
+            if (!mdat) mdat = monsterByRndName(monspec)
                 || (monspec ? { name: monspec, mlet: monspec[0], mlevel: 0, mmove: 12, maligntyp: 0, hostile: true, neuter: false } : null);
             const spot = mdat ? enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, mdat) : null;
             if (spot) {

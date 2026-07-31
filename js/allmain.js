@@ -10,7 +10,7 @@ import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, vie
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
-import { wereChange } from './were.js';
+import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn } from './were.js';
 import {
     setMhitmHooks as setMonsterMonsterCombatHooks,
     mmAggression as monsterMonsterAggression,
@@ -2565,6 +2565,52 @@ function addToplineMessage(msg) {
     return false;
 }
 
+// C ref: uhitm.c:4276-4286 mhitm_ad_were() mhitu branch — a landed AD_WERE
+// attack on the hero always rolls rn2(4); only on a 0 with the hero not yet
+// lycanthropic does it run mhitm_mgc_atk_negated (uhitm.c:75-98:
+// rn2(10) >= 3*armpro; negated -> "You avoid harm."), otherwise it infects
+// the hero with the attacker's lycanthrope species (set_ulycn,
+// were.c:231-237) and reports "You feel feverish."  Protection from shape
+// changers and an AD_WERE-defending weapon also block infection
+// (uhitm.c:4280); neither gear exists in this contest build.
+function applyWereBiteInfection(mon, data) {
+    const dbg = process.env.WEREDBG;
+    const dbgInfo = () => `mon=${data?.name} moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length}`;
+    const r4 = rn2(4);
+    if (dbg) console.error(`WEREDBG infection-check ${dbgInfo()} r4=${r4}`);
+    if (r4) return; // uhitm.c:4279 — single draw taken unconditionally
+    if (game.u?.ulycn && game.u.ulycn !== -1) return; // u.ulycn != NON_PM
+    const armproWere = (game.inventory || []).reduce((best, item) =>
+        item.worn ? Math.max(best, ARMOR_MAGIC_NEGATION[item.kind] || 0) : best, 0);
+    const r10 = rn2(10);
+    if (!(r10 >= 3 * armproWere)) { // uhitm.c:87-93 — negated
+        if (dbg) console.error(`WEREDBG  avoid harm r10=${r10} armpro=${armproWere}`);
+        addToplineMessage('You avoid harm.');
+        return;
+    }
+    if (dbg) console.error(`WEREDBG  feverish r10=${r10} armpro=${armproWere}`);
+    setUlycn(String(data?.name || '').toLowerCase()); // uhitm.c:4282-4284
+    addToplineMessage('You feel feverish.');
+}
+
+// C ref: end.c:2040-2068 savelife(): on refusing the wizard/explore "Die?"
+// prompt, C restores u.uhp = min(u.uhpmax, 50 + 10 * trunc(A_CON/2)) and
+// dosage is *synchronous* inside the fatal attack (mhitu.c mdamageu -> done
+// -> die()).  The JS engine defers the "--More--"/"Die?" prompt chain across
+// input boundaries, so the hero would otherwise remain at 0 hp while
+// post-death monster turns run their HP-gated RNG paths (e.g. regen_hp
+// allmain.c:655-659, AD_WERE infection uhitm.c:4279).  Restore the hero here,
+// at the point the lethal blow lands, to mirror C's synchronous heal.
+function restoreHeroHpForUnresolvedWizardDeath() {
+    if (!(game.flags?.debug || game.flags?.explore)) return;
+    const u = game.u;
+    if (!u || !('uhp' in u)) return;
+    const con = u.acurr?.a?.[A_CON] ?? 10;
+    const givehp = 50 + 10 * Math.trunc(con / 2);
+    u.uhp = Math.min(u.uhpmax || 1, givehp);
+    game._death_pending_confirm = true; // cleared when the Die? prompt resolves
+}
+
 function applyHeroLavaSinkingAfterTurn() {
     const result = processHeroLavaSinkingTurn();
     if (!result) return null;
@@ -5007,9 +5053,84 @@ export async function processMonsterTurns() {
                     const wandererMovesInstead = nearby && mon.data?.wanderer && !rn2(4);
                     const wandererCanMoveInstead = wandererMovesInstead && monsterHasNonHeroMove(mon, conflictActive);
 		                    if (adjacentHostile && !wandererCanMoveInstead) {
-                        const data = mon.data || {};
+                        let data = mon.data || {};
                         const name = data.name || 'creature';
                         const foundYou = apparentX === (game.u?.ux ?? 0) && apparentY === (game.u?.uy ?? 0);
+                        // C ref: mhitu.c:726-741 mattacku() — when not cancelled,
+                        // not a shapechanger, and in melee range, demons and
+                        // were creatures invoke summonmu() before the to-hit
+                        // computation. The demon branch (mhitu.c:966-971) is
+                        // handled by the bespoke demon gates below; the were
+                        // branch (mhitu.c:974-1029) is wired here.
+                        if (!mon.cham && !mon.mcan && isWereData(data)) {
+                            const alreadyFleeing = !!mon.mflee; // mhitu.c:731
+                            const wereCanSeeIt = !game.u?.blind && !mon.mundetected
+                                && (game.u?.seeInvisible || !mon.minvis);
+                            const wereCtx = {
+                                g: game,
+                                canseemon: m => !game.u?.blind
+                                    && typeof cansee === 'function' && cansee(m.mx, m.my)
+                                    && !m.mundetected && (game.u?.seeInvisible || !m.minvis),
+                                addToplineMessage: msg => { addToplineMessage(msg); },
+                                newsym,
+                            };
+                            // summonmu (mhitu.c:974-985): form switch attempt;
+                            // newWere() performs the "changes into" message and
+                            // data swap (were.c:96-135 via were.c:41/16).
+                            if (isWereHumanForm(data)) {
+                                // mhitu.c:979 — rn2(5 - (night() * 2)): a single
+                                // draw whose width narrows from 5 to 3 at night.
+                                if (!rn2(5 - (nightNow(game) ? 2 : 0))) {
+                                    newWere(mon, wereCtx);
+                                    data = mon.data || data; // mhitu.c:985,740
+                                }
+                            } else if (!rn2(30)) { // mhitu.c:982
+                                newWere(mon, wereCtx);
+                                data = mon.data || data;
+                            }
+                            if (!alreadyFleeing && mon.mflee) {
+                                // mhitu.c:738-739 — a fresh flee aborts the attack.
+                                continue;
+                            }
+                            // mhitu.c:989 — "summons help!" branch (not blocked
+                            // by Protection_from_shape_changers here; were_summon
+                            // itself checks it at were.c:153-154).
+                            if (!rn2(10)) {
+                                if (wereCanSeeIt) // mhitu.c:994-995
+                                    addToplineMessage(`${monsterDisplayName(mon)} summons help!`);
+                                const summonResult = await wereSummon(data, {
+                                    g: game,
+                                    canseemon: wereCtx.canseemon,
+                                    makemon: async (typ, hx, hy) => {
+                                        const created = await makemon(monsterByRndName(typ), hx, hy, 0);
+                                        if (created) {
+                                            // C ref: makemon.c:1472-1505 — makemon
+                                            // of a visible in-game monster prints
+                                            // "A X suddenly appears next to you!"
+                                            // (next2u, you.h:558) / " close by "
+                                            // (distu<=BOLT_LIM*BOLT_LIM=64) / "".
+                                            newsym(created.mx, created.my);
+                                            if (!created.mundetected && !created.minvis) {
+                                                const du2 = ((created.mx ?? 0) - (game.u?.ux ?? 0)) ** 2
+                                                    + ((created.my ?? 0) - (game.u?.uy ?? 0)) ** 2;
+                                                const where = du2 <= 2 ? ' next to you'
+                                                    : du2 <= 64 ? ' close by' : '';
+                                                addToplineMessage(`A ${typ} suddenly appears${where}!`);
+                                            }
+                                        }
+                                        return created;
+                                    },
+                                });
+                                if (wereCanSeeIt) {
+                                    if (summonResult.total === 0)
+                                        addToplineMessage('But none comes.'); // mhitu.c:1002
+                                    else if (summonResult.visible === 0)
+                                        addToplineMessage('You feel hemmed in.'); // mhitu.c:999-1000
+                                } else if (summonResult.total > 0 && summonResult.visible === 0) {
+                                    addToplineMessage('You feel hemmed in.'); // mhitu.c:1014-1016
+                                }
+                            }
+                        }
                         const dataAttackIsExplosion = normalizedAttackCode(data.attack?.aatyp) === 'expl';
                         if (foundYou && !dataAttackIsExplosion && maybeBlockInvulnerableAttack(mon)) {
                             if (game._message_more && !game._process_time_with_more) return false;
@@ -5063,6 +5184,7 @@ export async function processMonsterTurns() {
                                 game._death_current_move = 1;
                                 game._death_moves = game.moves || 1;
                                 game._queued_message_after_more = 'You die...';
+                                restoreHeroHpForUnresolvedWizardDeath();
                                 game._message_more = 1;
                             }
                             if (game._message_more && !game._process_time_with_more) return false;
@@ -5316,6 +5438,7 @@ export async function processMonsterTurns() {
                                     game._death_cause = `killed by ${article} ${name}`;
                                     game._death_current_move = !!game._pending_time_passed;
                                     game._queued_message_after_more = 'You die...';
+                                restoreHeroHpForUnresolvedWizardDeath();
                                     game._message_more = 1;
                                     break;
                                 }
@@ -5472,6 +5595,7 @@ export async function processMonsterTurns() {
                                                     game._death_cause = `killed by ${/^[aeiou]/i.test(data.name || '') ? 'an' : 'a'} ${data.name || 'monster'}`;
                                                     game._death_current_move = true;
                                                     game._queued_message_after_more = 'You die...';
+                                restoreHeroHpForUnresolvedWizardDeath();
                                                     game._message_more = 1;
                                                     game._process_time_with_more = 0;
                                                     return false;
@@ -5652,6 +5776,7 @@ export async function processMonsterTurns() {
                                             game._death_cause = `killed by ${article} ${name}`;
                                             game._death_current_move = !!game._pending_time_passed;
                                             game._queued_message_after_more = 'You die...';
+                                restoreHeroHpForUnresolvedWizardDeath();
                                             if (hpBeforeDamage - damage === -1) game._death_status_hp_before_zero = hpBeforeDamage;
                                             else game.u.uhp = 0;
                                             game._message_more = 1;
@@ -5791,6 +5916,11 @@ if (attack.adtyp === 'steal') {
 			                            if (pendingBeforeAttack && !attackFits) {
 	                                game._topline_after_more = attackMessage;
 		                                game._topline_more_after_more = 0;
+	                                // C ref: uhitm.c:4276-4286 — the AD_WERE effect
+	                                // rolls with the hit (before knockback, which is
+	                                // deferred below via _knockback_after_topline_more).
+	                                if (attack.adtyp === 'were' && isWereData(data))
+	                                    applyWereBiteInfection(mon, data);
 	                                game._attack_resume_after_more = 1;
 	                                game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
 	                                game._damage_after_topline_more_needs_ac = 1;
@@ -5824,6 +5954,10 @@ if (attack.adtyp === 'steal') {
 		                                    if (rn2(10) >= 3 * stckNegation && !game.u?.ustuck)
 		                                        game.u.ustuck = mon;
 		                                }
+		                                // C ref: uhitm.c:4276-4286 mhitm_ad_were() — AD_WERE
+		                                // effect between damage roll and knockback.
+		                                if (attack.adtyp === 'were' && isWereData(data))
+		                                    applyWereBiteInfection(mon, data);
 		                                rn2(3);
 		                                rn2(6);
 		                            }
@@ -5882,6 +6016,7 @@ if (attack.adtyp === 'steal') {
                                     }
 		                                game._death_current_move = 1;
 		                                game._queued_message_after_more = 'You die...';
+                                restoreHeroHpForUnresolvedWizardDeath();
 		                                if (activeWeapon && !hiddenBullwhip)
 		                                    game._death_moves = game.moves || 1;
 		                                game._message_more = 1;
@@ -9380,6 +9515,7 @@ async function finishMonsterTurnTail() {
         }
 	        let reachedFullHp = false;
         let reachedFullPower = false;
+        if (process.env.WEREDBG) console.error(`WEREDBG regen-eval moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length} dp=${!!game._death_pending_confirm} poly=${!!game.u?._polyself_form}`);
         if (game.u?._polyself_form) {
             // C ref: allmain.c regen_hp() — the Upolyd branch (allmain.c:630-644)
             // heals every 20 turns (or via Regeneration) with NO rn2(100)
@@ -9395,8 +9531,17 @@ async function finishMonsterTurnTail() {
                     reachedFullHp = (game.u?.uhp || 0) === (game.u?.uhpmax || 0);
                 }
             }
-        } else if (!game.u?.uinvulnerable && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
+        } else if (!game.u?.uinvulnerable && (game.u?.uhp || 0) > 0
+                   // C ref: allmain.c:655-659 / end.c:2137-2173 — when the
+                   // hero just died and wizard/explore mode would offer the
+                   // "Die?" cheat, C's done()->die() runs synchronously and
+                   // savelife() (end.c:2040-2068) restores HP before any later
+                   // regen_hp() call.  restoreHeroHpForUnresolvedWizardDeath()
+                   // reproduces that at the point the fatal blow is queued, so
+                   // only a truly-zero u.uhp (not yet healed) suppresses the roll.
+                   && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
             const con = game.u?.acurr?.a?.[4] ?? 10;
+            if (process.env.WEREDBG) console.error(`WEREDBG regen moves=${game.moves} uhp=${game.u.uhp}/${game.u.uhpmax} rngidx=${getRngLog().length}`);
             const regenRoll = rn2(100);
             const suppressHpRegen = !!game._suppress_next_hp_regen;
             game._suppress_next_hp_regen = 0;
