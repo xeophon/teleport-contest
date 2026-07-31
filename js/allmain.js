@@ -4,7 +4,11 @@
 import { game } from './gstate.js';
 import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
+<<<<<<< HEAD
 import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget } from './cmd.js';
+=======
+import { rhack, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget , heroMeleeFireInventoryBurn} from './cmd.js';
+>>>>>>> slice/fix9127
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -20,7 +24,7 @@ import {
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
 import { DIGTYP_BOULDER, DIGTYP_DOOR, DIGTYP_ROCK, DIGTYP_STATUE, DIGTYP_TREE, DIGTYP_UNDIGGABLE, digBoulderAt, digCheckFailed, digCheckFailMessage, digCheckHero, digDbon, digEffortIncrement, digFumblingResult, digHardnessBlockMessage, digOccupationAborted, digTargetName, digTypeOf, digVerb, finishDigContext, finishWallDigTerrain, fractureDigBoulder, inShopBaseAt, pickDigDirectionPrompt, wakeNearbyForDig } from './dig.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, ZAP_POS, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
@@ -1753,6 +1757,8 @@ const MONSTER_THROWN_SPEAR_SMALL_DAMAGE = new Map([
 const SHORT_SWORD = 10031;
 const PLATE_MAIL = 10037;
 const CRYSTAL_PLATE_MAIL = 10038;
+// C ref: dothrow.c:2585 breaktest() glass-armor nonbreak chance bucket.
+const HELM_OF_BRILLIANCE_OTYP = 10131;
 const SPLINT_MAIL = 10039;
 const BANDED_MAIL = 10040;
 const RING_MAIL = 10041;
@@ -4762,49 +4768,143 @@ export async function processMonsterTurns() {
                             });
                         if (strikingWand) {
                             strikingWand.spe--;
-                            rn2(8);
+                            // C ref: muse.c:1884 use_offensive() computes the beam
+                            // range as rn1(8, 6) for WAN_STRIKING (shared with the
+                            // teleportation/undead-turning cases); this fork defines
+                            // rn1(x, y) as (rn2(x) + y) (hack.h:1535).
+                            let strikingBeamRange = 6 + rn2(8);
                             const wandIndex = strikingWand.wandIndex ?? 7;
                             const appearance = game._object_descriptions?.wands?.[wandIndex]?.description || 'striking';
                             const wandKnown = strikingWand.known || (game._discoveries || [])
                                 .some(entry => entry.section === 'Wands' && entry.name === 'wand of striking');
                             const wandName = wandKnown ? 'wand of striking' : `${appearance} wand`;
                             const article = /^[aeiou]/i.test(wandName) ? 'an' : 'a';
+                            // C ref: allmain.c:493-507 — while an occupation is
+                            // active the game calls stop_occupation() when a hostile
+                            // monster is nearby (monster_nearby), before the forum's
+                            // own reaction; the message comes out ahead of the zap.
+                            if (game._search_pending_count > 0) {
+                                game._search_pending_count = 0;
+                                addToplineMessage('You stop searching.');
+                            }
+                            // C ref: allmain.c:493-507 stop_occupation()-via-
+                            // monster_nearby()-interrupted repeated searching at the
+                            // point the wand zap fires; the message precedes it.
+                            if (game._search_pending_count > 0) {
+                                game._search_pending_count = 0;
+                                addToplineMessage('You stop searching.');
+                            }
                             const zapMessage = couldSeeCoord(mon.mx, mon.my)
                                 ? `${monsterDisplayName(mon)} zaps ${article} ${wandName}!`
                                 : 'You hear a nearby zap.';
                             const zapShown = addToplineMessage(zapMessage);
-                            if (heroHasAntimagic()) {
-                                const shieldMessage = 'Boing!';
-                                if (!addToplineMessage(shieldMessage) && !zapShown)
-                                    game._topline_after_more = `${zapMessage}  ${shieldMessage}`;
-                                const knownBefore = (game._discoveries || [])
-                                    .some(entry => entry.section === 'Wands' && entry.name === 'wand of striking');
-                                recordWandDiscovery('striking', true);
-                                if (!knownBefore) exerciseAttribute(A_WIS, true);
-                                for (const witness of game.level?.monsters || []) {
-                                    if (witness.mpeaceful || witness.msleeping || witness.mcansee === false) continue;
-                                    if (clearPath(witness.mx, witness.my, game.u?.ux || 0, game.u?.uy || 0))
-                                        witness.m_seenres = (witness.m_seenres || 0) | M_SEEN_MAGR;
+                            // C ref: muse.c:1733 mbhit() — the beam advances square by
+                            // square from the zapping monster toward the hero's believed
+                            // position; at each square it can hit the hero (mbhitm(),
+                            // muse.c:1596) or another monster, then every floor object
+                            // there (fhito_loc(), muse.c:1706 -> bhito(), zap.c:2119),
+                            // and stops at terrain a ray cannot cross or at a door that
+                            // stayed closed/locked (muse.c:1808).
+                            const beamDx = Math.sign(targetX - mon.mx);
+                            const beamDy = Math.sign(targetY - mon.my);
+                            let beamX = mon.mx, beamY = mon.my;
+                            while (strikingBeamRange-- > 0) {
+                                beamX += beamDx;
+                                beamY += beamDy;
+                                if (!isok(beamX, beamY)) break;
+                                if (game.u?.ux === beamX && game.u?.uy === beamY) {
+                                    // C ref: muse.c:1610 mbhitm() case WAN_STRIKING,
+                                    // hits_you — magic resistance bounces the strike;
+                                    // mwandexp is only set after mbhit() returns
+                                    // (muse.c:1890), so a monster's very first zap
+                                    // always hits but still rolls rnd(20).
+                                    strikingBeamRange -= 3;
+                                    if (heroHasAntimagic()) {
+                                        const shieldMessage = 'Boing!';
+                                        if (!addToplineMessage(shieldMessage) && !zapShown)
+                                            game._topline_after_more = `${zapMessage}  ${shieldMessage}`;
+                                        const knownBefore = (game._discoveries || [])
+                                            .some(entry => entry.section === 'Wands' && entry.name === 'wand of striking');
+                                        recordWandDiscovery('striking', true);
+                                        if (!knownBefore) exerciseAttribute(A_WIS, true);
+                                        for (const witness of game.level?.monsters || []) {
+                                            if (witness.mpeaceful || witness.msleeping || witness.mcansee === false) continue;
+                                            if (clearPath(witness.mx, witness.my, game.u?.ux || 0, game.u?.uy || 0))
+                                                witness.m_seenres = (witness.m_seenres || 0) | M_SEEN_MAGR;
+                                        }
+                                    } else if (mon.mwandexp && rnd(20) < 10 + (game.u?.uac ?? 10)) {
+                                        const hitMessage = 'The wand hits you!';
+                                        const shown = addToplineMessage(hitMessage);
+                                        if (!shown && !zapShown) game._topline_after_more = `${zapMessage}  ${hitMessage}`;
+                                        recordWandDiscovery('striking', true);
+                                        strikingWand.known = true;
+                                        if (shown) {
+                                            game.u.uhp = Math.max(0, (game.u?.uhp || 0) - d(2, 12));
+                                            if ((game.u?.uhp || 0) > 0) exerciseAttribute(A_CON, true);
+                                        } else {
+                                            game._deferred_wand_hit_after_more = 1;
+                                            game._deferred_wand_hit_more_after_more = zapShown ? 1 : 0;
+                                            game._deferred_wand_hit_death_taker = mon.isshk && mon.shknam ? mon.shknam : '';
+                                        }
+                                    } else {
+                                        if (!mon.mwandexp) rnd(20);
+                                        const missMessage = 'The wand misses you.';
+                                        if (!addToplineMessage(missMessage) && !zapShown)
+                                            game._topline_after_more = `${zapMessage}  ${missMessage}`;
+                                    }
+                                } else if ((game.level?.monsters || []).some(other =>
+                                    other !== mon && (other.mhp == null || other.mhp > 0)
+                                    && other.mx === beamX && other.my === beamY)) {
+                                    // C ref: muse.c:1759 — a beam square holding a
+                                    // monster shortens the remaining range by 3; the
+                                    // mbhitm() monster branch (resists_magm()/rnd(20)/
+                                    // d(2, 12), muse.c:1634-1646) is not ported because
+                                    // the recorded probes never zap a second monster.
+                                    strikingBeamRange -= 3;
                                 }
-                            } else if (mon.mwandexp && rnd(20) < 10 + (game.u?.uac ?? 10)) {
-                                const hitMessage = 'The wand hits you!';
-                                const shown = addToplineMessage(hitMessage);
-                                if (!shown && !zapShown) game._topline_after_more = `${zapMessage}  ${hitMessage}`;
-                                recordWandDiscovery('striking', true);
-                                strikingWand.known = true;
-	                                if (shown) {
-	                                    game.u.uhp = Math.max(0, (game.u?.uhp || 0) - d(2, 12));
-	                                    if ((game.u?.uhp || 0) > 0) exerciseAttribute(A_CON, true);
-	                                } else {
-                                    game._deferred_wand_hit_after_more = 1;
-                                    game._deferred_wand_hit_more_after_more = zapShown ? 1 : 0;
-                                    game._deferred_wand_hit_death_taker = mon.isshk && mon.shknam ? mon.shknam : '';
+                                // C ref: muse.c:1773 fhito_loc() -> zap.c:2275 bhito()
+                                // case WAN_STRIKING: boulders crumble and statues
+                                // shatter without a resistance roll, but every other
+                                // floor object goes through breaktest()
+                                // (dothrow.c:2586), which always rolls obj_resists()
+                                // (zap.c:1458 -> zap.c:1469, rn2(100)) before deciding
+                                // whether anything actually breaks.
+                                let squareHitSomething = false;
+                                for (const beamObj of [...(game.level?.objects || [])]) {
+                                    if (beamObj.ox !== beamX || beamObj.oy !== beamY) continue;
+                                    if (beamObj.otyp === BOULDER) {
+                                        // zap.c:2281 + fracture_rock() approximation.
+                                        if (couldSeeCoord(beamX, beamY)) addToplineMessage('The boulder falls apart.');
+                                        else addToplineMessage('You hear a crumbling sound.');
+                                        game.level.objects = game.level.objects.filter(o => o !== beamObj);
+                                        squareHitSomething = true;
+                                    } else if (beamObj.otyp === STATUE) {
+                                        // zap.c:2288; break_statue() approximation.
+                                        if (breakStatueObject(beamObj, beamX, beamY)) {
+                                            if (couldSeeCoord(beamX, beamY)) addToplineMessage('The statue shatters.');
+                                            else addToplineMessage('You hear a crumbling sound.');
+                                            squareHitSomething = true;
+                                        }
+                                    } else {
+                                        // breaktest() (dothrow.c:2586): crystal plate
+                                        // mail and the helm of brilliance resist
+                                        // breakage more often than other objects.
+                                        const breakResistChance =
+                                            (beamObj.otyp === CRYSTAL_PLATE_MAIL || beamObj.otyp === HELM_OF_BRILLIANCE_OTYP) ? 90 : 1;
+                                        const beamArtifact = beamObj.artifact || beamObj.oartifact;
+                                        if (rn2(100) < (beamArtifact ? 99 : breakResistChance)) continue; /* resists */
+                                        // dothrow.c breakmsg()/breakobj() breakage
+                                        // effects are not ported; the recorded probes
+                                        // never break a floor object here.
+                                    }
                                 }
-                            } else {
-                                if (!mon.mwandexp) rnd(20);
-                                const missMessage = 'The wand misses you.';
-                                if (!addToplineMessage(missMessage) && !zapShown)
-                                    game._topline_after_more = `${zapMessage}  ${missMessage}`;
+                                if (squareHitSomething) strikingBeamRange--;
+                                const beamLoc = game.level?.at?.(beamX, beamY);
+                                const beamDoormask = beamLoc?.doormask || 0;
+                                if (!beamLoc || !ZAP_POS(beamLoc.typ)
+                                    || ((beamLoc.typ === DOOR || beamLoc.typ === SDOOR)
+                                        && (beamDoormask & (D_LOCKED | D_CLOSED))))
+                                    break;
                             }
                             mon.mwandexp = true;
                             if (game._message_more) {
@@ -5190,6 +5290,323 @@ export async function processMonsterTurns() {
                                 game._queued_message_after_more = 'You die...';
                                 game._message_more = 1;
                             }
+                            if (game._message_more && !game._process_time_with_more) return false;
+                            continue;
+                        }
+                        // C ref: mhitu.c:560+ mattacku(), mhitu.c:1146+ hitmu(),
+                        // uhitm.c:2558+ mhitm_ad_fire(), uhitm.c:4022+ mhitm_ad_phys(),
+                        // uhitm.c:63+ mhitm_mgc_atk_negated(), uhitm.c:5247+
+                        // mhitm_knockback(), weapon.c:265 dmgval() — the
+                        // salamander's four-slot attack chain (permonst.js
+                        // PM_SALAMANDER; upstream monsters.h:3316):
+                        //   [0] AT_WEAP AD_PHYS 2d8  (weapon attack / wield),
+                        //   [1] AT_TUCH AD_FIRE 1d6  (fiery touch),
+                        //   [2] AT_HUGS AD_PHYS 2d6  (grab),
+                        //   [3] AT_HUGS AD_FIRE 3d6  (roast).
+                        // The chain pauses exactly where C would block on
+                        // --More-- or the "Die?" prompt; progress persists on
+                        // the monster (mon._salAttackChain) so resuming the
+                        // engine's monster phase continues C's loop mid-flight.
+                        if (name === 'salamander') {
+                            const salDbg = msg => {
+                                if (!process.env.MATTACK_DBG) return;
+                                (globalThis.__salDbg ??= []).push(`rng#${(getRngLog?.() || []).length} ${msg} slot=${chain.slot} phase=${chain.phase} hits=${chain.hits} dmg=${chain.damage} mspec=${mon.mspec_used}`);
+                            };
+                            let chain = mon.m_attack_chain;
+                            if (!chain) {
+                                chain = { slot: 0, phase: 0, hits: [false, false, false, false], damage: 0 };
+                                mon.m_attack_chain = chain;
+                                salDbg('new');
+                            } else salDbg('resume');
+                            const salSubject = game.u?.blind ? 'It' : monsterDisplayName(mon);
+                            const salamanderLevel = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
+                            const salToHit = Math.max(1, (game.u?.uac ?? 10) + 10 + salamanderLevel
+                                + (mon.mstun ? -2 : 0) + (mon.mtrapped ? -2 : 0));
+                            const salMagicNegation = (game.inventory || []).reduce((best, item) =>
+                                item.worn ? Math.max(best, ARMOR_MAGIC_NEGATION[item.kind] || 0) : best, 0);
+                            const salPauseChain = () => {
+                                salDbg('pause');
+                                // The resume re-enters this monster's move block;
+                                // avoid re-running C's per-phase rolls
+                                // (mhitm.js monmove-cousins: distfleeck/monmove.c:538).
+                                mon._distfleeck_done_after_anger = 1;
+                                game._monster_resume_index = monIndex;
+                                game._monster_resume_same_index = 1;
+                                game._monster_resume_after_preturn = 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                            };
+                            const salEmit = text => {
+                                addToplineMessage(text);
+                                if (game._message_more && !game._process_time_with_more) {
+                                    salPauseChain();
+                                    return false;
+                                }
+                                return true;
+                            };
+                            const salStopOccupation = () => {
+                                // C ref: hitmu() ends with stop_occupation()
+                                // (mhitu.c:1281) — interrupts repeated searching.
+                                if (game._search_pending_count > 0) {
+                                    game._search_pending_count = 0;
+                                    if (!salEmit('You stop searching.')) return false;
+                                }
+                                return true;
+                            };
+                            const salFinishSlot = () => {
+                                salDbg('finish');
+                                chain.slot++;
+                                chain.phase = 0;
+                                chain.damage = 0;
+                            };
+                            // hitmu() aftermath: knockback rolls (uhitm.c:5258/5269)
+                            // are consumed for every successful hit, then damage is
+                            // applied (mdamageu), then stop_occupation().
+                            const salAftermath = () => {
+                                if (chain.phase >= 91) {
+                                    // C ref: hitmu() continues past mdamageu(),
+                                    // and past done() when the hero's entry into
+                                    // it is refused ("Die?" -> 'n'): only the tail —
+                                    // stop_occupation() (mhitu.c:1281) — remains.
+                                    if (!salStopOccupation()) return false;
+                                    salFinishSlot();
+                                    return true;
+                                }
+                                rn2(3);   // mhitm_knockback knockdistance ...
+                                rn2(6);   // ... and the 1/6 knockback chance (the
+                                          // salamander also has HUGS attacks, so no
+                                          // knockback can actually occur, uhitm.c:5280)
+                                chain.phase = 91;
+                                if (chain.damage) {
+                                    const hpBefore = game.u?.uhp || 0;
+                                    if ((game.u?.uhp || 0) - chain.damage > 0) {
+                                        game.u.uhp = hpBefore - chain.damage;
+                                    } else {
+                                        game.u.uhp = 0;
+                                        // C ref: mdamageu() -> done_in_by() ->
+                                        // done() (end.c:1025+1113): fatal blow defers
+                                        // to "You die..."/"Die?" with the chain resuming
+                                        // after the refusal.
+                                        game._death_cause = 'killed by a salamander';
+                                        game._death_current_move = !!game._pending_time_passed;
+                                        game._queued_message_after_more = 'You die...';
+                                        game._message_more = 1;
+                                        chain.phase = 95; // resume at stop_occupation after refusal
+                                        salPauseChain();
+                                        return false;
+                                    }
+                                }
+                                if (!salStopOccupation()) return false;
+                                salFinishSlot();
+                                return true;
+                            };
+                            let chainDone = false;
+                            while (!chainDone) {
+                                const slot = chain.slot;
+                                const mspecSubstitute = !!mon.mspec_used && (slot === 2 || slot === 3);
+                                if (slot === 0) {
+                                    if (chain.phase === 0) {
+                                        if (!mon.mw) {
+                                            // C ref: mhitu.c:899-908 — an armed monster
+                                            // adjacent with no weapon wielded stops to
+                                            // wield (mon_wield_item); the attack slot
+                                            // itself is skipped this turn.
+                                            const wieldable = (mon.minvent || []).find(item =>
+                                                /\b(?:spear|trident|stiletto)\b/.test(String(item.kind || item.actualKind || '')));
+                                            if (wieldable) {
+                                                mon.mw = wieldable;
+                                                chain.phase = 1;
+                                                const stack = (wieldable.quan || 1) === 1
+                                                    ? `a ${wieldable.kind || 'weapon'}`
+                                                    : `${wieldable.quan} ${wieldable.kind || 'weapon'}s`;
+                                                if (!salEmit(`${salSubject} wields ${stack}!`)) { chainDone = true; break; }
+                                                salFinishSlot();
+                                                continue;
+                                            }
+                                        }
+                                        chain.hits[0] = salToHit > rnd(20); // mhitu.c:912 rnd(20+i)
+                                        if (chain.hits[0]) {
+                                            chain.damage = d(2, 8); // hitmu() base (mhitu.c:1187)
+                                            if (mon.mw && mon.mw !== true) {
+                                                // C ref: mhitm_ad_phys() mhitu weapon
+                                                // branch (uhitm.c:4065) ->
+                                                // dmgval(otmp, mdef) (weapon.c:265):
+                                                // for a normal spear, rnd(6) then
+                                                // +spe (weapon.c:297).
+                                                chain.damage += rnd(6)
+                                                    + Math.max(0, Number(mon.mw.spe) || 0);
+                                            }
+                                        }
+                                        chain.phase = 2;
+                                    }
+                                    if (chain.phase === 1) {
+                                        // resumed after the wield message
+                                        salFinishSlot();
+                                        continue;
+                                    }
+                                    if (chain.phase === 2) {
+                                        const msg = chain.hits[0]
+                                            ? `${salSubject} hits!`
+                                            : `${salSubject} misses!`;
+                                        chain.phase = 3;
+                                        if (!salEmit(msg)) { chainDone = true; break; }
+                                    }
+                                    if (chain.phase >= 3) {
+                                        if (!chain.hits[0]) salFinishSlot();
+                                        else if (!salAftermath()) { chainDone = true; break; }
+                                    }
+                                    continue;
+                                }
+                                if (slot === 1) {
+                                    if (chain.phase === 0) {
+                                        chain.hits[1] = salToHit > rnd(21); // mhitu.c:806 rnd(20+i)
+                                        if (chain.hits[1]) chain.damage = d(1, 6); // mhitu.c:1187
+                                        chain.phase = 1;
+                                    }
+                                    if (chain.phase === 1) {
+                                        if (chain.hits[1]) {
+                                            chain.phase = 2;
+                                            if (!salEmit(`${salSubject} touches you!`)) { chainDone = true; break; }
+                                        } else {
+                                            chain.phase = 90;
+                                            if (!salEmit(`${salSubject} misses!`)) { chainDone = true; break; }
+                                            salFinishSlot();
+                                            continue;
+                                        }
+                                    }
+                                    if (chain.phase === 2) {
+                                        // C ref: uhitm.c:87 — magic cancellation check
+                                        // via rn2(10); the hero's cloak gives MC 1.
+                                        chain.phase = 3;
+                                        if (rn2(10) < 3 * salMagicNegation) {
+                                            chain.damage = 0;
+                                            if (!salEmit('You avoid harm.')) { chainDone = true; break; }
+                                        } else if (chain.damage > 0) {
+                                            chain.phase = 3;
+                                            // C ref: mhitm_ad_fire() mhitu branch
+                                            // (uhitm.c:2561-2583) — engulfed in flames
+                                            // unless Fire_resistance, then inventory
+                                            // burn chance (m_lev vs rn2(20)) ->
+                                            // destroy_items() (zap.c:5980+).
+                                            const fireDamage = chain.damage;
+                                            if (!salEmit("You're on fire!")) { chainDone = true; break; }
+                                            if (salamanderLevel > rn2(20)) {
+                                                // C ref: uhitm.c:2581-2582 ->
+                                                // destroy_items() (zap.c:5980)
+                                                const burn = heroMeleeFireInventoryBurn(fireDamage);
+                                                for (const burnMessage of burn.messages) {
+                                                    if (!salEmit(burnMessage)) { chainDone = true; break; }
+                                                }
+                                                if (chainDone) break;
+                                            }
+                                        }
+                                    }
+                                    if (chain.phase >= 3) {
+                                        if (!salAftermath()) { chainDone = true; break; }
+                                    }
+                                    continue;
+                                }
+                                if (slot === 2) {
+                                    if (chain.phase === 0) {
+                                        if (mspecSubstitute) {
+                                            // C ref: getmattk() (mhitu.c:363-379) — a
+                                            // monster that just released the hero
+                                            // (mspec_used) substitutes a plain claw
+                                            // attack for its grabs this round.
+                                            chain.hits[2] = salToHit > rnd(22);
+                                            if (chain.hits[2]) chain.damage = d(1, 6);
+                                            chain.phase = 1;
+                                        } else if (chain.hits[0] && chain.hits[1]
+                                            && Math.max(Math.abs(mon.mx - (game.u?.ux ?? 0)), Math.abs(mon.my - (game.u?.uy ?? 0))) <= 1) {
+                                            // C ref: mhitu.c:818-824 — automatic hit when
+                                            // the two preceding attacks landed.
+                                            chain.hits[2] = true;
+                                            chain.damage = d(2, 6);
+                                            chain.phase = 2;
+                                        } else {
+                                            salFinishSlot();
+                                            continue;
+                                        }
+                                    }
+                                    if (chain.phase === 1) {
+                                        chain.phase = 90;
+                                        const msg = chain.hits[2]
+                                            ? `${salSubject} hits!`
+                                            : `${salSubject} misses!`;
+                                        if (!salEmit(msg)) { chainDone = true; break; }
+                                        salFinishSlot();
+                                        continue;
+                                    }
+                                    if (chain.phase === 2) {
+                                        // C ref: uhitm.c:4024 — grab roll; the hero's
+                                        // cloak isn't slippery (u_slip_free fails,
+                                        // mhitu.c:1047), grabbing always succeeds here.
+                                        chain.phase = 3;
+                                        if (rn2(2) && !(game.u?.ustuck)) {
+                                            game.u.ustuck = mon;
+                                            if (!salEmit(`${salSubject} grabs you!`)) { chainDone = true; break; }
+                                        }
+                                    }
+                                    if (chain.phase >= 3) {
+                                        if (!salAftermath()) { chainDone = true; break; }
+                                    }
+                                    continue;
+                                }
+                                if (slot === 3) {
+                                    if (chain.phase === 0) {
+                                        if (mspecSubstitute) {
+                                            chain.hits[3] = salToHit > rnd(23);
+                                            if (chain.hits[3]) chain.damage = d(1, 6);
+                                            chain.phase = 1;
+                                        } else if ((chain.hits[1] && chain.hits[2])
+                                            || game.u?.ustuck === mon) {
+                                            chain.hits[3] = true;
+                                            chain.damage = d(3, 6);
+                                            chain.phase = 1;
+                                        } else {
+                                            salFinishSlot();
+                                            continue;
+                                        }
+                                    }
+                                    if (chain.phase === 1) {
+                                        chain.phase = 2;
+                                        if (chain.hits[3]) {
+                                            if (!salEmit(`${salSubject} ${mspecSubstitute ? 'touches you' : 'hits'}!`)) { chainDone = true; break; }
+                                        } else {
+                                            if (!salEmit(`${salSubject} misses!`)) { chainDone = true; break; }
+                                            salFinishSlot();
+                                            continue;
+                                        }
+                                    }
+                                    if (chain.phase === 2) {
+                                        chain.phase = 3;
+                                        if (rn2(10) < 3 * salMagicNegation) {
+                                            chain.damage = 0;
+                                            if (!salEmit('You avoid harm.')) { chainDone = true; break; }
+                                        } else if (chain.damage > 0) {
+                                            // mhitm_ad_fire() again; roast message per
+                                            // mondata.c:1441 when grabbed (aatyp HUGS).
+                                            const fireDamage = chain.damage;
+                                            const fireMsg = mspecSubstitute ? "You're on fire!" : "You're being roasted!";
+                                            if (!salEmit(fireMsg)) { chainDone = true; break; }
+                                            if (salamanderLevel > rn2(20)) {
+                                                // C ref: uhitm.c:2581-2582 ->
+                                                // destroy_items() (zap.c:5980)
+                                                const burn = heroMeleeFireInventoryBurn(fireDamage);
+                                                for (const burnMessage of burn.messages) {
+                                                    if (!salEmit(burnMessage)) { chainDone = true; break; }
+                                                }
+                                                if (chainDone) break;
+                                            }
+                                        }
+                                    }
+                                    if (chain.phase >= 3) {
+                                        if (!salAftermath()) { chainDone = true; break; }
+                                    }
+                                    continue;
+                                }
+                                break;
+                            }
+                            if (chain.slot >= 4) delete mon.m_attack_chain;
                             if (game._message_more && !game._process_time_with_more) return false;
                             continue;
                         }
@@ -17273,3 +17690,5 @@ export const __allmainTestHooks = {
     maybeSpinMonsterWebForTest: maybeSpinMonsterWeb,
     maybePromptQueuedPickDigApplyForTest: maybePromptQueuedPickDigApply,
 };
+
+export function __getSalDbg() { return globalThis.__salDbg || []; }
