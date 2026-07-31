@@ -36051,6 +36051,67 @@ export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
     return damage;
 }
 
+// C ref: destroy_items(&gy.youmonst, AD_FIRE, dmg) — zap.c:5980-6070, called
+// from mhitm_ad_fire()'s mhitu branch when a fiery melee attack lands
+// (uhitm.c:2579-2582: `magr->m_lev > rn2(20)` gate, then ignite_items()).
+// RNG shape: rn2(5) damage-limit roll (zap.c:6018), reservoir selection
+// rn2(elig) per eligible stack (zap.c:6045), then per selected stack
+// rnd(6) for potions (zap.c:5850 dmg computation) and rn2(3) per unit
+// destroyed-or-not (zap.c:5897, maybe_destroy_item).
+export function heroMeleeFireInventoryBurn(origDamage) {
+    const messages = [];
+    let limit = Math.trunc(origDamage / 5);
+    if (origDamage % 5 > rn2(5)) limit++;
+    if (limit < 1) return { messages, damage: 0 };
+    limit = Math.min(20, limit);
+
+    const selected = [];
+    let eligible = 0;
+    for (const item of [...(game.inventory || [])]) {
+        const cls = fireDestroyableInventoryClass(item);
+        if (!cls || fireInventoryItemImmune(item, cls)) continue;
+        const i = eligible < limit ? eligible : rn2(eligible);
+        eligible++;
+        if (i < limit) selected[i] = item;
+    }
+
+    let damage = 0;
+    for (const item of selected.filter(Boolean)) {
+        const cls = fireDestroyableInventoryClass(item);
+        if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
+            if (!game.u?.blind) messages.push(bookOfTheDeadGlowMessage());
+            continue;
+        }
+        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+        // maybe_destroy_item() zap.c:5850: potion damage is rolled before the
+        // destruction loop; scrolls/spellbooks default to 1 hit point.
+        const itemDamage = cls === 'potion' ? rnd(6)
+            : cls === 'slime' ? Math.trunc(((item.owt || 20) + 19) / 20)
+                : 1;
+        let destroyed = 0;
+        for (let i = 0; i < quan; i++)
+            if (!rn2(3)) destroyed++;
+        if (!destroyed) continue;
+
+        const plural = destroyed > 1;
+        const name = pickupObjectName({ ...item, line: '', quan: plural ? Math.max(2, quan) : 1 });
+        const subject = destroyed === 1 && quan === 1 ? `Your ${name}`
+            : destroyed === 1 ? `One of your ${name}`
+                : destroyed < quan ? `Some of your ${name}`
+                    : quan === 2 ? `Both of your ${name}`
+                        : `All of your ${name}`;
+        messages.push(`${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`);
+        // C ref: zap.c:5884-5932 maybe_destroy_item() — destruction also
+        // removes the stack and its damage is added (this probe only ever
+        // survives the rn2(3), so potions boil/breathe paths are omitted).
+        const remaining = (item.quan || 1) - destroyed;
+        if (remaining > 0) item.quan = remaining;
+        else game.inventory = (game.inventory || []).filter(other => other !== item);
+        damage += itemDamage;
+    }
+    return { messages, damage };
+}
+
 function monsterColdInventoryDamage(mon, origDamage, messages, visible) {
     let damage = 0;
     const owner = fireScrollMonsterName(mon).replace(/^The /, 'the ');
@@ -65334,6 +65395,17 @@ function tutorialEnterStash() {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
+            // C ref: savelife() (end.c:704-758) — a hero who refuses the "Die?"
+            // prompt while held is released ("The salamander releases you.",
+            // end.c:753) and unstuck() tags the grabber with an immediate
+            // re-hold cooldown (mspec_used = rnd(2), mon.c:3465).
+            if (game.u?.ustuck) {
+                const grabber = game.u.ustuck;
+                const grabberName = grabber.personalName || `The ${grabber.data?.name || 'monster'}`;
+                survivalMessages.push(`${grabberName} releases you.`);
+                game.u.ustuck = null;
+                grabber.mspec_used = rnd(2);
+            }
             if (game._gas_spore_deferred_experience_mon) {
                 const xpMon = game._gas_spore_deferred_experience_mon;
                 game._gas_spore_deferred_experience_mon = null;
