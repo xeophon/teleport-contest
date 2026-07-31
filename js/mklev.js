@@ -1103,6 +1103,9 @@ const RNDMONST_WEAPON_ATTACKS = new Map([
     ['kobold', [1, 4]], ['large kobold', [1, 6]], ['kobold leader', [2, 4]],
     ['goblin', [1, 4]], ['hobgoblin', [1, 6]], ['orc', [1, 8]],
     ['hill orc', [1, 6]], ['Mordor orc', [1, 6]], ['Uruk-hai', [1, 8]],
+    // C ref: monsters.h:2611/2620/2629 — human-form weres ATTK(AT_WEAP,
+    // AD_PHYS, 2, 4) (unarmed 2d4 weapon hit when they carry no weapon).
+    ['wererat', [2, 4]], ['werejackal', [2, 4]], ['werewolf', [2, 4]],
 ]);
 
 const RNDMONST_COLOR_BY_GLYPH = new Map([
@@ -5812,6 +5815,19 @@ function monsterFromRndMeta(row) {
         ptr.attack = { dice: 1, sides: 3, verb: 'bites' };
     }
     if (name === 'coyote') ptr.attack = { dice: 1, sides: 4, verb: 'bites' };
+    // C ref: monsters.h dog/lycanthrope-summon bite cases —
+    // wolf: ATTK(AT_BITE, AD_PHYS, 2, 4); warg/winter wolf: 2,6;
+    // winter wolf cub: 1,8 (plus its breath attack).
+    if (name === 'wolf') ptr.attack = { dice: 2, sides: 4, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+    if (name === 'warg') ptr.attack = { dice: 2, sides: 6, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+    if (name === 'winter wolf') {
+        ptr.attack = { dice: 2, sides: 6, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+        ptr.breath = { dice: 2, sides: 6, adtyp: 'cold' };
+    }
+    if (name === 'winter wolf cub') {
+        ptr.attack = { dice: 1, sides: 8, verb: 'bites', aatyp: 'bite', adtyp: 'phys' };
+        ptr.breath = { dice: 1, sides: 6, adtyp: 'cold' };
+    }
     if (name === 'soldier ant') ptr.attack = { dice: 2, sides: 4, verb: 'bites' };
     if (mlet === S_NYMPH) {
         ptr.attack = { dice: 0, sides: 0, verb: 'hits', aatyp: 'claw', adtyp: 'steal' };
@@ -22161,7 +22177,13 @@ function themeroom_buried_zombies(croom) {
 function themeroom_massacre(croom) {
     const pos = { x: 0, y: 0 };
     let idx = rn2(MASSACRE_CORPSES.length);
-    for (let i = 0, count = d(5, 5); i < count; i++) {
+    // C ref: dat/themerms.lua "Massacre" — Lua d(5,5) (nhlib.lua:29-40) sums
+    // five math.random(1,5) draws; nhlib.lua:5-15 math.random(1,x) -> 1+rn2(x)
+    // (nhlua.c nhl_random:947-948), so each die is logged as a separate rn2(5)
+    // by the C recorder. Do NOT use hacklib d(5,5) here.
+    let count = 0;
+    for (let k = 0; k < 5; k++) count += 1 + rn2(5);
+    for (let i = 0; i < count; i++) {
         if (rn2(100) < 10) idx = rn2(MASSACRE_CORPSES.length);
         if (!somexyspace(croom, pos)) continue;
         const corpse = mksobj_at(CORPSE, pos.x, pos.y, true, false);
@@ -22221,10 +22243,16 @@ async function themeroom_trap_room(croom) {
 
 async function themeroom_statuary(croom) {
     const pos = { x: 0, y: 0 };
-    for (let i = 0, count = d(5, 5); i < count; i++) {
+    // C ref: dat/themerms.lua "Statuary" — lua d(5,5) then lua d(3), both via
+    // nhlib.lua:29-40 -> five rn2(5) draws then one rn2(3) draw (1-arg d ->
+    // math.random(1,3) -> 1 + rn2(3), nhlua.c nhl_random:947-948).
+    let count = 0;
+    for (let k = 0; k < 5; k++) count += 1 + rn2(5);
+    for (let i = 0; i < count; i++) {
         if (somexyspace(croom, pos)) mksobj_at(STATUE, pos.x, pos.y, true, false);
     }
-    for (let i = 0, count = rnd(3); i < count; i++) {
+    count = 1 + rn2(3);
+    for (let i = 0; i < count; i++) {
         if (somexyspace(croom, pos)) await maketrap(pos.x, pos.y, STATUE_TRAP);
     }
 }
@@ -22328,7 +22356,11 @@ function themeroom_buried_treasure(croom) {
     const chest = mksobj_at(CHEST, pos.x, pos.y, true, false);
     if (!chest) return null;
     delete_contents(chest);
-    for (let i = 0, count = d(3, 4); i < count; i++)
+    // C ref: dat/themerms.lua "Buried treasure" — lua d(3,4) (nhlib.lua:29-40)
+    // = three math.random(1,4) draws -> three 1+rn2(4) (nhlua.c:947-948).
+    let count = 0;
+    for (let k = 0; k < 3; k++) count += 1 + rn2(4);
+    for (let i = 0; i < count; i++)
         add_to_container(chest, mkobj(RANDOM_CLASS, true));
     buryThemeroomObject(chest);
     game._themeroom_postprocess ??= [];

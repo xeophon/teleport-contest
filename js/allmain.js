@@ -10,7 +10,7 @@ import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, vie
 import { init_objects } from './o_init.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
-import { wereChange } from './were.js';
+import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn, youWere } from './were.js';
 import {
     setMhitmHooks as setMonsterMonsterCombatHooks,
     mmAggression as monsterMonsterAggression,
@@ -2565,6 +2565,56 @@ function addToplineMessage(msg) {
     return false;
 }
 
+// C ref: uhitm.c:4276-4286 mhitm_ad_were() mhitu branch — a landed AD_WERE
+// attack on the hero always rolls rn2(4); only on a 0 with the hero not yet
+// lycanthropic does it run mhitm_mgc_atk_negated (uhitm.c:75-98:
+// rn2(10) >= 3*armpro; negated -> "You avoid harm."), otherwise it infects
+// the hero with the attacker's lycanthrope species (set_ulycn,
+// were.c:231-237) and reports "You feel feverish."  Protection from shape
+// changers and an AD_WERE-defending weapon also block infection
+// (uhitm.c:4280); neither gear exists in this contest build.
+function applyWereBiteInfection(mon, data) {
+    const dbg = process.env.WEREDBG;
+    const dbgInfo = () => `mon=${data?.name} moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length}`;
+    const r4 = rn2(4);
+    if (dbg) console.error(`WEREDBG infection-check ${dbgInfo()} r4=${r4}`);
+    if (r4) return; // uhitm.c:4279 — single draw taken unconditionally
+    if (game.u?.ulycn && game.u.ulycn !== -1) return; // u.ulycn != NON_PM
+    const armproWere = (game.inventory || []).reduce((best, item) =>
+        item.worn ? Math.max(best, ARMOR_MAGIC_NEGATION[item.kind] || 0) : best, 0);
+    const r10 = rn2(10);
+    if (!(r10 >= 3 * armproWere)) { // uhitm.c:87-93 — negated
+        if (dbg) console.error(`WEREDBG  avoid harm r10=${r10} armpro=${armproWere}`);
+        addToplineMessage('You avoid harm.');
+        return;
+    }
+    if (dbg) console.error(`WEREDBG  feverish r10=${r10} armpro=${armproWere}`);
+    setUlycn(String(data?.name || '').toLowerCase()); // uhitm.c:4282-4284
+    addToplineMessage('You feel feverish.');
+    // uhitm.c:4283 exercise(A_CON, FALSE) — attrib.c:509 subtracts rn2(2)
+    // when |AEXE| < AVAL(50); no C-side AEXE accumulation exists in this port,
+    // so always roll (matches C for |AEXE(A_CON)| < 50).
+    rn2(2);
+}
+
+// C ref: end.c:2040-2068 savelife(): on refusing the wizard/explore "Die?"
+// prompt, C restores u.uhp = min(u.uhpmax, 50 + 10 * trunc(A_CON/2)) and
+// dosage is *synchronous* inside the fatal attack (mhitu.c mdamageu -> done
+// -> die()).  The JS engine defers the "--More--"/"Die?" prompt chain across
+// input boundaries, so the hero would otherwise remain at 0 hp while
+// post-death monster turns run their HP-gated RNG paths (e.g. regen_hp
+// allmain.c:655-659, AD_WERE infection uhitm.c:4279).  Restore the hero here,
+// at the point the lethal blow lands, to mirror C's synchronous heal.
+function restoreHeroHpForUnresolvedWizardDeath() {
+    if (!(game.flags?.debug || game.flags?.explore)) return;
+    const u = game.u;
+    if (!u || !('uhp' in u)) return;
+    const con = u.acurr?.a?.[A_CON] ?? 10;
+    const givehp = 50 + 10 * Math.trunc(con / 2);
+    u.uhp = Math.min(u.uhpmax || 1, givehp);
+    game._death_pending_confirm = true; // cleared when the Die? prompt resolves
+}
+
 function applyHeroLavaSinkingAfterTurn() {
     const result = processHeroLavaSinkingTurn();
     if (!result) return null;
@@ -5007,9 +5057,84 @@ export async function processMonsterTurns() {
                     const wandererMovesInstead = nearby && mon.data?.wanderer && !rn2(4);
                     const wandererCanMoveInstead = wandererMovesInstead && monsterHasNonHeroMove(mon, conflictActive);
 		                    if (adjacentHostile && !wandererCanMoveInstead) {
-                        const data = mon.data || {};
+                        let data = mon.data || {};
                         const name = data.name || 'creature';
                         const foundYou = apparentX === (game.u?.ux ?? 0) && apparentY === (game.u?.uy ?? 0);
+                        // C ref: mhitu.c:726-741 mattacku() — when not cancelled,
+                        // not a shapechanger, and in melee range, demons and
+                        // were creatures invoke summonmu() before the to-hit
+                        // computation. The demon branch (mhitu.c:966-971) is
+                        // handled by the bespoke demon gates below; the were
+                        // branch (mhitu.c:974-1029) is wired here.
+                        if (!mon.cham && !mon.mcan && isWereData(data)) {
+                            const alreadyFleeing = !!mon.mflee; // mhitu.c:731
+                            const wereCanSeeIt = !game.u?.blind && !mon.mundetected
+                                && (game.u?.seeInvisible || !mon.minvis);
+                            const wereCtx = {
+                                g: game,
+                                canseemon: m => !game.u?.blind
+                                    && typeof cansee === 'function' && cansee(m.mx, m.my)
+                                    && !m.mundetected && (game.u?.seeInvisible || !m.minvis),
+                                addToplineMessage: msg => { addToplineMessage(msg); },
+                                newsym,
+                            };
+                            // summonmu (mhitu.c:974-985): form switch attempt;
+                            // newWere() performs the "changes into" message and
+                            // data swap (were.c:96-135 via were.c:41/16).
+                            if (isWereHumanForm(data)) {
+                                // mhitu.c:979 — rn2(5 - (night() * 2)): a single
+                                // draw whose width narrows from 5 to 3 at night.
+                                if (!rn2(5 - (nightNow(game) ? 2 : 0))) {
+                                    newWere(mon, wereCtx);
+                                    data = mon.data || data; // mhitu.c:985,740
+                                }
+                            } else if (!rn2(30)) { // mhitu.c:982
+                                newWere(mon, wereCtx);
+                                data = mon.data || data;
+                            }
+                            if (!alreadyFleeing && mon.mflee) {
+                                // mhitu.c:738-739 — a fresh flee aborts the attack.
+                                continue;
+                            }
+                            // mhitu.c:989 — "summons help!" branch (not blocked
+                            // by Protection_from_shape_changers here; were_summon
+                            // itself checks it at were.c:153-154).
+                            if (!rn2(10)) {
+                                if (wereCanSeeIt) // mhitu.c:994-995
+                                    addToplineMessage(`${monsterDisplayName(mon)} summons help!`);
+                                const summonResult = await wereSummon(data, {
+                                    g: game,
+                                    canseemon: wereCtx.canseemon,
+                                    makemon: async (typ, hx, hy) => {
+                                        const created = await makemon(monsterByRndName(typ), hx, hy, 0);
+                                        if (created) {
+                                            // C ref: makemon.c:1472-1505 — makemon
+                                            // of a visible in-game monster prints
+                                            // "A X suddenly appears next to you!"
+                                            // (next2u, you.h:558) / " close by "
+                                            // (distu<=BOLT_LIM*BOLT_LIM=64) / "".
+                                            newsym(created.mx, created.my);
+                                            if (!created.mundetected && !created.minvis) {
+                                                const du2 = ((created.mx ?? 0) - (game.u?.ux ?? 0)) ** 2
+                                                    + ((created.my ?? 0) - (game.u?.uy ?? 0)) ** 2;
+                                                const where = du2 <= 2 ? ' next to you'
+                                                    : du2 <= 64 ? ' close by' : '';
+                                                addToplineMessage(`A ${typ} suddenly appears${where}!`);
+                                            }
+                                        }
+                                        return created;
+                                    },
+                                });
+                                if (wereCanSeeIt) {
+                                    if (summonResult.total === 0)
+                                        addToplineMessage('But none comes.'); // mhitu.c:1002
+                                    else if (summonResult.visible === 0)
+                                        addToplineMessage('You feel hemmed in.'); // mhitu.c:999-1000
+                                } else if (summonResult.total > 0 && summonResult.visible === 0) {
+                                    addToplineMessage('You feel hemmed in.'); // mhitu.c:1014-1016
+                                }
+                            }
+                        }
                         const dataAttackIsExplosion = normalizedAttackCode(data.attack?.aatyp) === 'expl';
                         if (foundYou && !dataAttackIsExplosion && maybeBlockInvulnerableAttack(mon)) {
                             if (game._message_more && !game._process_time_with_more) return false;
@@ -5791,6 +5916,11 @@ if (attack.adtyp === 'steal') {
 			                            if (pendingBeforeAttack && !attackFits) {
 	                                game._topline_after_more = attackMessage;
 		                                game._topline_more_after_more = 0;
+	                                // C ref: uhitm.c:4276-4286 — the AD_WERE effect
+	                                // rolls with the hit (before knockback, which is
+	                                // deferred below via _knockback_after_topline_more).
+	                                if (attack.adtyp === 'were' && isWereData(data))
+	                                    applyWereBiteInfection(mon, data);
 	                                game._attack_resume_after_more = 1;
 	                                game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
 	                                game._damage_after_topline_more_needs_ac = 1;
@@ -5824,6 +5954,10 @@ if (attack.adtyp === 'steal') {
 		                                    if (rn2(10) >= 3 * stckNegation && !game.u?.ustuck)
 		                                        game.u.ustuck = mon;
 		                                }
+		                                // C ref: uhitm.c:4276-4286 mhitm_ad_were() — AD_WERE
+		                                // effect between damage roll and knockback.
+		                                if (attack.adtyp === 'were' && isWereData(data))
+		                                    applyWereBiteInfection(mon, data);
 		                                rn2(3);
 		                                rn2(6);
 		                            }
@@ -6430,11 +6564,20 @@ if (attack.adtyp === 'steal') {
 	                        }
 	                        continue;
 	                    }
+                    // C ref: allmain.c:501-507 — after each hero action during an
+                    // active search occupation, monster_nearby() (hack.c:4106-4127:
+                    // an adjacent, visible, hostile, not-helpless monster) stops
+                    // the occupation with "You stop searching."
+                    const searchAdjacentHostile = Math.abs(mon.mx - (game.u?.ux || 0)) <= 1
+                        && Math.abs(mon.my - (game.u?.uy || 0)) <= 1;
+                    if (process.env.WEREDBG && /wolf|jackal/.test(mon.data?.name || ''))
+                        console.error(`WEREDBG stop-search-check mon=${mon.data?.name}@${mon.mx},${mon.my} moves=${game.moves} sao=${searchOccupationActive} spc=${game._search_pending_count} adjs=${searchAdjacentHostile} peace=${!!mon.mpeaceful} blind=${!!game.u?.blind} mind=${!!mon.mundetected} vis=${!!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)} csc=${couldSeeCoord(mon.mx, mon.my)}`);
                     if (searchOccupationActive && (game.level?.monsters || []).includes(mon)
                         && !mon.mpeaceful && mon.mcanmove !== false && !mon.mundetected
                         && !scaryObjectAt(mon, game.u?.ux || 0, game.u?.uy || 0)
-                        && (mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2 <= (BOLT_LIM + 1) ** 2
-                        && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2)
+                        && (searchAdjacentHostile
+                            || (((mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2) <= (BOLT_LIM + 1) ** 2
+                                && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2)))
                         && !game.u?.blind && (!mon.minvis || game.u?.seeInvisible)
                         && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
                         && couldSeeCoord(mon.mx, mon.my)) {
@@ -9380,6 +9523,7 @@ async function finishMonsterTurnTail() {
         }
 	        let reachedFullHp = false;
         let reachedFullPower = false;
+        if (process.env.WEREDBG) console.error(`WEREDBG regen-eval moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length} dp=${!!game._death_pending_confirm} poly=${!!game.u?._polyself_form}`);
         if (game.u?._polyself_form) {
             // C ref: allmain.c regen_hp() — the Upolyd branch (allmain.c:630-644)
             // heals every 20 turns (or via Regeneration) with NO rn2(100)
@@ -9395,8 +9539,17 @@ async function finishMonsterTurnTail() {
                     reachedFullHp = (game.u?.uhp || 0) === (game.u?.uhpmax || 0);
                 }
             }
-        } else if (!game.u?.uinvulnerable && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
+        } else if (!game.u?.uinvulnerable && (game.u?.uhp || 0) > 0
+                   // C ref: allmain.c:655-659 / end.c:2137-2173 — when the
+                   // hero just died and wizard/explore mode would offer the
+                   // "Die?" cheat, C's done()->die() runs synchronously and
+                   // savelife() (end.c:2040-2068) restores HP before any later
+                   // regen_hp() call.  restoreHeroHpForUnresolvedWizardDeath()
+                   // reproduces that at the point the fatal blow is queued, so
+                   // only a truly-zero u.uhp (not yet healed) suppresses the roll.
+                   && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
             const con = game.u?.acurr?.a?.[4] ?? 10;
+            if (process.env.WEREDBG) console.error(`WEREDBG regen moves=${game.moves} uhp=${game.u.uhp}/${game.u.uhpmax} rngidx=${getRngLog().length}`);
             const regenRoll = rn2(100);
             const suppressHpRegen = !!game._suppress_next_hp_regen;
             game._suppress_next_hp_regen = 0;
@@ -9441,6 +9594,17 @@ async function finishMonsterTurnTail() {
             game._counted_repeat_interruptible = 0;
             if (game.flags?.verbose !== false)
                 addToplineMessage(reachedFullHp ? 'You are in full health.' : 'You feel full of energy.');
+        }
+        // C ref: allmain.c:318-329 — hero lycanthropy flare check inside
+        // moveloop_core's deferred-poly block: each turn an infected,
+        // non-polymorphed hero rolls rn2(80 - 20*night()); on 0 the form
+        // change is queued (you_were, were.c:191-210).  Hero has no
+        // Polymorph intrinsic in this port's covered sessions, so the
+        // `Polymorph && !rn2(100)` branch takes no draw.
+        if (!game.u?.uinvulnerable && game.u?.ulycn && game.u.ulycn !== -1
+            && !game.u?._polyself_form) {
+            if (!rn2(80 - (nightNow(game) ? 20 : 0)))
+                youWere({ g: game, addToplineMessage: msg => addToplineMessage(msg) });
         }
         const canAutoSearch = !game._armor_wear_occupation
             && !game._eating_turns_remaining
@@ -16005,6 +16169,7 @@ export async function moveloop_core() {
             g._skip_pending_time_decrement = 1;
         }
         if (g._search_pending_count > 0) {
+            const searchCountBeforeTurn = g._search_pending_count;
             let foundSearchMonster = false;
             let foundMessage = '';
             let revealedSecretTerrain = false;
@@ -16084,6 +16249,27 @@ export async function moveloop_core() {
                 g._keep_pending_message = 1;
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
+            }
+            // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
+            // monster_nearby() (hack.c:4103-4127) stops an active search with
+            // "You stop searching." when a visible hostile non-helpless monster
+            // is adjacent to the hero.
+            if (!foundSearchMonster && searchCountBeforeTurn > 0
+                && g._search_pending_count > 0
+                && (game.level?.monsters || []).some(candidate =>
+                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
+                    && !candidate.mpeaceful && !candidate.data?.noattacks
+                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
+                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
+                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
+                    && !g.u?.blind && !candidate.mundetected
+                    && (!candidate.minvis || g.u?.seeInvisible)
+                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
+                    && couldSeeCoord(candidate.mx, candidate.my))) {
+                addToplineMessage('You stop searching.');
+                g._search_pending_count = 0;
+                g._pending_time_passed = Math.min(g._pending_time_passed, 1);
+                g._keep_pending_message = 1;
             }
         }
 
