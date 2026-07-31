@@ -22806,7 +22806,15 @@ test('visible monster polymorph trap polymorphs monster and leaves trap', async 
     game.moves = 1;
     const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
-    const goblin = dartTrapGoblin(31386, { mhp: 10, mhpmax: 10 });
+    // C ref: an adjacent difficulty<6 monster near the hero deliberately jumps
+    // onto a polymorph trap via find_misc()/use_misc() MUSE_POLY_TRAP
+    // (muse.c:2120-2143 difficulty gate at muse.c:2121, called before m_move()
+    // from dochug() at monmove.c:797-800), bypassing mintrap(). This test
+    // exercises the mintrap() -> trapeffect_poly_trap() path
+    // (trap.c:3733, trap.c:2501-2524), so the goblin fixture is given
+    // difficulty >= 6 to keep MUSE_POLY_TRAP out of the scenario exactly as C
+    // would for a difficulty >= 6 monster.
+    const goblin = dartTrapGoblin(31386, { mhp: 10, mhpmax: 10, data: { difficulty: 6 } });
     game.level.monsters = [goblin];
 
     queueEscapeForMonsterTurn();
@@ -22840,11 +22848,15 @@ test('magic resistant monster polymorph trap is visible and leaves trap', async 
     game.inventory = [];
     const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
+    // C ref: difficulty >= 6 keeps this scenario on the mintrap() path; an
+    // adjacent difficulty<6 monster would deliberately jump onto the trap via
+    // MUSE_POLY_TRAP instead (muse.c:2121 gate, monmove.c:797-800 order),
+    // and that MUSE path has no resistance check at all (muse.c:2519-2544).
     const goblin = dartTrapGoblin(31387, {
         mhp: 10,
         mhpmax: 10,
         magicResistance: true,
-        data: { resistsMagic: true },
+        data: { difficulty: 6, resistsMagic: true },
     });
     game.level.monsters = [goblin];
 
@@ -22879,9 +22891,12 @@ test('in-air monster still triggers polymorph trap', async () => {
     game.inventory = [];
     const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
+    // C ref: difficulty >= 6 keeps this scenario on the mintrap() path
+    // (muse.c:2121 difficulty gate for MUSE_POLY_TRAP; monmove.c:797-800 runs
+    // find_misc() before movement).
     const goblin = dartTrapGoblin(31388, {
         magicResistance: true,
-        data: { inAir: true, resistsMagic: true },
+        data: { difficulty: 6, inAir: true, resistsMagic: true },
     });
     game.level.monsters = [goblin];
 
@@ -22956,7 +22971,12 @@ test('pet polymorph trap uses pet movement trap path', async () => {
         mtame: 5,
         pet: true,
         mextra: { edog: { apport: 3, hungrytime: 0, whistletime: 0, ogoal: { x: 0, y: 0 } } },
-        data: { resistsMagic: true },
+        // C ref: difficulty >= 6 keeps the pet on the mintrap() movement path;
+        // dochug()'s find_misc() MUSE_POLY_TRAP gate (muse.c:2121,
+        // monmove.c:797-800) does not exclude tame monsters from deliberate
+        // jumps, so a difficulty<6 pet adjacent to the trap would jump via
+        // MUSE instead of walking onto it.
+        data: { difficulty: 6, resistsMagic: true },
     });
     game.level.monsters = [goblin];
 

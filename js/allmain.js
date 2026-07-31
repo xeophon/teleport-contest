@@ -11728,6 +11728,11 @@ function monsterTeleportTrapEffect(mon, trap) {
 function monsterUsePolyTrap(mon) {
     const data = mon?.data || {};
     if (!mon || data.animal || data.mindless) return false;
+    // C ref: muse.c:2136-2137 (find_misc) — a monster wearing iron footwear
+    // (iron shoes / kicking boots; trap.c:1098-1102 wearing_iron_shoes())
+    // never chooses MUSE_POLY_TRAP; it walks onto the trap and the mintrap()
+    // path (trap.c:2501-2514) warps the footwear instead of polymorphing.
+    if (monsterWornIronFootwearForAntiMagic(mon)) return false;
     if (game.u?.uswallow && game.u?.ustuck === mon) return false;
     const goalX = mon.mux ?? game.u?.ux ?? mon.mx;
     const goalY = mon.muy ?? game.u?.uy ?? mon.my;
@@ -11763,7 +11768,14 @@ function monsterUsePolyTrap(mon) {
                 newsym(tx, ty);
             }
             const target = randomMonsterPolymorphTarget(mon);
-            if (target) applyMonsterPolymorphTarget(mon, target, [], visible);
+            if (target) {
+                // C ref: muse.c:2543 — use_misc() MUSE_POLY_TRAP calls
+                // newcham(mtmp, 0, NC_SHOW_MSG), so the "turns into" feedback
+                // (mon.c newcham()) is shown when the monster is visible.
+                const feedback = [];
+                applyMonsterPolymorphTarget(mon, target, feedback, visible);
+                for (const message of feedback) addToplineMessage(message);
+            }
             return true;
         }
     }
