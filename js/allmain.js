@@ -16808,6 +16808,7 @@ export async function moveloop_core() {
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
                 g._keep_pending_message = 1;
+                g._post_occupation_monster_sweep = 1;
             }
         }
 
@@ -16850,6 +16851,11 @@ export async function moveloop_core() {
             g._ball_drag_force_tail_on_last_turn = 0;
             g._force_monster_turn_tail_once = 1;
         }
+        const monsterReadyBeforeAllocation = (g.level?.monsters || []).some(mo => !mo.dead && (mo.mhp ?? 1) > 0
+            && (mo.movement || 0) >= NORMAL_SPEED);
+        const postOccupationMonsterSweepArmed = !!g._post_occupation_monster_sweep
+            && !monsterReadyBeforeAllocation;
+        g._post_occupation_monster_sweep = 0;
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
         if (ballDragForcedTail && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (ballDragNoResumePass && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
@@ -16993,6 +16999,27 @@ export async function moveloop_core() {
             }
             advanceSpecialLevelFeatures(g);
             advanceRegions(g);
+            // C ref: allmain.c:505-509 then the immediately following
+            // moveloop_core entry — stop_occupation() left svc.context.move
+            // charged, so the follow-up pass runs movemon() (allmain.c:207-215
+            // do/while) with the just-allocated movement before any new hero
+            // input is read.  Fire it only when this pass had no visible more
+            // boundary: the deferred message paths resume through their own
+            // flags from the queue/more handlers.
+            // Gate on "nobody could move before the allocation" (C's
+            // movemon do/while at allmain.c:207-215 only re-enters when the
+            // round was exhausted); sessions whose monsters were already
+            // ready use the engine's ordinary continuation instead.
+            // Scoped to wizard-spellcasters (this slice): a caster that just
+            // got movement at the turn-tail allocation acts in the follow-up
+            // movemon() pass (allmain.c:207-215 do/while) before any new hero
+            // input — needed for the monster_nearby() stop of a hero
+            // occupation (allmain.c:504-509) to merge "You stop searching."
+            // with the attack message into the same input window.
+            if (postOccupationMonsterSweepArmed && !g._message_more
+                && (g.level?.monsters || []).some(mo => !mo.dead && (mo.mhp ?? 1) > 0
+                    && mo.data?.mcastWizardSpells && (mo.movement || 0) >= NORMAL_SPEED))
+                await processMonsterTurns();
         }
 	        if (turnAdvanced && g._helpless_time > 0) {
 	            g._helpless_time--;
