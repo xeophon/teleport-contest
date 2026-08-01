@@ -917,7 +917,16 @@ export function newsym(x, y) {
             game._hilite_pet && displayedMon.pet ? 1 : 0, glyph);
         return;
     }
-    if (mon?.appearGlyph && remembered
+    /* C ref: display.c display_monster() cases M_AP_OBJECT/M_AP_FURNITURE
+       (display.c:527-592) — a mimic's fake appearance only enters the hero's
+       map memory when the spot is actually in sight ("we must do the mimic
+       check first ... so that when the position is out of sight, the hero
+       remembers what the mimic was mimicking" applies only to PHYSICALLY_SEEN
+       locations).  A merely map-remembered (e.g. via #wizmap) cell with an
+       unseen mimicking mimic therefore shows its remembered TERRAIN, not the
+       fake object; loc.remembered_glyph (set in the visible branch above)
+       carries the fake object memory once it has genuinely been seen. */
+    if (mon?.appearGlyph && loc.remembered_glyph && remembered
         && Math.max(Math.abs(x - (game.u?.ux ?? 0)), Math.abs(y - (game.u?.uy ?? 0))) <= 2) {
         const glyph = monsterGlyph(mon);
         show_glyph_cell(x, y, glyph.ch, glyph.color, glyph.dec, 0, glyph);
