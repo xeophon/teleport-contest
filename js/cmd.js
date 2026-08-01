@@ -15007,7 +15007,14 @@ async function advanceExperienceLevel(incremental = false) {
     }
 
     if ((game.u?.ulevel || 1) >= (game._level_change_target || 1)) {
-        if (game._level_change_delayed_welcome) await setMessage(`Welcome to experience level ${game._level_change_delayed_welcome}.`);
+        // C ref: attrib.c wiz_abil (attrib.c:86) via exper.c more_experienced
+        // — the final level-up's ability gain message ("You feel
+        // sensitive!" at level 15) is pline()'d after the last
+        // "Welcome to experience level N." message completes.
+        const pendingAbility = game._level_change_ability_prefix || '';
+        game._level_change_ability_prefix = '';
+        if (pendingAbility) await setMessage(pendingAbility);
+        else if (game._level_change_delayed_welcome) await setMessage(`Welcome to experience level ${game._level_change_delayed_welcome}.`);
         game._level_change_delayed_welcome = 0;
         game._command_mode = null;
         return;
@@ -15083,7 +15090,11 @@ async function advanceExperienceLevel(incremental = false) {
     } else if (abilityMessage) {
         game._level_change_ability_prefix = abilityMessage;
     }
-    const more = level < (game._level_change_target || level) || !!nextDelayed || !!pendingMessage;
+    // C ref: tty pline()/more() — when the level-up grants an ability
+    // message (queued in _level_change_ability_prefix, printed next round),
+    // this level's own message still bears a trailing --More--.
+    const more = level < (game._level_change_target || level) || !!nextDelayed || !!pendingMessage
+        || !!(game._level_change_ability_prefix);
     game._level_change_delayed_welcome = nextDelayed;
     game._level_change_pending_message = pendingMessage;
     const message = delayed
@@ -31880,6 +31891,14 @@ function finishWishedCorpseDisplay(otmp) {
 }
 
 function makeWishedCorpseObject(corpseWish, qualifiers = {}) {
+    // C ref: objnam.c rnd_otyp_by_namedesc() (objnam.c:3455-3528, called
+    // from readobjnam_postparse3 at objnam.c:4749) — after the monster
+    // name is stripped by name_to_monplus (objnam.c:4400-4431) or by the
+    // "corpse/statue/figurine of <foo>" scan (objnam.c:4371-4396), the
+    // remaining word "corpse" matches the single CORPSE object entry by
+    // name, so C consumes rn2(oc_prob(0) + xtra_prob(1)) = rn2(1) before
+    // mksobj() creates the object (objnam.c:5037).
+    rn2(1);
     const resolved = resolveWishedCorpstatMonsterName(
         corpseWish?.monsterName,
         corpseWish?.requestedGender || qualifiers.monsterGender || null,
