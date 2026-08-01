@@ -5647,6 +5647,15 @@ export async function processMonsterTurns() {
                                     addToplineMessage(game._queued_message_after_more);
                                     game._queued_message_after_more = '';
                                     game._queued_explore_lifesaving_message = 0;
+                                    // C ref: moveloop_core() (allmain.c:222-244,
+                                    // 269-390): the monster phase, new-turn block
+                                    // (svm.moves++, allmain.c:244) and per-turn tail
+                                    // (regen_hp allmain.c:294, dosounds, gethungry,
+                                    // u_wipe_engr, unmul at 380-388) all run inside
+                                    // the same blocked-on-tty-More computation; the
+                                    // frame stalls only at pline overflow.  Don't
+                                    // defer the turn tail past this batch boundary.
+                                    if (game._message_more) game._process_time_with_more = 1; // DEBUG-TOGGLE
                                 }
                             }
                             if (game._message_more && !game._process_time_with_more) return false;
@@ -7098,9 +7107,20 @@ if (attack.adtyp === 'steal') {
                         && Math.abs(mon.my - (game.u?.uy || 0)) <= 1;
                     if (process.env.WEREDBG && /wolf|jackal/.test(mon.data?.name || ''))
                         console.error(`WEREDBG stop-search-check mon=${mon.data?.name}@${mon.mx},${mon.my} moves=${game.moves} sao=${searchOccupationActive} spc=${game._search_pending_count} adjs=${searchAdjacentHostile} peace=${!!mon.mpeaceful} blind=${!!game.u?.blind} mind=${!!mon.mundetected} vis=${!!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)} csc=${couldSeeCoord(mon.mx, mon.my)}`);
+                    // C ref: mhitu.c:1265/99 + monmove.c:223-235 — an attack
+                    // that reaches hitmu()/missmu() stops an active search
+                    // ("You stop searching."); the plain-adjacent early-batch
+                    // stop is what got tick-1 wrong for monsters that never
+                    // engage (the fleeing/moving salamander at step 66): gate
+                    // the adjacent branch to an engineering marker for having
+                    // engaged the hero this tick — hitmu()'s mdamageu() HP
+                    // drain.
+                    const sTick1NotEngaged = (game._search_ticks_this_press || 0) <= 1
+                        && (game.u?.uhp ?? 0) >= (game._search_tick_hero_hp_before ?? 0);
                     if (searchOccupationActive && (game.level?.monsters || []).includes(mon)
                         && !mon.mpeaceful && mon.mcanmove !== false && !mon.mundetected
                         && !scaryObjectAt(mon, game.u?.ux || 0, game.u?.uy || 0)
+                        && !(sTick1NotEngaged && searchAdjacentHostile)
                         && (searchAdjacentHostile
                             || (((mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2) <= (BOLT_LIM + 1) ** 2
                                 && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2)))
@@ -16700,6 +16720,7 @@ export async function moveloop_core() {
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
             const tailResult = await finishMonsterTurnTail();
+            if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:1', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
@@ -16726,6 +16747,7 @@ export async function moveloop_core() {
             let foundStatueTrap = false;
             g._search_pending_count--;
             g._search_ticks_this_press = (g._search_ticks_this_press || 0) + 1;
+            g._search_tick_hero_hp_before = g.u?.uhp ?? 0;
             for (let x = (g.u?.ux || 0) - 1; x <= (g.u?.ux || 0) + 1; x++) {
                 for (let y = (g.u?.uy || 0) - 1; y <= (g.u?.uy || 0) + 1; y++) {
                     if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO) continue;
@@ -16893,7 +16915,8 @@ export async function moveloop_core() {
             const advancedTail = await processMonsterTurns();
             g._armor_wear_occupation = occupationForTail;
             if (advancedTail) {
-                g.moves = (g.moves || 1) + 1;
+                if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:2', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
+            g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
                 lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
                 if (lavaSinkingResult?.fatal || lavaSinkingResult?.lifeSaving) {
@@ -16999,6 +17022,7 @@ export async function moveloop_core() {
         } else if (movedMonsters === 'defer-tail') {
             // The visible --More-- must be captured before nh_timeout/gethungry tail rolls.
         } else if (movedMonsters) {
+            if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:4', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
@@ -17199,7 +17223,8 @@ export async function moveloop_core() {
             if (movedMoreMonsters === 'defer-tail') {
                 // Deferred by a message prompt; the top of the loop resumes the tail.
             } else if (movedMoreMonsters) {
-                g.moves = (g.moves || 1) + 1;
+                if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:5', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
+            g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
             }
             if (g._message_more && g._pending_force_lock_start_message && !g._process_time_with_more) {
