@@ -42,5 +42,6 @@
   "seed4500-knight-coverage.session.json",
   "seed5002-wizard-coverage-pair.session.json",
   "seed5006-tourist-stress-disaster.session.json",
-  "seed8000-tourist-starter.session.json"
+  "seed8000-tourist-starter.session.json",
+  "seed9104-wiz-conflict-mvm.session.json"
 ]
