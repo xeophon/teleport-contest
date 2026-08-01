@@ -6894,11 +6894,13 @@ export function rlocNoMsg(mon, { allowUnset = false } = {}) {
     // callers placing one (mon_arrive, dog.c) pass allowUnset.
     if (!mon?.mx && !allowUnset) return false;
     for (let trycount = 0; trycount < 50; trycount++) {
-        // C ref: teleport.c rloc() — x = rnd(COLNO - 1), y = rn2(ROWNO).
-        // The port's world coordinates are C's +1 in x (map, hero, and
-        // monsters all sit one column further right; the display shifts
-        // back), so the same roll addresses the same logical cell at x+1.
-        const x = rnd(COLNO - 1) + 1;
+        // C ref: teleport.c rloc() — x = rnd(COLNO - 1) (1..COLNO-1),
+        // y = rn2(ROWNO) (0..ROWNO-1).  The port's world coordinates are
+        // identical to C's (verified against recorded monster placement,
+        // e.g. wand-of-teleportation rloc of a monster near the wall),
+        // so there is no +1 offset here — the same roll addresses the
+        // same cell.
+        const x = rnd(COLNO - 1);
         const y = rn2(ROWNO);
         if (rlocPosOk(mon, x, y)) {
             rlocToCoreNoMsg(mon, x, y);
