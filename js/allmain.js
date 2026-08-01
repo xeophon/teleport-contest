@@ -5849,7 +5849,13 @@ export async function processMonsterTurns() {
                              * same attack slot successor says "hits again!". */
                             let prevHitAgainKey = null;
 		                            for (let attackIndex = 0; attackIndex < attackCount; attackIndex++) {
-		                                const multiAttack = heroMultiAttacks[attackIndex];
+		                                let multiAttack = heroMultiAttacks[attackIndex];
+                                        // C ref: mhitu.c:372-390 getmattk() — while
+                                        // mspec_used > 0, grabs/engulfs/sticks/poly
+                                        // downgrade to a plain 1d6 claw ("hits").
+                                        if (mon.mspec_used && (multiAttack.aatyp === 'engl' || multiAttack.aatyp === 'hugs'
+                                            || multiAttack.adtyp === 'stck' || multiAttack.adtyp === 'poly'))
+                                            multiAttack = { ...multiAttack, aatyp: 'claw', adtyp: 'phys', dice: 1, sides: 6, verb: 'hits' };
 		                                const deferredAttackRoll = attackIndex === 0
 		                                    ? mon._deferred_multi_attack_roll_after_more : null;
 		                                if (attackIndex === 0) mon._deferred_multi_attack_roll_after_more = null;
