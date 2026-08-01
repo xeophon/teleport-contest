@@ -10,7 +10,7 @@ const h = { getItem(k){return storage.has(k)?storage.get(k):null;}, setItem(k,v)
 const g = await runSegment({ ...seg, seed: seg.seed ?? norm.seed, datetime: seg.datetime ?? norm.datetime, nethackrc: seg.nethackrc ?? norm.nethackrc, moves: seg.moves, storage: h });
 const sl = g.getRngSlices();
 const isR = e=>typeof e==='string'&&/^(?:rn2|rnd|rn1|rnl|rne|rnz|d)\(/.test(e);
-for (let i=72;i<=83;i++){
+for (let i=78;i<=99;i++){
   const rec=(seg.steps||[])[i];
   const crng=(rec?.rng||[]).filter(isR).map(e=>e.replace(/\s*@\s.*$/,''));
   const jrng=(sl[i]||[]).filter(isR).map(e=>String(e).replace(/^\d+\s+/,''));

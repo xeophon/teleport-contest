@@ -5871,18 +5871,22 @@ export async function processMonsterTurns() {
 	                                    const missMessage = `${shownSubject} ${toHit === attackRoll && game.flags?.verbose !== false ? 'just ' : ''}misses!`;
 	                                    if (deferMultiAttack) {
 	                                        multiMessages.push(missMessage);
-	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), nextIndex: attackIndex + 1, toHit, subject, name };
+	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [false] };
 	                                        continue;
 	                                    }
                                     if (!game._suppress_monster_attack_messages) {
                                         const missShown = addToplineMessage(missMessage);
                                         showedAttack = showedAttack || missShown;
                                         if (missShown && countedRepeatActive && !stoppedCountedRepeat) {
+                                            // C ref: stop_occupation() (cmd.c:1834-1850) prints
+                                            // the occupation's occtxt — 'searching' while a
+                                            // counted search is armed.
+                                            const hadSearch = (game._search_pending_count || 0) > 0;
                                             game._pending_time_passed = 0;
                                             game._skip_pending_time_decrement = 1;
                                             game._search_pending_count = 0;
                                             game._counted_repeat_interruptible = 0;
-                                            addToplineMessage('You stop waiting.');
+                                            addToplineMessage(hadSearch ? 'You stop searching.' : 'You stop waiting.');
                                             stoppedCountedRepeat = true;
                                         }
                                     }
@@ -5896,7 +5900,7 @@ export async function processMonsterTurns() {
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {
 	                                    multiMessages.push(hitMessage);
-	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), nextIndex: attackIndex + 1, toHit, subject, name };
+	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [true] };
 	                                    continue;
 	                                }
 	                                rn2(3);
@@ -5910,11 +5914,12 @@ export async function processMonsterTurns() {
                                     const hitShown = addToplineMessage(hitMessage);
                                     showedAttack = showedAttack || hitShown;
                                     if (hitShown && countedRepeatActive && !stoppedCountedRepeat) {
+                                        const hadSearch = (game._search_pending_count || 0) > 0;
                                         game._pending_time_passed = 0;
                                         game._skip_pending_time_decrement = 1;
                                         game._search_pending_count = 0;
                                         game._counted_repeat_interruptible = 0;
-                                        addToplineMessage('You stop waiting.');
+                                        addToplineMessage(hadSearch ? 'You stop searching.' : 'You stop waiting.');
                                         stoppedCountedRepeat = true;
                                     }
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
@@ -16854,7 +16859,7 @@ export async function moveloop_core() {
             // keep the occupation armed so the attack chain can merge it.
             const spellcasterActsFirst = (game.level?.monsters || []).some(candidate =>
                 candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
-                && candidate.data?.mcastWizardSpells
+                && !candidate.mpeaceful
                 && (candidate.movement || 0) >= NORMAL_SPEED
                 && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
                 && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1);
@@ -17084,7 +17089,7 @@ export async function moveloop_core() {
             // with the attack message into the same input window.
             if (postOccupationMonsterSweepArmed && !g._message_more
                 && (g.level?.monsters || []).some(mo => !mo.dead && (mo.mhp ?? 1) > 0
-                    && mo.data?.mcastWizardSpells && (mo.movement || 0) >= NORMAL_SPEED))
+                    && !mo.mpeaceful && (mo.movement || 0) >= NORMAL_SPEED))
                 await processMonsterTurns();
         }
 	        if (turnAdvanced && g._helpless_time > 0) {

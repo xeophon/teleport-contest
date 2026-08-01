@@ -64122,10 +64122,25 @@ function tutorialEnterStash() {
 	                            damage = Math.max(1, damage - rnd(-(game.u?.uac ?? 10)));
 	                        game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
 		                    }
+		                    const hitsSoFar = [...(deferred.hitsSoFar || [])];
 		                    for (let i = 0; i < (deferred.attacks || []).length; i++) {
 		                        const attackIndex = (deferred.nextIndex || 1) + i;
-		                        const attack = deferred.attacks[i];
-		                        const attackRoll = rnd(20 + attackIndex);
+		                        let attack = deferred.attacks[i];
+                                // C ref: mhitu.c:372-390 getmattk() — while
+                                // mspec_used > 0, grabs/engulfs/sticks/poly
+                                // downgrade to a plain 1d6 claw, and the
+                                // downgraded slot then takes the normal AT_CLAW
+                                // to-hit roll path.
+                                if (deferred.mon?.mspec_used && (attack.aatyp === 'engl' || attack.aatyp === 'hugs'
+                                    || attack.adtyp === 'stck' || attack.adtyp === 'poly'))
+                                    attack = { ...attack, aatyp: 'claw', adtyp: 'phys', dice: 1, sides: 6, verb: 'hits' };
+                                // C ref: mhitu.c:822-826 AT_HUGS — automatic hit
+                                // when the previous two attacks both hit; no
+                                // rnd(20+i) to-hit roll in that case.
+                                const hugAutoHit = attack.aatyp === 'hugs'
+                                    && attackIndex >= 2
+                                    && hitsSoFar[hitsSoFar.length - 1] && hitsSoFar[hitsSoFar.length - 2];
+		                        const attackRoll = hugAutoHit ? 999 : rnd(20 + attackIndex);
                                 let shownSubject = deferred.subject || 'It';
                                 let hallucinatedSubject = false;
                                 if ((game.u?._statusSuffix || '').includes('Hallu') && !game.u?.blind) {
@@ -64142,8 +64157,10 @@ function tutorialEnterStash() {
                                 let nextMessage;
                                 let nextFirst = null;
 		                        if ((deferred.toHit || 0) <= attackRoll) {
+		                            hitsSoFar.push(false);
 		                            nextMessage = `${shownSubject} ${(deferred.toHit || 0) === attackRoll ? 'just ' : ''}misses!`;
 		                        } else {
+		                            hitsSoFar.push(true);
 		                            const damage = d(attack.dice ?? 1, attack.sides ?? 2);
                                     const attackVerb = hallucinatedSubject
                                         ? String(attack.verb || 'hits').replace(/ again$/, '')
@@ -64163,6 +64180,8 @@ function tutorialEnterStash() {
                                         toHit: deferred.toHit,
                                         subject: deferred.subject,
                                         name: deferred.name,
+                                        mon: deferred.mon,
+                                        hitsSoFar: [...hitsSoFar],
                                     };
                                     game._attack_resume_after_more = 1;
                                     game._hallu_display_after_deferred_multiattack = 1;
@@ -76961,7 +76980,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     const appearName = created.data?.name || monspec || 'monster';
                     const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
                         || /^[A-Z]/.test(appearName));
-                    await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
+                    const article = !proper && /^[aeiouAEIOU]/.test(appearName) ? 'An' : 'A';
+                    await setMessage(`${proper ? 'The' : article} ${appearName} appears next to you.`);
                     }
                     return;
                 }
