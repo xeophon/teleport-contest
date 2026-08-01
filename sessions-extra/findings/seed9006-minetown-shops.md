@@ -115,3 +115,80 @@ a WEB there).
    equivalent): match C's roll order (rn2(8) direction scan first).
 3. After fixing, re-score; the shop-flow steps (#pay menus, theft,
    sellobj) then become comparable for any remaining divergences.
+
+
+---
+
+## Wave-6 continuation (2026-08-01) — current status: PARTIAL
+
+State: **RNG starts diverging at flat 6522/7003 (step 88, teleport-into-shop
+turn), Screens 69/111, cursors 101/111** (runner: RNG 6660/7003 matched).
+
+### What got fixed this wave
+
+1. **Monster wand-of-striking zap gating** (`js/allmain.js` ~4802): the bespoke
+   striking-wand zap previously fired whenever the monster was lined up with
+   its believed hero position, consuming the whole turn *before* movement.  In
+   C, `use_offensive()` (muse.c:1824) runs only from `mattacku()`
+   (mhitu.c:758-761), which `dochug()` reaches in PHASE FOUR
+   (monmove.c:960-971) — the monster first takes the PHASE THREE movement
+   attempt unless it believes the hero adjacent (monnear, mon.c:2476-2483).
+   Without the gate, step-88 Izchak zapped *instead of moving*, desyncing the
+   whole stream.  Now gated on `perceivedNearby && !mflee && !mconf && !mstun`.
+
+2. **In-shop `rn2(25)` parity roll now unconditional for the shk_move() return
+   -1 case** (`js/allmain.js` shk/priest block): a following angry keeper
+   (udist>4, no billct) still standing in a shop room always passes through
+   `m_search_items()`'s "in shop, usually skip" rule (monmove.c:1353-1356).
+   The prior `appr !== 1 || !inLine` suppression skipped the roll when the
+   keeper was lined up and in throw range; the C recording rolls it anyway in
+   this scenario (step 80 and step 88).
+
+3. **mtrack parity plumbing**: `mon_track_add()` (monmove.c:2062) only runs in
+   generic `m_move()` — added the equivalent `updateMonsterTrack()` call for
+   the angry-following keeper's committed move (`inShkGenericMMove` gate:
+   `isshk && !mpeaceful && following && !billct && udist>4`); peaceful keepers
+   (move_special) and priests (pri_move) intentionally excluded.
+
+4. **getpos cursor auto-describe names objects** (`js/cmd.js`
+   teleportCursor direction handler): C's `getpos.c:865-867 auto_describe()`
+   -> `do_screen_description()` (pager.c) describes the glyph actually shown;
+   the previous port described terrain only.  Seen-or-remembered object
+   glyphs now describe as "a candle"/"7 candles" — fixes steps 86-87.
+
+### Remaining divergences
+
+- **rng[6522] (step 88)**: C rolls `rn2(16)=1 @ m_move(monmove.c:1963)` — the
+  mtrack-avoidance roll (`rn2(4 * (cnt - j))`) — immediately after Izchak's
+  `rn2(25)` shop-skip.  `4*(cnt-j)=16` needs `cnt-j=4`, but Izchak at (24,8)
+  (shop SW corner) has at most 2 mfndpos candidates ((23,7) Kop-occupied is
+  not enumerable: mm_aggression/mm_displacement both 0 for shk-vs-kop; the
+  open door (23,9) is excluded by the diagonal-door rule, mon.c:2205-2219).
+  Source reading says this roll cannot come from Izchak at (24,8) via the
+  shk_move -1 path; the most likely explanation is a subtle positional or
+  order difference inside step 88's monster sweep that the flat trace
+  cannot pin down (the canonical session.json is authoritative; rebuilding
+  the local recorder binary diverges from it at dungeon.c init roll #202 —
+  the recorder *patches* series in nethack-c/patches/ evidently evolved since
+  the canonical recordings were made, so live C reproduction is not currently
+  possible).  All downstream rolls (63% of stream) shift accordingly.
+
+- **Screens 61, 62-77, 88+**: (a) step 61: C's getpos '.' keeps the
+  auto-describe topline ("dark part of a room") after a silent teleport;
+  JS clears it.  (b) the small mimic @ (21,12) shows its fake ']' on JS
+  screens 62-77 but C shows remembered floor; C memory semantics for
+  `M_AP_OBJECT` monsters only populate `levl[y][x].glyph` when
+  PHYSICALLY_SEEN — a ported memory model would need to distinguish
+  wizmap-revealed terrain from actually-seen mimic objects, which current
+  JS conflates via a distance-<=2 remember-cheat (see prior attempt notes).
+  (c) 88+ all cascade from the rng[6522] desync.
+
+### C refs proving the current behavior
+
+- `use_offensive` from mattacku only: src/mhitu.c:758-761, museumuse
+  muse.c:1824; dochug phase ordering monmove.c:690-971.
+- in-shop rn2(25): monmove.c:1353-1356.
+- shk_move return -1: shk.c:4880-4948; m_move dispatch: monmove.c:1805-1827.
+- mon_track_add only in m_move commit: monmove.c:2062 + 76-86.
+- m_move choice keeps running-best (first-wins): monmove.c:1965-1989
+  (`nidist = ndist` inside the acceptance branch).
