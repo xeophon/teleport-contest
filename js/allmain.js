@@ -6226,7 +6226,13 @@ export async function processMonsterTurns() {
                                             const width = game.nhDisplay?.cols || 80;
                                             if (attackShown && (game._pending_message || '').length + frostMessage.length + 3 >= width - 8) {
                                                 game._topline_after_more = frostMessage;
-                                                game._cold_destroy_after_topline_more = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
+                                                // C ref: mhitu.c:1187-1190 — hitmu passes mhm.damage
+                                                // (orig_dmg) into destroy_items (uhitm.c:2660-2661 →
+                                                // zap.c:5965), so carry both numbers for the lich
+                                                // (mcastWizardSpells) frost-touch chain.
+                                                game._cold_destroy_after_topline_more = data.mcastWizardSpells
+                                                    ? { level: mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0, damage }
+                                                    : mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
                                                 game._attack_resume_after_more = 1;
                                                 game._hallu_display_after_cold_topline = 1;
                                                 game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;

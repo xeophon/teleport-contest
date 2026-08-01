@@ -12509,6 +12509,35 @@ function coldDamageInventory(origDamage) {
     return { messages, damage, deathCause };
 }
 
+// C ref: destroy_items(&gy.youmonst, AD_COLD, dmg) — zap.c:5965-6110, and
+// maybe_destroy_item (zap.c:5798-5954).  Returns the per-stack destruction
+// results in inventory order; callers are responsible for pline/--More--
+// staging.  RNG order per stack: inventory_resistance_check roll (only when
+// something protects, zap.c:5816-5818 / uhitm.c mhitm_ad_cold), rnd(4) damage
+// (zap.c:5821-5824), rn2(3) per item in the stack (zap.c:5894-5898).
+export function coldTouchDestroyItemsProgram(origDamage) {
+    const entries = [];
+    for (const item of coldDestroyInventorySelection(game.inventory || [], origDamage)) {
+        if (coldInventoryItemProtected()) continue;
+        const itemDamage = rnd(4);
+        const stackQuan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+        let destroyedCount = 0;
+        for (let qi = 0; qi < stackQuan; qi++) if (!rn2(3)) destroyedCount++;
+        if (!destroyedCount) continue; // zap.c:5900-5901 — resisted stack is silent
+        const plural = destroyedCount > 1;
+        const stackName = coldPotionDisplayName(item, plural);
+        // zap.c:5903-5911 — subject count phrases.
+        const subject = destroyedCount === 1 && stackQuan === 1 ? `Your ${stackName}`
+            : destroyedCount === 1 ? `One of your ${stackName}`
+            : destroyedCount < stackQuan ? `Some of your ${stackName}`
+            : stackQuan === 2 ? `Both of your ${stackName}`
+            : `All of your ${stackName}`;
+        removeInventoryItem(item, destroyedCount); // zap.c:5929-5934 useup()
+        entries.push({ text: `${subject} ${coldInventoryDestroyVerb(plural)}!`, damage: itemDamage });
+    }
+    return entries;
+}
+
 function electricInventoryDisplayName(item) {
     return pickupObjectName({ ...item, line: '', quan: 1 });
 }
@@ -63341,9 +63370,43 @@ function tutorialEnterStash() {
                             }
                         }
                         if (game._cold_destroy_after_topline_more != null) {
-                            const coldLevel = game._cold_destroy_after_topline_more;
+                            const coldInfo = game._cold_destroy_after_topline_more;
                             game._cold_destroy_after_topline_more = null;
-                            if (coldLevel > rn2(20)) rn2(5);
+                            const coldLevel = typeof coldInfo === 'object' && coldInfo ? (coldInfo.level || 0) : coldInfo;
+                            // C ref: uhitm.c:2659-2661 mhitm_ad_cold mhitu branch —
+                            // destroy_items(&gy.youmonst, AD_COLD, orig_dmg) when
+                            // `(int) magr->m_lev > rn2(20)`.
+                            if (coldLevel > rn2(20)) {
+                                if (typeof coldInfo === 'object' && coldInfo) {
+                                    // Lich frost touch: full per-stack program
+                                    // (zap.c:5965-6110).  Each destroyed stack's
+                                    // shatter message is its own tty --More--
+                                    // boundary (zap.c:5906-5912 pline); the
+                                    // touch's damage tail (mhitm_knockback
+                                    // uhitm.c:5258/5269, mdamageu mhitu.c:1194+)
+                                    // rides the last entry.
+                                    const lichShatterEntries = coldTouchDestroyItemsProgram(coldInfo.damage || 0);
+                                    if (lichShatterEntries.length) {
+                                        game._queued_messages_after_more ??= [];
+                                        lichShatterEntries.forEach((entry, idx) =>
+                                            game._queued_messages_after_more.push({
+                                                text: entry.text,
+                                                more: true,
+                                                lichColdShatter: {
+                                                    damage: entry.damage,
+                                                    touchDamage: idx === lichShatterEntries.length - 1 ? (game._damage_after_topline_more || 0) : 0,
+                                                    touchNeedsAc: idx === lichShatterEntries.length - 1 && !!game._damage_after_topline_more_needs_ac,
+                                                    touchKnockBack: idx === lichShatterEntries.length - 1 && !!game._knockback_after_topline_more,
+                                                    isLast: idx === lichShatterEntries.length - 1,
+                                                },
+                                            }));
+                                        game._damage_after_topline_more = 0;
+                                        game._damage_after_topline_more_needs_ac = 0;
+                                        game._knockback_after_topline_more = 0;
+                                        keepMore = true;
+                                    }
+                                } else rn2(5);
+                            }
                         }
                 if (promoteLethalProjectileAfterMore()) {
                     keepMore = true;
@@ -64141,6 +64204,40 @@ function tutorialEnterStash() {
                         }
                     }
                     exerciseAttribute(A_STR, false);
+                }
+                if (next.lichColdShatter) {
+                    const fx = next.lichColdShatter;
+                    // C ref: zap.c:5936-5949 (maybe_destroy_item) — losehp() of
+                    // the shattering potion's rnd(4) damage, then
+                    // exercise(A_STR, FALSE) whose only PRNG is rn2(2)
+                    // (attrib.c:508).
+                    if (fx.damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - fx.damage);
+                    exerciseAttribute(A_STR, false);
+                    if (fx.isLast) {
+                        // C ref: mhitu.c:1192-1195 — hitmu() calls
+                        // mhitm_knockback() after mhitm_adtyping(); the two
+                        // rolls are uhitm.c:5258 (rn2(3)) and uhitm.c:5269
+                        // (rn2(6)).
+                        if (fx.touchKnockBack) { rn2(3); rn2(6); }
+                        // mhitu.c:1203-1207: negative-AC damage reduction,
+                        // then mdamageu (mhitu.c:1258).
+                        let lichDeferredDamage = fx.touchDamage || 0;
+                        if (lichDeferredDamage && fx.touchNeedsAc && (game.u?.uac ?? 10) < 0)
+                            lichDeferredDamage = Math.max(1, lichDeferredDamage - rnd(-(game.u?.uac ?? 10)));
+                        const lichHpBefore = game.u?.uhp || 0;
+                        if (lichDeferredDamage) {
+                            game.u.uhp = Math.max(0, lichHpBefore - lichDeferredDamage);
+                            game.nhDisplay?.renderStatus?.(game.u);
+                        }
+                        if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
+                            if (lichHpBefore - lichDeferredDamage === -1)
+                                game._death_status_hp_before_zero = lichHpBefore;
+                            game._death_current_move = 1;
+                            game._death_moves = game.moves || 1;
+                            game._queued_message_after_more = 'You die...';
+                            next.more = true;
+                        }
+                    }
                 }
                 if (next.clearBeam) game._transient_beam_cells = null;
                 game._pending_message = '';
