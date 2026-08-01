@@ -63905,6 +63905,14 @@ function tutorialEnterStash() {
 	                    game._pending_message = messages.join('  ');
 	                    if (process.env.TRACE95 && (game.u?.uhp || 0) <= 4) console.error(`TRACE death-detect uhp=${game.u?.uhp} moves=${game.moves}`);
 	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
+                            // C ref: hitmu's fatal hit runs done() inside the
+                            // monster's attack-slot loop (mhitu.c mdamageu →
+                            // end.c); when the --More--/revival chain closes,
+                            // movemon resumes with the NEXT monster, not this
+                            // monster's replayed slot chain.
+                            game._monster_resume_same_index = 0;
+                            game._monster_resume_after_preturn = 0;
+                            game._attack_resume_after_more = 0;
 	                        const name = deferred.name || 'monster';
 	                        // C ref: done_in_by() (end.c:184-196) picks
 	                        // "killed by <monster>" with format KILLED_BY_AN,

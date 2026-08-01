@@ -5896,6 +5896,33 @@ export async function processMonsterTurns() {
 	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name };
 	                                    continue;
 	                                }
+	                                // C ref: mhitu.c hitmu() per-slot order (mhitu.c:1187-1265):
+                                // damage roll, then hitmsg() (via mhitm_adphys →
+                                // mhitm_adtyping — a --More-- blocks inline right
+                                // there), THEN mhitm_knockback rolls, then
+                                // mdamageu() applying hp (death → done() blocks
+                                // inside), then stop_occupation().  When the
+                                // hitmsg overflows the topline, defer the
+                                // kb/damage/death resolution to the dismissal.
+                                    const hitShown = !game._suppress_monster_attack_messages
+                                        && addToplineMessage(hitMessage);
+	                                const deferAfterOverflow = !game._suppress_monster_attack_messages && !hitShown;
+	                                if (deferAfterOverflow) {
+	                                    game._deferred_multiattack_after_more = {
+	                                        first: { hit: true, damage, message: hitMessage },
+	                                        attacks: heroMultiAttacks.slice(attackIndex + 1),
+                                            prevAttack: heroMultiAttacks[attackIndex],
+	                                        nextIndex: attackIndex + 1, toHit, subject, name,
+	                                    };
+	                                    game._attack_resume_after_more = 1;
+	                                    game._message_more = 1;
+	                                    game._process_time_with_more = 0;
+	                                    game._monster_resume_index = monIndex;
+	                                    game._monster_resume_same_index = 1;
+	                                    game._monster_resume_after_preturn = 1;
+	                                    game._monster_resume_somebody_can_move = somebodyCanMove;
+	                                    return false;
+	                                }
 	                                rn2(3);
 	                                rn2(6);
 	                                if (damage && (game.u?.uac ?? 10) < 0)
@@ -5904,17 +5931,16 @@ export async function processMonsterTurns() {
                                 if (game._suppress_monster_attack_messages) {
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                 } else {
-                                    const hitShown = addToplineMessage(hitMessage);
                                     showedAttack = showedAttack || hitShown;
+                                    game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                     if (hitShown && countedRepeatActive && !stoppedCountedRepeat) {
                                         game._pending_time_passed = 0;
                                         game._skip_pending_time_decrement = 1;
                                         game._search_pending_count = 0;
                                         game._counted_repeat_interruptible = 0;
-                                        addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count_before_hit || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
+                                        addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
                                         stoppedCountedRepeat = true;
                                     }
-                                    game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                 }
                                 if ((game.u?.uhp || 0) <= 0) {
                                     const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
