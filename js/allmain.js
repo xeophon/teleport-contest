@@ -10649,6 +10649,7 @@ async function finishMonsterTurnTail() {
 	    if (game.u?.uevent?.udemigod && !game.u?.uinvulnerable) {
 	        for (const harassMessage of await demigodTurnHook())
 	            if (harassMessage) addToplineMessage(harassMessage);
+	    if (process.env.HARDBG) { const leo = (game.level?.monsters||[]).find(m=>m.data?.name==='leocrotta'); console.error(`HARD rng=${getRngLog().length} moves=${game.moves} spc=${game._search_pending_count} leo=${leo?leo.mx+','+leo.my:'-'} hero=${game.u?.ux},${game.u?.uy} pend=${JSON.stringify((game._pending_message||'').slice(0,40))}`); }
 	    }
     if (game._gauntlets_power_exercise_after_turn_tail) {
         game._gauntlets_power_exercise_after_turn_tail = 0;
@@ -16741,6 +16742,7 @@ export async function moveloop_core() {
         }
         if (g._search_pending_count > 0) {
             const searchCountBeforeTurn = g._search_pending_count;
+            if (process.env.HARDBG) console.error(`STCK rng=${getRngLog().length} moves=${g.moves} spc=${searchCountBeforeTurn} pend=${JSON.stringify((g._pending_message||'').slice(0,30))}`);
             let foundSearchMonster = false;
             let foundMessage = '';
             let revealedSecretTerrain = false;
@@ -16825,6 +16827,7 @@ export async function moveloop_core() {
             // monster_nearby() (hack.c:4103-4127) stops an active search with
             // "You stop searching." when a visible hostile non-helpless monster
             // is adjacent to the hero.
+            if (process.env.HARDBG && searchCountBeforeTurn > 0) { const adj = (game.level?.monsters||[]).filter(mm=>!mm.mpeaceful && Math.abs((mm.mx||0)-(g.u?.ux||0))<=1 && Math.abs((mm.my||0)-(g.u?.uy||0))<=1); console.error(`STOPS rng=${getRngLog().length} moves=${g.moves} spc=${g._search_pending_count} adj=${adj.map(m=>m.data?.name+'@'+m.mx+','+m.my+'/'+(m.mundetected?'u':'')+(m.minvis?'i':'')+'/'+((g.viz_array?.[m.my]?.[m.mx]&IN_SIGHT)?'v':'-')+'/'+couldSeeCoord(m.mx,m.my)).join(';')}`); }
             if (!foundSearchMonster && searchCountBeforeTurn > 0
                 && g._search_pending_count > 0
                 && (game.level?.monsters || []).some(candidate =>
