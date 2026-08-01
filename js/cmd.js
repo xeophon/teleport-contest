@@ -63636,6 +63636,18 @@ function tutorialEnterStash() {
                                         game._damage_after_topline_more = 0;
                                         game._damage_after_topline_more_needs_ac = 0;
                                         game._knockback_after_topline_more = 0;
+                                        // C: the tty pauses inside pline() during
+                                        // destroy_items (zap.c:5906) — monsters
+                                        // after the caster (movemon iteration,
+                                        // mon.c:1214-1330) are NOT evaluated while
+                                        // the shatter --More-- chain is pending, so
+                                        // strip the engine's more-continuation resume
+                                        // markers here.
+                                        game._continue_monsters_after_more = 0;
+                                        game._attack_resume_after_more = 0;
+                                        game._monster_resume_index = 0;
+                                        game._monster_resume_same_index = 0;
+                                        game._monster_resume_after_preturn = 0;
                                         keepMore = true;
                                     }
                                 } else rn2(5);
@@ -64472,6 +64484,7 @@ function tutorialEnterStash() {
                         }
                     }
                 }
+                if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[queue-shift] nxt=${JSON.stringify((next.text||'').slice(0,40))} qleft=${(game._queued_messages_after_more||[]).length} qmsg=${JSON.stringify(game._queued_message_after_more||'')}`);
                 if (next.lichCastRndcurse) {
                     // C ref: sit.c:571-617 rndcurse() — the "malignant aura"
                     // pline (sit.c:584-586) pauses the tty boundary first; its
@@ -65947,16 +65960,7 @@ function tutorialEnterStash() {
             game._command_mode = null;
             await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult);
             if (landing?.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
-            // C ref: mattacku() attack-slot loop (mhitu.c:763-946) — after
-            // slot 0's hitmu() returns (even through a refused done()), slot 1
-            // ATTK(AT_MAGC, AD_SPEL, 0, 0) (monsters.h:1889-1891) runs
-            // castmu() (mcastu.c:129-330) for wizard-spell casters.
-            if (game._lichCastMonster && (game.level?.monsters || []).includes(game._lichCastMonster)
-                && (game._lichCastMonster.mhp || 0) > 0) {
-                const lichMon = game._lichCastMonster;
-                game._lichCastMonster = null;
-                await wizardMonsterCastResolvedAfterTouch(lichMon);
-            }
+
             if (game._deferred_raven_blind_after_more) {
                 const ravenAttack = game._deferred_raven_blind_after_more;
                 game._deferred_raven_blind_after_more = null;
@@ -65992,6 +65996,26 @@ function tutorialEnterStash() {
             game._pending_explore_lifesaving_message = 1;
             game._queued_explore_lifesaving_message = 1;
             game._queued_message_after_more = 'You survived that attempt on your life.';
+            // C ref: mattacku() attack-slot loop (mhitu.c:763-946) — after
+            // slot 0's hitmu() returns (even through a refused done()), slot 1
+            // ATTK(AT_MAGC, AD_SPEL, 0, 0) (monsters.h:1889-1891) runs
+            // castmu() (mcastu.c:129-330) for wizard-spell casters.  The
+            // wizard-mode nomovemsg ("You survived that attempt on your
+            // life.", end.c:727) is shown by the following moveloop pass, so
+            // when the spell messages queue up here the survival line must
+            // ride the same queue AFTER them instead of preempting it.
+            if (game._lichCastMonster && (game.level?.monsters || []).includes(game._lichCastMonster)
+                && (game._lichCastMonster.mhp || 0) > 0) {
+                const lichMon = game._lichCastMonster;
+                game._lichCastMonster = null;
+                await wizardMonsterCastResolvedAfterTouch(lichMon);
+                if (game._queued_messages_after_more?.length) {
+                    game._queued_messages_after_more.push({
+                        text: game._queued_message_after_more, more: false,
+                    });
+                    game._queued_message_after_more = '';
+                }
+            }
             game._command_mode = null;
             if (game._prayer_pending_done) game._prayer_pending_done_delay = 3;
             game.context.move = 1;

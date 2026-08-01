@@ -4297,6 +4297,12 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    // C ref: the tty pauses inside pline() while the lich frost-touch chain
+    // (destroy_items shatters, zap.c:5906) and the follow-on castmu() effect
+    // lines (mcastu.c:822-834) are pending — the rest of movemon()'s monster
+    // sweep resumes only after the --More-- queue drains.
+    if (game._queued_messages_after_more?.some(e => e.lichColdShatter || e.lichCastRndcurse))
+        return false;
     if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[mt-turns] pend=${JSON.stringify(game._pending_message||'')} more=${game._message_more} moves=${game.moves}`);
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
@@ -4526,7 +4532,6 @@ export async function processMonsterTurns() {
                         }
                     }
                 }
-                if (process.env.NH_DBG_LICH) (game._traceLog ??= []).push(`[loop-entry] i=${monIndex} name=${mon.data?.name} mv=${mon.movement} sleep=${mon.msleeping} froz=${mon.mfrozen} rpi=${resumingPetInventory} rap=${resumedAfterPreturn} smi=${resumingSameMonster}`);
                 const movement = mon.movement || 0;
                 const skipAfterMimicReveal = !!mon._skip_after_mimic_reveal;
                 if (skipAfterMimicReveal) mon._skip_after_mimic_reveal = 0;
@@ -16681,7 +16686,7 @@ export async function moveloop_core() {
     while (g._pending_time_passed
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
-        if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0}`);
+        if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
