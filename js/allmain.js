@@ -4297,6 +4297,7 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    if (process.env.TRACE95) console.error(`TRACE pmTurns-enter moves=${game.moves} umove=${game.u?.umovement} rng=${getRngLog().length} resume=${game._monster_resume_index}/${game._monster_resume_same_index} cont=${game._continue_monsters_after_more}`);
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
         game._stale_queued_kill_pet = null;
@@ -5827,7 +5828,8 @@ export async function processMonsterTurns() {
 	                                game._pending_time_passed = 1;
 	                                game._resume_time_after_more = 1;
 	                                game._counted_repeat_interruptible = 0;
-	                                game._deferred_counted_repeat_stop_waiting = 1;
+	                                if (process.env.TRACE95) console.error(`TRACE defer-stopwait-set moves=${game.moves} rng=${getRngLog().length} scnt=${game._search_pending_count} cntrep=${game._counted_repeat_interruptible} pm=${JSON.stringify((game._pending_message||'').slice(0,50))}`);
+	                                game._deferred_counted_repeat_stop_waiting = (game._search_pending_count || 0) > 0 ? 2 : 1;
 	                                game._monster_resume_index = monIndex;
 	                                game._monster_resume_same_index = 1;
 	                                game._monster_resume_after_preturn = 1;
@@ -5843,6 +5845,12 @@ export async function processMonsterTurns() {
 	                            const multiMessages = [];
 	                            let showedAttack = false;
                             const countedRepeatActive = !!game._counted_repeat_interruptible;
+                            // C ref: mhitu.c:1265 — hitmu() ends with
+                            // stop_occupation(); report uses the occupation's
+                            // own verb stem ("searching" for a counted search,
+                            // allmain.c:684-696).
+                            game._stop_occupation_text_for_hit = (game._search_pending_count || 0) > 0
+                                ? 'You stop searching.' : 'You stop waiting.';
                             let stoppedCountedRepeat = false;
 	                            const attackCount = deferMultiAttack ? 1 : heroMultiAttacks.length;
 	                            let deferredMultiAttack = null;
@@ -5871,7 +5879,7 @@ export async function processMonsterTurns() {
                                             game._skip_pending_time_decrement = 1;
                                             game._search_pending_count = 0;
                                             game._counted_repeat_interruptible = 0;
-                                            addToplineMessage('You stop waiting.');
+                                            addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
                                             stoppedCountedRepeat = true;
                                         }
                                     }
@@ -5903,7 +5911,7 @@ export async function processMonsterTurns() {
                                         game._skip_pending_time_decrement = 1;
                                         game._search_pending_count = 0;
                                         game._counted_repeat_interruptible = 0;
-                                        addToplineMessage('You stop waiting.');
+                                        addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count_before_hit || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
                                         stoppedCountedRepeat = true;
                                     }
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
@@ -5994,7 +6002,8 @@ export async function processMonsterTurns() {
 	                                game._pending_time_passed = 1;
 	                                game._resume_time_after_more = 1;
 	                                game._counted_repeat_interruptible = 0;
-	                                game._deferred_counted_repeat_stop_waiting = 1;
+	                                if (process.env.TRACE95) console.error(`TRACE defer-stopwait-set moves=${game.moves} rng=${getRngLog().length} scnt=${game._search_pending_count} cntrep=${game._counted_repeat_interruptible} pm=${JSON.stringify((game._pending_message||'').slice(0,50))}`);
+	                                game._deferred_counted_repeat_stop_waiting = (game._search_pending_count || 0) > 0 ? 2 : 1;
 	                                game._monster_resume_index = monIndex;
 	                                game._monster_resume_same_index = 1;
 	                                game._monster_resume_after_preturn = 1;
@@ -16664,9 +16673,16 @@ export async function moveloop_core() {
         g._pending_time_passed = 1;
     while (g._pending_time_passed
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
+        // C ref: end.c:1107-1118 — when the hero died mid-monster-turn,
+        // done() blocks at "You die..."/"Die?" inline; the movemon monster
+        // loop resumes only after revival.  Keep the pass loop parked while a
+        // queued death waits behind --More--.
+        && !(g._message_more && g._queued_message_after_more === 'You die...'
+             && (g.u?.uhp ?? 1) <= 0 && !g._dying_revived_mid_turn)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
+        if (process.env.TRACE95) console.error(`TRACE pass-head moves=${g.moves} rng=${getRngLog().length} pending=${g._pending_time_passed} more=${!!g._message_more} ptwm=${!!g._process_time_with_more} cmon=${!!g._continue_monsters_after_more} qmsg=${JSON.stringify(g._queued_message_after_more||'')} resume=${g._monster_resume_index}/${g._monster_resume_same_index}`);
         let ballDragNoResumePass = false;
         let lavaSinkingResult = null;
         if (g._ball_drag_delay_no_resume > 0) {
@@ -17453,6 +17469,10 @@ export async function moveloop_core() {
 	    g._process_time_with_more = g._message_more && g._continue_monsters_after_more
 	        && !g._pet_inventory_resume && !g._monster_resume_index && !g._monster_resume_same_index
 	        && !g._attack_resume_after_more && !g._pickup_resume_after_more
+	        // C ref: end.c:1107-1118 — when the hero died mid-movemon, done()
+	        // blocks at "You die..."/"Die?" BEFORE the monster loop resumes;
+	        // keep the resume state frozen until revival lets it continue.
+	        && !(g._queued_message_after_more === 'You die...' && (g.u?.uhp || 0) <= 0)
 	        && !(g._queued_message_after_more && g._search_pending_count > 0) ? 1 : 0;
     g._dismissed_more_this_command = 0;
     g._resume_run_after_queued_dead_more = 0;

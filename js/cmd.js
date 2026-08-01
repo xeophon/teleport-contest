@@ -62567,6 +62567,32 @@ function tutorialEnterStash() {
             }
             if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
                 game._dismissed_more_this_command = 1;
+                // C ref: end.c:1107-1118 — done()'s wizard-mode "Die?" flow
+                // runs synchronously the moment the hero dies, even in the
+                // middle of a monster attack chain inside movemon().  A queued
+                // "You die..." therefore wins over any waiting topline resume
+                // (the monster loop's continuation only runs after revival).
+                if ((game._queued_message_after_more === 'You die...'
+                        || game._queued_message_after_more === 'You die.')
+                    && game._message_more) {
+                    const queuedDeathText = game._queued_message_after_more;
+                    game._queued_message_after_more = '';
+                    game._queued_message_more_line_after_more = '';
+                    prepareDeathBones();
+                    if (!game._pending_time_passed) game._death_current_move = 0;
+                    game._pending_time_passed = 0;
+                    game.context.move = 0;
+                    game._process_command_time_now = 0;
+                    game._run_steps_remaining = 0;
+                    game._pending_message = '';
+                    game._message_more = 0;
+                    // C ref: done()'s death line ("You die." vs "You die..."
+                    // per how==; end.c:1008-kill_unseen region).
+                    await setMessage(queuedDeathText, true);
+                    game._message_more = 1;
+                    game._command_mode = 'deathDieMore';
+                    return;
+                }
                 if (game._queued_map_invisible_after_more) {
                     const { x, y } = game._queued_map_invisible_after_more;
                     game._queued_map_invisible_after_more = null;
@@ -63732,11 +63758,16 @@ function tutorialEnterStash() {
 	                    }
 	                    let stoppedDeferredCount = false;
 	                    if (game._deferred_counted_repeat_stop_waiting) {
+                            // C ref: allmain.c:684-696 stop_occupation() —
+                            // text is the armed occupation's ("waiting" for
+                            // counted rest, "searching" for counted search).
+	                        const stopOccupationText = game._deferred_counted_repeat_stop_waiting === 2
+	                            ? 'You stop searching.' : 'You stop waiting.';
 	                        game._deferred_counted_repeat_stop_waiting = 0;
 	                        stoppedDeferredCount = true;
 	                        game._pending_message = game._pending_message
-	                            ? `${game._pending_message}  You stop waiting.`
-	                            : 'You stop waiting.';
+	                            ? `${game._pending_message}  ${stopOccupationText}`
+	                            : stopOccupationText;
 	                    }
 	                    if (passive.resumeIndex != null) {
 	                        game._monster_resume_index = passive.resumeIndex;
@@ -63786,6 +63817,7 @@ function tutorialEnterStash() {
                 }
                 let pauseAfterDeferredMultiattack = false;
 		                if (game._deferred_multiattack_after_more) {
+	                    if (process.env.TRACE95) console.error(`TRACE defer-multi-resume rng=${getRngLog().length} q=${JSON.stringify(game._queued_message_after_more||'')} tl=${JSON.stringify(game._topline_after_more||'')}`);
 	                    const deferred = game._deferred_multiattack_after_more;
 	                    game._deferred_multiattack_after_more = null;
 	                    const messages = game._pending_message ? [game._pending_message] : [];
@@ -64411,6 +64443,7 @@ function tutorialEnterStash() {
                 return;
             }
             if (game._queued_message_after_more) {
+                if (process.env.TRACE95) console.error(`TRACE pull-queued rng=${getRngLog().length} q=${JSON.stringify(game._queued_message_after_more)} pm=${JSON.stringify(game._pending_message||'')} tl=${JSON.stringify(game._topline_after_more||'')}`);
                 let next = game._queued_message_after_more;
                 const nextMoreLine = game._queued_message_more_line_after_more || '';
                 game._queued_message_after_more = '';
