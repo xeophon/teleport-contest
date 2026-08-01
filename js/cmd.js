@@ -1,3 +1,56 @@
+// mcastu.c:800-895 mcast_spell() effects — castmu computes dmg=d(ml/2+1, 6)
+// (mcastu.c:240-243, mattk->damd==0 for ATTK(AT_MAGC, AD_SPEL, 0, 0)) right
+// before dispatching here.  Only the branches the recorded sessions exercise
+// are meaningful; the rest are best-effort placeholders (see the audit doc).
+async function wizardMonsterSpellEffect(mon, spell) {
+    const ml = Math.max(0, mon.m_lev ?? mon.data?.mlevel ?? 0);
+    const dmg = d(Math.trunc(ml / 2) + 1, 6);             // mcastu.c:240-243
+    switch (spell) {
+    case 'CURSE_ITEMS': {                                 // mcastu.c:831-834
+        (game._queued_messages_after_more ??= []).push(
+            { text: 'You feel as if you need some help.', more: true },
+            { text: 'You feel a malignant aura surround you.', more: true, lichCastRndcurse: 1 });
+        break;
+    }
+    case 'SUMMON_MONS': {                                 // mcastu.c:822-824
+        const count = await monsterSummonNasties(mon);
+        if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[summon] count=${count} pend=${JSON.stringify(game._pending_message||'')}`);
+        // mcast_summon_mons() (mcastu.c:418-449) plines the appearance right
+        // after the cast line; the tty folds them together when they fit.
+        const summonMsg = count === 1 ? 'A monster appears from nowhere!' : 'Monsters appear from nowhere!';
+        game._lichCastEffectCombine = summonMsg;
+        break;
+    }
+    case 'DESTRY_ARMR': {                                 // mcastu.c:450-468
+        (game._queued_messages_after_more ??= []).push({
+            text: heroHasAntimagic() ? 'A field of force surrounds you!' : 'Your skin itches.',
+            more: true,
+        });
+        break;
+    }
+    case 'AGGRAVATION': {                                 // mcastu.c:826-828
+        (game._queued_messages_after_more ??= []).push({
+            text: 'You feel that monsters are aware of your presence.', more: true,
+        });
+        for (const other of game.level?.monsters || []) {
+            other.msleeping = 0;
+            if (other.mfrozen) other.mfrozen = 0;
+        }
+        break;
+    }
+    case 'PSI_BOLT': {                                    // mcastu.c:606-622 mcast_psi_bolt
+        (game._queued_messages_after_more ??= []).push({
+            text: dmg <= 5 ? 'You get a slight headache.' : dmg <= 10 ? 'Your brain is on fire!' : dmg <= 20 ? 'Your head suddenly aches painfully!' : 'Your head suddenly aches very painfully!',
+            more: true,
+        });
+        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - dmg);
+        break;
+    }
+    default:                                              // unported branches — see audit
+        break;
+    }
+}
+
 // cmd.js — Command dispatch and movement.
 // C refs: src/cmd.c:rhack(), src/hack.c:domove().
 
@@ -12620,6 +12673,9 @@ function monsterCastRndcurseItems() {
 // what the session reaches: 10%-in-hell msummon skipped (not Gehennom),
 // pick_nasty() (mklev) for the summon list, enextoMonsterSpot, makemon.
 async function monsterSummonNasties(summoner) {
+    // wizard.c:603-605 — 10%-in-hell demon summoning (msummon) replaced by a
+    // plain nasties loop; not Gehennom here, so just the roll.
+    rn2(10);
     const outer = rnd((game.u?.ulevel || 1) > 3 ? Math.trunc((game.u?.ulevel || 1) / 3) : 1); // wizard.c:625
     let difcap = summoner.data?.difficulty || 0;          // wizard.c:627
     let count = 0;
@@ -12646,10 +12702,12 @@ async function monsterSummonNasties(summoner) {
             const mname = mon.data?.name || '';
             if (mname === 'arch-lich' || mname === 'Archon') // wizard.c:730-737
                 difcap = (!difcap || difcap > 26) ? 26 : difcap;
-            mon.mspec_used = rnd(4);                      // wizard.c:695
+            mon.mspec_used = rnd(4);                      // wizard.c:692-693
             count++;
-            // wizard.c:697-705 — stop after 10, or one of the same alignment as caster
-            if (count >= 10 || Math.sign(mon.data?.maligntyp || 0) === Math.sign(summoner.data?.maligntyp || 0))
+            // wizard.c:694-698 — stop at MAXNASTIES, or a neutrally-aligned
+            // summon, or one matching the caster's alignment (sgn).
+            if (count >= 10 || (mon.data?.maligntyp || 0) === 0
+                || Math.sign(mon.data?.maligntyp || 0) === Math.sign(summoner.data?.maligntyp || 0))
                 return count;
         }
     }
@@ -12667,6 +12725,11 @@ function monsterDataHasWizardSpellAttack(data) {
 // refused wizard-mode done().  Scoped port; all rolls happen synchronously
 // here; generated messages go through the pending-message/--More-- staging so
 // each pline lands on its own input boundary like tty pline().
+// mcastu.c:129-330 castmu() AD_SPEL branch, reached from mattacku()'s attack
+// loop (mhitu.c:763-946) after slot 0 (hitmu) returns — including via a
+// refused wizard-mode done().  Scoped port; all rolls happen synchronously
+// here; generated messages go through the pending-message/--More-- staging so
+// each pline lands on its own input boundary like tty pline().
 async function wizardMonsterCastResolvedAfterTouch(mon) {
     const ml = Math.max(0, mon.m_lev ?? mon.data?.mlevel ?? 0);
     if (!ml) return;
@@ -12678,11 +12741,15 @@ async function wizardMonsterCastResolvedAfterTouch(mon) {
         if (!monsterSpellWouldBeUseless(mon, spell)) break;
     } while (--cnt > 0);
     if (cnt <= 0) return;
-    const indirect = MCAST_INDIRECT.has(spell);
     if (mon.mcan || mon.mspec_used) {                     // mcastu.c:174-181
         // mcastu.c:66-85 cursetxt(), canspotmon branch (caster is visible).
         const subject = mon.givenName || `The ${mon.data?.name || 'monster'}`;
-        appendCastMessage(`${subject} points ${indirect ? 'all around, then curses' : 'at you, then curses'}.`, false);
+        const undirected = MCAST_INDIRECT.has(spell);
+        (game._queued_messages_after_more ??= []).push({
+            text: `${subject} points ${undirected ? 'all around, then curses' : 'at you, then curses'}.`,
+            more: true,
+        });
+        game._message_more = 1;
         return;
     }
     // mcastu.c:183-186; monst->m_lev is uchar — no clamp needed for the lich.
@@ -12690,84 +12757,33 @@ async function wizardMonsterCastResolvedAfterTouch(mon) {
     if (rn2(ml * 10) < (mon.mconf ? 100 : 20)) return;    // mcastu.c:211-214 fumble
     const subject = mon.givenName || `The ${mon.data?.name || 'monster'}`;
     // mcastu.c:216-227 — "casts a spell!" / "casts a spell at you!" pline.
-    const castMsg = `${subject} casts a spell${indirect ? '' : ' at you'}!`;
-    // mcastu.c:240-243 — mattk->damd==0 for ATTK(AT_MAGC, AD_SPEL, 0, 0):
-    // d(ml/2 + 1, 6).
-    const dmg = d(Math.trunc(ml / 2) + 1, 6);
-    await wizardMonsterSpellEffect(mon, spell, dmg, castMsg);
-}
-
-// combine-or-queue staging per tty pline(): the cast message appends to the
-// pending top line when it fits (tty width - 8 margin matches the port's
-// other combination thresholds); the effect message starts a new boundary.
-function appendCastMessage(text, forceOwnLine) {
-    const pending = game._pending_message || '';
+    const castMsg = `${subject} casts a spell${MCAST_INDIRECT.has(spell) ? '' : ' at you'}!`;
+    // C tty sequencing: the spell effect's rolls happen in whatever input
+    // window the cast line becomes the displayed top line.  When it combines
+    // with the current line (fits), that is *now*; otherwise it waits for a
+    // queue entry (lichCastEffect drains on the cast line's own boundary).
+    const pend = game._pending_message || '';
     const width = game.nhDisplay?.cols || 80;
-    if (!forceOwnLine && pending && pending.length + text.length + 3 < width - 8) {
-        game._pending_message = `${pending}  ${text}`;
-    } else if (pending) {
-        (game._queued_messages_after_more ??= []).push({ text, more: true });
+    if (pend && pend.length + castMsg.length + 3 < width - 8) {
+        game._pending_message = `${pend}  ${castMsg}`;
         game._message_more = 1;
-    } else game._pending_message = text;
-}
-
-// mcastu.c:800-895 mcast_spell() effects — only the branches the recorded
-// session exercises are meaningful; the others are placeholders (see audit).
-async function wizardMonsterSpellEffect(mon, spell, dmg, castMsg) {
-    switch (spell) {
-    case 'CURSE_ITEMS': {                                 // mcastu.c:831-834
-        appendCastMessage(castMsg, false);
-        (game._queued_messages_after_more ??= []).push(
-            { text: 'You feel as if you need some help.', more: true },
-            { text: 'You feel a malignant aura surround you.', more: true, lichCastRndcurse: 1 });
-        game._message_more = 1;
-        break;
-    }
-    case 'SUMMON_MONS': {                                 // mcastu.c:822-824
-        const count = await monsterSummonNasties(mon);
-        appendCastMessage(castMsg, false);
-        (game._queued_messages_after_more ??= []).push({
-            text: count === 1 ? 'A monster appears from nowhere!' : 'Monsters appear from nowhere!',
-            more: true,
-        });
-        game._message_more = 1;
-        break;
-    }
-    case 'DESTRY_ARMR': {                                 // mcastu.c:450-468
-        appendCastMessage(castMsg, false);
-        (game._queued_messages_after_more ??= []).push({
-            text: heroHasAntimagic() ? 'A field of force surrounds you!' : 'Your skin itches.',
-            more: true,
-        });
-        game._message_more = 1;
-        break;
-    }
-    case 'AGGRAVATION': {                                 // mcastu.c:826-828
-        appendCastMessage(castMsg, false);
-        (game._queued_messages_after_more ??= []).push({
-            text: 'You feel that monsters are aware of your presence.', more: true,
-        });
-        game._message_more = 1;
-        for (const other of game.level?.monsters || []) {
-            other.msleeping = 0;
-            if (other.mfrozen) other.mfrozen = 0;
+        await wizardMonsterSpellEffect(mon, spell);
+        const combineText = game._lichCastEffectCombine || '';
+        game._lichCastEffectCombine = '';
+        if (combineText) {
+            const pendNow = game._pending_message || '';
+            const widthNow = game.nhDisplay?.cols || 80;
+            if (pendNow && pendNow.length + combineText.length + 3 < widthNow - 8)
+                game._pending_message = `${pendNow}  ${combineText}`;
+            else
+                (game._queued_messages_after_more ??= []).push({ text: combineText, more: true });
         }
-        break;
-    }
-    case 'PSI_BOLT': {                                    // mcastu.c:606-622 mcast_psi_bolt
-        appendCastMessage(castMsg, false);
+    } else {
         (game._queued_messages_after_more ??= []).push({
-            text: dmg <= 5 ? 'You get a slight headache.' : dmg <= 10 ? 'Your brain is on fire!' : dmg <= 20 ? 'Your head suddenly aches painfully!' : 'Your head suddenly aches very painfully!',
-            more: true,
+            text: castMsg, more: true,
+            lichCastEffect: { spell, monId: mon.m_id },
         });
         game._message_more = 1;
-        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - dmg);
-        break;
-    }
-    default:                                              // unported branches — see audit
-        appendCastMessage(castMsg, false);
-        game._message_more = 1;
-        break;
     }
 }
 
@@ -30649,7 +30665,11 @@ async function finishWizgenesisSpawn(mdat, disposition, monspec) {
             const appearName = created.data?.name || monspec || 'monster';
             const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
                 || /^[A-Z]/.test(appearName));
-            await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
+            // C: makemon.c:1474-1496 message builds the subject via
+            // mon_nam/An()-style article selection — capitalize 'An' for
+            // vowel-led names ("An arch-lich appears next to you.").
+            const article = !proper && /^[aeiouAEIOU]/.test(appearName) ? 'An' : 'A';
+            await setMessage(`${proper ? 'The' : article} ${appearName} appears next to you.`);
             return;
         }
     }
@@ -64485,6 +64505,24 @@ function tutorialEnterStash() {
                     }
                 }
                 if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[queue-shift] nxt=${JSON.stringify((next.text||'').slice(0,40))} qleft=${(game._queued_messages_after_more||[]).length} qmsg=${JSON.stringify(game._queued_message_after_more||'')}`);
+                if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[cast-eff] spell=${next.lichCastEffect?.spell} pend=${JSON.stringify(game._pending_message||'')} qq=${(game._queued_messages_after_more||[]).length}`);
+                if (next.lichCastEffect) {
+                    // C: castmu()'s mcast_spell() dispatch (mcastu.c:229-243,
+                    // 800-895) runs once the cast line displays — the tty
+                    // pause inside the pline keeps its rolls on this
+                    // boundary.  mcast_summon_mons (mcastu.c:418-449) plines
+                    // the appearance right after the cast line; fold it into
+                    // this boundary's text when it fits.
+                    const castMon = (game.level?.monsters || []).find(m => m.m_id === next.lichCastEffect.monId);
+                    if (castMon) await wizardMonsterSpellEffect(castMon, next.lichCastEffect.spell);
+                    const combineText = game._lichCastEffectCombine || '';
+                    game._lichCastEffectCombine = '';
+                    const widthForCombine = game.nhDisplay?.cols || 80;
+                    if (combineText && nextText.length + combineText.length + 3 < widthForCombine - 8)
+                        nextText = `${nextText}  ${combineText}`;
+                    else if (combineText)
+                        game._queued_messages_after_more.unshift({ text: combineText, more: true });
+                }
                 if (next.lichCastRndcurse) {
                     // C ref: sit.c:571-617 rndcurse() — the "malignant aura"
                     // pline (sit.c:584-586) pauses the tty boundary first; its

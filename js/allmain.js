@@ -4,7 +4,7 @@
 import { game } from './gstate.js';
 import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn } from './cmd.js';
+import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -6308,8 +6308,45 @@ export async function processMonsterTurns() {
 	                                coldNegated = rn2(10) < 3 * magicNegation;
 	                                if (!coldNegated) {
 	                                    const coldDestroyRoll = rn2(20);
-	                                    if ((mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0) > coldDestroyRoll)
+	                                    const coldDestroyBeatsLevel = (mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0) > coldDestroyRoll;
+	                                    // generic non-lich cold touch keeps the legacy
+	                                    // approximation; liches run destroy_items()
+	                                    // for real below.
+	                                    if (coldDestroyBeatsLevel && !data.mcastWizardSpells)
 	                                        rn2(5);
+	                                    if (data.mcastWizardSpells && coldDestroyBeatsLevel) {
+	                                        // C ref: uhitm.c:2652 — mhitm_ad_cold mhitu
+	                                        // branch plines "You're covered in frost!"
+	                                        // right after hitmsg(); the touch message is
+	                                        // composed further down in this port, so pass
+	                                        // the frost line through.
+	                                        game._lich_frost_after_touch = 1;
+	                                        // C ref: uhitm.c:2659-2661 → destroy_items
+	                                        // (zap.c:5965-6110) — full per-stack program
+	                                        // for the lich touch; each destroyed stack's
+	                                        // shatter pline (zap.c:5906) is its own tty
+	                                        // --More-- boundary that carries the touch's
+	                                        // losehp/exercise (attrib.c:508) and
+	                                        // knockback (uhitm.c:5258/5269) tail.
+	                                        const frostChainEntries = coldTouchDestroyItemsProgram(damage);
+	                                        if (frostChainEntries.length) {
+	                                            game._queued_messages_after_more ??= [];
+	                                            frostChainEntries.forEach((entry, idx) =>
+	                                                game._queued_messages_after_more.push({
+	                                                    text: entry.text,
+	                                                    more: true,
+	                                                    lichColdShatter: {
+	                                                        damage: entry.damage,
+	                                                        touchDamage: idx === frostChainEntries.length - 1 ? damage : 0,
+	                                                        touchNeedsAc: true,
+	                                                        touchKnockBack: true,
+	                                                        isLast: idx === frostChainEntries.length - 1,
+	                                                    },
+	                                                }));
+	                                            damage = 0;
+	                                            game._lich_chain_suppress_tail = 1;
+	                                        }
+	                                    }
 	                                }
 	                                else damage = 0;
 	                            }
@@ -6384,7 +6421,8 @@ if (attack.adtyp === 'steal') {
 		                                ? `${unseenWarning ? "Wait!  There's something there you can't see!  " : ''}${shownSubject} ${attack.verb || 'hits'}!`
 	                                : attack.adtyp === 'elec'
 	                                ? `${shownWeaponPrefix}${shownSubject} ${attack.verb || 'hits'}!  ${elecNegated ? 'You avoid harm.' : 'You get zapped!'}`
-	                                : `${shownWeaponPrefix}${shownSubject} ${attack.verb || 'hits'}!`;
+	                                : `${shownWeaponPrefix}${shownSubject} ${attack.verb || 'hits'}!${game._lich_frost_after_touch ? '  You\'re covered in frost!' : ''}`;
+		                                    game._lich_frost_after_touch = 0;
 		                            if (game._suppress_monster_attack_messages) {
 		                                rn2(3);
 		                                rn2(6);
@@ -16809,8 +16847,18 @@ export async function moveloop_core() {
             // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
             // monster_nearby() (hack.c:4103-4127) stops an active search with
             // "You stop searching." when a visible hostile non-helpless monster
-            // is adjacent to the hero.
-            if (!foundSearchMonster && searchCountBeforeTurn > 0
+            // is adjacent to the hero.  But when a wizard-spellcasting monster
+            // (AT_MAGC/AD_SPEL attack slot, mhitu.c:763-946/mcastu.c:129) can
+            // act this pass, its slot-0 hitmu() fires first and the stop_occupation()
+            // at the end of hitmu (mhitu.c:1265) produces the line instead;
+            // keep the occupation armed so the attack chain can merge it.
+            const spellcasterActsFirst = (game.level?.monsters || []).some(candidate =>
+                candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
+                && candidate.data?.mcastWizardSpells
+                && (candidate.movement || 0) >= NORMAL_SPEED
+                && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
+                && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1);
+            if (!foundSearchMonster && searchCountBeforeTurn > 0 && !spellcasterActsFirst
                 && g._search_pending_count > 0
                 && (game.level?.monsters || []).some(candidate =>
                     candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
