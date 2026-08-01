@@ -6892,7 +6892,6 @@ if (attack.adtyp === 'steal') {
                                    mtrack-avoidance rolls below. */
                                 const inShkGenericMMove = mon.isshk && !mon.mpeaceful
                                     && mon.following && !mon.billct && fudist0 > 4;
-                                const shkNearerBase = (oldx - goalX) ** 2 + (oldy - goalY) ** 2;
                             for (const pos of positions) {
                                 if (!(IS_ROOM(pos.loc.typ) || (mon.isshk && (!inHisShop || mon.following)))) continue;
                                 if (avoid && (pos.info & NOTONL) && !(pos.info & ALLOW_M)) continue;
@@ -6901,13 +6900,8 @@ if (attack.adtyp === 'steal') {
                                     const choiceDist = choice
                                         ? (choice.x - goalX) ** 2 + (choice.y - goalY) ** 2
                                         : (oldx - goalX) ** 2 + (oldy - goalY) ** 2;
-                                    /* C ref: monmove.c:1976-1988 — in generic m_move an
-                                       approaching monster adopts EVERY candidate
-                                       strictly nearer to its goal than its current
-                                       square (the last nearer candidate wins on ties);
-                                       wanderers use the `!rn2(++chcnt)` reservoir. */
                                     if ((!appr && !rn2(++chcnt))
-                                        || (appr && candidateDist < (inShkGenericMMove ? shkNearerBase : choiceDist))
+                                        || (appr && candidateDist < choiceDist)
                                     || (pos.info & ALLOW_M)) {
                                     choice = { x: pos.x, y: pos.y };
                                     choiceInfo = pos.info;
