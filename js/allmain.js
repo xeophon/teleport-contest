@@ -5908,7 +5908,6 @@ export async function processMonsterTurns() {
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                 }
                                 if ((game.u?.uhp || 0) <= 0) {
-                                    if (process.env.DIEDBG) console.error(`DIEDBG generic queue rng=${getRngLog().length} moves=${game.moves} name=${name}`);
                                     const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
                                     game._death_cause = `killed by ${article} ${name}`;
                                     game._death_current_move = !!game._pending_time_passed;
@@ -9896,7 +9895,6 @@ if (attack.adtyp === 'steal') {
         const movementRoll = rn2(NORMAL_SPEED);
         const extra = movementRoll < (mmove % NORMAL_SPEED) ? NORMAL_SPEED : 0;
         mon.movement = (mon.movement || 0) + base + extra;
-        if (process.env.ALLODBG) { const L = getRngLog().length; if (L >= +(process.env.ALLOC_LO||5570) && L <= +(process.env.ALLOC_HI||5600)) console.error(`ALLOC rng=${L} ${mon.data?.name} @${mon.mx},${mon.my} roll=${movementRoll} mmove=${mmove} mv=${mon.movement} fleetim=${mon.mfleetim}`); }
         if (mon.mfleetim && !--mon.mfleetim) mon.mflee = 0;
     }
     const currentDungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
@@ -10650,7 +10648,6 @@ async function finishMonsterTurnTail() {
 	    if (game.u?.uevent?.udemigod && !game.u?.uinvulnerable) {
 	        for (const harassMessage of await demigodTurnHook())
 	            if (harassMessage) addToplineMessage(harassMessage);
-	    if (process.env.HARDBG) { const leo = (game.level?.monsters||[]).find(m=>m.data?.name==='leocrotta'); console.error(`HARD rng=${getRngLog().length} moves=${game.moves} spc=${game._search_pending_count} leo=${leo?leo.mx+','+leo.my:'-'} hero=${game.u?.ux},${game.u?.uy} pend=${JSON.stringify((game._pending_message||'').slice(0,40))}`); }
 	    }
     if (game._gauntlets_power_exercise_after_turn_tail) {
         game._gauntlets_power_exercise_after_turn_tail = 0;
@@ -16715,7 +16712,6 @@ export async function moveloop_core() {
     while (g._pending_time_passed
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
-        if (process.env.HARDBG) console.error(`PASS rng=${getRngLog().length} moves=${g.moves} ptp=${g._pending_time_passed} spc=${g._search_pending_count} more=${g._message_more} pend=${JSON.stringify((g._pending_message||'').slice(0,30))}`);
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
@@ -16734,9 +16730,7 @@ export async function moveloop_core() {
         if (armorTailOnly) g._armor_tail_after_more = 0;
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
-            if (process.env.HARDBG) console.error(`TAIL-pre rng=${getRngLog().length} moves=${g.moves} spc=${g._search_pending_count}`);
             const tailResult = await finishMonsterTurnTail();
-            if (process.env.HARDBG) console.error(`TAIL-post rng=${getRngLog().length} moves=${g.moves} spc=${g._search_pending_count}`);
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
@@ -16756,7 +16750,6 @@ export async function moveloop_core() {
         }
         if (g._search_pending_count > 0) {
             const searchCountBeforeTurn = g._search_pending_count;
-            if (process.env.HARDBG) console.error(`STCK rng=${getRngLog().length} moves=${g.moves} spc=${searchCountBeforeTurn} pend=${JSON.stringify((g._pending_message||'').slice(0,30))}`);
             let foundSearchMonster = false;
             let foundMessage = '';
             let revealedSecretTerrain = false;
@@ -16841,7 +16834,6 @@ export async function moveloop_core() {
             // monster_nearby() (hack.c:4103-4127) stops an active search with
             // "You stop searching." when a visible hostile non-helpless monster
             // is adjacent to the hero.
-            if (process.env.HARDBG && searchCountBeforeTurn > 0) { const adj = (game.level?.monsters||[]).filter(mm=>!mm.mpeaceful && Math.abs((mm.mx||0)-(g.u?.ux||0))<=1 && Math.abs((mm.my||0)-(g.u?.uy||0))<=1); console.error(`STOPS rng=${getRngLog().length} moves=${g.moves} spc=${g._search_pending_count} adj=${adj.map(m=>m.data?.name+'@'+m.mx+','+m.my+'/'+(m.mundetected?'u':'')+(m.minvis?'i':'')+'/'+((g.viz_array?.[m.my]?.[m.mx]&IN_SIGHT)?'v':'-')+'/'+couldSeeCoord(m.mx,m.my)).join(';')}`); }
             if (!foundSearchMonster && searchCountBeforeTurn > 0
                 && g._search_pending_count > 0
                 && (game.level?.monsters || []).some(candidate =>
@@ -16920,6 +16912,13 @@ export async function moveloop_core() {
             g._search_pending_count = 0;
             g._pending_time_passed = Math.min(g._pending_time_passed || 0, 1);
             g._keep_pending_message = 1;
+            /* C ref: allmain.c:212-225 — the movemon loop keeps running until
+             * no monster can move; after the interrupted batch finishes its
+             * tail, the freshly spawned adjacent monster (its movement already
+             * allocated in this tail) still gets to act within the same
+             * rhack — that's what produces the maul pages directly on the
+             * search key press. */
+            g._counted_repeat_finish_monsters_once = 1;
         }
         if (ballDragForcedTail && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (ballDragNoResumePass && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);

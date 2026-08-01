@@ -61029,7 +61029,6 @@ export async function rhack(_cmd) {
 
 	    const key = _cmd || await nhgetch();
 	    let ch = commandChar(key);
-    if (process.env.RHCKDBG && getRngLog().length >= +process.env.RHCK_LO) console.error(`RHCK rng=${getRngLog().length} ch=${JSON.stringify(ch)} mode=${game._command_mode} more=${game._message_more} pend=${JSON.stringify((game._pending_message||'').slice(0,50))} q=${JSON.stringify(game._queued_message_after_more||'')} search=${game._search_pending_count} moves=${game.moves}`);
     game._pending_message_visual_override = '';
     game._pending_message_visual_override_base = '';
 	    if (game.u?.uswallow && game._swallow_overlay_active && game._overlay_lines
@@ -63380,7 +63379,6 @@ function tutorialEnterStash() {
                         && !game._monster_throw_after_more
                         && !game._arrow_drop_throw_after_topline_more) rn2(3);
 	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
-                        if (process.env.DIEDBG) console.error('DIEDBG deferred-zero-hp');
                             if (hpBeforeDeferredDamage - deferredDamage === -1)
                                 game._death_status_hp_before_zero = hpBeforeDeferredDamage;
 	                        game._death_cause ||= 'killed by a water demon';
@@ -63864,10 +63862,8 @@ function tutorialEnterStash() {
                                 }
 		                    }
 	                    game._pending_message = messages.join('  ');
-                    if (process.env.DIEDBG && (game.u?.uhp || 0) <= 0) console.error(`DIEDBG deferred-multi eval rng=${getRngLog().length} moves=${game.moves} q=${JSON.stringify(game._queued_message_after_more)}`);
                     const deferredHeroHpHitZero = (game.u?.uhp || 0) <= 0;
 	                    if (deferredHeroHpHitZero && !game._queued_message_after_more) {
-                        if (process.env.DIEDBG) console.error('DIEDBG deferred-multi queue');
 	                        const name = deferred.name || 'monster';
 	                        // C ref: done_in_by() (end.c:184-196) picks
 	                        // "killed by <monster>" with format KILLED_BY_AN,
@@ -64414,7 +64410,6 @@ function tutorialEnterStash() {
                 if (next.usePendingTime) game._object_list_use_pending_time = 1;
                 return;
             }
-            if (process.env.DIEDBG && game._queued_message_after_more === 'You die...') console.error(`DIEDBG pump-reached rng=${getRngLog().length} moves=${game.moves}`);
             if (game._queued_message_after_more) {
                 let next = game._queued_message_after_more;
                 const nextMoreLine = game._queued_message_more_line_after_more || '';
