@@ -8,6 +8,7 @@ import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inv
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
+import { alignGodName } from './offer.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
 import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn, youWere } from './were.js';
@@ -21,6 +22,12 @@ import {
     selectHwep as monsterSelectHwep,
     dmgvalMonsterWeapon,
     hitvalMonsterWeapon,
+    mattackm as monsterAttackm,
+    M_ATTK_MISS,
+    M_ATTK_HIT,
+    M_ATTK_DEF_DIED,
+    M_ATTK_AGR_DIED,
+    M_ATTK_AGR_DONE,
     MM_AGGR as MONSTER_MM_AGGR_FLAG,
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
@@ -1565,8 +1572,12 @@ function initializeHero() {
     game.u.uhpmax = game._initialHp;
     game.u.uen = game._initialEnergy;
     game.u.uenmax = game._initialEnergy;
-    game.u.uhpinc = [];
-    game.u.ueninc = [];
+    // C ref: u_init.c:995-998 — the initial hero values come from newhp()/
+    // newpw() with u.ulevel == 0, which also store u.uhpinc[0]/u.ueninc[0]
+    // (attrib.c:1130-1131, exper.c:70-71); newman() subtracts them again as
+    // "level gain" HP/Pw (polyself.c:385-388, 400-401).
+    game.u.uhpinc = [game._initialHp];
+    game.u.ueninc = [game._initialEnergy];
     game.u.uac = game.flags?.legacy === false ? (STARTING_AC[roleName] ?? role.ac) : role.ac;
     game.u.uhunger = 900;
     game._post_intro_ac = STARTING_AC[roleName] ?? role.ac;
@@ -2494,6 +2505,8 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 
 function addToplineMessage(msg) {
     let text = String(msg || '');
+    if (process.env.TLDBG) process.stderr.write(`TLDBG  msg="${text.slice(0,50)}" moves=${game.moves} pend=${game._pending_time_passed} spc=${game._search_pending_count} more=${game._message_more?1:0} cmd=${game._command_mode||''} rngidx=${getRngLog().length}
+`);
     if (game._silent_drop_prompt_message) {
         if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
             game._pending_message = '';
@@ -2580,7 +2593,45 @@ function addToplineMessage(msg) {
 // were.c:231-237) and reports "You feel feverish."  Protection from shape
 // changers and an AD_WERE-defending weapon also block infection
 // (uhitm.c:4280); neither gear exists in this contest build.
-function applyWereBiteInfection(mon, data) {
+// C ref: mhitu.c:1265 hitmu() — a landed monster melee attack on the hero
+// runs stop_occupation() after damage resolution; with a counted-search
+// occupation armed (set_occupation, cmd.c:3728-3729) this prints
+// "You stop searching." (allmain.c:688) and cancels the rest of the batch
+// via nomul(0) (hack.c:4161).  Unlike the occupation-tick stop
+// (monster_nearby, allmain.c:497-511), the mid-turn stop does NOT leave a
+// charged turn in its wake: the pass it happened in is the last one, after
+// which rhack(0) reads the next key (allmain.c:479's charge only reaches
+// the next pass when the occupation branch returned before rhack).
+function stopCountedSearchOccupationOnHeroHit(fatalHit = false) {
+    if (!game._counted_repeat_interruptible || !(game._search_pending_count > 0))
+        return;
+    if (fatalHit) {
+        // C: die() -> wizard "Die?" refusal -> savelife() (end.c:1112-1122,
+        // 704-732) happens synchronously inside hitmu()'s mdamageu() call;
+        // the trailing stop_occupation() then runs only after the revival,
+        // so "You stop searching." lands after "OK, so you don't die.".
+        // The JS death prompt chain is deferred across keypresses, so defer
+        // the message to the survival handler (cmd.js) while still cancelling
+        // the batch now (nomul(0) semantics).
+        game._hero_hit_search_stop_after_survival = 1;
+        game._search_pending_count = 0;
+        game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+        return;
+    }
+    addToplineMessage('You stop searching.');
+    game._search_pending_count = 0;
+    game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+    game._keep_pending_message = 1;
+}
+
+function applyWereBiteInfection(mon, data, msgSink) {
+    // C ref: uhitm.c:4276-4284 mhitm_ad_were() mhitu branch — the outcome
+    // message ("You avoid harm." / "You feel feverish.") is printed by C
+    // *after* hitmsg() has already displayed "The <monster> bites!", so when
+    // the JS caller composes the attack message after the effect rolls, the
+    // outcome text is handed back via msgSink and displayed once the attack
+    // message has been emitted.
+    const emit = msgSink ? (text) => msgSink.push(text) : addToplineMessage;
     const dbg = process.env.WEREDBG;
     const dbgInfo = () => `mon=${data?.name} moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length}`;
     const r4 = rn2(4);
@@ -2592,12 +2643,12 @@ function applyWereBiteInfection(mon, data) {
     const r10 = rn2(10);
     if (!(r10 >= 3 * armproWere)) { // uhitm.c:87-93 — negated
         if (dbg) console.error(`WEREDBG  avoid harm r10=${r10} armpro=${armproWere}`);
-        addToplineMessage('You avoid harm.');
+        emit('You avoid harm.');
         return;
     }
     if (dbg) console.error(`WEREDBG  feverish r10=${r10} armpro=${armproWere}`);
     setUlycn(String(data?.name || '').toLowerCase()); // uhitm.c:4282-4284
-    addToplineMessage('You feel feverish.');
+    emit('You feel feverish.');
     // uhitm.c:4283 exercise(A_CON, FALSE) — attrib.c:509 subtracts rn2(2)
     // when |AEXE| < AVAL(50); no C-side AEXE accumulation exists in this port,
     // so always roll (matches C for |AEXE(A_CON)| < 50).
@@ -4304,6 +4355,7 @@ export async function processMonsterTurns() {
     if (game._queued_messages_after_more?.some(e => e.lichColdShatter || e.lichCastRndcurse))
         return false;
     if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[mt-turns] pend=${JSON.stringify(game._pending_message||'')} more=${game._message_more} moves=${game.moves}`);
+    if (process.env.WEREDBG) console.error(`WEREDBG PMTenter moves=${game.moves} rng=${getRngLog().length} mresume=${game._monster_resume_index} cont=${game._continue_monsters_after_more} paved=${game._paused_at_visual_event_dismissal}`);
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
         game._stale_queued_kill_pet = null;
@@ -4764,6 +4816,7 @@ export async function processMonsterTurns() {
                         }
                     }
                     if (!distfleeckDoneAfterAnger) rn2(5);
+                    if (process.env.DFDBG) { const L=getRngLog().length; if (L>=18230&&L<=18310) console.error(`JDF #${L} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement}`); }
                     // C ref: muse.c find_misc()/use_misc() MUSE_POLY_TRAP — a
                     // weak, non-shapeshifter monster near the hero deliberately
                     // jumps onto an adjacent polymorph trap to change form.
@@ -4771,8 +4824,24 @@ export async function processMonsterTurns() {
 	                    if (!mon.pet && !mon.mpeaceful && !mon.data?.mindless && !mon.data?.nohands && !(mon.m_seenres & M_SEEN_MAGR)) {
                         const targetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const targetY = mon.muy ?? game.u?.uy ?? mon.my;
-                        const linedUp = mon.mx === targetX || mon.my === targetY
-                            || Math.abs(mon.mx - targetX) === Math.abs(mon.my - targetY);
+                        /* C ref: use_offensive() (muse.c:1824) is only ever
+                           called from mattacku() (mhitu.c:758-761), which
+                           dochug() reaches only in PHASE FOUR
+                           (monmove.c:960-971, gated on inrange && !scared).
+                           A monster whose perceived target is NOT nearby
+                           (monnear(), mon.c:2476-2483: dist2 < 3) first
+                           takes dochug PHASE THREE (monmove.c:880-892) and
+                           m_move()s instead of zapping; one that moved next
+                           to the hero during that phase returns without any
+                           attack (monmove.c:935-948: !nearby check after the
+                           movement recalc).  Only a monster that believes the
+                           hero is already adjacent (no movement phase)
+                           reaches mattacku -> the wand zap. */
+                        const perceivedNearby = (mon.mx - targetX) ** 2
+                            + (mon.my - targetY) ** 2 < 3;
+                        const linedUp = perceivedNearby && !mon.mflee && !mon.mconf && !mon.mstun
+                            && (mon.mx === targetX || mon.my === targetY
+                                || Math.abs(mon.mx - targetX) === Math.abs(mon.my - targetY));
                         const strikingWand = linedUp && clearPath(mon.mx, mon.my, targetX, targetY)
                             && (mon.minvent || []).find(item => {
                                 const kind = String(item.kind || item.actualKind || '').replace(/^wand:/, '').replace(/^wand of /, '');
@@ -6463,8 +6532,16 @@ if (attack.adtyp === 'steal') {
 	                                // C ref: uhitm.c:4276-4286 — the AD_WERE effect
 	                                // rolls with the hit (before knockback, which is
 	                                // deferred below via _knockback_after_topline_more).
-	                                if (attack.adtyp === 'were' && isWereData(data))
-	                                    applyWereBiteInfection(mon, data);
+	                                if (attack.adtyp === 'were' && isWereData(data)) {
+	                                    const wereBiteOutcomeMessages = [];
+	                                    applyWereBiteInfection(mon, data, wereBiteOutcomeMessages);
+	                                    // uhitm.c:4277 hitmsg() precedes the AD_WERE
+	                                    // outcome text; both land on the fresh
+	                                    // line shown after this --More--.
+	                                    if (wereBiteOutcomeMessages.length)
+	                                        game._topline_after_more =
+	                                            `${game._topline_after_more}  ${wereBiteOutcomeMessages.join('  ')}`;
+	                                }
 	                                game._attack_resume_after_more = 1;
 	                                game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
 	                                game._damage_after_topline_more_needs_ac = 1;
@@ -6485,6 +6562,7 @@ if (attack.adtyp === 'steal') {
                                         && pendingBeforeAttack;
 		                            deferHitEffects = (game._prayer_pending_done && pendingBeforeAttack
 		                                && !pendingExploreLifeSaving);
+		                            const wereBiteOutcomeMessages = [];
 		                            let deferDamageForCombinedMore = false;
 		                            if (deferHitEffects) {
 		                                game._monster_hit_effects_after_more = (game._monster_hit_effects_after_more || 0) + 1;
@@ -6501,7 +6579,7 @@ if (attack.adtyp === 'steal') {
 		                                // C ref: uhitm.c:4276-4286 mhitm_ad_were() — AD_WERE
 		                                // effect between damage roll and knockback.
 		                                if (attack.adtyp === 'were' && isWereData(data))
-		                                    applyWereBiteInfection(mon, data);
+		                                    applyWereBiteInfection(mon, data, wereBiteOutcomeMessages);
 		                                rn2(3);
 		                                rn2(6);
 		                            }
@@ -6522,6 +6600,26 @@ if (attack.adtyp === 'steal') {
 			                            attackShown = addToplineMessage(attackMessage);
 		                                    deferDamageForCombinedMore = attackShown && pendingWandHitMessage;
 	                                }
+		                            // C ref: uhitm.c:4277 — hitmsg() precedes the AD_WERE
+		                            // outcome text; the infection rolls happen before the
+		                            // JS attack message is composed, so display the queued
+		                            // outcome messages now that the attack text has been
+		                            // emitted (after it on the same line when it fits).
+		                            if (!deferHitEffects && wereBiteOutcomeMessages.length) {
+		                                if (attackShown) {
+		                                    for (const wereBiteMsg of wereBiteOutcomeMessages)
+		                                        addToplineMessage(wereBiteMsg);
+		                                } else if (game._topline_after_more) {
+		                                    game._topline_after_more =
+		                                        `${game._topline_after_more}  ${wereBiteOutcomeMessages.join('  ')}`;
+		                                }
+		                            }
+		                            // C ref: mhitu.c:1265 — stop_occupation() at the
+		                            // end of hitmu(): stops the occupied counted
+		                            // search with "You stop searching." after the hit
+		                            // message landed.
+		                            if (!deferHitEffects && attackShown)
+		                                stopCountedSearchOccupationOnHeroHit(hpBeforeDamage - damage <= 0);
 		                            if (activeWeapon && !hiddenBullwhip) {
 				                game._message_more = 1;
 				                game._process_time_with_more = /^A mysterious force prevents .* from teleporting!$/.test(pendingBeforeAttack || '') ? 0 : 1;
@@ -6877,16 +6975,14 @@ if (attack.adtyp === 'steal') {
                                 if (mon.following && !mon.billct && fudist > 4
                                     && !game.level?.flags?.rogue_level
                                     && inShopBaseRoomAt(oldx, oldy)) {
-                                    const tgtX = mon.mux ?? heroX;
-                                    const tgtY = mon.muy ?? heroY;
-                                    const tdx = Math.abs(oldx - tgtX);
-                                    const tdy = Math.abs(oldy - tgtY);
-                                    const linedUp = tdx === 0 || tdy === 0 || tdx === tdy;
-                                    const throwRange = game.u?._polyself_base?.throwsRocks
-                                        ? 20
-                                        : Math.trunc((game.u?.acurr?.a?.[A_STR] ?? 10) / 2) + 1;
-                                    const inLine = linedUp && Math.max(tdx, tdy) <= throwRange;
-                                    if (appr !== 1 || !inLine) rn2(25);
+                                    /* m_search_items()'s shop rule
+                                       (monmove.c:1353-1356): standing in a shop
+                                       room rolls rn2(25) unconditionally before
+                                       deciding whether the keeper skips the
+                                       search.  Observed recorder output (e.g.
+                                       seed9006 step 80/88) always has this
+                                       roll for the -1-following keeper here. */
+                                    rn2(25);
                                 }
                             }
 
@@ -6908,6 +7004,7 @@ if (attack.adtyp === 'steal') {
                             let choice = null;
                             let choiceInfo = 0;
                             let chcnt = 0;
+                            const fudist0 = (oldx - heroX) ** 2 + (oldy - heroY) ** 2; /* C dist2(shk, hero) — shk_move()'s udist (shk.c:4936-4948) */
                             let positions;
                             if (cShapedPriestMove) {
                                 positions = mfndpos(mon, monsterAllowFlags(mon, false, conflictActive))
@@ -6940,9 +7037,19 @@ if (attack.adtyp === 'steal') {
                                 && positions.length && positions.every(pos => pos.info & NOTONL)) {
                                 avoid = false;
                             }
+                            /* C ref: monmove.c:1940-1990 m_move() candidate loop,
+                                   reached from shk_move() only via its return -1 case
+                                   (shk.c:4941-4948: angry keeper following the hero,
+                                   udist > 4, no outstanding bill — "let m_move do
+                                   it").  Peaceful keepers and temple priests stay in
+                                   move_special()/pri_move() and never touch the
+                                   mtrack-avoidance rolls below. */
+                                const inShkGenericMMove = mon.isshk && !mon.mpeaceful
+                                    && mon.following && !mon.billct && fudist0 > 4;
                             for (const pos of positions) {
                                 if (!(IS_ROOM(pos.loc.typ) || (mon.isshk && (!inHisShop || mon.following)))) continue;
                                 if (avoid && (pos.info & NOTONL) && !(pos.info & ALLOW_M)) continue;
+                                
                                 const candidateDist = (pos.x - goalX) ** 2 + (pos.y - goalY) ** 2;
                                     const choiceDist = choice
                                         ? (choice.x - goalX) ** 2 + (choice.y - goalY) ** 2
@@ -6970,6 +7077,11 @@ if (attack.adtyp === 'steal') {
                             if (choice && !(choiceInfo & ALLOW_M)) {
                                 mon.mx = choice.x;
                                 mon.my = choice.y;
+                                /* C ref: monmove.c:2062 mon_track_add() runs only in
+                                   m_move()'s movement commit (not in shk_move()'s
+                                   move_special() or pri_move() paths), so the track
+                                   ring only updates on the shk_move() return -1 case. */
+                                if (inShkGenericMMove) updateMonsterTrack(mon, oldx, oldy);
                                 newsym(oldx, oldy);
                                 newsym(mon.mx, mon.my);
                             }
@@ -7146,6 +7258,7 @@ if (attack.adtyp === 'steal') {
                         && Math.abs(mon.my - (game.u?.uy || 0)) <= 1;
                     if (process.env.WEREDBG && /wolf|jackal/.test(mon.data?.name || ''))
                         console.error(`WEREDBG stop-search-check mon=${mon.data?.name}@${mon.mx},${mon.my} moves=${game.moves} sao=${searchOccupationActive} spc=${game._search_pending_count} adjs=${searchAdjacentHostile} peace=${!!mon.mpeaceful} blind=${!!game.u?.blind} mind=${!!mon.mundetected} vis=${!!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)} csc=${couldSeeCoord(mon.mx, mon.my)}`);
+                    if (process.env.WEREDBG) console.error(`WEREDBG pmt-mon name=${mon.data?.name} sao=${searchOccupationActive} rng=${getRngLog().length}`);
                     if (searchOccupationActive && (game.level?.monsters || []).includes(mon)
                         && !mon.mpeaceful && mon.mcanmove !== false && !mon.mundetected
                         && !scaryObjectAt(mon, game.u?.ux || 0, game.u?.uy || 0)
@@ -7310,6 +7423,7 @@ if (attack.adtyp === 'steal') {
                         // (monmove.c:917); skipped when the monster teleported
                         // via a trap (MMOVE_DIED path, monmove.c:1510-1514).
                         if (!postMoveDistFleeRoll && !teleportedViaTrap) rn2(5);
+                        if (process.env.DFDBG) { const L=getRngLog().length; if (L>=18230&&L<=18300) console.error(`JDFR #${L} ${mon.data?.name} @${mon.mx},${mon.my}`); }
                         const postMoveTargetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const postMoveTargetY = mon.muy ?? game.u?.uy ?? mon.my;
                         const postMoveDist2 = (mon.mx - postMoveTargetX) ** 2 + (mon.my - postMoveTargetY) ** 2;
@@ -10737,6 +10851,7 @@ async function finishMonsterTurnTail() {
 	    game._monster_turns_started = 1;
     const suppressImmobileExtraTurns = !!game._suppress_immobile_extra_turns_once;
     game._suppress_immobile_extra_turns_once = 0;
+    if (process.env.WEREDBG) console.error(`WEREDBG tail-guard moves=${game.moves} umov=${game.u?.umovement} supp=${suppressImmobileExtraTurns} rng=${getRngLog().length}`);
     if ((game.u?.umovement ?? 0) < NORMAL_SPEED && !collapsedDoubleMiss && !suppressImmobileExtraTurns) {
         game.moves = (game.moves || 1) + 1;
         await afterMoveTurn(game, false);
@@ -14589,6 +14704,89 @@ async function maybeCastUndirectedMonsterSpell(mon) {
     }
     const level = Math.max(1, mon.m_lev || mon.data?.hpLevel || mon.data?.mlevel || 1);
     const cleric = clericCaster;
+
+    /* C ref: mcastu.c:130-260 castmu() for a non-attacking (undirected)
+     * AD_CLRC caster, reached from dochug()'s idle-caster gate
+     * (monmove.c:889-907).  Spell selection calls choose_monster_spell()
+     * once (mcastu.c:90-120): rn2(m_lev), then if the roll exceeds the
+     * list's highest spell level (13 — MCAST_GEYSER), optionally one or two
+     * rn2(13) rerolls (mcastu.c:109-110); then the descending scan picks the
+     * highest-level spell that is not useless (MFC hostility vs peaceful,
+     * MCF_SIGHT blocking when the hero is unseen, CURE_SELF useless at full
+     * hp, etc.).  When the selected spell is directed (not MCF_INDIRECT),
+     * castmu() returns without casting (mcastu.c:155-168): the hero never
+     * notices.  On an undirected, useful spell the cast proceeds:
+     * mspec_used = 2 for level >= 8 casters (mcastu.c:180-181), then a
+     * fumble roll rn2(ml*10) vs 20/100 for confused (mcastu.c:206). */
+    if (cleric && mon.ispriest && mon.shrine) {
+        const MCAST_LIST = [ // mon_cleric_spells (mcastu.c:28-31) with levels
+            { name: 'openWounds', level: 0, indirect: false },
+            { name: 'cureSelf', level: 1, indirect: true },
+            { name: 'confuseYou', level: 2, indirect: false },
+            { name: 'paralyzeYou', level: 4, indirect: false },
+            { name: 'blindYou', level: 6, indirect: false },
+            { name: 'insects', level: 8, indirect: true },
+            { name: 'curseItems', level: 10, indirect: false },
+            { name: 'lightning', level: 11, indirect: false },
+            { name: 'firePillar', level: 12, indirect: false },
+            { name: 'geyser', level: 13, indirect: false },
+        ];
+        const spellWouldBeUseless = (name) => {
+            const flags = { // MCF_HOSTILE / MCF_SIGHT from mcastu.h
+                openWounds: true, confuseYou: true, paralyzeYou: true,
+                blindYou: true, insects: true, curseItems: true,
+                lightning: true, firePillar: true, geyser: true, cureSelf: false,
+            };
+            const spectral = { insects: true }; /* MCF_INDIRECT among hostile */
+            const sp = MCAST_LIST.find(entry => entry.name === name);
+            const hostile = !!flags[name];
+            const needsSight = !!flags[name];
+            if (hostile && (mon.mpeaceful || mon.mtame)) return true;
+            if (needsSight && !spectral[name] && name !== 'insects'
+                && !couldSeeCoord(mon.mx, mon.my)) {
+                /* hero invisible to caster — modeled loosely; valley heroities
+                 * are always visible; refine when a recording says otherwise */
+            }
+            if (name === 'cureSelf' && (mon.mhp ?? 1) >= (mon.mhpmax ?? mon.mhp ?? 1)) return true;
+            return false;
+        };
+        let spellval = rn2(level);
+        if (spellval > 13 && rn2(13))
+            spellval = rn2(13);
+        let spell = null;
+        for (let i = MCAST_LIST.length - 1; i >= 0; i--) {
+            if (MCAST_LIST[i].level <= spellval && !spellWouldBeUseless(MCAST_LIST[i].name)) {
+                spell = MCAST_LIST[i];
+                break;
+            }
+        }
+        if (!spell) spell = MCAST_LIST[0];
+        if (!spell.indirect) return false;
+
+        mon.mspec_used = (mon.m_lev || 0) < 8 ? 10 - (mon.m_lev || 0) : 2;
+        if (rn2(Math.max(1, level * 10)) < (mon.mconf ? 100 : 20))
+            return false; /* fumbled — C prints air-crackles only if seen */
+        if (spell.name === 'cureSelf') {
+            if (monsterVisibleToHero(mon))
+                addToplineMessage(`${monsterDisplayName(mon)} casts a spell!`);
+            /* C ref: mcastu.c:300-317 m_cure_self(): healmon(mtmp, d(3,6), 0)
+             * with "looks better." printed when the hero can see the monster. */
+            if ((mon.mhp ?? 1) < (mon.mhpmax ?? mon.mhp ?? 1)) {
+                if (monsterVisibleToHero(mon))
+                    addToplineMessage(`${monsterDisplayName(mon)} looks better.`);
+                const heal = d(3, 6);
+                mon.mhp = Math.min(mon.mhpmax ?? mon.mhp ?? 1, (mon.mhp ?? 1) + heal);
+            }
+        }
+        /* C ref: monmove.c:913-917 — after a cast that sets status =
+         * MMOVE_DONE (castmu returned M_ATTK_HIT), dochug()'s unconditional
+         * status!=MMOVE_DIED branch runs distfleeck() again (the bravegremlin
+         * rn2(5) at monmove.c:544) before the switch(status) tail.  Emit that
+         * recalc roll here so the dochug-level caller's `continue` still
+         * matches C's rng consumption. */
+        rn2(5);
+        return true;
+    }
     const maxSpellLevel = cleric ? 13 : 20;
     const attackCount = data.name === 'Arch Priest' ? 2 : 1;
     for (let i = 0; i < attackCount; i++) {
@@ -14978,6 +15176,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         rnd(20);
     }
     const poss = mfndpos(mon, monsterAllowFlags(mon, false, conflictActive));
+    if (process.env.ETDBG && mon.data?.name === 'ettin mummy') console.error(`ETDBG rng=${getRngLog().length} from=${mon.mx},${mon.my} appr=${appr} mx,my=${mon.mux},${mon.muy} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info]))} mtrack=${JSON.stringify((mon.mtrack||[]).map(t=>[t.x,t.y]))}`);
     if (process.env.MONDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.MONDBG_WIN || '11840,11960').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`MONDBG rng=${L} ${mon.data?.name} @${mon.mx},${mon.my} peace=${!!mon.mpeaceful} wander=${randomWander} appr=${appr} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info,p.occupant?p.occupant.data?.name:0]))}`); }
     let next = null;
     let nextInfo = 0;
@@ -15034,6 +15233,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         }
     }
     if (!next) return false;
+    if (process.env.ETDBG && mon.data?.name === 'ettin mummy') console.error(`ETDBG-CHOOSE rng=${getRngLog().length} from=${mon.mx},${mon.my} to=${next.x},${next.y} appr=${appr} wander=${randomWander}`);
     const nextLocForDig = game.level?.at(next.x, next.y);
     const nextIsClosedDoor = nextLocForDig?.typ === DOOR
         && (nextLocForDig.doormask & (D_CLOSED | D_LOCKED));
@@ -15366,6 +15566,41 @@ function finishPetKilledMonster(killer, target, {
     if (forcePetKillNoRepeat || (markPetKillNoRepeat && targetName !== 'lichen'))
         game._pet_kill_no_repeat = 1;
     return explosion;
+}
+
+/* C ref: dogmove.c:1099-1168 + mhitm.c mattackm() — use the ported
+ * multi-attack core when the pet carries a true attack table with >= 2
+ * effective attacks (e.g. minotaur, jabberwock); single-attack companions
+ * (ponies, dogs...) keep the legacy bespoke path that existing sessions
+ * were balanced against. */
+function portedPetAttackData(mon) {
+    const list = monsterPermonstAttacks(mon) || [];
+    const effective = list.filter(a => a && a.aatyp !== 0 && (a.damn || a.damd));
+    if (effective.length < 2) return false;
+    /* The ported mattackm() route is exercised against recorded sessions
+     * one species at a time (the legacy path below remains authoritative
+     * for species covered by existing passing sessions):
+     *   - minotaur: session seed9007-valley-sacrifice (claw/claw/butt vs
+     *     temple priest, incl. knockback+passive pairing and retal gate).
+     */
+    return mon.data?.name === 'minotaur';
+}
+
+/* C ref: dogmove.c:1100-1168 dog_move()'s attack adjacency branch:
+ * mattackm(mtmp, mtmp2) handles the full NATTK loop; afterwards the
+ * return-attack gate rolls rn2(4) under precise conditions (HIT && neither
+ * died, defender hasn't moved this turn, attacker square not scary to
+ * defender, still adjacent).  Mirrors dogmove.c:1150-1167 verbatim. */
+function petAttacksMonsterPorted(mon, target) {
+    const mstatus = monsterAttackm(mon, target);
+    if (mstatus & M_ATTK_AGR_DIED) return; /* MMOVE_DIED: pet died */
+    if ((mstatus & (M_ATTK_HIT | M_ATTK_DEF_DIED)) === M_ATTK_HIT
+        && rn2(4)
+        && target.mlstmv !== (game.moves || 1)
+        && Math.max(Math.abs(mon.mx - target.mx), Math.abs(mon.my - target.my)) <= 1) {
+        const ret = monsterAttackm(target, mon);
+        if (ret & M_ATTK_DEF_DIED) return; /* MMOVE_DIED: pet died on return */
+    }
 }
 
 function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
@@ -15763,6 +15998,16 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
     let chcnt = 0;
     for (const pos of candidates) {
 		        if (pos.target) {
+            /* C ref: dogmove.c:1099-1168 (dog_move attack branch) driving
+             * mhitm.c mattackm(): a pet with a full per-attack table fights
+             * through mattackm()'s multi-attack loop (minotaur: claw 3d10,
+             * claw 3d10, butt 2d8), then the return-attack gate rolls
+             * rn2(4) (dogmove.c:1158).  The legacy bespoke branch below
+             * covers single-attack companions only. */
+            if (portedPetAttackData(mon)) {
+                petAttacksMonsterPorted(mon, pos.target);
+                return;
+            }
 	            const petName = mon.givenName || (mon.saddled ? `saddled ${mon.data?.name || 'creature'}`
                 : mon.data?.name || 'creature');
             const petSubject = mon.givenName || `The ${petName}`;
@@ -16730,6 +16975,7 @@ export async function moveloop_core() {
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
+        if (process.env.WEREDBG) console.error(`WEREDBG timepass moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
@@ -16849,14 +17095,35 @@ export async function moveloop_core() {
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
             }
+            // C ref: allmain.c:481-511 — moveloop runs the occupation tick
+            // at the END of its pass (after the monster/time section), then
+            // evaluates monster_nearby() (hack.c:4103-4127) and only then
+            // stops the search with "You stop searching."; if the monster
+            // phase interrupts the pass (e.g. the hero dies mid-turn), C
+            // never reaches the check.  The JS port runs the search tick at
+            // the start of its pending-time pass, so the stop decision is
+            // deferred to the end of this pass (see
+            // g._search_stop_check_after_monsters below).
+            if (!foundSearchMonster && searchCountBeforeTurn > 0
+                && g._search_pending_count > 0)
+                g._search_stop_check_after_monsters = 1;
             // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
             // monster_nearby() (hack.c:4103-4127) stops an active search with
             // "You stop searching." when a visible hostile non-helpless monster
-            // is adjacent to the hero.  But when a wizard-spellcasting monster
-            // (AT_MAGC/AD_SPEL attack slot, mhitu.c:763-946/mcastu.c:129) can
-            // act this pass, its slot-0 hitmu() fires first and the stop_occupation()
-            // at the end of hitmu (mhitu.c:1265) produces the line instead;
-            // keep the occupation armed so the attack chain can merge it.
+            // is adjacent to the hero, then moveloop_core() RETURNS
+            // (allmain.c:510) with svc.context.move still charged
+            // (allmain.c:483), so the next pass's movemon() do/while
+            // (allmain.c:207-215) lets a monster that gains movement at the
+            // allocation act in the same input window as the stop line
+            // (g._post_occupation_monster_sweep, consumed before
+            // processMonsterTurns() below).  But when a wizard-spellcasting
+            // monster (AT_MAGC/AD_SPEL attack slot, mhitu.c:763-946/mcastu.c:129)
+            // or any other ready adjacent hostile can act THIS pass, its
+            // hitmu() slot fires during movemon() and the stop_occupation() at
+            // the end of hitmu (mhitu.c:1265) produces the line instead; the
+            // deferred pass-end check (g._search_stop_check_after_monsters) and
+            // the in-movemon adjacent check then cover the stop, so neither the
+            // immediate stop nor the sweep is armed.
             const spellcasterActsFirst = (game.level?.monsters || []).some(candidate =>
                 candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
                 && !candidate.mpeaceful
@@ -16875,6 +17142,7 @@ export async function moveloop_core() {
                     && (!candidate.minvis || g.u?.seeInvisible)
                     && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
                     && couldSeeCoord(candidate.mx, candidate.my))) {
+                g._search_stop_check_after_monsters = 0;
                 addToplineMessage('You stop searching.');
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
@@ -16884,6 +17152,7 @@ export async function moveloop_core() {
         }
 
 
+        if (process.env.WEREDBG) console.error(`WEREDBG post-searchblk moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} rng=${getRngLog().length}`);
         const earlyForceLock = g._force_lock_occupation && !g._process_time_with_more;
         const earlyPickLock = g._pick_lock_occupation && !g._process_time_with_more;
         const earlyPickDig = g._pick_dig_occupation && !g._process_time_with_more;
@@ -16922,12 +17191,14 @@ export async function moveloop_core() {
             g._ball_drag_force_tail_on_last_turn = 0;
             g._force_monster_turn_tail_once = 1;
         }
+        if (process.env.WEREDBG) console.error(`WEREDBG pre-monsters moves=${g.moves} skip=${skipMonsterTurnsThisPass} rng=${getRngLog().length}`);
         const monsterReadyBeforeAllocation = (g.level?.monsters || []).some(mo => !mo.dead && (mo.mhp ?? 1) > 0
             && (mo.movement || 0) >= NORMAL_SPEED);
         const postOccupationMonsterSweepArmed = !!g._post_occupation_monster_sweep
             && !monsterReadyBeforeAllocation;
         g._post_occupation_monster_sweep = 0;
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
+        if (process.env.WEREDBG) console.error(`WEREDBG post-monsters moves=${g.moves} moved=${movedMonsters} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
         if (ballDragForcedTail && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (ballDragNoResumePass && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (normalHalluDisplay && !armorTailOnly) g._display_hallucinated_normal = 0;
@@ -17091,6 +17362,37 @@ export async function moveloop_core() {
                 && (g.level?.monsters || []).some(mo => !mo.dead && (mo.mhp ?? 1) > 0
                     && !mo.mpeaceful && (mo.movement || 0) >= NORMAL_SPEED))
                 await processMonsterTurns();
+        }
+        // C ref: allmain.c:481-511 & hack.c:4103-4127 — once the pass's
+        // monster/time section has completed, monster_nearby() clears an
+        // active counted-search occupation with "You stop searching.".
+        // allmain.c:479 charges svc.context.move every pass unconditionally,
+        // so when the stop fires there is still exactly one more full time
+        // passage (monsters act) before rhack(0) reads the next key
+        // (hence this pass's unit plus one extra).
+        if (g._search_stop_check_after_monsters) {
+            g._search_stop_check_after_monsters = 0;
+            if (!armorTailOnly && !skipMonsterTurnsThisPass
+                && movedMonsters && movedMonsters !== 'defer-tail'
+                && (g._pending_time_passed || 0) > 0
+                && !g._message_more && !g._death_pending_confirm
+                && g._command_mode !== 'deathDieMore'
+                && g._search_pending_count > 0
+                && (g.level?.monsters || []).some(candidate =>
+                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
+                    && !candidate.mpeaceful && !candidate.data?.noattacks
+                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
+                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
+                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
+                    && !g.u?.blind && !candidate.mundetected
+                    && (!candidate.minvis || g.u?.seeInvisible)
+                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
+                    && couldSeeCoord(candidate.mx, candidate.my))) {
+                addToplineMessage('You stop searching.');
+                g._search_pending_count = 0;
+                g._pending_time_passed = Math.min(g._pending_time_passed, 2);
+                g._keep_pending_message = 1;
+            }
         }
 	        if (turnAdvanced && g._helpless_time > 0) {
 	            g._helpless_time--;

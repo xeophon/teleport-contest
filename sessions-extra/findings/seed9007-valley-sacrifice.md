@@ -1,106 +1,126 @@
 # Findings: seed9007-valley-sacrifice
 
-## What the session covers (ground truth, recorded with C recorder)
+And reclaiming the recorded session flow: Wizard "Offer" (chaotic) on seed
+9007 / datetime 20260720093000 — wishes for gold and a wand of teleportation,
+teleports by name to the Valley of the Dead, wizmaps, teleports onto the
+temple stack, spawns a **tame minotaur**, zaps a wand of teleportation west
+across the mob (hitting the lich AND the ettin mummy standing two rows
+away), waits through the minotaur-vs-shrine-priest brawl, teleports out
+the minotaur, genocides nothing (or not), kills the newt with force bolt,
+picks the newt corpse up, steps onto the altar of Moloch, and finally
+runs `#offer` in its three shapes.
 
-Wizard "Offer" (chaotic — rc has `align:chaotic` last), seed 9007,
-datetime 20260720093000:
+Base state this wave inherited was deep in the mid-session: the levelport
+had just been fixed, so the first divergence missed at turn ~step-167.
 
-- `#wizwish` 100 gold (for the offer-gold test) and
-  `#wizwish wand of teleportation` (lands on letter `o`).
-- `^V` name-levelport `valley` (main→gehennom is allowed in C's wizard
-  levelport; arrival shows `You arrive at the Valley of the Dead...` and
-  `The odor of burnt flesh and decay pervades the air.` as TWO --More--s;
-  the original stub's `#wizmap` was eaten by those mores — stub recipe
-  fixed with two spaces and re-recorded).
-- `#wizmap`, then `^T` position-teleport next to the altar of Moloch
-  (screen (74,11); DECgraphics draws altars as `{`, dat/symbols
-  `S_altar: \xfb`).
-- Priest greeting: `The priest of Moloch intones: "Pilgrim, you enter a
-  sacred place!"` — a hostile aligned cleric (4d10 melee, MR 50) plus an
-  adjacent lich infest the shrine.
-- `z` wand of teleport `o` west → `The lich vanishes!`
-- `#wizgenesis tame minotaur` (0-turn debug command), step onto the altar,
-  wait out the brawl with `. ` x8: `The minotaur hits the priest of
-  Moloch...` (many --More--s) → `The priest of Moloch is killed!`
-  (hero untouched).
-- `z` `o` east → `The minotaur vanishes!` (dismisses the pet so it can't
-  steal the kill).
-- `#wizgenesis newt` → `A newt appears next to you.` (SW of hero).
-- `Z` cast → `a` (force bolt, "Choose which spell to cast" menu) → `b`
-  direction: `The spell hits it!  You kill the newt!`
-- `b` step, `,` pickup → `p - a newt corpse.`, `u` back onto the altar.
-- `#offer` → `What do you want to sacrifice? [p or ?*]` → `$` →
-  `You cannot sacrifice gold.` (getobj GOLD_SYM rejection, invent.c).
-- `#offer` → `p` → `Moloch rejects your sacrifice!` + `The voice of
-  Moloch booms: "Suffer, infidel!"` — NOTE: the valley altar is
-  align="noalign" (Moloch), NOT chaotic as the task sheet assumed;
-  A_NONE + Inhell forces the rejection branch of
-  `offer_different_alignment_altar` (pray.c): ugangr+3, align−5,
-  luck−5, WIS 11→9; the corpse is NOT consumed.
-- Step off, drop the corpse, step back on, `#offer` →
-  `You don't have anything to sacrifice.`
+## Wave-five continuation — what I diagnosed and fixed
 
-Coverage: wishes (object+gold), name levelport, valley arrival mores,
-wizmap, wiz-teleport, wand of teleport zaps, tame wizgenesis, pet
-combat vs temple priest, force-bolt kill, corpse pickup, and all three
-`#offer` paths (gold rejection, Moloch rejection, empty offer).
+### 1. rloc()'s bogus x-offset (js/mklev.js, `rlocNoMsg`)
 
-## Final JS score
+Call site for a monster teleported by a wand-of-teleportation beam:
+teleport.c:1850 `rnd(COLNO - 1)` was being wrapped as
+`rnd(COLNO - 1) + 1` because of a middle-of-history comment about a
+display offset that actually lives somewhere else.  Same roll, same
+virtual cell check, wrong square: `rloc(ettin mummy)` placed it at
+(38,5) rather than the C-true (37,5).  One cell of offset then
+desynced the whole mid-game mfndpos roll pattern (the first recorded
+divergence was at flat index 17709, step 167, where the C stream's
+`rn2(16)=8` was the mummy's mtrack-avoidance roll and the JS was
+rolling `rn2(8)=0` for the same monster standing one column away).
 
-`node frozen/ps_test_runner.mjs sessions-extra/seed9007-valley-sacrifice.session.json`
-**FAIL — RNG 2254/21276, Screens 64/238 (cursors 85/238).**
+C refs: teleport.c:1850-1871 (`rloc` random-candidate loop).
 
-## Divergence 1 (root cause): name-based levelport unsupported in JS
+### 2. #wizgenesis visibility-gated feedback (js/cmd.js)
 
-First RNG mismatch, flat index 2254 (the very first call of valley
-level-gen, right after the wand-of-teleportation wish):
+"A minotaur appears next to you." printing depended on where the
+genesis call sites lived; the JS etoiletwo parallel paths.  Both are
+now routed through `finishWizgenesisSpawn()` and the message is only
+printed when the created monster is actually perceivable by the hero
+(makemon.c:1478 canseemon/sensemon guard — a wild minotaur spawned
+while the hero is blind is silently landed in seed4500-knight-coverage,
+which regressed when I first blindly re-enabled the message on all
+`#wizgenesis` outcomes).
 
-```
-[2253] C:  rn2(100)=45 @ makewish(zap.c:6421)
-[2253] JS: rn2(100)=45
-[2254] C:  rn2(3)=0  @ getbones(bones.c:645)   <<< C starts valley gen
-[2254] JS: rnd(100)=77                         <<< JS random-levelports
-[2255] C:  rn2(3)=1  @ random src=nhlib.lua:8 parent=shuffle(nhlib.lua:19)
-[2255] JS: rn2(19)=8
-```
+C refs: read.c:3252-3361 (`create_particular_creation`), makemon.c:1470-1503.
 
-In C, `^V` + `valley\n` resolves through `lev_by_name(buf)`
-(dungeon.c:2098) and ports to the Valley. In the JS, the
-`levelTeleportText` handler parses the answer with `cAtoiLikeLevel`
-(js/cmd.js:5176), which is ONLY `Number.parseInt` — there is no
-`lev_by_name` equivalent at all. Any typed level name ("valley",
-"castle", "oracle", "sokoban", "minetn") yields NaN, so the JS
-re-prompts (`retryInvalidLevelTeleportPrompt`), consumes the following
-recipe keys as more getlin input, and after 10 failures falls into
-`randomLevelTeleportFromPrompt` → `rnd(100)` → the hero lands on a
-RANDOM level instead of the Valley. Everything downstream desyncs.
+### 3. Temple-adjacent minotaur multi-attack rounds (js/allmain.js + js/mhitm.js)
 
-Same failure confirmed on the provided stubs
-`sessions-extra/seed9004-arrive-oracle.session.json` (FAIL 2590/5227)
-and `sessions-extra/seed9005-arrive-sokoban.session.json` (FAIL
-2001/5558), which also use name ports.
+The tame minotaur's dog_move attack is a full mattackm() with
+NATTK=3: claw 3d10, claw 3d10, butt 2d8.  Previous bespoke support
+modeled one swing per turn and hard-faked rn2(3)/rn2(6)/rn2(3)
+continuation rolls.  The new `portedPetAttackData()` /
+`petAttacksMonsterPorted()` gate (currently restricted to
+`data.name === 'minotaur'`) routes attacks through
+`mhitm.mattackm()` plus the return-attack gate on rn2(4)
+(dogmove.c:1158) so each minotaur round consumes exactly C's sequence
+rnd(20)+d(3,10)+rn2(3)+rn2(6)+rn2(3), then rnd(21)+d(3,10)+...
+[i.e., the i-scaled to-hit retry], etc. rather than the legacy shape.
 
-Suspect: `cAtoiLikeLevel` / the `levelTeleportText` command handler in
-`js/cmd.js` (~lines 5176, 72488); C reference `lev_by_name`
-(dungeon.c:2098), incl. its branch reachability rule
-(`dlev_in_current_branch`, dungeon.c:2087, which in this build also
-allows main↔gehennom — "valley" and "castle" work from Dlvl:1, while
-cross-branch names like "minetn" correctly fail).
+C refs: dogmove.c:1099-1168, mhitm.c:194-571, mhitm.c:441
+(rnd(20+i) gate), mhitm.c:1025 (mdamagem damage roll),
+uhitm.c:5258/5269 (mhitm_knockback rolls), mhitm.c:1363 (passivemm
+gate roll).
 
-## Divergences 2+ (not independently reachable yet)
+### 4. Ghosts wallwalking (js/mklev.js GHOST spec)
 
-Because the whole session desyncs at the levelport, nothing after it
-(wizgenesis, pet fight, force bolt, #offer paths) can be compared
-positionally. After `lev_by_name` is implemented, re-score to expose
-any further divergences in those areas.
+NetHack's ghost permonst has M1_WALLWALK|M1_FLY|M1_UNSOLID among its
+mflags1 (permonst.js passes_walls test).  The JS sparse GHOST spec
+Carried none of these, so `monsterAllowFlags` never granted
+ALLOW_WALL|ALLOW_ROCK, and mid-monster walks (mfndpos) stopped early:
+`ghost@m (,,) cnt=3` in the JS where the C log shows `cnt=8` (monster
+can stone-glance away, even onto "rock" walls).  The cascade hits in
+the second hour of the brawl: exactly where things desynced after the
+first reroll-fixes.
 
-## Suggested fix areas
+C refs: mondata.h:29 (passes_walls), mon.c:2104-2105 (allow flags),
+monc:2120-2260 (mfndpos reachable-cell filters).
 
-1. Implement `lev_by_name` in the JS levelport: exact (case-insensitive)
-   match against special-level proto names + mapseen annotations +
-   branch names, with C's reachability rule (`dlev_in_current_branch`
-   incl. the medusa↔valley and main↔gehennom allowances) and the
-   wizard-mode VISITED exemption. The `?` menu path already works in
-   the JS (menu port used for seed9006) and should stay equivalent.
-2. Re-score; then examine the valley-gen/pet/fight/#offer steps that
-   become comparable.
+### 5. Shrine-priest idle casting (js/allmain.js maybeCastUndirectedMonsterSpell)
+
+The peaceful shrine cleric was never casting its cleric spells; when
+faced with the brawl-battered minotaur adjacent, the C session briefly
+does: choose_monster_spell(rn2(15)), castmu's fumble gate rn2(150),
+"casts a spell!" message, and m_cure_self's d(3,6) heal.  The JS's
+cleric branch rolled a single rn2(m_lev) then returned false — no
+rn2(150), no d(3,6), and mspec_used never latched, sending the priest
+through the (wrong) generic movement path instead.
+
+Ported gate: mcastu.c:90-120 (choose_monster_spell), mcastu.c:155-168
+(directed-selection abort), mcastu.c:180-181 (mspec_used saturation to
+2 for level ≥ 8 casters), mcastu.c:206 (rn2(ml*10) fumble gate),
+mcastu.c:300-317 (m_cure_self d(3,6)), monmove.c:894-907+(667-690)
+(dochug idle-caster gate, "not attacking here → maybe cast, then
+m_move" branch).  In the abstract the JS also had to model the priest
+not moving on a cast-turn (MS_MOVE_DONE).
+
+C refs for the last pet NPC branch of the flow: monmove.c:1090-1135
+/ 2086-2126.
+
+## What is still UNPORTED in this subsystem
+
+Big buckets that still misalign after the fixes above:
+
+* **Monster-turn composer / --More--** pacing.  The C engine blocks mid
+  `mattackm()` at every repeated pline (so "The minotaur hits..." →
+  --More-- → next attack's to-hit roll lands in the same recorded key
+  and the *damage* lands in the next).  The JS engine queues messages
+  and continues processing, so rng-price distribution across keystrokes
+  doesn't match past the first working-message.  It shows up as
+  per-step mismatches on the brawl steps even when rng ends up matching
+  by the end of the turn.
+* **Priest retaliation path** (its "attacked-back" swings at adjacent
+  nasties): mattackm calls inside dochug's "attack if possible" tail
+  (monmove.c:1030 and on) for non-peaceful priests; the JS has the
+  basics on peaceful priests but not this gating.  Faces the target
+  pickup: minotaur.  Recording has specific "The priest of Moloch
+  wields a mace!/casts a spell!/looks better." triple rolls.  None of
+  those messages/counts exist yet in the JS.
+* **Pet-follow of the teleported-away minotaur** (rloc / mnexto
+  re-targeting after the pet got teleported away by the second wand
+  zap); currently the JS seems content to leave pandemonium at the
+  spawn zone.
+* **The #offer path** continues to diverge deeper in the 2100s-by-21200
+  range (ushered by other divergence ripples); the killable newt,
+  pickup, drop, offer logic all hire their own rng comparison windows
+  and should be revisited after a fresh rebuild of ground truth after
+  the above three are cleared.
