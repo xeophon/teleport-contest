@@ -2493,6 +2493,10 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 }
 
 function addToplineMessage(msg) {
+    if (process.env.TRACE95 && String(msg||'').includes('stop searching')) {
+        const st = new Error().stack.split('\n').slice(1, 6).map(s=>s.trim()).join(' <- ');
+        console.error(`TRACE stopsearch-emit rng=${getRngLog().length} msg=${JSON.stringify(msg)} stack: ${st}`);
+    }
     let text = String(msg || '');
     if (game._silent_drop_prompt_message) {
         if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
@@ -5874,7 +5878,7 @@ export async function processMonsterTurns() {
                                     if (!game._suppress_monster_attack_messages) {
                                         const missShown = addToplineMessage(missMessage);
                                         showedAttack = showedAttack || missShown;
-                                        if (missShown && countedRepeatActive && !stoppedCountedRepeat) {
+                                        if (missShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
                                             game._pending_time_passed = 0;
                                             game._skip_pending_time_decrement = 1;
                                             game._search_pending_count = 0;
@@ -5933,7 +5937,8 @@ export async function processMonsterTurns() {
                                 } else {
                                     showedAttack = showedAttack || hitShown;
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
-                                    if (hitShown && countedRepeatActive && !stoppedCountedRepeat) {
+                                    if (hitShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
+                                        if (process.env.TRACE95) console.error(`TRACE hitstop moves=${game.moves} rng=${getRngLog().length}`);
                                         game._pending_time_passed = 0;
                                         game._skip_pending_time_decrement = 1;
                                         game._search_pending_count = 0;
@@ -6485,7 +6490,12 @@ if (attack.adtyp === 'steal') {
 			                            attackShown = addToplineMessage(attackMessage);
 		                                    deferDamageForCombinedMore = attackShown && pendingWandHitMessage;
 	                                }
-		                            if (activeWeapon && !hiddenBullwhip) {
+		                            // C ref: tty topl.c:262-274 — a --More-- only shows
+                            // when the topline overflows; an armed-monster hit
+                            // whose message fits must not force one (the forced
+                            // more used to leak an extra monster loop pass while
+                            // the hero's queued death/revival chain progressed).
+	                            if (activeWeapon && !hiddenBullwhip && (deferDamageForCombinedMore || !attackShown)) {
 				                game._message_more = 1;
 				                game._process_time_with_more = /^A mysterious force prevents .* from teleporting!$/.test(pendingBeforeAttack || '') ? 0 : 1;
 				            }
@@ -6511,6 +6521,17 @@ if (attack.adtyp === 'steal') {
                                     } else if (hpBeforeDamage - damage <= 0) {
                                         game._death_status_hp_before_zero = hpBeforeDamage - damage === -1 ? hpBeforeDamage : null;
 			                                if (attackShown) game.u.uhp = 0;
+                                        if ((game._search_pending_count || 0) > 0) {
+                                            // C ref: mhitu.c:1265 — hitmu()'s trailing
+                                            // stop_occupation() runs only after done()
+                                            // returns, so a fatal hit during counted
+                                            // searching prints "You stop searching."
+                                            // after "OK, so you don't die." instead
+                                            // of mid-movemon.
+                                            game._stop_search_after_revival = 1;
+                                            game._search_pending_count = 0;
+                                            game._counted_repeat_interruptible = 0;
+                                        }
 			                                const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
 			                                game._death_cause = `killed by ${article} ${name}`;
                                     if (game.flags?.debug && name === 'raven') {
@@ -6541,6 +6562,21 @@ if (attack.adtyp === 'steal') {
                                         game._deferred_raven_blind_after_more = { toHit, subject };
 	                            } else {
 	                                game.u.uhp = hpBeforeDamage - damage;
+	                            }
+                                // C ref: mhitu.c:1265 — hitmu() ends with
+                                // stop_occupation() once the hit landed:
+                                // an active (counted) search occupation stops
+                                // with "You stop searching." right after the
+                                // hit's damage is applied.
+	                            if (attackShown && (game.u?.uhp || 0) > 0
+	                                && (game._search_pending_count || 0) > 0
+	                                && !game._suppress_monster_attack_messages) {
+	                                game._pending_time_passed = 0;
+	                                game._skip_pending_time_decrement = 1;
+	                                game._search_pending_count = 0;
+	                                game._counted_repeat_interruptible = 0;
+                                    if (process.env.TRACE95) console.error(`TRACE hitstop-armed moves=${game.moves} rng=${getRngLog().length}`);
+	                                addToplineMessage('You stop searching.');
 	                            }
                             const brownMoldPassive = attackShown && (game.u?.uhp || 0) > 0
                                 && String(game.u?._polyself_form?.name || '').toLowerCase() === 'brown mold';
@@ -16878,9 +16914,14 @@ export async function moveloop_core() {
             g._force_monster_turn_tail_once = 1;
         }
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
+        if (process.env.TRACE95) console.error(`TRACE pass-post p=${g._pending_time_passed} more=${!!g._message_more} ptwm=${!!g._process_time_with_more} contam=${!!g._continue_monsters_after_more} resume=${g._monster_resume_index}/${g._monster_resume_same_index} atkres=${!!g._attack_resume_after_more} scnt=${g._search_pending_count} rng=${getRngLog().length} pm=${JSON.stringify((g._pending_message||'').slice(0,70))}`);
         if (g._monnearby_check_after_movemon) {
             g._monnearby_check_after_movemon = 0;
             if (!g._stop_search_message_pending && g._search_pending_count > 0
+                // A hero-killing hit this pass defers its hitmu() stop_occupation
+                // until after revival (mhitu.c:1258 mdamageu → done() … then
+                // stop_occupation at mhitu.c:1265): emit nothing mid-movemon.
+                && !(g._queued_message_after_more === 'You die...') && !g._death_in_movemon_this_pass
                 && (game.level?.monsters || []).some(candidate =>
                     candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
                     && !candidate.mpeaceful && !candidate.data?.noattacks
