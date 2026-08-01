@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9162,
+   "datetime": "20260720120000",
+   "nethackrc": "OPTIONS=name:Probe,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": "#levelchange\n15\n               #wizgenesis\nshrieker\n  #wizwish\nscroll of stinking cloud\n  ro    h. \u0014  lllll.5s 5s 5s 5s 5s 5s 5s "
+  }
+ ]
+}
