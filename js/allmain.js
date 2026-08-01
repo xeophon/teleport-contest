@@ -16715,6 +16715,7 @@ export async function moveloop_core() {
     while (g._pending_time_passed
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
+        if (process.env.HARDBG) console.error(`PASS rng=${getRngLog().length} moves=${g.moves} ptp=${g._pending_time_passed} spc=${g._search_pending_count} more=${g._message_more} pend=${JSON.stringify((g._pending_message||'').slice(0,30))}`);
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
@@ -16733,7 +16734,9 @@ export async function moveloop_core() {
         if (armorTailOnly) g._armor_tail_after_more = 0;
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
+            if (process.env.HARDBG) console.error(`TAIL-pre rng=${getRngLog().length} moves=${g.moves} spc=${g._search_pending_count}`);
             const tailResult = await finishMonsterTurnTail();
+            if (process.env.HARDBG) console.error(`TAIL-post rng=${getRngLog().length} moves=${g.moves} spc=${g._search_pending_count}`);
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
@@ -16898,6 +16901,26 @@ export async function moveloop_core() {
             g._force_monster_turn_tail_once = 1;
         }
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
+        /* C ref: allmain.c:495-510 — after each occupation tick, monster_nearby()
+         * (hack.c:4103-4127) stops an active counted search ("You stop searching.")
+         * as soon as a visible, hostile, non-helpless monster is adjacent — including
+         * one created by the turn tail (demigod intervene() -> nasty() spawn). */
+        if ((g._search_pending_count || 0) > 0
+            && (g.level?.monsters || []).some(mon =>
+                mon && !mon.dead && (mon.mhp == null || mon.mhp > 0)
+                && !mon.mpeaceful && !mon.data?.noattacks
+                && Math.abs((mon.mx || 0) - (g.u?.ux || 0)) <= 1
+                && Math.abs((mon.my || 0) - (g.u?.uy || 0)) <= 1
+                && (mon.mx !== (g.u?.ux || 0) || mon.my !== (g.u?.uy || 0))
+                && !g.u?.blind && !mon.mundetected
+                && (!mon.minvis || g.u?.seeInvisible)
+                && !!(g.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
+                && couldSeeCoord(mon.mx, mon.my))) {
+            addToplineMessage('You stop searching.');
+            g._search_pending_count = 0;
+            g._pending_time_passed = Math.min(g._pending_time_passed || 0, 1);
+            g._keep_pending_message = 1;
+        }
         if (ballDragForcedTail && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (ballDragNoResumePass && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (normalHalluDisplay && !armorTailOnly) g._display_hallucinated_normal = 0;
