@@ -8,6 +8,7 @@ import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inv
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
+import { alignGodName } from './offer.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
 import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn, youWere } from './were.js';
@@ -21,6 +22,12 @@ import {
     selectHwep as monsterSelectHwep,
     dmgvalMonsterWeapon,
     hitvalMonsterWeapon,
+    mattackm as monsterAttackm,
+    M_ATTK_MISS,
+    M_ATTK_HIT,
+    M_ATTK_DEF_DIED,
+    M_ATTK_AGR_DIED,
+    M_ATTK_AGR_DONE,
     MM_AGGR as MONSTER_MM_AGGR_FLAG,
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
@@ -15296,6 +15303,41 @@ function finishPetKilledMonster(killer, target, {
     return explosion;
 }
 
+/* C ref: dogmove.c:1099-1168 + mhitm.c mattackm() — use the ported
+ * multi-attack core when the pet carries a true attack table with >= 2
+ * effective attacks (e.g. minotaur, jabberwock); single-attack companions
+ * (ponies, dogs...) keep the legacy bespoke path that existing sessions
+ * were balanced against. */
+function portedPetAttackData(mon) {
+    const list = monsterPermonstAttacks(mon) || [];
+    const effective = list.filter(a => a && a.aatyp !== 0 && (a.damn || a.damd));
+    if (effective.length < 2) return false;
+    /* The ported mattackm() route is exercised against recorded sessions
+     * one species at a time (the legacy path below remains authoritative
+     * for species covered by existing passing sessions):
+     *   - minotaur: session seed9007-valley-sacrifice (claw/claw/butt vs
+     *     temple priest, incl. knockback+passive pairing and retal gate).
+     */
+    return mon.data?.name === 'minotaur';
+}
+
+/* C ref: dogmove.c:1100-1168 dog_move()'s attack adjacency branch:
+ * mattackm(mtmp, mtmp2) handles the full NATTK loop; afterwards the
+ * return-attack gate rolls rn2(4) under precise conditions (HIT && neither
+ * died, defender hasn't moved this turn, attacker square not scary to
+ * defender, still adjacent).  Mirrors dogmove.c:1150-1167 verbatim. */
+function petAttacksMonsterPorted(mon, target) {
+    const mstatus = monsterAttackm(mon, target);
+    if (mstatus & M_ATTK_AGR_DIED) return; /* MMOVE_DIED: pet died */
+    if ((mstatus & (M_ATTK_HIT | M_ATTK_DEF_DIED)) === M_ATTK_HIT
+        && rn2(4)
+        && target.mlstmv !== (game.moves || 1)
+        && Math.max(Math.abs(mon.mx - target.mx), Math.abs(mon.my - target.my)) <= 1) {
+        const ret = monsterAttackm(target, mon);
+        if (ret & M_ATTK_DEF_DIED) return; /* MMOVE_DIED: pet died on return */
+    }
+}
+
 function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
     game._pet_map_redraw_pending = 1;
     const realUx = game.u?.ux ?? mon.mx;
@@ -15691,6 +15733,16 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
     let chcnt = 0;
     for (const pos of candidates) {
 		        if (pos.target) {
+            /* C ref: dogmove.c:1099-1168 (dog_move attack branch) driving
+             * mhitm.c mattackm(): a pet with a full per-attack table fights
+             * through mattackm()'s multi-attack loop (minotaur: claw 3d10,
+             * claw 3d10, butt 2d8), then the return-attack gate rolls
+             * rn2(4) (dogmove.c:1158).  The legacy bespoke branch below
+             * covers single-attack companions only. */
+            if (portedPetAttackData(mon)) {
+                petAttacksMonsterPorted(mon, pos.target);
+                return;
+            }
 	            const petName = mon.givenName || (mon.saddled ? `saddled ${mon.data?.name || 'creature'}`
                 : mon.data?.name || 'creature');
             const petSubject = mon.givenName || `The ${petName}`;

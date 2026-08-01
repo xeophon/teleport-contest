@@ -30384,10 +30384,22 @@ async function finishWizgenesisSpawn(mdat, disposition, monspec) {
                 if (disposition === 'hostile') created.mtame = 0;
             }
             newsym(created.mx, created.my);
+            /* C ref: makemon.c:1470-1503 — the genesis feedback
+             * ("<A|An> <mon> appears [next to you].") only fires when the
+             * new monster is discernible by the hero (canseemon()/
+             * sensemon()); #wizgenesis passes MM_NOEXCLAM which suppresses
+             * the "suddenly" qualifier only.  An out-of-sight genesis (e.g.
+             * behind a wall) prints nothing — seed4500-knight-coverage. */
+            const visible_ = !game.u?.blind && !created.minvis && !created.mundetected
+                && !!(game.viz_array?.[created.my]?.[created.mx] & IN_SIGHT)
+                && cansee(created.mx, created.my);
+            if (process.env.GENDBG) console.error(`GENDBG ${created.data?.name} vis=${visible_} blind=${!!game.u?.blind} minvis=${!!created.minvis} mundet=${!!created.mundetected} insight=${!!(game.viz_array?.[created.my]?.[created.mx] & IN_SIGHT)} cansee=${cansee(created.mx, created.my)} pos=${created.mx},${created.my}`);
+            if (visible_) {
             const appearName = created.data?.name || monspec || 'monster';
             const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
                 || /^[A-Z]/.test(appearName));
             await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
+            }
             return;
         }
     }
@@ -76499,55 +76511,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     return;
                 }
             }
-            const spot = mdat ? enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, mdat) : null;
-            if (spot) {
-                const created = await makemon(mdat, spot.x, spot.y, 0);
-                if (created) {
-                    created.msleeping = 0;
-                    if (disposition === 'tame') {
-                        // C ref: dog.c tamedog()/initedog() — the new pet is
-                        // peaceful, gets an edog extension, and starts at
-                        // tameness 5 (10 for domestic animals).
-                        created.mpeaceful = 1;
-                        created.pet = true;
-                        created.mtame = Math.max(created.mtame || 0,
-                            created.data?.domestic || created.data?.isDomestic ? 10 : 5);
-                        created.mextra ??= {};
-                        created.mextra.edog ??= {
-                            apport: game.u?.acurr?.a?.[A_CHA] ?? 3,
-                            hungrytime: (game.moves || 1) + 1000,
-                            dropdist: 10000,
-                            whistletime: 0,
-                            ogoal: { x: -1, y: -1 },
-                        };
-                    } else if (disposition === 'peaceful') {
-                        // C ref: read.c create_particular_creation() —
-                        // makepeaceful: mtame = 0, mpeaceful = 1.
-                        created.mtame = 0;
-                        created.mpeaceful = 1;
-                    } else {
-                        created.mpeaceful = 0;
-                        if (disposition === 'hostile') created.mtame = 0;
-                    }
-                    newsym(created.mx, created.my);
-                    if (false) { /* minotaur special-case removed: C prints the
-                        standard "A <monster> appears next to you." message for
-                        #wizgenesis of a tame minotaur (recorded in
-                        seed9007-valley-sacrifice step 163) */
-                    } else {
-                        // C ref: makemon.c:1474-1496 — makemon's MM_NOEXCLAM
-                    // message uses Amonnam() ("The <unique>/pname" vs
-                    // "a <generic>"); #wizgenesis (MM_NOEXCLAM via
-                    // read.c:3299) suppresses "suddenly" and uses '.'.
-                    const appearName = created.data?.name || monspec || 'monster';
-                    const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
-                        || /^[A-Z]/.test(appearName));
-                    await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
-                    }
-                    return;
-                }
-            }
-            await setMessage('Nothing happens.');
+            /* All genesis creation goes through finishWizgenesisSpawn
+             * (visibility-gated feedback, tame/peaceful disposition) —
+             * single canonical path; see the C-fidelity comment there. */
+            await finishWizgenesisSpawn(mdat, disposition, monspec);
             return;
         }
         if (key === 8 || key === 127) game._wizgenesis_text = (game._wizgenesis_text || '').slice(0, -1);
