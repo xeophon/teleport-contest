@@ -76530,10 +76530,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                         if (disposition === 'hostile') created.mtame = 0;
                     }
                     newsym(created.mx, created.my);
-                    if (created.data?.name === 'minotaur') {
-                        game._pending_message = '';
-                        game._message_more = 0;
-                        game._keep_pending_message = 0;
+                    if (false) { /* minotaur special-case removed: C prints the
+                        standard "A <monster> appears next to you." message for
+                        #wizgenesis of a tame minotaur (recorded in
+                        seed9007-valley-sacrifice step 163) */
                     } else {
                         // C ref: makemon.c:1474-1496 — makemon's MM_NOEXCLAM
                     // message uses Amonnam() ("The <unique>/pname" vs
