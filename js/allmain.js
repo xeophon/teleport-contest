@@ -4526,6 +4526,7 @@ export async function processMonsterTurns() {
                         }
                     }
                 }
+                if (process.env.NH_DBG_LICH) (game._traceLog ??= []).push(`[loop-entry] i=${monIndex} name=${mon.data?.name} mv=${mon.movement} sleep=${mon.msleeping} froz=${mon.mfrozen} rpi=${resumingPetInventory} rap=${resumedAfterPreturn} smi=${resumingSameMonster}`);
                 const movement = mon.movement || 0;
                 const skipAfterMimicReveal = !!mon._skip_after_mimic_reveal;
                 if (skipAfterMimicReveal) mon._skip_after_mimic_reveal = 0;
@@ -6196,6 +6197,14 @@ export async function processMonsterTurns() {
                                  * dmgval (weapon.c:216) on top of the attack dice. */
 		                            if (activeWeapon) damage += dmgvalMonsterWeapon(activeWeapon, null);
 		                            const hpBeforeDamage = game.u?.uhp || 0;
+                                    if (attack.adtyp === 'cold' && data.mcastWizardSpells)
+                                        // mattacku attack slot 1 for liches is
+                                        // ATTK(AT_MAGC, AD_SPEL, 0, 0)
+                                        // (monsters.h:1889-1891) — castmu()
+                                        // (mcastu.c:129-330) runs right after
+                                        // hitmu() returns, even when the touch
+                                        // killed the hero and done() was refused.
+                                        game._lichCastMonster = mon;
                                     if (attack.adtyp === 'cold' && pendingBeforeAttack && !game._suppress_monster_attack_messages) {
                                         if (travelFinishPending) {
                                             if (travelFinishOnlyPending) game._pending_message = '';
@@ -6285,6 +6294,10 @@ export async function processMonsterTurns() {
 	                            }
 	                            let coldNegated = false;
 	                            if (attack.adtyp === 'cold') {
+	                                if (data.mcastWizardSpells)
+	                                    // see castmu note on the paired pending branch
+	                                    // (mcastu.c:129-330 after hitmu)
+	                                    game._lichCastMonster = mon;
 	                                const magicNegation = (game.inventory || []).reduce((best, item) =>
 	                                    item.worn ? Math.max(best, ARMOR_MAGIC_NEGATION[item.kind] || 0) : best, 0);
 	                                coldNegated = rn2(10) < 3 * magicNegation;
