@@ -5907,11 +5907,20 @@ export async function processMonsterTurns() {
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                 }
                                 if ((game.u?.uhp || 0) <= 0) {
+                                    if (process.env.DIEDBG) console.error(`DIEDBG generic queue rng=${getRngLog().length} moves=${game.moves} name=${name}`);
                                     const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
                                     game._death_cause = `killed by ${article} ${name}`;
                                     game._death_current_move = !!game._pending_time_passed;
                                     game._queued_message_after_more = 'You die...';
                                     game._message_more = 1;
+                                    // C ref: done() -> die() -> savelife()
+                                    // (end.c:704-758,1108-1116) — in wizard mode the
+                                    // "Die?" refusal heals the hero immediately and the
+                                    // interrupted monster turn keeps running.  The JS
+                                    // prompt chain is deferred across input boundaries,
+                                    // but HP must track C for hp-gated per-turn rolls
+                                    // (regen_hp, allmain.c:655-659) to line up.
+                                    restoreHeroHpForUnresolvedWizardDeath();
                                     break;
                                 }
                             }
