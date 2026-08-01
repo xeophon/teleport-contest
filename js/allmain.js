@@ -16707,6 +16707,7 @@ export async function moveloop_core() {
             let foundTrap = false;
             let foundStatueTrap = false;
             g._search_pending_count--;
+            g._search_ticks_this_press = (g._search_ticks_this_press || 0) + 1;
             for (let x = (g.u?.ux || 0) - 1; x <= (g.u?.ux || 0) + 1; x++) {
                 for (let y = (g.u?.uy || 0) - 1; y <= (g.u?.uy || 0) + 1; y++) {
                     if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO) continue;
@@ -16784,8 +16785,14 @@ export async function moveloop_core() {
             // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
             // monster_nearby() (hack.c:4103-4127) stops an active search with
             // "You stop searching." when a visible hostile non-helpless monster
-            // is adjacent to the hero.
+            // is adjacent to the hero.  This check belongs to the occupation
+            // branch of moveloop2 (allmain.c:485), which only fires for
+            // continuation ticks: the press's first search is the direct rhack
+            // command action (cmd.c:3728-3748 sets the "searching" occupation
+            // before running dosearch() itself), so no monster_nearby check
+            // runs between the first search and that turn's monster phase.
             if (!foundSearchMonster && searchCountBeforeTurn > 0
+                && (g._search_ticks_this_press || 0) > 1
                 && g._search_pending_count > 0
                 && (game.level?.monsters || []).some(candidate =>
                     candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)

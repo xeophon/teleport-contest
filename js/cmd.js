@@ -80454,6 +80454,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         game.context.move = count || 1;
         game._search_pending_count = game.context.move;
+        game._search_ticks_this_press = 0;
         game._counted_repeat_interruptible = count > 0;
         game._last_command_was_search = true;
         game._count_prefix = '';
