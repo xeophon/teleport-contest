@@ -29,6 +29,7 @@ import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, G
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
+import { MONS, MZ_SMALL } from './permonst.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
@@ -11762,9 +11763,13 @@ function monsterThrownPotionAccidentalHitValue(target, potion = null) {
     return monsterThrownObjectAccidentalHitValue(target, potion);
 }
 
+// C ref: trap.c m_harmless_trap() / mondata.c — msize (MZ_*) from the
+// permonst table when the runtime record's own fields don't carry it.
+const MONSTER_MSIZE_BY_NAME = new Map(MONS.map(m => [m.name, m.size]));
 function monsterObjectHitSizeValue(target) {
     const data = target?.data || {};
-    const value = target?.msize ?? target?.size ?? data.msize ?? data.size;
+    const value = target?.msize ?? target?.size ?? data.msize ?? data.size
+        ?? (data.name != null ? MONSTER_MSIZE_BY_NAME.get(data.name) : undefined);
     if (Number.isFinite(Number(value))) return Math.trunc(Number(value));
     const key = normalizedGemName(value);
     if (MONSTER_OBJECT_HIT_SIZE_VALUES.has(key)) return MONSTER_OBJECT_HIT_SIZE_VALUES.get(key);
@@ -12511,7 +12516,13 @@ function monsterTrapHarmless(mon, trap) {
     const ttyp = trap?.ttyp;
     const data = mon.data || {};
     if (monsterInAirAvoidsFloorTrigger(mon, trap)) return true;
-    if (ttyp === BEAR_TRAP) return data.verysmall || data.small || data.amorphous || data.unsolid;
+    // C ref: m_harmless_trap() BEAR_TRAP case (trap.c:1125-1129): harmless
+    // iff msize <= MZ_SMALL || amorphous || is_whirly || unsolid.  msize
+    // resolution mirrors monsterObjectHitSizeValue()'s chain.
+    if (ttyp === BEAR_TRAP) {
+        const msize = monsterObjectHitSizeValue(mon);
+        return msize <= MZ_SMALL || !!data.amorphous || !!data.whirly || !!data.unsolid;
+    }
     if (ttyp === RUST_TRAP) return data.name !== 'iron golem';
     if (ttyp === WEB) return monsterWebPassesThrough(data);
     if (ttyp === ANTI_MAGIC) return monsterResistsAntiMagicTrap(mon);
