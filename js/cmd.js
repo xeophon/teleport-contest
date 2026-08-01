@@ -63536,6 +63536,7 @@ function tutorialEnterStash() {
                     if (game._damage_after_topline_more_needs_ac && deferredDamage && (game.u?.uac ?? 10) < 0)
                         deferredDamage = Math.max(1, deferredDamage - rnd(-(game.u?.uac ?? 10)));
                     const hpBeforeDeferredDamage = game.u?.uhp || 0;
+                    if (process.env.WEREDBG) console.error(`WEREDBG deferdmg-tail rng=${getRngLog().length} dmg=${deferredDamage} uhp=${game.u?.uhp}/${game.u?.uhpmax} qmam=${JSON.stringify(game._queued_message_after_more)} kb=${!!game._knockback_after_topline_more}`);
                     game.u.uhp = Math.max(0, hpBeforeDeferredDamage - deferredDamage);
                     game._damage_after_topline_more_needs_ac = 0;
                     game._damage_after_topline_more = 0;
@@ -63556,7 +63557,12 @@ function tutorialEnterStash() {
                     if (deferredDamage > 0 && game.u?._polyself_form
                         && !game._monster_throw_after_more
                         && !game._arrow_drop_throw_after_topline_more) rn2(3);
-	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
+	                    // C ref: mdamageu() (mhitu.c:1258) -> done() (end.c:1025+)
+	                    // preempts any queued non-fatal followup (e.g. the previous
+	                    // revival's "You survived that attempt on your life."
+	                    // tail); only an already-queued death line defers a second.
+	                    if ((game.u?.uhp || 0) <= 0
+	                        && !(game._queued_message_after_more || '').startsWith('You die')) {
                             if (hpBeforeDeferredDamage - deferredDamage === -1)
                                 game._death_status_hp_before_zero = hpBeforeDeferredDamage;
 	                        game._death_cause ||= 'killed by a water demon';
@@ -63566,6 +63572,18 @@ function tutorialEnterStash() {
                         }
                         game._queued_message_after_more = 'You die...';
 	                        keepMore = true;
+                            if (process.env.WEREDBG) console.error(`WEREDBG tail-death-hold SET rng=${getRngLog().length} uhp=${game.u?.uhp}`);
+                            // C ref: mhitu.c:1258 mdamageu() -> done_in_by()
+                            // (end.c:184-196) -> done() (end.c:1025+) — a fatal
+                            // monster hit runs C's die()/savelife() prompt chain
+                            // synchronously before the monster-move loop reaches
+                            // the next monster.  The JS engine defers that hit's
+                            // damage to this --More-- dismissal tail, so the armed
+                            // monster-phase resume must likewise wait for the
+                            // queued "You die..."/"Die?" chain; otherwise the
+                            // next monster attacks the 0-hp hero and the
+                            // post-refusal savelife restore lands after its bite.
+	                        game._death_queued_mid_attack_tail = 1;
 	                    }
 	                }
                 if (game._poisoned_projectile_after_topline_more
@@ -64031,7 +64049,12 @@ function tutorialEnterStash() {
                                 }
 		                    }
 	                    game._pending_message = messages.join('  ');
-	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
+	                    // C ref: mdamageu() (mhitu.c:1258) -> done() (end.c:1025+)
+	                    // preempts any queued non-fatal followup (e.g. the previous
+	                    // revival's "You survived that attempt on your life."
+	                    // tail); only an already-queued death line defers a second.
+	                    if ((game.u?.uhp || 0) <= 0
+	                        && !(game._queued_message_after_more || '').startsWith('You die')) {
 	                        const name = deferred.name || 'monster';
 	                        // C ref: done_in_by() (end.c:184-196) picks
 	                        // "killed by <monster>" with format KILLED_BY_AN,
@@ -64076,7 +64099,14 @@ function tutorialEnterStash() {
                     game._command_mode = 'demonBribeOffer';
                 }
                 if (game._message_more) {
+		                    // C ref: mdamageu() (mhitu.c:1258) -> done()/savelife()
+		                    // (end.c:1025+, end.c:2040-2068) — when the deferred damage
+		                    // applied in this dismissal tail killed the hero, C's
+		                    // "You die..."/"Die?" chain resolves before the monster
+		                    // loop reaches the next monster; hold the armed
+		                    // monster-phase resume until the chain has restored HP.
 		                    game._process_time_with_more = !pauseAfterDeferredMultiattack
+                                && !game._death_queued_mid_attack_tail
                                 && (resumeMonsters || resumeAttackMonsters || (resumePetInventory && game._fire_direction_pending_after_more)) ? 1 : 0;
 		                    if (resumePetInventory && game._fire_direction_pending_after_more) game._fire_direction_ready_after_more = 1;
 		                }
@@ -64087,9 +64117,13 @@ function tutorialEnterStash() {
 			                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
 			                    game._process_command_time_now = 1;
 			                }
-		                if ((resumeMonsters || resumeAttackMonsters) && game._pending_time_passed > 0) {
+		                if ((resumeMonsters || resumeAttackMonsters) && !game._death_queued_mid_attack_tail && game._pending_time_passed > 0) {
 		                    game._process_command_time_now = 1;
 		                    if (resumeMonsters) game._pickup_resume_stop_after_monsters = 1;
+		                }
+		                if (game._death_queued_mid_attack_tail) {
+		                    game._death_queued_mid_attack_tail = 0;
+		                    game._process_command_time_now = 0;
 		                }
                 const fumbleNoiseMore = resumePetMessage && pendingHadFumbleAfterMonsterNoise;
                 const petRunSteps = Math.max(game._run_steps_remaining || 0, game._run_steps_after_more || 0);
