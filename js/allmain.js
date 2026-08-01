@@ -2493,6 +2493,7 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 }
 
 function addToplineMessage(msg) {
+    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more});
     let text = String(msg || '');
     if (game._silent_drop_prompt_message) {
         if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
@@ -5630,7 +5631,24 @@ export async function processMonsterTurns() {
                                 }
                                 break;
                             }
-                            if (chain.slot >= 4) delete mon.m_attack_chain;
+                            if (chain.slot >= 4) {
+                                delete mon.m_attack_chain;
+                                // C ref: end.c:727 savelife() sets nomovemsg =
+                                // "You survived that attempt on your life." and
+                                // unmul() (hack.c:4185-4186) pline's it when the
+                                // death-turn's tail runs — after an attack chain
+                                // resumed across the "Die?" refusal has dumped
+                                // its remaining slots.  Emit it here so tty-width
+                                // batching (--More--) matches C's pagination
+                                // instead of dropping the queued line.
+                                if (game._queued_explore_lifesaving_message
+                                    && game._queued_message_after_more === 'You survived that attempt on your life.'
+                                    && game._pending_message) {
+                                    addToplineMessage(game._queued_message_after_more);
+                                    game._queued_message_after_more = '';
+                                    game._queued_explore_lifesaving_message = 0;
+                                }
+                            }
                             if (game._message_more && !game._process_time_with_more) return false;
                             continue;
                         }
