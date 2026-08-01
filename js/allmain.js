@@ -2494,6 +2494,8 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 
 function addToplineMessage(msg) {
     let text = String(msg || '');
+    if (process.env.TLDBG) process.stderr.write(`TLDBG  msg="${text.slice(0,50)}" moves=${game.moves} pend=${game._pending_time_passed} spc=${game._search_pending_count} more=${game._message_more?1:0} cmd=${game._command_mode||''} rngidx=${getRngLog().length}
+`);
     if (game._silent_drop_prompt_message) {
         if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
             game._pending_message = '';
@@ -2580,6 +2582,37 @@ function addToplineMessage(msg) {
 // were.c:231-237) and reports "You feel feverish."  Protection from shape
 // changers and an AD_WERE-defending weapon also block infection
 // (uhitm.c:4280); neither gear exists in this contest build.
+// C ref: mhitu.c:1265 hitmu() — a landed monster melee attack on the hero
+// runs stop_occupation() after damage resolution; with a counted-search
+// occupation armed (set_occupation, cmd.c:3728-3729) this prints
+// "You stop searching." (allmain.c:688) and cancels the rest of the batch
+// via nomul(0) (hack.c:4161).  Unlike the occupation-tick stop
+// (monster_nearby, allmain.c:497-511), the mid-turn stop does NOT leave a
+// charged turn in its wake: the pass it happened in is the last one, after
+// which rhack(0) reads the next key (allmain.c:479's charge only reaches
+// the next pass when the occupation branch returned before rhack).
+function stopCountedSearchOccupationOnHeroHit(fatalHit = false) {
+    if (!game._counted_repeat_interruptible || !(game._search_pending_count > 0))
+        return;
+    if (fatalHit) {
+        // C: die() -> wizard "Die?" refusal -> savelife() (end.c:1112-1122,
+        // 704-732) happens synchronously inside hitmu()'s mdamageu() call;
+        // the trailing stop_occupation() then runs only after the revival,
+        // so "You stop searching." lands after "OK, so you don't die.".
+        // The JS death prompt chain is deferred across keypresses, so defer
+        // the message to the survival handler (cmd.js) while still cancelling
+        // the batch now (nomul(0) semantics).
+        game._hero_hit_search_stop_after_survival = 1;
+        game._search_pending_count = 0;
+        game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+        return;
+    }
+    addToplineMessage('You stop searching.');
+    game._search_pending_count = 0;
+    game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+    game._keep_pending_message = 1;
+}
+
 function applyWereBiteInfection(mon, data, msgSink) {
     // C ref: uhitm.c:4276-4284 mhitm_ad_were() mhitu branch — the outcome
     // message ("You avoid harm." / "You feel feverish.") is printed by C
@@ -6478,6 +6511,12 @@ if (attack.adtyp === 'steal') {
 		                                        `${game._topline_after_more}  ${wereBiteOutcomeMessages.join('  ')}`;
 		                                }
 		                            }
+		                            // C ref: mhitu.c:1265 — stop_occupation() at the
+		                            // end of hitmu(): stops the occupied counted
+		                            // search with "You stop searching." after the hit
+		                            // message landed.
+		                            if (!deferHitEffects && attackShown)
+		                                stopCountedSearchOccupationOnHeroHit(hpBeforeDamage - damage <= 0);
 		                            if (activeWeapon && !hiddenBullwhip) {
 				                game._message_more = 1;
 				                game._process_time_with_more = /^A mysterious force prevents .* from teleporting!$/.test(pendingBeforeAttack || '') ? 0 : 1;

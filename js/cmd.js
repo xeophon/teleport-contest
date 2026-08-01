@@ -65558,6 +65558,14 @@ function tutorialEnterStash() {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
+            // C ref: mhitu.c:1265 — the fatal landed hit resumes from hitmu()
+            // after the wizard "Die?" refusal and runs stop_occupation()
+            // (allmain.c:684-697), so "You stop searching." joins the survival
+            // line when the fatal attack interrupted a counted search.
+            if (game._hero_hit_search_stop_after_survival) {
+                game._hero_hit_search_stop_after_survival = 0;
+                survivalMessages.push('You stop searching.');
+            }
             // C ref: savelife() (end.c:704-758) — a hero who refuses the "Die?"
             // prompt while held is released ("The salamander releases you.",
             // end.c:753) and unstuck() tags the grabber with an immediate
