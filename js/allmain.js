@@ -6819,15 +6819,13 @@ if (attack.adtyp === 'steal') {
                                 if (mon.following && !mon.billct && fudist > 4
                                     && !game.level?.flags?.rogue_level
                                     && inShopBaseRoomAt(oldx, oldy)) {
-                                    const tgtX = mon.mux ?? heroX;
-                                    const tgtY = mon.muy ?? heroY;
-                                    const tdx = Math.abs(oldx - tgtX);
-                                    const tdy = Math.abs(oldy - tgtY);
-                                    const linedUp = tdx === 0 || tdy === 0 || tdx === tdy;
-                                    const throwRange = game.u?._polyself_base?.throwsRocks
-                                        ? 20
-                                        : Math.trunc((game.u?.acurr?.a?.[A_STR] ?? 10) / 2) + 1;
-                                    const inLine = linedUp && Math.max(tdx, tdy) <= throwRange;
+                                    /* m_search_items()'s shop rule
+                                       (monmove.c:1353-1356): standing in a shop
+                                       room rolls rn2(25) unconditionally before
+                                       deciding whether the keeper skips the
+                                       search.  Observed recorder output (e.g.
+                                       seed9006 step 80/88) always has this
+                                       roll for the -1-following keeper here. */
                                     rn2(25);
                                 }
                             }
