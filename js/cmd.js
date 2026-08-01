@@ -63901,7 +63901,16 @@ function tutorialEnterStash() {
 		                                damage = Math.max(1, damage - rnd(-(game.u?.uac ?? 10)));
 		                            game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
                                 }
-		                    }
+	                    }
+                        // C ref: mattacku()/movemon slot-loop continuation —
+                        // once the deferred replay consumed every pending slot
+                        // of this monster, the monster loop advances to the
+                        // next monster instead of re-entering this one.
+                        if (!pauseAfterDeferredMultiattack && !game._deferred_multiattack_after_more) {
+                            game._monster_resume_same_index = 0;
+                            game._monster_resume_after_preturn = 0;
+                            game._attack_resume_after_more = 0;
+                        }
 	                    game._pending_message = messages.join('  ');
 	                    if (process.env.TRACE95 && (game.u?.uhp || 0) <= 4) console.error(`TRACE death-detect uhp=${game.u?.uhp} moves=${game.moves}`);
 	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
