@@ -30387,7 +30387,10 @@ async function finishWizgenesisSpawn(mdat, disposition, monspec) {
             const appearName = created.data?.name || monspec || 'monster';
             const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
                 || /^[A-Z]/.test(appearName));
-            await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
+            // C ref: makemon.c:1482 uses Amonnam() — capitalized an()
+            // (do_name.c:1158-1165 Amonnam, objnam.c:2143-2155 an).
+            const what = an(appearName);
+            await setMessage(`${proper ? 'The ' + appearName : what[0].toUpperCase() + what.slice(1)} appears next to you.`);
             return;
         }
     }
@@ -63794,7 +63797,14 @@ function tutorialEnterStash() {
 	                            damage = Math.max(1, damage - rnd(-(game.u?.uac ?? 10)));
 	                        game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
 		                    }
-		                    for (let i = 0; i < (deferred.attacks || []).length; i++) {
+		                    // mhitu.c:72-77 hitmsg() — " again" iff the same
+                    // monster's immediately previous attack slot was a hit of
+                    // the same attack type.  (Some data packs bake the same
+                    // semantics into slot-2 verbs.)
+                    let prevSlotWasHit = !!deferred.first?.hit;
+                    let prevBaseVerb = deferred.prevAttack
+                        ? String(deferred.prevAttack.verb || 'hits').replace(/ again$/, '') : null;
+		                for (let i = 0; i < (deferred.attacks || []).length; i++) {
 		                        const attackIndex = (deferred.nextIndex || 1) + i;
 		                        const attack = deferred.attacks[i];
 		                        const attackRoll = rnd(20 + attackIndex);
@@ -63815,12 +63825,19 @@ function tutorialEnterStash() {
                                 let nextFirst = null;
 		                        if ((deferred.toHit || 0) <= attackRoll) {
 		                            nextMessage = `${shownSubject} ${(deferred.toHit || 0) === attackRoll ? 'just ' : ''}misses!`;
+                                    // mhitu.c:87-88 missmu() — a miss resets the
+                                    // hitmsg_prev/hitmsg_mid tracker.
+                                    prevSlotWasHit = false;
+                                    prevBaseVerb = null;
 		                        } else {
 		                            const damage = d(attack.dice ?? 1, attack.sides ?? 2);
-                                    const attackVerb = hallucinatedSubject
-                                        ? String(attack.verb || 'hits').replace(/ again$/, '')
-                                        : attack.verb || 'hits';
-		                            nextMessage = `${shownSubject} ${attackVerb}!`;
+                                    const baseVerb = String(attack.verb || 'hits').replace(/ again$/, '');
+                                    // mhitu.c:73-76 — consecutive same-aatyp
+                                    // slots give " again"; data verbs proxy it.
+                                    const again = prevSlotWasHit && prevBaseVerb === baseVerb ? ' again' : '';
+                                    prevSlotWasHit = true;
+                                    prevBaseVerb = baseVerb;
+		                            nextMessage = `${shownSubject} ${baseVerb}${again}!`;
                                     nextFirst = { hit: true, damage, message: nextMessage };
                                 }
                                 const currentMessage = messages.join('  ');
@@ -63831,6 +63848,7 @@ function tutorialEnterStash() {
                                     game._deferred_multiattack_after_more = {
                                         first: nextFirst,
                                         attacks: (deferred.attacks || []).slice(i + 1),
+                                        prevAttack: (deferred.attacks || [])[i - 1] || deferred.prevAttack,
                                         nextIndex: attackIndex + 1,
                                         toHit: deferred.toHit,
                                         subject: deferred.subject,
@@ -63853,6 +63871,7 @@ function tutorialEnterStash() {
                                 }
 		                    }
 	                    game._pending_message = messages.join('  ');
+	                    if (process.env.TRACE95 && (game.u?.uhp || 0) <= 4) console.error(`TRACE death-detect uhp=${game.u?.uhp} moves=${game.moves}`);
 	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
 	                        const name = deferred.name || 'monster';
 	                        // C ref: done_in_by() (end.c:184-196) picks
@@ -76542,7 +76561,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     const appearName = created.data?.name || monspec || 'monster';
                     const proper = !!(created.data?.unique || created.data?.iswiz || created.data?.pname
                         || /^[A-Z]/.test(appearName));
-                    await setMessage(`${proper ? 'The' : 'A'} ${appearName} appears next to you.`);
+                    // C ref: makemon.c:1482 uses Amonnam() — capitalized an()
+                    // (do_name.c:1158-1165 Amonnam, objnam.c:2143-2155 an).
+                    const what = an(appearName);
+                    await setMessage(`${proper ? 'The ' + appearName : what[0].toUpperCase() + what.slice(1)} appears next to you.`);
                     }
                     return;
                 }

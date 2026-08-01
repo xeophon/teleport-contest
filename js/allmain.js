@@ -4695,11 +4695,13 @@ export async function processMonsterTurns() {
                              * interrupts a counted search with
                              * "You stop searching." — folded into the fight's
                              * own --More-- page (message order per recording). */
-                            if ((game._search_pending_count || 0) > 0) {
-                                addToplineMessage('You stop searching.');
-                                game._search_pending_count = 0;
-                                game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
-                            }
+                            // C ref: monster-vs-monster fights stop nothing
+                            // themselves in C (no stop_occupation in the
+                            // mhitm/mattackm path); handle_occupation's
+                            // monster_nearby() (allmain.c:505-507) runs
+                            // post-movemon — see the deferred check in
+                            // moveloop_core below.
+
                             if (game._message_more && !game._process_time_with_more) {
                                 game._monster_resume_index = monIndex + 1;
                                 game._monster_resume_somebody_can_move = somebodyCanMove;
@@ -5858,7 +5860,7 @@ export async function processMonsterTurns() {
 	                                    const missMessage = `${shownSubject} ${toHit === attackRoll && game.flags?.verbose !== false ? 'just ' : ''}misses!`;
 	                                    if (deferMultiAttack) {
 	                                        multiMessages.push(missMessage);
-	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), nextIndex: attackIndex + 1, toHit, subject, name };
+	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name };
 	                                        continue;
 	                                    }
                                     if (!game._suppress_monster_attack_messages) {
@@ -5883,7 +5885,7 @@ export async function processMonsterTurns() {
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {
 	                                    multiMessages.push(hitMessage);
-	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), nextIndex: attackIndex + 1, toHit, subject, name };
+	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name };
 	                                    continue;
 	                                }
 	                                rn2(3);
@@ -7072,16 +7074,23 @@ if (attack.adtyp === 'steal') {
                         && Math.abs(mon.my - (game.u?.uy || 0)) <= 1;
                     if (process.env.WEREDBG && /wolf|jackal/.test(mon.data?.name || ''))
                         console.error(`WEREDBG stop-search-check mon=${mon.data?.name}@${mon.mx},${mon.my} moves=${game.moves} sao=${searchOccupationActive} spc=${game._search_pending_count} adjs=${searchAdjacentHostile} peace=${!!mon.mpeaceful} blind=${!!game.u?.blind} mind=${!!mon.mundetected} vis=${!!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)} csc=${couldSeeCoord(mon.mx, mon.my)}`);
+                    // C ref: dochugw()'s post-move occupation-stop check
+                    // (monmove.c:203-238): a hostile, attack-capable,
+                    // non-helpless monster that is close now but was far
+                    // or unseen before (crossed the (BOLT_LIM+1)^2 ring /
+                    // became visible mid-movemon) stops the occupation.
+                    // The message is deferred until after processMonsterTurns
+                    // so it follows the turn's monster messages (allmain.c:
+                    // movemon runs at the top of the iteration — see below).
                     if (searchOccupationActive && (game.level?.monsters || []).includes(mon)
                         && !mon.mpeaceful && mon.mcanmove !== false && !mon.mundetected
                         && !scaryObjectAt(mon, game.u?.ux || 0, game.u?.uy || 0)
-                        && (searchAdjacentHostile
-                            || (((mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2) <= (BOLT_LIM + 1) ** 2
-                                && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2)))
+                        && (((mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2) <= (BOLT_LIM + 1) ** 2
+                            && (!searchSawBefore || !searchCouldSeeBefore || searchDistBefore > (BOLT_LIM + 1) ** 2))
                         && !game.u?.blind && (!mon.minvis || game.u?.seeInvisible)
                         && (game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT)
                         && couldSeeCoord(mon.mx, mon.my)) {
-                        addToplineMessage('You stop searching.');
+                        game._stop_search_message_pending = 1;
                         game._search_pending_count = 0;
                         game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
                     }
@@ -16645,6 +16654,7 @@ export function processEatingOccupationTick(g = game) {
 
 export async function moveloop_core() {
     const g = game;
+    if (process.env.TRACE95) console.error(`TRACE core-entry moves=${g.moves} umove=${g.u?.umovement} pending=${g._pending_time_passed} scnt=${g._search_pending_count} more=${!!g._message_more} rng=${getRngLog().length} qmsg=${JSON.stringify(g._queued_message_after_more||'')} pm=${JSON.stringify((g._pending_message||'').slice(0,70))} taless=${JSON.stringify(g._topline_after_more||'')}`);
     // C ref: allmain.c:483-510 — while an occupation is armed the moveloop
     // charges a full turn automatically (svc.context.move = 1 immediately
     // before (*go.occupation)()); the eat occupation ticks back-to-back
@@ -16774,25 +16784,15 @@ export async function moveloop_core() {
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
             }
             // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
-            // monster_nearby() (hack.c:4103-4127) stops an active search with
+            // monster_nearby() (hack.c:4106-4127) stops an active search with
             // "You stop searching." when a visible hostile non-helpless monster
-            // is adjacent to the hero.
+            // is adjacent to the hero.  C's check runs in handle_occupation
+            // AFTER the iteration's movemon, so evaluation is deferred until
+            // processMonsterTurns() completes below (the tick itself, and any
+            // rng it consumes, keeps its base position).
             if (!foundSearchMonster && searchCountBeforeTurn > 0
-                && g._search_pending_count > 0
-                && (game.level?.monsters || []).some(candidate =>
-                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
-                    && !candidate.mpeaceful && !candidate.data?.noattacks
-                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
-                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
-                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
-                    && !g.u?.blind && !candidate.mundetected
-                    && (!candidate.minvis || g.u?.seeInvisible)
-                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
-                    && couldSeeCoord(candidate.mx, candidate.my))) {
-                addToplineMessage('You stop searching.');
-                g._search_pending_count = 0;
-                g._pending_time_passed = Math.min(g._pending_time_passed, 1);
-                g._keep_pending_message = 1;
+                && g._search_pending_count > 0) {
+                g._monnearby_check_after_movemon = 1;
             }
         }
 
@@ -16836,6 +16836,38 @@ export async function moveloop_core() {
             g._force_monster_turn_tail_once = 1;
         }
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
+        if (g._monnearby_check_after_movemon) {
+            g._monnearby_check_after_movemon = 0;
+            if (!g._stop_search_message_pending && g._search_pending_count > 0
+                && (game.level?.monsters || []).some(candidate =>
+                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
+                    && !candidate.mpeaceful && !candidate.data?.noattacks
+                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
+                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
+                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
+                    && !g.u?.blind && !candidate.mundetected
+                    && (!candidate.minvis || g.u?.seeInvisible)
+                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
+                    && couldSeeCoord(candidate.mx, candidate.my))) {
+                g._stop_search_message_pending = 1;
+                g._search_pending_count = 0;
+                g._pending_time_passed = Math.min(g._pending_time_passed, 1);
+                g._keep_pending_message = 1;
+                // C ref: allmain.c:483 + 509-510 — unlike a mid-movemon
+                // dochugw stop, the handle_occupation stop_occupation()
+                // returns from moveloop_core with svc.context.move still 1,
+                // so the next key-free iteration runs its movemon header
+                // before the hero's next command is read.
+                g._stop_search_extra_pass = 1;
+            }
+        }
+        // C ref: allmain.c:203-216 + 495-507 — movemon() runs at the top of
+        // the moveloop iteration and the occupation/stop step after it, so
+        // "You stop searching." follows the turn's monster messages.
+        if (g._stop_search_message_pending) {
+            g._stop_search_message_pending = 0;
+            addToplineMessage('You stop searching.');
+        }
         if (ballDragForcedTail && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (ballDragNoResumePass && g.u) g.u.umovement = Math.min(g.u.umovement || 0, NORMAL_SPEED);
         if (normalHalluDisplay && !armorTailOnly) g._display_hallucinated_normal = 0;
@@ -17010,6 +17042,10 @@ export async function moveloop_core() {
 	        else {
 	            g._pet_resume_keep_time_count = 0;
 	            g._pending_time_passed--;
+	        }
+	        if (g._stop_search_extra_pass) {
+	            g._stop_search_extra_pass = 0;
+	            g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
 	        }
         // C ref: allmain.c:483-510 — while an occupation is armed the
         // moveloop charges a full turn automatically (svc.context.move = 1
