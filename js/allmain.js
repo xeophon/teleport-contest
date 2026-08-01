@@ -2580,7 +2580,14 @@ function addToplineMessage(msg) {
 // were.c:231-237) and reports "You feel feverish."  Protection from shape
 // changers and an AD_WERE-defending weapon also block infection
 // (uhitm.c:4280); neither gear exists in this contest build.
-function applyWereBiteInfection(mon, data) {
+function applyWereBiteInfection(mon, data, msgSink) {
+    // C ref: uhitm.c:4276-4284 mhitm_ad_were() mhitu branch — the outcome
+    // message ("You avoid harm." / "You feel feverish.") is printed by C
+    // *after* hitmsg() has already displayed "The <monster> bites!", so when
+    // the JS caller composes the attack message after the effect rolls, the
+    // outcome text is handed back via msgSink and displayed once the attack
+    // message has been emitted.
+    const emit = msgSink ? (text) => msgSink.push(text) : addToplineMessage;
     const dbg = process.env.WEREDBG;
     const dbgInfo = () => `mon=${data?.name} moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length}`;
     const r4 = rn2(4);
@@ -2592,12 +2599,12 @@ function applyWereBiteInfection(mon, data) {
     const r10 = rn2(10);
     if (!(r10 >= 3 * armproWere)) { // uhitm.c:87-93 — negated
         if (dbg) console.error(`WEREDBG  avoid harm r10=${r10} armpro=${armproWere}`);
-        addToplineMessage('You avoid harm.');
+        emit('You avoid harm.');
         return;
     }
     if (dbg) console.error(`WEREDBG  feverish r10=${r10} armpro=${armproWere}`);
     setUlycn(String(data?.name || '').toLowerCase()); // uhitm.c:4282-4284
-    addToplineMessage('You feel feverish.');
+    emit('You feel feverish.');
     // uhitm.c:4283 exercise(A_CON, FALSE) — attrib.c:509 subtracts rn2(2)
     // when |AEXE| < AVAL(50); no C-side AEXE accumulation exists in this port,
     // so always roll (matches C for |AEXE(A_CON)| < 50).
@@ -6389,8 +6396,16 @@ if (attack.adtyp === 'steal') {
 	                                // C ref: uhitm.c:4276-4286 — the AD_WERE effect
 	                                // rolls with the hit (before knockback, which is
 	                                // deferred below via _knockback_after_topline_more).
-	                                if (attack.adtyp === 'were' && isWereData(data))
-	                                    applyWereBiteInfection(mon, data);
+	                                if (attack.adtyp === 'were' && isWereData(data)) {
+	                                    const wereBiteOutcomeMessages = [];
+	                                    applyWereBiteInfection(mon, data, wereBiteOutcomeMessages);
+	                                    // uhitm.c:4277 hitmsg() precedes the AD_WERE
+	                                    // outcome text; both land on the fresh
+	                                    // line shown after this --More--.
+	                                    if (wereBiteOutcomeMessages.length)
+	                                        game._topline_after_more =
+	                                            `${game._topline_after_more}  ${wereBiteOutcomeMessages.join('  ')}`;
+	                                }
 	                                game._attack_resume_after_more = 1;
 	                                game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
 	                                game._damage_after_topline_more_needs_ac = 1;
@@ -6411,6 +6426,7 @@ if (attack.adtyp === 'steal') {
                                         && pendingBeforeAttack;
 		                            deferHitEffects = (game._prayer_pending_done && pendingBeforeAttack
 		                                && !pendingExploreLifeSaving);
+		                            const wereBiteOutcomeMessages = [];
 		                            let deferDamageForCombinedMore = false;
 		                            if (deferHitEffects) {
 		                                game._monster_hit_effects_after_more = (game._monster_hit_effects_after_more || 0) + 1;
@@ -6427,7 +6443,7 @@ if (attack.adtyp === 'steal') {
 		                                // C ref: uhitm.c:4276-4286 mhitm_ad_were() — AD_WERE
 		                                // effect between damage roll and knockback.
 		                                if (attack.adtyp === 'were' && isWereData(data))
-		                                    applyWereBiteInfection(mon, data);
+		                                    applyWereBiteInfection(mon, data, wereBiteOutcomeMessages);
 		                                rn2(3);
 		                                rn2(6);
 		                            }
@@ -6448,6 +6464,20 @@ if (attack.adtyp === 'steal') {
 			                            attackShown = addToplineMessage(attackMessage);
 		                                    deferDamageForCombinedMore = attackShown && pendingWandHitMessage;
 	                                }
+		                            // C ref: uhitm.c:4277 — hitmsg() precedes the AD_WERE
+		                            // outcome text; the infection rolls happen before the
+		                            // JS attack message is composed, so display the queued
+		                            // outcome messages now that the attack text has been
+		                            // emitted (after it on the same line when it fits).
+		                            if (!deferHitEffects && wereBiteOutcomeMessages.length) {
+		                                if (attackShown) {
+		                                    for (const wereBiteMsg of wereBiteOutcomeMessages)
+		                                        addToplineMessage(wereBiteMsg);
+		                                } else if (game._topline_after_more) {
+		                                    game._topline_after_more =
+		                                        `${game._topline_after_more}  ${wereBiteOutcomeMessages.join('  ')}`;
+		                                }
+		                            }
 		                            if (activeWeapon && !hiddenBullwhip) {
 				                game._message_more = 1;
 				                game._process_time_with_more = /^A mysterious force prevents .* from teleporting!$/.test(pendingBeforeAttack || '') ? 0 : 1;
@@ -16773,27 +16803,18 @@ export async function moveloop_core() {
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
             }
-            // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
-            // monster_nearby() (hack.c:4103-4127) stops an active search with
-            // "You stop searching." when a visible hostile non-helpless monster
-            // is adjacent to the hero.
+            // C ref: allmain.c:481-511 — moveloop runs the occupation tick
+            // at the END of its pass (after the monster/time section), then
+            // evaluates monster_nearby() (hack.c:4103-4127) and only then
+            // stops the search with "You stop searching."; if the monster
+            // phase interrupts the pass (e.g. the hero dies mid-turn), C
+            // never reaches the check.  The JS port runs the search tick at
+            // the start of its pending-time pass, so the stop decision is
+            // deferred to the end of this pass (see
+            // g._search_stop_check_after_monsters below).
             if (!foundSearchMonster && searchCountBeforeTurn > 0
-                && g._search_pending_count > 0
-                && (game.level?.monsters || []).some(candidate =>
-                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
-                    && !candidate.mpeaceful && !candidate.data?.noattacks
-                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
-                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
-                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
-                    && !g.u?.blind && !candidate.mundetected
-                    && (!candidate.minvis || g.u?.seeInvisible)
-                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
-                    && couldSeeCoord(candidate.mx, candidate.my))) {
-                addToplineMessage('You stop searching.');
-                g._search_pending_count = 0;
-                g._pending_time_passed = Math.min(g._pending_time_passed, 1);
-                g._keep_pending_message = 1;
-            }
+                && g._search_pending_count > 0)
+                g._search_stop_check_after_monsters = 1;
         }
 
 
@@ -16978,6 +16999,37 @@ export async function moveloop_core() {
             }
             advanceSpecialLevelFeatures(g);
             advanceRegions(g);
+        }
+        // C ref: allmain.c:481-511 & hack.c:4103-4127 — once the pass's
+        // monster/time section has completed, monster_nearby() clears an
+        // active counted-search occupation with "You stop searching.".
+        // allmain.c:479 charges svc.context.move every pass unconditionally,
+        // so when the stop fires there is still exactly one more full time
+        // passage (monsters act) before rhack(0) reads the next key
+        // (hence this pass's unit plus one extra).
+        if (g._search_stop_check_after_monsters) {
+            g._search_stop_check_after_monsters = 0;
+            if (!armorTailOnly && !skipMonsterTurnsThisPass
+                && movedMonsters && movedMonsters !== 'defer-tail'
+                && (g._pending_time_passed || 0) > 0
+                && !g._message_more && !g._death_pending_confirm
+                && g._command_mode !== 'deathDieMore'
+                && g._search_pending_count > 0
+                && (g.level?.monsters || []).some(candidate =>
+                    candidate && !candidate.dead && (candidate.mhp == null || candidate.mhp > 0)
+                    && !candidate.mpeaceful && !candidate.data?.noattacks
+                    && Math.abs((candidate.mx || 0) - (g.u?.ux || 0)) <= 1
+                    && Math.abs((candidate.my || 0) - (g.u?.uy || 0)) <= 1
+                    && (candidate.mx !== (g.u?.ux || 0) || candidate.my !== (g.u?.uy || 0))
+                    && !g.u?.blind && !candidate.mundetected
+                    && (!candidate.minvis || g.u?.seeInvisible)
+                    && !!(g.viz_array?.[candidate.my]?.[candidate.mx] & IN_SIGHT)
+                    && couldSeeCoord(candidate.mx, candidate.my))) {
+                addToplineMessage('You stop searching.');
+                g._search_pending_count = 0;
+                g._pending_time_passed = Math.min(g._pending_time_passed, 2);
+                g._keep_pending_message = 1;
+            }
         }
 	        if (turnAdvanced && g._helpless_time > 0) {
 	            g._helpless_time--;
