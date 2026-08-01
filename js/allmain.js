@@ -4492,7 +4492,7 @@ export async function processMonsterTurns() {
 		            for (let monIndex = startIndex; monIndex < mons.length; monIndex++) {
 		                const mon = mons[monIndex];
 		                if (!(game.level?.monsters || []).includes(mon)) continue;
-                    if (process.env.PROCDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.PROCDBG_WIN || '6360,6480').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`PROC rng=${L} idx=${monIndex} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement} peace=${!!mon.mpeaceful} shk=${!!mon.isshk} fol=${!!mon.following} roomno=${game.level?.at(mon.mx, mon.my)?.roomno}`); }
+                    if (process.env.PROCDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.PROCDBG_WIN || '6360,6480').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`PROC rng=${L} idx=${monIndex} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement} peace=${!!mon.mpeaceful} shk=${!!mon.isshk} fol=${!!mon.following} roomno=${game.level?.at(mon.mx, mon.my)?.roomno} hero=${game.u?.ux},${game.u?.uy} mux=${mon.mux},${mon.muy}`); }
 		                const resumingPetInventory = game._pet_inventory_resume === mon;
 	                const resumedAfterPreturn = resumeAfterPreturn && monIndex === startIndex;
 	                if (resumingSameMonster && monIndex === startIndex && mon._resume_web_after_more) {
@@ -9886,6 +9886,7 @@ if (attack.adtyp === 'steal') {
         const movementRoll = rn2(NORMAL_SPEED);
         const extra = movementRoll < (mmove % NORMAL_SPEED) ? NORMAL_SPEED : 0;
         mon.movement = (mon.movement || 0) + base + extra;
+        if (process.env.ALLODBG) { const L = getRngLog().length; if (L >= +(process.env.ALLOC_LO||5570) && L <= +(process.env.ALLOC_HI||5600)) console.error(`ALLOC rng=${L} ${mon.data?.name} @${mon.mx},${mon.my} roll=${movementRoll} mmove=${mmove} mv=${mon.movement} fleetim=${mon.mfleetim}`); }
         if (mon.mfleetim && !--mon.mfleetim) mon.mflee = 0;
     }
     const currentDungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
@@ -12505,6 +12506,16 @@ function monsterTrapHarmless(mon, trap) {
     if (ttyp === WEB) return monsterWebPassesThrough(data);
     if (ttyp === ANTI_MAGIC) return monsterResistsAntiMagicTrap(mon);
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
+}
+
+// C ref: trap.c:1555 wearing_iron_shoes() — a monster wearing iron shoes
+// (armorf slot, METAL==iron material) takes no d(2,4) damage from a bear
+// trap, though it is still caught.
+function monsterWearingIronShoes(mon) {
+    return (mon?.minvent || []).some(item => {
+        if (!item || !(item.worn || item.owornmask)) return false;
+        return /iron shoes/.test(String(item.actualKind || item.kind || '').toLowerCase());
+    });
 }
 
 function monsterWornIronFootwearForAntiMagic(mon) {
@@ -15202,6 +15213,34 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (monsterFireTrapEffect(mon, trap)) return done();
     }
     if (monsterRockTrapEffect(mon, trap)) return done();
+    // C ref: trapeffect_bear_trap() monster branch (trap.c:1526-1560),
+    // reached via m_move() -> postmov() -> mintrap() (monmove.c:1509,2072,
+    // trap.c:3790-3840): a monster stepping onto a bear trap it does not
+    // already know about (already_seen && rn2(4) evade) is caught
+    // (mtmp->mtrapped = 1) and, unless it wears iron shoes, takes d(2,4)
+    // damage via thitm().
+    if (trap?.ttyp === BEAR_TRAP && !monsterTrapHarmless(mon, trap)) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
+        monsterTriggerTrap(mon, trap);
+        if (trap.madeby_u && rnl(5)) mon.mpeaceful = 0;
+        mon.mtrapped = 1;
+        const bearTrapInSight = !game.u?.blind && couldSeeCoord(mon.mx, mon.my)
+            && !mon.minvis && !mon.mundetected;
+        if (bearTrapInSight) {
+            trap.tseen = true;
+            addToplineMessage(`${monsterDisplayName(mon)} is caught in ${trap.madeby_u ? 'your' : 'a'} bear trap!`);
+        }
+        if (!monsterWearingIronShoes(mon)) {
+            const bearTrapDamage = d(2, 4);
+            mon.mhp = (mon.mhp || 1) - bearTrapDamage;
+            if ((mon.mhp || 0) < 1) {
+                if (bearTrapInSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+                finishTrapKilledMonster(mon);
+                return done();
+            }
+        }
+        return done();
+    }
     if (monsterPitTrapEffect(mon, trap, { cavernTunnelRoom })) return done();
     if (monsterHoleTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {

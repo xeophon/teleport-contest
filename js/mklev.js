@@ -7576,6 +7576,9 @@ export async function makemon(mdat, x, y, mmflags) {
         if (ptr.hidesUnder) mon.mundetected = canHideUnderObjAt(x, y);
     }
     if (game.in_mklev && ptr.mlet === ';') mon.mundetected = !!IS_POOL(game.level?.at(x, y)?.typ);
+    // C ref: makemon.c:1327-1329 — the whole S_LEPRECHAUN class (mlet 'l':
+    // leprechauns, lurkers above, trappers) always spawns asleep.
+    if (ptr.mlet === 'l') mon.msleeping = 1;
     if (ptr.mlet === S_NYMPH || ptr.mlet === 'J') {
         if (rn2(5) && !game.u?.uhave?.amulet) mon.msleeping = 1;
     }
