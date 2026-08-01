@@ -14904,6 +14904,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         rnd(20);
     }
     const poss = mfndpos(mon, monsterAllowFlags(mon, false, conflictActive));
+    if (process.env.ETDBG && mon.data?.name === 'ettin mummy') console.error(`ETDBG rng=${getRngLog().length} from=${mon.mx},${mon.my} appr=${appr} mx,my=${mon.mux},${mon.muy} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info]))} mtrack=${JSON.stringify((mon.mtrack||[]).map(t=>[t.x,t.y]))}`);
     if (process.env.MONDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.MONDBG_WIN || '11840,11960').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`MONDBG rng=${L} ${mon.data?.name} @${mon.mx},${mon.my} peace=${!!mon.mpeaceful} wander=${randomWander} appr=${appr} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info,p.occupant?p.occupant.data?.name:0]))}`); }
     let next = null;
     let nextInfo = 0;
@@ -14960,6 +14961,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         }
     }
     if (!next) return false;
+    if (process.env.ETDBG && mon.data?.name === 'ettin mummy') console.error(`ETDBG-CHOOSE rng=${getRngLog().length} from=${mon.mx},${mon.my} to=${next.x},${next.y} appr=${appr} wander=${randomWander}`);
     const nextLocForDig = game.level?.at(next.x, next.y);
     const nextIsClosedDoor = nextLocForDig?.typ === DOOR
         && (nextLocForDig.doormask & (D_CLOSED | D_LOCKED));
