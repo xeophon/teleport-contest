@@ -870,7 +870,12 @@ const WATCHMAN = { name: 'watchman', mlet: '@', glyph: '@', color: CLR_GRAY, mle
 const WATCH_CAPTAIN = { name: 'watch captain', mlet: '@', glyph: '@', color: CLR_GREEN, mlevel: 10, difficulty: 12, mmove: 10, maligntyp: -4, mercenary: true, armed: true, alwaysPeaceful: true };
 
 const GIANT_MIMIC = { name: 'giant mimic', mlet: S_MIMIC, mlevel: 9, mac: 7, mmove: 3, maligntyp: 0, hostile: true, neuter: false, attack: { dice: 3, sides: 6, verb: 'hits' } };
-const GHOST = { name: 'ghost', mlet: 'ghost', glyph: ' ', color: CLR_GRAY, mlevel: 10, mmove: 3, maligntyp: -5, neuter: false, noCorpse: true, alwaysHostile: true };
+const GHOST = { name: 'ghost', mlet: 'ghost', glyph: ' ', color: CLR_GRAY, mlevel: 10, mmove: 3, maligntyp: -5, neuter: false, noCorpse: true, alwaysHostile: true,
+    /* include/monsters.h ghost row: M1_FLY|M1_BREATHLESS|M1_WALLWALK|
+       M1_HUMANOID|M1_UNSOLID — ghosts float over water/lava and pass
+       through walls (mon_allowflags() -> ALLOW_WALL|ALLOW_ROCK,
+       mon.c:2104-2105). */
+    inAir: true, passWalls: true, solidless: true, unsolid: true };
 const SHADE = { name: 'shade', mlet: 'ghost', glyph: ' ', color: CLR_BLACK, mlevel: 12, mmove: 10, difficulty: 14, maligntyp: 0, neuter: false, noCorpse: true, inAir: true, passWalls: true, alwaysHostile: true, nasty: true };
 const ALIGNED_CLERIC = { name: 'aligned cleric', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 12, difficulty: 15, mmove: 12, maligntyp: 0, priest: true, armed: true, randomInventory: true, alwaysPeaceful: true };
 const HIGH_CLERIC = { name: 'high cleric', mlet: '@', glyph: '@', color: CLR_WHITE, mlevel: 25, hpLevel: 29, difficulty: 30, mmove: 15, maligntyp: 0, priest: true, armed: true, randomInventory: true, alwaysPeaceful: true, nasty: true };

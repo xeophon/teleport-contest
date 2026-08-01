@@ -14522,6 +14522,82 @@ async function maybeCastUndirectedMonsterSpell(mon) {
     }
     const level = Math.max(1, mon.m_lev || mon.data?.hpLevel || mon.data?.mlevel || 1);
     const cleric = clericCaster;
+
+    /* C ref: mcastu.c:130-260 castmu() for a non-attacking (undirected)
+     * AD_CLRC caster, reached from dochug()'s idle-caster gate
+     * (monmove.c:889-907).  Spell selection calls choose_monster_spell()
+     * once (mcastu.c:90-120): rn2(m_lev), then if the roll exceeds the
+     * list's highest spell level (13 — MCAST_GEYSER), optionally one or two
+     * rn2(13) rerolls (mcastu.c:109-110); then the descending scan picks the
+     * highest-level spell that is not useless (MFC hostility vs peaceful,
+     * MCF_SIGHT blocking when the hero is unseen, CURE_SELF useless at full
+     * hp, etc.).  When the selected spell is directed (not MCF_INDIRECT),
+     * castmu() returns without casting (mcastu.c:155-168): the hero never
+     * notices.  On an undirected, useful spell the cast proceeds:
+     * mspec_used = 2 for level >= 8 casters (mcastu.c:180-181), then a
+     * fumble roll rn2(ml*10) vs 20/100 for confused (mcastu.c:206). */
+    if (cleric && mon.ispriest && mon.shrine) {
+        const MCAST_LIST = [ // mon_cleric_spells (mcastu.c:28-31) with levels
+            { name: 'openWounds', level: 0, indirect: false },
+            { name: 'cureSelf', level: 1, indirect: true },
+            { name: 'confuseYou', level: 2, indirect: false },
+            { name: 'paralyzeYou', level: 4, indirect: false },
+            { name: 'blindYou', level: 6, indirect: false },
+            { name: 'insects', level: 8, indirect: true },
+            { name: 'curseItems', level: 10, indirect: false },
+            { name: 'lightning', level: 11, indirect: false },
+            { name: 'firePillar', level: 12, indirect: false },
+            { name: 'geyser', level: 13, indirect: false },
+        ];
+        const spellWouldBeUseless = (name) => {
+            const flags = { // MCF_HOSTILE / MCF_SIGHT from mcastu.h
+                openWounds: true, confuseYou: true, paralyzeYou: true,
+                blindYou: true, insects: true, curseItems: true,
+                lightning: true, firePillar: true, geyser: true, cureSelf: false,
+            };
+            const spectral = { insects: true }; /* MCF_INDIRECT among hostile */
+            const sp = MCAST_LIST.find(entry => entry.name === name);
+            const hostile = !!flags[name];
+            const needsSight = !!flags[name];
+            if (hostile && (mon.mpeaceful || mon.mtame)) return true;
+            if (needsSight && !spectral[name] && name !== 'insects'
+                && !couldSeeCoord(mon.mx, mon.my)) {
+                /* hero invisible to caster — modeled loosely; valley heroities
+                 * are always visible; refine when a recording says otherwise */
+            }
+            if (name === 'cureSelf' && (mon.mhp ?? 1) >= (mon.mhpmax ?? mon.mhp ?? 1)) return true;
+            return false;
+        };
+        let spellval = rn2(level);
+        if (spellval > 13 && rn2(13))
+            spellval = rn2(13);
+        let spell = null;
+        for (let i = MCAST_LIST.length - 1; i >= 0; i--) {
+            if (MCAST_LIST[i].level <= spellval && !spellWouldBeUseless(MCAST_LIST[i].name)) {
+                spell = MCAST_LIST[i];
+                break;
+            }
+        }
+        if (!spell) spell = MCAST_LIST[0];
+        if (!spell.indirect) return false;
+
+        mon.mspec_used = (mon.m_lev || 0) < 8 ? 10 - (mon.m_lev || 0) : 2;
+        if (rn2(Math.max(1, level * 10)) < (mon.mconf ? 100 : 20))
+            return false; /* fumbled — C prints air-crackles only if seen */
+        if (spell.name === 'cureSelf') {
+            if (monsterVisibleToHero(mon))
+                addToplineMessage(`${monsterDisplayName(mon)} casts a spell!`);
+            /* C ref: mcastu.c:300-317 m_cure_self(): healmon(mtmp, d(3,6), 0)
+             * with "looks better." printed when the hero can see the monster. */
+            if ((mon.mhp ?? 1) < (mon.mhpmax ?? mon.mhp ?? 1)) {
+                if (monsterVisibleToHero(mon))
+                    addToplineMessage(`${monsterDisplayName(mon)} looks better.`);
+                const heal = d(3, 6);
+                mon.mhp = Math.min(mon.mhpmax ?? mon.mhp ?? 1, (mon.mhp ?? 1) + heal);
+            }
+        }
+        return true;
+    }
     const maxSpellLevel = cleric ? 13 : 20;
     const attackCount = data.name === 'Arch Priest' ? 2 : 1;
     for (let i = 0; i < attackCount; i++) {
