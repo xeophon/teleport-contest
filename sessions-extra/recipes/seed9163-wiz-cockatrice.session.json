@@ -1,0 +1,12 @@
+{
+ "version": 5,
+ "source": "c",
+ "segments": [
+  {
+   "seed": 9163,
+   "datetime": "20260812120000",
+   "nethackrc": "OPTIONS=name:Probe,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,mention_walls\nOPTIONS=pushweapon,showexp,time,color\nOPTIONS=symset:DECgraphics\nOPTIONS=playmode:debug\n",
+   "moves": " #levelchange\n15\n               #wizwish\nlizard corpse\n  #wizgenesis\ncockatrice\n  5s 5s 5s 5s 5s 5seo    5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s 5s "
+  }
+ ]
+}
