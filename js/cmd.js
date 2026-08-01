@@ -63817,7 +63817,6 @@ function tutorialEnterStash() {
                 }
                 let pauseAfterDeferredMultiattack = false;
 		                if (game._deferred_multiattack_after_more) {
-	                    if (process.env.TRACE95) console.error(`TRACE defer-multi-resume rng=${getRngLog().length} q=${JSON.stringify(game._queued_message_after_more||'')} tl=${JSON.stringify(game._topline_after_more||'')}`);
 	                    const deferred = game._deferred_multiattack_after_more;
 	                    game._deferred_multiattack_after_more = null;
 	                    const messages = game._pending_message ? [game._pending_message] : [];
@@ -63827,7 +63826,15 @@ function tutorialEnterStash() {
 	                        let damage = deferred.first.damage || 0;
 	                        if (damage && (game.u?.uac ?? 10) < 0)
 	                            damage = Math.max(1, damage - rnd(-(game.u?.uac ?? 10)));
+	                        // C ref: display quirk — during the death --More-- chain the
+	                        // status HP line keeps the hit's pre-damage value when the
+	                        // killing blow lands at exactly -1 (see game_display.js:150-154).
+	                        if (((game.u?.uhp || 0) - damage) === -1)
+	                            game._death_status_hp_before_zero = game.u?.uhp || 0;
 	                        game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
+	                        // C ref: display quirk verified against recording — the status
+	                        // HP line keeps the pre-damage value shown while the death
+	                        // --More-- chain plays when the killing blow lands at exactly -1.
 		                    }
 		                    // mhitu.c:72-77 hitmsg() — " again" iff the same
                     // monster's immediately previous attack slot was a hit of
@@ -63899,7 +63906,15 @@ function tutorialEnterStash() {
 		                            let damage = nextFirst.damage || 0;
 		                            if (damage && (game.u?.uac ?? 10) < 0)
 		                                damage = Math.max(1, damage - rnd(-(game.u?.uac ?? 10)));
+		                            // C ref: display quirk — during the death --More-- chain the
+		                            // status HP line keeps the hit's pre-damage value when the
+		                            // killing blow lands at exactly -1 (see game_display.js:150-154).
+		                            if (((game.u?.uhp || 0) - damage) === -1)
+		                                game._death_status_hp_before_zero = game.u?.uhp || 0;
 		                            game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
+		                            // C ref: display quirk verified against recording — the status
+		                            // HP line keeps the pre-damage value shown while the death
+		                            // --More-- chain plays when the killing blow lands at exactly -1.
                                 }
 	                    }
                         // C ref: mattacku()/movemon slot-loop continuation —
@@ -63912,7 +63927,6 @@ function tutorialEnterStash() {
                             game._attack_resume_after_more = 0;
                         }
 	                    game._pending_message = messages.join('  ');
-	                    if (process.env.TRACE95 && (game.u?.uhp || 0) <= 4) console.error(`TRACE death-detect uhp=${game.u?.uhp} moves=${game.moves}`);
 	                    if ((game.u?.uhp || 0) <= 0 && !game._queued_message_after_more) {
                             // C ref: hitmu's fatal hit runs done() inside the
                             // monster's attack-slot loop (mhitu.c mdamageu →
@@ -64460,7 +64474,6 @@ function tutorialEnterStash() {
                 return;
             }
             if (game._queued_message_after_more) {
-                if (process.env.TRACE95) console.error(`TRACE pull-queued rng=${getRngLog().length} q=${JSON.stringify(game._queued_message_after_more)} pm=${JSON.stringify(game._pending_message||'')} tl=${JSON.stringify(game._topline_after_more||'')}`);
                 let next = game._queued_message_after_more;
                 const nextMoreLine = game._queued_message_more_line_after_more || '';
                 game._queued_message_after_more = '';
@@ -65627,6 +65640,13 @@ function tutorialEnterStash() {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
+            // C ref: mhitu.c:1265 — done() returns into hitmu(), whose
+            // trailing stop_occupation() prints the queued search-stop text
+            // right after "OK, so you don't die.".
+            if (game._stop_search_after_revival) {
+                game._stop_search_after_revival = 0;
+                survivalMessages.push('You stop searching.');
+            }
             // C ref: savelife() (end.c:704-758) — a hero who refuses the "Die?"
             // prompt while held is released ("The salamander releases you.",
             // end.c:753) and unstuck() tags the grabber with an immediate

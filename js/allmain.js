@@ -2493,10 +2493,6 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 }
 
 function addToplineMessage(msg) {
-    if (process.env.TRACE95 && String(msg||'').includes('stop searching')) {
-        const st = new Error().stack.split('\n').slice(1, 6).map(s=>s.trim()).join(' <- ');
-        console.error(`TRACE stopsearch-emit rng=${getRngLog().length} msg=${JSON.stringify(msg)} stack: ${st}`);
-    }
     let text = String(msg || '');
     if (game._silent_drop_prompt_message) {
         if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)
@@ -4301,7 +4297,6 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
-    if (process.env.TRACE95) console.error(`TRACE pmTurns-enter moves=${game.moves} umove=${game.u?.umovement} rng=${getRngLog().length} resume=${game._monster_resume_index}/${game._monster_resume_same_index} cont=${game._continue_monsters_after_more}`);
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
         game._stale_queued_kill_pet = null;
@@ -5832,7 +5827,6 @@ export async function processMonsterTurns() {
 	                                game._pending_time_passed = 1;
 	                                game._resume_time_after_more = 1;
 	                                game._counted_repeat_interruptible = 0;
-	                                if (process.env.TRACE95) console.error(`TRACE defer-stopwait-set moves=${game.moves} rng=${getRngLog().length} scnt=${game._search_pending_count} cntrep=${game._counted_repeat_interruptible} pm=${JSON.stringify((game._pending_message||'').slice(0,50))}`);
 	                                game._deferred_counted_repeat_stop_waiting = (game._search_pending_count || 0) > 0 ? 2 : 1;
 	                                game._monster_resume_index = monIndex;
 	                                game._monster_resume_same_index = 1;
@@ -5938,7 +5932,6 @@ export async function processMonsterTurns() {
                                     showedAttack = showedAttack || hitShown;
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                     if (hitShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
-                                        if (process.env.TRACE95) console.error(`TRACE hitstop moves=${game.moves} rng=${getRngLog().length}`);
                                         game._pending_time_passed = 0;
                                         game._skip_pending_time_decrement = 1;
                                         game._search_pending_count = 0;
@@ -6033,7 +6026,6 @@ export async function processMonsterTurns() {
 	                                game._pending_time_passed = 1;
 	                                game._resume_time_after_more = 1;
 	                                game._counted_repeat_interruptible = 0;
-	                                if (process.env.TRACE95) console.error(`TRACE defer-stopwait-set moves=${game.moves} rng=${getRngLog().length} scnt=${game._search_pending_count} cntrep=${game._counted_repeat_interruptible} pm=${JSON.stringify((game._pending_message||'').slice(0,50))}`);
 	                                game._deferred_counted_repeat_stop_waiting = (game._search_pending_count || 0) > 0 ? 2 : 1;
 	                                game._monster_resume_index = monIndex;
 	                                game._monster_resume_same_index = 1;
@@ -6575,7 +6567,6 @@ if (attack.adtyp === 'steal') {
 	                                game._skip_pending_time_decrement = 1;
 	                                game._search_pending_count = 0;
 	                                game._counted_repeat_interruptible = 0;
-                                    if (process.env.TRACE95) console.error(`TRACE hitstop-armed moves=${game.moves} rng=${getRngLog().length}`);
 	                                addToplineMessage('You stop searching.');
 	                            }
                             const brownMoldPassive = attackShown && (game.u?.uhp || 0) > 0
@@ -16725,7 +16716,6 @@ export function processEatingOccupationTick(g = game) {
 
 export async function moveloop_core() {
     const g = game;
-    if (process.env.TRACE95) console.error(`TRACE core-entry moves=${g.moves} umove=${g.u?.umovement} pending=${g._pending_time_passed} scnt=${g._search_pending_count} more=${!!g._message_more} rng=${getRngLog().length} qmsg=${JSON.stringify(g._queued_message_after_more||'')} pm=${JSON.stringify((g._pending_message||'').slice(0,70))} taless=${JSON.stringify(g._topline_after_more||'')}`);
     // C ref: allmain.c:483-510 — while an occupation is armed the moveloop
     // charges a full turn automatically (svc.context.move = 1 immediately
     // before (*go.occupation)()); the eat occupation ticks back-to-back
@@ -16744,7 +16734,6 @@ export async function moveloop_core() {
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
-        if (process.env.TRACE95) console.error(`TRACE pass-head moves=${g.moves} rng=${getRngLog().length} pending=${g._pending_time_passed} more=${!!g._message_more} ptwm=${!!g._process_time_with_more} cmon=${!!g._continue_monsters_after_more} qmsg=${JSON.stringify(g._queued_message_after_more||'')} resume=${g._monster_resume_index}/${g._monster_resume_same_index}`);
         let ballDragNoResumePass = false;
         let lavaSinkingResult = null;
         if (g._ball_drag_delay_no_resume > 0) {
@@ -16914,7 +16903,6 @@ export async function moveloop_core() {
             g._force_monster_turn_tail_once = 1;
         }
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
-        if (process.env.TRACE95) console.error(`TRACE pass-post p=${g._pending_time_passed} more=${!!g._message_more} ptwm=${!!g._process_time_with_more} contam=${!!g._continue_monsters_after_more} resume=${g._monster_resume_index}/${g._monster_resume_same_index} atkres=${!!g._attack_resume_after_more} scnt=${g._search_pending_count} rng=${getRngLog().length} pm=${JSON.stringify((g._pending_message||'').slice(0,70))}`);
         if (g._monnearby_check_after_movemon) {
             g._monnearby_check_after_movemon = 0;
             if (!g._stop_search_message_pending && g._search_pending_count > 0
