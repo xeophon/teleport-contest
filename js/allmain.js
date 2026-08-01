@@ -4764,6 +4764,7 @@ export async function processMonsterTurns() {
                         }
                     }
                     if (!distfleeckDoneAfterAnger) rn2(5);
+                    if (process.env.DFDBG) { const L=getRngLog().length; if (L>=18230&&L<=18310) console.error(`JDF #${L} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement}`); }
                     // C ref: muse.c find_misc()/use_misc() MUSE_POLY_TRAP — a
                     // weak, non-shapeshifter monster near the hero deliberately
                     // jumps onto an adjacent polymorph trap to change form.
@@ -7243,6 +7244,7 @@ if (attack.adtyp === 'steal') {
                         // (monmove.c:917); skipped when the monster teleported
                         // via a trap (MMOVE_DIED path, monmove.c:1510-1514).
                         if (!postMoveDistFleeRoll && !teleportedViaTrap) rn2(5);
+                        if (process.env.DFDBG) { const L=getRngLog().length; if (L>=18230&&L<=18300) console.error(`JDFR #${L} ${mon.data?.name} @${mon.mx},${mon.my}`); }
                         const postMoveTargetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const postMoveTargetY = mon.muy ?? game.u?.uy ?? mon.my;
                         const postMoveDist2 = (mon.mx - postMoveTargetX) ** 2 + (mon.my - postMoveTargetY) ** 2;
@@ -14596,6 +14598,13 @@ async function maybeCastUndirectedMonsterSpell(mon) {
                 mon.mhp = Math.min(mon.mhpmax ?? mon.mhp ?? 1, (mon.mhp ?? 1) + heal);
             }
         }
+        /* C ref: monmove.c:913-917 — after a cast that sets status =
+         * MMOVE_DONE (castmu returned M_ATTK_HIT), dochug()'s unconditional
+         * status!=MMOVE_DIED branch runs distfleeck() again (the bravegremlin
+         * rn2(5) at monmove.c:544) before the switch(status) tail.  Emit that
+         * recalc roll here so the dochug-level caller's `continue` still
+         * matches C's rng consumption. */
+        rn2(5);
         return true;
     }
     const maxSpellLevel = cleric ? 13 : 20;
