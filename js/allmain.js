@@ -6800,7 +6800,6 @@ if (attack.adtyp === 'steal') {
                                 goalX = heroX;
                                 goalY = heroY;
                                 avoid = false;
-                                if (process.env.SHKDBG && mon.isshk && getRngLog().length >= 6510 && getRngLog().length <= 6565) console.error('SHKDBG entry', getRngLog().length, mon.shknam, mon.mx, mon.my);
                                 /* C ref: shk.c:4941-4950 shk_move() -- an angry
                                    shopkeeper actively following the hero (udist
                                    > 4 and no outstanding bill) returns -1, "let
@@ -6817,29 +6816,19 @@ if (attack.adtyp === 'steal') {
                                    in-throw-range target keeps appr==1. */
                                 const fudist = (oldx - heroX) ** 2
                                     + (oldy - heroY) ** 2; /* C distu() = dist2() (hack.h:1531) */
-                                if (process.env.SHKDBG && mon.isshk && getRngLog().length >= 6510 && getRngLog().length <= 6570) console.error('SHKDBG pre-shim', getRngLog().length, mon.shknam, mon.mx, mon.my, 'fol', mon.following, 'billct', mon.billct, 'fudist', fudist, 'inshop', inShopBaseRoomAt(oldx, oldy), 'appr', appr, 'mux', mon.mux, mon.muy, 'hero', heroX, heroY);
                                 if (mon.following && !mon.billct && fudist > 4
                                     && !game.level?.flags?.rogue_level
                                     && inShopBaseRoomAt(oldx, oldy)) {
                                     const tgtX = mon.mux ?? heroX;
                                     const tgtY = mon.muy ?? heroY;
-                                    /* C's in_line test uses lined_up() ->
-                                       m_lined_up(hero,mon) -> linedup()
-                                       (zap.c:1330-1371), which for a hero
-                                       target additionally requires
-                                       couldsee(bx,by) — the HERO's line of
-                                       sight to the monster's own square
-                                       (not merely the monster seeing the
-                                       hero). */
                                     const tdx = Math.abs(oldx - tgtX);
                                     const tdy = Math.abs(oldy - tgtY);
-                                    const linedUp = (tdx === 0 || tdy === 0 || tdx === tdy)
-                                        && couldSeeCoord(oldx, oldy);
+                                    const linedUp = tdx === 0 || tdy === 0 || tdx === tdy;
                                     const throwRange = game.u?._polyself_base?.throwsRocks
                                         ? 20
                                         : Math.trunc((game.u?.acurr?.a?.[A_STR] ?? 10) / 2) + 1;
                                     const inLine = linedUp && Math.max(tdx, tdy) <= throwRange;
-                                    if (appr !== 1 || !inLine) rn2(25);
+                                    rn2(25);
                                 }
                             }
 
@@ -6862,8 +6851,6 @@ if (attack.adtyp === 'steal') {
                             let choiceInfo = 0;
                             let chcnt = 0;
                             const fudist0 = (oldx - heroX) ** 2 + (oldy - heroY) ** 2; /* C dist2(shk, hero) — shk_move()'s udist (shk.c:4936-4948) */
-                            if (process.env.SHKDBG && mon.isshk && getRngLog().length >= 6510 && getRngLog().length <= 6580) console.error('SHKDBG prepos', mon.shknam, mon.mx, mon.my, '-> goal', goalX, goalY, 'appr', appr, 'avoid', avoid, 'mux', mon.mux, mon.muy);
-                            if (process.env.SHKDBG2 && mon.isshk) { globalThis.__shkdbg_positions = null; }
                             let positions;
                             if (cShapedPriestMove) {
                                 positions = mfndpos(mon, monsterAllowFlags(mon, false, conflictActive))
@@ -6896,7 +6883,6 @@ if (attack.adtyp === 'steal') {
                                 && positions.length && positions.every(pos => pos.info & NOTONL)) {
                                 avoid = false;
                             }
-                            if (process.env.SHKDBG2 && mon.isshk && getRngLog().length >= 6490 && getRngLog().length <= 6600) console.error('SHKDBG poss', mon.shknam, mon.mx, mon.my, JSON.stringify(positions.map(p=>[p.x,p.y,p.info,p.loc && p.loc.typ])));
                             /* C ref: monmove.c:1940-1990 m_move() candidate loop,
                                    reached from shk_move() only via its return -1 case
                                    (shk.c:4941-4948: angry keeper following the hero,
@@ -6906,21 +6892,11 @@ if (attack.adtyp === 'steal') {
                                    mtrack-avoidance rolls below. */
                                 const inShkGenericMMove = mon.isshk && !mon.mpeaceful
                                     && mon.following && !mon.billct && fudist0 > 4;
-                                const tracks = mon.mtrack || [];
-                                const shkCnt = positions.length;
-                                const shkJcnt = Math.min(4, shkCnt - 1);
                                 const shkNearerBase = (oldx - goalX) ** 2 + (oldy - goalY) ** 2;
                             for (const pos of positions) {
                                 if (!(IS_ROOM(pos.loc.typ) || (mon.isshk && (!inHisShop || mon.following)))) continue;
                                 if (avoid && (pos.info & NOTONL) && !(pos.info & ALLOW_M)) continue;
-                                if (inShkGenericMMove && appr !== 0) {
-                                    let trackSkipped = false;
-                                    for (let j = 0; j < shkJcnt; j++) {
-                                        if (tracks[j]?.x !== pos.x || tracks[j]?.y !== pos.y) continue;
-                                        if (rn2(4 * (shkCnt - j))) { trackSkipped = true; break; }
-                                    }
-                                    if (trackSkipped) continue;
-                                }
+                                
                                 const candidateDist = (pos.x - goalX) ** 2 + (pos.y - goalY) ** 2;
                                     const choiceDist = choice
                                         ? (choice.x - goalX) ** 2 + (choice.y - goalY) ** 2
@@ -6961,7 +6937,6 @@ if (attack.adtyp === 'steal') {
                                 newsym(oldx, oldy);
                                 newsym(mon.mx, mon.my);
                             }
-                            if (process.env.SHKDBG && mon.isshk && getRngLog().length >= 6510 && getRngLog().length <= 6580) console.error('SHKDBG choice', mon.shknam, oldx, oldy, '->', choice && choice.x, choice && choice.y, 'info', choiceInfo);
                         }
                         rn2(5);
                         continue;
