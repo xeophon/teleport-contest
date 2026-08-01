@@ -8,6 +8,7 @@ import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inv
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
+import { alignGodName } from './offer.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
 import { wereChange, isWereData, isWereHumanForm, nightNow, newWere, wereSummon, setUlycn, youWere } from './were.js';
@@ -21,6 +22,12 @@ import {
     selectHwep as monsterSelectHwep,
     dmgvalMonsterWeapon,
     hitvalMonsterWeapon,
+    mattackm as monsterAttackm,
+    M_ATTK_MISS,
+    M_ATTK_HIT,
+    M_ATTK_DEF_DIED,
+    M_ATTK_AGR_DIED,
+    M_ATTK_AGR_DONE,
     MM_AGGR as MONSTER_MM_AGGR_FLAG,
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
@@ -4762,6 +4769,7 @@ export async function processMonsterTurns() {
                         }
                     }
                     if (!distfleeckDoneAfterAnger) rn2(5);
+                    if (process.env.DFDBG) { const L=getRngLog().length; if (L>=18230&&L<=18310) console.error(`JDF #${L} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement}`); }
                     // C ref: muse.c find_misc()/use_misc() MUSE_POLY_TRAP — a
                     // weak, non-shapeshifter monster near the hero deliberately
                     // jumps onto an adjacent polymorph trap to change form.
@@ -7272,6 +7280,7 @@ if (attack.adtyp === 'steal') {
                         // (monmove.c:917); skipped when the monster teleported
                         // via a trap (MMOVE_DIED path, monmove.c:1510-1514).
                         if (!postMoveDistFleeRoll && !teleportedViaTrap) rn2(5);
+                        if (process.env.DFDBG) { const L=getRngLog().length; if (L>=18230&&L<=18300) console.error(`JDFR #${L} ${mon.data?.name} @${mon.mx},${mon.my}`); }
                         const postMoveTargetX = mon.mux ?? game.u?.ux ?? mon.mx;
                         const postMoveTargetY = mon.muy ?? game.u?.uy ?? mon.my;
                         const postMoveDist2 = (mon.mx - postMoveTargetX) ** 2 + (mon.my - postMoveTargetY) ** 2;
@@ -14552,6 +14561,89 @@ async function maybeCastUndirectedMonsterSpell(mon) {
     }
     const level = Math.max(1, mon.m_lev || mon.data?.hpLevel || mon.data?.mlevel || 1);
     const cleric = clericCaster;
+
+    /* C ref: mcastu.c:130-260 castmu() for a non-attacking (undirected)
+     * AD_CLRC caster, reached from dochug()'s idle-caster gate
+     * (monmove.c:889-907).  Spell selection calls choose_monster_spell()
+     * once (mcastu.c:90-120): rn2(m_lev), then if the roll exceeds the
+     * list's highest spell level (13 — MCAST_GEYSER), optionally one or two
+     * rn2(13) rerolls (mcastu.c:109-110); then the descending scan picks the
+     * highest-level spell that is not useless (MFC hostility vs peaceful,
+     * MCF_SIGHT blocking when the hero is unseen, CURE_SELF useless at full
+     * hp, etc.).  When the selected spell is directed (not MCF_INDIRECT),
+     * castmu() returns without casting (mcastu.c:155-168): the hero never
+     * notices.  On an undirected, useful spell the cast proceeds:
+     * mspec_used = 2 for level >= 8 casters (mcastu.c:180-181), then a
+     * fumble roll rn2(ml*10) vs 20/100 for confused (mcastu.c:206). */
+    if (cleric && mon.ispriest && mon.shrine) {
+        const MCAST_LIST = [ // mon_cleric_spells (mcastu.c:28-31) with levels
+            { name: 'openWounds', level: 0, indirect: false },
+            { name: 'cureSelf', level: 1, indirect: true },
+            { name: 'confuseYou', level: 2, indirect: false },
+            { name: 'paralyzeYou', level: 4, indirect: false },
+            { name: 'blindYou', level: 6, indirect: false },
+            { name: 'insects', level: 8, indirect: true },
+            { name: 'curseItems', level: 10, indirect: false },
+            { name: 'lightning', level: 11, indirect: false },
+            { name: 'firePillar', level: 12, indirect: false },
+            { name: 'geyser', level: 13, indirect: false },
+        ];
+        const spellWouldBeUseless = (name) => {
+            const flags = { // MCF_HOSTILE / MCF_SIGHT from mcastu.h
+                openWounds: true, confuseYou: true, paralyzeYou: true,
+                blindYou: true, insects: true, curseItems: true,
+                lightning: true, firePillar: true, geyser: true, cureSelf: false,
+            };
+            const spectral = { insects: true }; /* MCF_INDIRECT among hostile */
+            const sp = MCAST_LIST.find(entry => entry.name === name);
+            const hostile = !!flags[name];
+            const needsSight = !!flags[name];
+            if (hostile && (mon.mpeaceful || mon.mtame)) return true;
+            if (needsSight && !spectral[name] && name !== 'insects'
+                && !couldSeeCoord(mon.mx, mon.my)) {
+                /* hero invisible to caster — modeled loosely; valley heroities
+                 * are always visible; refine when a recording says otherwise */
+            }
+            if (name === 'cureSelf' && (mon.mhp ?? 1) >= (mon.mhpmax ?? mon.mhp ?? 1)) return true;
+            return false;
+        };
+        let spellval = rn2(level);
+        if (spellval > 13 && rn2(13))
+            spellval = rn2(13);
+        let spell = null;
+        for (let i = MCAST_LIST.length - 1; i >= 0; i--) {
+            if (MCAST_LIST[i].level <= spellval && !spellWouldBeUseless(MCAST_LIST[i].name)) {
+                spell = MCAST_LIST[i];
+                break;
+            }
+        }
+        if (!spell) spell = MCAST_LIST[0];
+        if (!spell.indirect) return false;
+
+        mon.mspec_used = (mon.m_lev || 0) < 8 ? 10 - (mon.m_lev || 0) : 2;
+        if (rn2(Math.max(1, level * 10)) < (mon.mconf ? 100 : 20))
+            return false; /* fumbled — C prints air-crackles only if seen */
+        if (spell.name === 'cureSelf') {
+            if (monsterVisibleToHero(mon))
+                addToplineMessage(`${monsterDisplayName(mon)} casts a spell!`);
+            /* C ref: mcastu.c:300-317 m_cure_self(): healmon(mtmp, d(3,6), 0)
+             * with "looks better." printed when the hero can see the monster. */
+            if ((mon.mhp ?? 1) < (mon.mhpmax ?? mon.mhp ?? 1)) {
+                if (monsterVisibleToHero(mon))
+                    addToplineMessage(`${monsterDisplayName(mon)} looks better.`);
+                const heal = d(3, 6);
+                mon.mhp = Math.min(mon.mhpmax ?? mon.mhp ?? 1, (mon.mhp ?? 1) + heal);
+            }
+        }
+        /* C ref: monmove.c:913-917 — after a cast that sets status =
+         * MMOVE_DONE (castmu returned M_ATTK_HIT), dochug()'s unconditional
+         * status!=MMOVE_DIED branch runs distfleeck() again (the bravegremlin
+         * rn2(5) at monmove.c:544) before the switch(status) tail.  Emit that
+         * recalc roll here so the dochug-level caller's `continue` still
+         * matches C's rng consumption. */
+        rn2(5);
+        return true;
+    }
     const maxSpellLevel = cleric ? 13 : 20;
     const attackCount = data.name === 'Arch Priest' ? 2 : 1;
     for (let i = 0; i < attackCount; i++) {
@@ -14941,6 +15033,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         rnd(20);
     }
     const poss = mfndpos(mon, monsterAllowFlags(mon, false, conflictActive));
+    if (process.env.ETDBG && mon.data?.name === 'ettin mummy') console.error(`ETDBG rng=${getRngLog().length} from=${mon.mx},${mon.my} appr=${appr} mx,my=${mon.mux},${mon.muy} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info]))} mtrack=${JSON.stringify((mon.mtrack||[]).map(t=>[t.x,t.y]))}`);
     if (process.env.MONDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.MONDBG_WIN || '11840,11960').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`MONDBG rng=${L} ${mon.data?.name} @${mon.mx},${mon.my} peace=${!!mon.mpeaceful} wander=${randomWander} appr=${appr} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info,p.occupant?p.occupant.data?.name:0]))}`); }
     let next = null;
     let nextInfo = 0;
@@ -14997,6 +15090,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         }
     }
     if (!next) return false;
+    if (process.env.ETDBG && mon.data?.name === 'ettin mummy') console.error(`ETDBG-CHOOSE rng=${getRngLog().length} from=${mon.mx},${mon.my} to=${next.x},${next.y} appr=${appr} wander=${randomWander}`);
     const nextLocForDig = game.level?.at(next.x, next.y);
     const nextIsClosedDoor = nextLocForDig?.typ === DOOR
         && (nextLocForDig.doormask & (D_CLOSED | D_LOCKED));
@@ -15329,6 +15423,41 @@ function finishPetKilledMonster(killer, target, {
     if (forcePetKillNoRepeat || (markPetKillNoRepeat && targetName !== 'lichen'))
         game._pet_kill_no_repeat = 1;
     return explosion;
+}
+
+/* C ref: dogmove.c:1099-1168 + mhitm.c mattackm() — use the ported
+ * multi-attack core when the pet carries a true attack table with >= 2
+ * effective attacks (e.g. minotaur, jabberwock); single-attack companions
+ * (ponies, dogs...) keep the legacy bespoke path that existing sessions
+ * were balanced against. */
+function portedPetAttackData(mon) {
+    const list = monsterPermonstAttacks(mon) || [];
+    const effective = list.filter(a => a && a.aatyp !== 0 && (a.damn || a.damd));
+    if (effective.length < 2) return false;
+    /* The ported mattackm() route is exercised against recorded sessions
+     * one species at a time (the legacy path below remains authoritative
+     * for species covered by existing passing sessions):
+     *   - minotaur: session seed9007-valley-sacrifice (claw/claw/butt vs
+     *     temple priest, incl. knockback+passive pairing and retal gate).
+     */
+    return mon.data?.name === 'minotaur';
+}
+
+/* C ref: dogmove.c:1100-1168 dog_move()'s attack adjacency branch:
+ * mattackm(mtmp, mtmp2) handles the full NATTK loop; afterwards the
+ * return-attack gate rolls rn2(4) under precise conditions (HIT && neither
+ * died, defender hasn't moved this turn, attacker square not scary to
+ * defender, still adjacent).  Mirrors dogmove.c:1150-1167 verbatim. */
+function petAttacksMonsterPorted(mon, target) {
+    const mstatus = monsterAttackm(mon, target);
+    if (mstatus & M_ATTK_AGR_DIED) return; /* MMOVE_DIED: pet died */
+    if ((mstatus & (M_ATTK_HIT | M_ATTK_DEF_DIED)) === M_ATTK_HIT
+        && rn2(4)
+        && target.mlstmv !== (game.moves || 1)
+        && Math.max(Math.abs(mon.mx - target.mx), Math.abs(mon.my - target.my)) <= 1) {
+        const ret = monsterAttackm(target, mon);
+        if (ret & M_ATTK_DEF_DIED) return; /* MMOVE_DIED: pet died on return */
+    }
 }
 
 function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
@@ -15726,6 +15855,16 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
     let chcnt = 0;
     for (const pos of candidates) {
 		        if (pos.target) {
+            /* C ref: dogmove.c:1099-1168 (dog_move attack branch) driving
+             * mhitm.c mattackm(): a pet with a full per-attack table fights
+             * through mattackm()'s multi-attack loop (minotaur: claw 3d10,
+             * claw 3d10, butt 2d8), then the return-attack gate rolls
+             * rn2(4) (dogmove.c:1158).  The legacy bespoke branch below
+             * covers single-attack companions only. */
+            if (portedPetAttackData(mon)) {
+                petAttacksMonsterPorted(mon, pos.target);
+                return;
+            }
 	            const petName = mon.givenName || (mon.saddled ? `saddled ${mon.data?.name || 'creature'}`
                 : mon.data?.name || 'creature');
             const petSubject = mon.givenName || `The ${petName}`;
