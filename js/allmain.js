@@ -4,7 +4,7 @@
 import { game } from './gstate.js';
 import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn } from './cmd.js';
+import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -4371,6 +4371,13 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    // C ref: the tty pauses inside pline() while the lich frost-touch chain
+    // (destroy_items shatters, zap.c:5906) and the follow-on castmu() effect
+    // lines (mcastu.c:822-834) are pending — the rest of movemon()'s monster
+    // sweep resumes only after the --More-- queue drains.
+    if (game._queued_messages_after_more?.some(e => e.lichColdShatter || e.lichCastRndcurse || e.lichChain))
+        return false;
+    if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[mt-turns] pend=${JSON.stringify(game._pending_message||'')} more=${game._message_more} moves=${game.moves}`);
     if (process.env.WEREDBG) console.error(`WEREDBG PMTenter moves=${game.moves} rng=${getRngLog().length} mresume=${game._monster_resume_index} cont=${game._continue_monsters_after_more} paved=${game._paused_at_visual_event_dismissal}`);
     if (game._stale_queued_kill_pet && game._pending_message !== game._stale_queued_kill_pet.message) {
         const stale = game._stale_queued_kill_pet;
@@ -6133,28 +6140,42 @@ export async function processMonsterTurns() {
                              * same attack slot successor says "hits again!". */
                             let prevHitAgainKey = null;
 		                            for (let attackIndex = 0; attackIndex < attackCount; attackIndex++) {
-		                                const multiAttack = heroMultiAttacks[attackIndex];
+		                                let multiAttack = heroMultiAttacks[attackIndex];
+                                        // C ref: mhitu.c:372-390 getmattk() — while
+                                        // mspec_used > 0, grabs/engulfs/sticks/poly
+                                        // downgrade to a plain 1d6 claw ("hits").
+                                        if (mon.mspec_used && (multiAttack.aatyp === 'engl' || multiAttack.aatyp === 'hugs'
+                                            || multiAttack.adtyp === 'stck' || multiAttack.adtyp === 'poly'))
+                                            multiAttack = { ...multiAttack, aatyp: 'claw', adtyp: 'phys', dice: 1, sides: 6, verb: 'hits' };
 		                                const deferredAttackRoll = attackIndex === 0
 		                                    ? mon._deferred_multi_attack_roll_after_more : null;
 		                                if (attackIndex === 0) mon._deferred_multi_attack_roll_after_more = null;
 		                                const attackRoll = deferredAttackRoll ?? rnd(20 + attackIndex);
                                     const shownSubject = game.u?.blind || hiddenBullwhip ? 'It' : monsterDisplayName(mon, true);
 	                                if (toHit <= attackRoll) {
+                                    // C ref: mhitu.c:83-88 missmu() resets
+                                    // hitmsg_prev/hitmsg_mid — a miss breaks
+                                    // the " again" chain.
+                                    prevHitAgainKey = null;
 	                                    const missMessage = `${shownSubject} ${toHit === attackRoll && game.flags?.verbose !== false ? 'just ' : ''}misses!`;
 	                                    if (deferMultiAttack) {
 	                                        multiMessages.push(missMessage);
-	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name };
+	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [false] };
 	                                        continue;
 	                                    }
                                     if (!game._suppress_monster_attack_messages) {
                                         const missShown = addToplineMessage(missMessage);
                                         showedAttack = showedAttack || missShown;
-                                        if (missShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
+                                        // C ref: stop_occupation() (cmd.c:1834-1850) prints
+                                        // the occupation's occtxt — 'searching' while a
+                                        // counted search is armed (captured into
+                                        // game._stop_occupation_text_for_hit above).
+	                                        if (missShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
                                             game._pending_time_passed = 0;
                                             game._skip_pending_time_decrement = 1;
                                             game._search_pending_count = 0;
                                             game._counted_repeat_interruptible = 0;
-                                            addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
+	                                            addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
                                             stoppedCountedRepeat = true;
                                         }
                                     }
@@ -6162,13 +6183,19 @@ export async function processMonsterTurns() {
                                 }
 
 	                                let damage = d(multiAttack.dice ?? 1, multiAttack.sides ?? 2);
-                                    const againKey = `${multiAttack.verb || 'hits'}@${attackIndex}`;
-                                    const hitsAgain = prevHitAgainKey === `${multiAttack.verb || 'hits'}@${attackIndex - 1}`;
+                                    // C ref: mhitu.c:72-76 hitmsg() — " again"
+                                    // iff this is the slot right after the
+                                    // previous (mattk == hitmsg_prev + 1) with
+                                    // the SAME ATTACK TYPE, not just the same
+                                    // verb (an ape's claw claw hug chain prints
+                                    // "hits!  hits again!  hits!").
+                                    const againKey = `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex}`;
+                                    const hitsAgain = prevHitAgainKey === `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex - 1}`;
                                     prevHitAgainKey = againKey;
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {
 	                                    multiMessages.push(hitMessage);
-	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name };
+	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [true] };
 	                                    continue;
 	                                }
 	                                // C ref: mhitu.c hitmu() per-slot order (mhitu.c:1187-1265):
@@ -6207,13 +6234,13 @@ export async function processMonsterTurns() {
                                     game.u.uhp = Math.max(0, hpBeforeDamage - damage);
                                 } else {
                                     showedAttack = showedAttack || hitShown;
-                                    game.u.uhp = Math.max(0, hpBeforeDamage - damage);
-                                    if (hitShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
+	                                    game.u.uhp = Math.max(0, hpBeforeDamage - damage);
+	                                    if (hitShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
                                         game._pending_time_passed = 0;
                                         game._skip_pending_time_decrement = 1;
                                         game._search_pending_count = 0;
                                         game._counted_repeat_interruptible = 0;
-                                        addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
+	                                        addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
                                         stoppedCountedRepeat = true;
                                     }
                                 }
@@ -6500,6 +6527,14 @@ export async function processMonsterTurns() {
                                  * dmgval (weapon.c:216) on top of the attack dice. */
 		                            if (activeWeapon) damage += dmgvalMonsterWeapon(activeWeapon, null);
 		                            const hpBeforeDamage = game.u?.uhp || 0;
+                                    if (attack.adtyp === 'cold' && data.mcastWizardSpells)
+                                        // mattacku attack slot 1 for liches is
+                                        // ATTK(AT_MAGC, AD_SPEL, 0, 0)
+                                        // (monsters.h:1889-1891) — castmu()
+                                        // (mcastu.c:129-330) runs right after
+                                        // hitmu() returns, even when the touch
+                                        // killed the hero and done() was refused.
+                                        game._lichCastMonster = mon;
                                     if (attack.adtyp === 'cold' && pendingBeforeAttack && !game._suppress_monster_attack_messages) {
                                         if (travelFinishPending) {
                                             if (travelFinishOnlyPending) game._pending_message = '';
@@ -6530,7 +6565,13 @@ export async function processMonsterTurns() {
                                             const width = game.nhDisplay?.cols || 80;
                                             if (attackShown && (game._pending_message || '').length + frostMessage.length + 3 >= width - 8) {
                                                 game._topline_after_more = frostMessage;
-                                                game._cold_destroy_after_topline_more = mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
+                                                // C ref: mhitu.c:1187-1190 — hitmu passes mhm.damage
+                                                // (orig_dmg) into destroy_items (uhitm.c:2660-2661 →
+                                                // zap.c:5965), so carry both numbers for the lich
+                                                // (mcastWizardSpells) frost-touch chain.
+                                                game._cold_destroy_after_topline_more = data.mcastWizardSpells
+                                                    ? { level: mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0, damage }
+                                                    : mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0;
                                                 game._attack_resume_after_more = 1;
                                                 game._hallu_display_after_cold_topline = 1;
                                                 game._damage_after_topline_more = (game._damage_after_topline_more || 0) + damage;
@@ -6583,13 +6624,54 @@ export async function processMonsterTurns() {
 	                            }
 	                            let coldNegated = false;
 	                            if (attack.adtyp === 'cold') {
+	                                if (data.mcastWizardSpells)
+	                                    // see castmu note on the paired pending branch
+	                                    // (mcastu.c:129-330 after hitmu)
+	                                    game._lichCastMonster = mon;
 	                                const magicNegation = (game.inventory || []).reduce((best, item) =>
 	                                    item.worn ? Math.max(best, ARMOR_MAGIC_NEGATION[item.kind] || 0) : best, 0);
 	                                coldNegated = rn2(10) < 3 * magicNegation;
 	                                if (!coldNegated) {
 	                                    const coldDestroyRoll = rn2(20);
-	                                    if ((mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0) > coldDestroyRoll)
+	                                    const coldDestroyBeatsLevel = (mon.m_lev ?? data.hpLevel ?? data.mlevel ?? 0) > coldDestroyRoll;
+	                                    // generic non-lich cold touch keeps the legacy
+	                                    // approximation; liches run destroy_items()
+	                                    // for real below.
+	                                    if (coldDestroyBeatsLevel && !data.mcastWizardSpells)
 	                                        rn2(5);
+	                                    if (data.mcastWizardSpells && coldDestroyBeatsLevel) {
+	                                        // C ref: uhitm.c:2652 — mhitm_ad_cold mhitu
+	                                        // branch plines "You're covered in frost!"
+	                                        // right after hitmsg(); the touch message is
+	                                        // composed further down in this port, so pass
+	                                        // the frost line through.
+	                                        game._lich_frost_after_touch = 1;
+	                                        // C ref: uhitm.c:2659-2661 → destroy_items
+	                                        // (zap.c:5965-6110) — full per-stack program
+	                                        // for the lich touch; each destroyed stack's
+	                                        // shatter pline (zap.c:5906) is its own tty
+	                                        // --More-- boundary that carries the touch's
+	                                        // losehp/exercise (attrib.c:508) and
+	                                        // knockback (uhitm.c:5258/5269) tail.
+	                                        const frostChainEntries = coldTouchDestroyItemsProgram(damage);
+	                                        if (frostChainEntries.length) {
+	                                            game._queued_messages_after_more ??= [];
+	                                            frostChainEntries.forEach((entry, idx) =>
+	                                                game._queued_messages_after_more.push({
+	                                                    text: entry.text,
+	                                                    more: true,
+	                                                    lichColdShatter: {
+	                                                        damage: entry.damage,
+	                                                        touchDamage: idx === frostChainEntries.length - 1 ? damage : 0,
+	                                                        touchNeedsAc: true,
+	                                                        touchKnockBack: true,
+	                                                        isLast: idx === frostChainEntries.length - 1,
+	                                                    },
+	                                                }));
+	                                            damage = 0;
+	                                            game._lich_chain_suppress_tail = 1;
+	                                        }
+	                                    }
 	                                }
 	                                else damage = 0;
 	                            }
@@ -6664,7 +6746,8 @@ if (attack.adtyp === 'steal') {
 		                                ? `${unseenWarning ? "Wait!  There's something there you can't see!  " : ''}${shownSubject} ${attack.verb || 'hits'}!`
 	                                : attack.adtyp === 'elec'
 	                                ? `${shownWeaponPrefix}${shownSubject} ${attack.verb || 'hits'}!  ${elecNegated ? 'You avoid harm.' : 'You get zapped!'}`
-	                                : `${shownWeaponPrefix}${shownSubject} ${attack.verb || 'hits'}!`;
+	                                : `${shownWeaponPrefix}${shownSubject} ${attack.verb || 'hits'}!${game._lich_frost_after_touch ? '  You\'re covered in frost!' : ''}`;
+		                                    game._lich_frost_after_touch = 0;
 		                            if (game._suppress_monster_attack_messages) {
 		                                rn2(3);
 		                                rn2(6);
@@ -17295,6 +17378,7 @@ export async function moveloop_core() {
         && !(g._message_more && g._queued_message_after_more === 'You die...'
              && (g.u?.uhp ?? 1) <= 0 && !g._dying_revived_mid_turn)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
+        if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
         if (process.env.WEREDBG) console.error(`WEREDBG timepass moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
@@ -17333,6 +17417,7 @@ export async function moveloop_core() {
             g._skip_pending_time_decrement = 1;
         }
         if (g._search_pending_count > 0) {
+            if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[srch-step-pre] pend=${JSON.stringify(g._pending_message||'')} moves=${g.moves}`);
             const searchCountBeforeTurn = g._search_pending_count;
             let foundSearchMonster = false;
             let foundMessage = '';
@@ -18102,6 +18187,7 @@ export async function moveloop_core() {
     } else if (g._queued_more_continue_monsters && !g._message_more) {
         g._queued_more_continue_monsters = 0;
     }
+    if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[mt-turns-tail] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} moves=${g.moves}`);
     g._running_continuation = 0;
     g._initial_run_command = 0;
 	    g._process_time_with_more = g._message_more && g._continue_monsters_after_more

@@ -5912,6 +5912,29 @@ function monsterFromRndMeta(row) {
         // C ref: include/monsters.h:1615 — ATTK(AT_TUCH, AD_STCK, 0, 0).
         ptr.attack = { dice: 0, sides: 0, verb: 'touches you', adtyp: 'stck' };
     }
+    // C ref: include/monsters.h:1889-1891 — arch-lich attack slot 0 is
+    // ATTK(AT_TUCH, AD_COLD, 5, 6); hitmsg() verb for AT_TUCH is
+    // "touches you" (mhitu.c:56-58).  Slot 1 is ATTK(AT_MAGC, AD_SPEL, 0, 0),
+    // handled by the castmu() path (mcastu.c:129) adjacent to the hero.
+    if (name === 'arch-lich') {
+        ptr.attack = { dice: 5, sides: 6, verb: 'touches you', aatyp: 'tuch', adtyp: 'cold' };
+        ptr.mcastWizardSpells = true;
+        ptr.hostile = true;
+    }
+    // C ref: include/monsters.h:2402-2405 — carnivorous ape attacks:
+    // AT_CLAW AD_PHYS 1d4, AT_CLAW AD_PHYS 1d4, AT_HUGS AD_PHYS 1d8.
+    // hitmsg() uses "hits" for claw (" again" when consecutive,
+    // mhitu.c:73-76) and "hits" for hugs via the default: arm
+    // (mhitu.c:65-66).  getmattk() substitutes a 1d6 claw when
+    // mspec_used > 0 (mhitu.c:372-390).
+    if (name === 'carnivorous ape') {
+        ptr.mac = 6;
+        ptr.attacks = [
+            { dice: 1, sides: 4, verb: 'hits', aatyp: 'claw', adtyp: 'phys' },
+            { dice: 1, sides: 4, verb: 'hits again', aatyp: 'claw', adtyp: 'phys' },
+            { dice: 1, sides: 8, verb: 'hits', aatyp: 'hugs', adtyp: 'phys' },
+        ];
+    }
     if (name === 'pony') ptr.mac = 6;
     if (name === 'horse') ptr.mac = 5;
     if (name === 'warhorse') ptr.mac = 4;
