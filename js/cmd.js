@@ -14857,6 +14857,7 @@ function preservesTrapmoveRepeatMessage(msg) {
 }
 
 async function setMessage(msg, more = false) {
+    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'setMessage', text:String(msg||''), more:!!more, moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more});
     const text = String(msg || '');
     if (game._silent_drop_prompt_message) {
         if (game._pending_message === game._silent_drop_prompt_message && !game._message_more)

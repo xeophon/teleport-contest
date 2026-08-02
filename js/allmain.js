@@ -2505,6 +2505,7 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 }
 
 function addToplineMessage(msg) {
+    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more});
     let text = String(msg || '');
     if (process.env.TLDBG) process.stderr.write(`TLDBG  msg="${text.slice(0,50)}" moves=${game.moves} pend=${game._pending_time_passed} spc=${game._search_pending_count} more=${game._message_more?1:0} cmd=${game._command_mode||''} rngidx=${getRngLog().length}
 `);
@@ -4882,8 +4883,14 @@ export async function processMonsterTurns() {
                             // active the game calls stop_occupation() when a hostile
                             // monster is nearby (monster_nearby), before the forum's
                             // own reaction; the message comes out ahead of the zap.
+                            // stop_occupation() is print + nomul(0)
+                            // (allmain.c:684-696): the search batch's remaining
+                            // charged time is cancelled, exactly as the sibling
+                            // mid-phase stop sites model it.
                             if (game._search_pending_count > 0) {
                                 game._search_pending_count = 0;
+                                game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+                                game._keep_pending_message = 1;
                                 addToplineMessage('You stop searching.');
                             }
                             // C ref: allmain.c:493-507 stop_occupation()-via-
@@ -4891,6 +4898,8 @@ export async function processMonsterTurns() {
                             // point the wand zap fires; the message precedes it.
                             if (game._search_pending_count > 0) {
                                 game._search_pending_count = 0;
+                                game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+                                game._keep_pending_message = 1;
                                 addToplineMessage('You stop searching.');
                             }
                             const zapMessage = couldSeeCoord(mon.mx, mon.my)
@@ -5591,9 +5600,15 @@ export async function processMonsterTurns() {
                             };
                             const salStopOccupation = () => {
                                 // C ref: hitmu() ends with stop_occupation()
-                                // (mhitu.c:1281) — interrupts repeated searching.
+                                // (mhitu.c:1281) — interrupts repeated searching;
+                                // stop_occupation() is print + nomul(0)
+                                // (allmain.c:684-696), so the search batch's
+                                // remaining charged time is cancelled like its
+                                // sibling mid-phase stop sites.
                                 if (game._search_pending_count > 0) {
                                     game._search_pending_count = 0;
+                                    game._pending_time_passed = Math.min(game._pending_time_passed || 1, 1);
+                                    game._keep_pending_message = 1;
                                     if (!salEmit('You stop searching.')) return false;
                                 }
                                 return true;
@@ -5774,13 +5789,21 @@ export async function processMonsterTurns() {
                                         }
                                     }
                                     if (chain.phase === 1) {
-                                        chain.phase = 90;
+                                        // mspec-substitute claw attack (getmattk()
+                                        // mhitu.c:377-388): on a hit, C runs the
+                                        // full hitmu() tail — mhitm_knockback()
+                                        // consumes rn2(3)+rn2(6) (uhitm.c:5258/5269)
+                                        // before mdamageu() — so route through
+                                        // salAftermath() like the weapon attack.
+                                        chain.phase = chain.hits[2] ? 3 : 90;
                                         const msg = chain.hits[2]
                                             ? `${salSubject} hits!`
                                             : `${salSubject} misses!`;
                                         if (!salEmit(msg)) { chainDone = true; break; }
-                                        salFinishSlot();
-                                        continue;
+                                        if (!chain.hits[2]) {
+                                            salFinishSlot();
+                                            continue;
+                                        }
                                     }
                                     if (chain.phase === 2) {
                                         // C ref: uhitm.c:4024 — grab roll; the hero's
@@ -5852,7 +5875,33 @@ export async function processMonsterTurns() {
                                 }
                                 break;
                             }
-                            if (chain.slot >= 4) delete mon.m_attack_chain;
+                            if (chain.slot >= 4) {
+                                delete mon.m_attack_chain;
+                                // C ref: end.c:727 savelife() sets nomovemsg =
+                                // "You survived that attempt on your life." and
+                                // unmul() (hack.c:4185-4186) pline's it when the
+                                // death-turn's tail runs — after an attack chain
+                                // resumed across the "Die?" refusal has dumped
+                                // its remaining slots.  Emit it here so tty-width
+                                // batching (--More--) matches C's pagination
+                                // instead of dropping the queued line.
+                                if (game._queued_explore_lifesaving_message
+                                    && game._queued_message_after_more === 'You survived that attempt on your life.'
+                                    && game._pending_message) {
+                                    addToplineMessage(game._queued_message_after_more);
+                                    game._queued_message_after_more = '';
+                                    game._queued_explore_lifesaving_message = 0;
+                                    // C ref: moveloop_core() (allmain.c:222-244,
+                                    // 269-390): the monster phase, new-turn block
+                                    // (svm.moves++, allmain.c:244) and per-turn tail
+                                    // (regen_hp allmain.c:294, dosounds, gethungry,
+                                    // u_wipe_engr, unmul at 380-388) all run inside
+                                    // the same blocked-on-tty-More computation; the
+                                    // frame stalls only at pline overflow.  Don't
+                                    // defer the turn tail past this batch boundary.
+                                    if (game._message_more) game._process_time_with_more = 1; // DEBUG-TOGGLE
+                                }
+                            }
                             if (game._message_more && !game._process_time_with_more) return false;
                             continue;
                         }
@@ -7447,6 +7496,13 @@ if (attack.adtyp === 'steal') {
                     // non-helpless monster that is close now but was far
                     // or unseen before (crossed the (BOLT_LIM+1)^2 ring /
                     // became visible mid-movemon) stops the occupation.
+                    // Unlike the pass-end monster_nearby() adjacency stop
+                    // (allmain.c:501-511, which lives only in the occupation
+                    // branch and so never fires between the press's rhack
+                    // and its monster phase. C runs this dochugw check on
+                    // every movemon pass including the first occupation
+                    // continuation (monmove.c:212-213 only snapshots
+                    // already_saw_mon).
                     // The message is deferred until after processMonsterTurns
                     // so it follows the turn's monster messages (allmain.c:
                     // movemon runs at the top of the iteration — see below).
@@ -17259,6 +17315,7 @@ export async function moveloop_core() {
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
             const tailResult = await finishMonsterTurnTail();
+            if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:1', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
@@ -17445,7 +17502,8 @@ export async function moveloop_core() {
             const advancedTail = await processMonsterTurns();
             g._armor_wear_occupation = occupationForTail;
             if (advancedTail) {
-                g.moves = (g.moves || 1) + 1;
+                if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:2', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
+            g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
                 lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
                 if (lavaSinkingResult?.fatal || lavaSinkingResult?.lifeSaving) {
@@ -17550,6 +17608,7 @@ export async function moveloop_core() {
         } else if (movedMonsters === 'defer-tail') {
             // The visible --More-- must be captured before nh_timeout/gethungry tail rolls.
         } else if (movedMonsters) {
+            if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:4', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
             g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
@@ -17796,7 +17855,8 @@ export async function moveloop_core() {
             if (movedMoreMonsters === 'defer-tail') {
                 // Deferred by a message prompt; the top of the loop resumes the tail.
             } else if (movedMoreMonsters) {
-                g.moves = (g.moves || 1) + 1;
+                if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:5', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
+            g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
             }
             if (g._message_more && g._pending_force_lock_start_message && !g._process_time_with_more) {
