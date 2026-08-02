@@ -124,3 +124,23 @@ TOOL_CLASS/AMULET_CLASS branches.
    tune path, drum deafness `rn1(20,30)`, hornoplenty (mkobj.c:2867/2880),
    directional horn blast (dobuzz range `rn1(7,7)`, zap_hit, bounce,
    reflection) — plus the supplemental animFrames for the beam display.
+
+
+## Final (wave 5 fix9010)
+
+Session now PASSes: RNG 2641/2641, screens 170/170 (cells + cursors
+included), publics 44/44, unit tests 3643/3643 — see
+docs/c-parity-audit/971-wizard-instruments-2026-08-02.md for the full
+audit.  Diagnosis summary: the wish/frost-horn cascade had been fixed
+upstream already; the remaining divergence chain was (a) the worn
+amulet of reflection never refreshed game.u.reflecting (hero took the
+cold bolt and died), (b) the horn missing its `ubuzz(..., rn1(6, 6))`
+damage-dice roll before dobuzz()'s range roll and the misplaced
+wand-only exercise(A_WIS) roll, (c) missing makeknown() wisdom
+exercises for newly discovered object types (ureflects W_AMUL +
+music.c:637 intr), (d) tty topline packing (--More-- only when a new
+message overflows CO-8, prompt must wait behind an unacknowledged
+message), (e) awaken_scare flee messages never reached the topline,
+(f) Deaf status suffix visibility follows the botl boundary.  Details
+plus the still-open items (beam animFrames, horn zap terrain-sharing)
+are in the audit doc.
