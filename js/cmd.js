@@ -18935,7 +18935,11 @@ function awakenMonstersWithInstrument(distance) {
             fleeMessages.push(`${name} turns to flee.`);
         }
     }
-    if (fleeMessages.length) game._topline_after_more = fleeMessages.join('  ');
+    // C ref: music.c:73 awaken_monsters() -> awaken_scare() -> monflee()
+    // (monmove.c:517): fleeing monsters pline immediately; messages flow
+    // through the topline packing rules, so callers fold these into their
+    // message stream rather than deferring to a separate line.
+    return fleeMessages;
 }
 
 function awakenSoldiersWithBugle(messages) {
@@ -18986,6 +18990,99 @@ function identifyZapToolOrWand(item, element) {
     item.line = `${item.letter} - a wand of ${element}${wandChargeSuffix(item)}`;
 }
 
+function heroZapReflectSourceWord() {
+    // C ref: muse.c:2836-2857 ureflects() — outermost to innermost:
+    // shield, weapon, amulet ("medallion"), armor, silver-dragon scales.
+    const inv = game.inventory || [];
+    const worn = item => !!(item && (isWornInventoryItem(item) || item._polyselfSkin));
+    for (const item of inv) {
+        if (worn(item) && String(item.kind || item.actualKind || '').toLowerCase() === 'shield of reflection')
+            return 'shield';
+    }
+    for (const item of inv) {
+        const wielded = item.wielded || /\bweapon in\b|\(wielded\)/.test(String(item.line || ''));
+        if (wielded && item.artifactReflecting) return 'weapon';
+    }
+    for (const item of inv) {
+        if (item.cls === 'amulet' && worn(item)
+            && (item.amuletIndex === 7
+                || String(item.kind || item.actualKind || '').toLowerCase() === 'amulet of reflection'))
+            return 'medallion';
+    }
+    for (const item of inv) {
+        if (worn(item) && isSilverDragonArmorKind(armorKind(item))) return 'armor';
+    }
+    return null;
+}
+
+// C ref: muse.c:2846-2853 + makeknown (o_init.c:454 discover_object with
+// credit_hero) — learning the shield/amulet type through a reflection
+// message exercises wisdom (attrib.c:509 rn2(19)); only the shield and
+// amulet branches makeknown().
+function identifyReflectedShieldOfReflection(item) {
+    const known = !!(game._discoveries || []).find(entry =>
+        entry.section === 'Armor' && entry.name === 'shield of reflection' && entry.known !== false);
+    if (item) {
+        item.known = true;
+        item.line = normalInventoryLine({ ...item, line: '' });
+    }
+    game._discoveries ??= [];
+    if (!game._discoveries.some(entry => entry.section === 'Armor' && entry.name === 'shield of reflection')) {
+        game._discoveries.push({
+            section: 'Armor',
+            name: 'shield of reflection',
+            text: 'shield of reflection (polished silver shield) {buy 50}',
+            starred: false,
+        });
+    } else {
+        const entry = game._discoveries.find(e => e.section === 'Armor' && e.name === 'shield of reflection');
+        entry.known = true;
+    }
+    if (!known) exerciseAttribute(A_WIS, true);
+}
+
+function identifyReflectedAmuletOfReflection(item) {
+    const known = (game._discoveries || []).some(entry =>
+        entry.section === 'Amulets' && entry.name === 'amulet of reflection' && entry.known !== false);
+    if (item) item.known = true;
+    recordKnownAmuletDiscovery('amulet of reflection', item);
+    if (!known) exerciseAttribute(A_WIS, true);
+}
+
+// C ref: win/tty/topl.c:251-266 update_topl() — a pline joins the pending
+// topline while `len(new) + len(cur) + 3 < CO - 8` (room for --More--);
+// otherwise the line ends in --More-- and the new text owns the next line.
+function packToplineMessages(texts) {
+    const width = game.nhDisplay?.cols || 80;
+    const lines = [];
+    let cur = '';
+    for (const raw of texts) {
+        const text = String(raw || '');
+        if (!text) continue;
+        if (!cur) { cur = text; continue; }
+        if (cur.length + text.length + 3 < width - 8) cur = `${cur}  ${text}`;
+        else { lines.push(cur); cur = text; }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+}
+
+async function setPackedToplineMessages(texts) {
+    const lines = packToplineMessages(texts);
+    if (!lines.length) return;
+    await setMessage(lines[0], lines.length > 1);
+    if (lines.length > 1) {
+        game._queued_messages_after_more ??= [];
+        for (let k = 1; k < lines.length; k++) {
+            game._queued_messages_after_more.push({
+                text: lines[k],
+                more: k < lines.length - 1,
+                processTime: k === lines.length - 1,
+            });
+        }
+    }
+}
+
 function hornBlastMessage(item) {
     const element = fireColdHornElement(item);
     if (!element || game.u?.blind) return '';
@@ -18996,7 +19093,7 @@ function tooledHornImprovisationEffect(messages, sameOldSong = false) {
     messages.push(heroIsDeaf()
         ? 'You blow into the horn.'
         : `You produce a frightful, grave${sameOldSong ? ', yet familiar,' : ''} sound.`);
-    awakenMonstersWithInstrument((game.u?.ulevel || 1) * 30);
+    messages.push(...awakenMonstersWithInstrument((game.u?.ulevel || 1) * 30));
     exerciseAttribute(A_WIS, false);
 }
 
@@ -19004,6 +19101,12 @@ function leatherDrumImprovisationEffect(messages, { mundaneDowngrade = false, sa
     if (!mundaneDowngrade) {
         if (!heroIsDeaf()) {
             messages.push(`You beat a ${sameOldSong ? 'familiar ' : ''}deafening row!`);
+            // C ref: music.c:706-711 incr_itimeout(&HDeaf, rn1(20, 30)) — the
+            // timeout applies inline; the visible status-wide Deaf suffix
+            // follows the botl redraw boundary: after an in-command --More--
+            // pauses before the status refresh, the suffix materializes after
+            // the dismissal (seed 0002), without the More it is already drawn
+            // on the same frame (seed 9010 step 162).
             if (game.u)
                 game.u._deafTimeout = Math.max(game.u._deafTimeout || 0, rn1(20, 30));
             game._deaf_after_more = 1;
@@ -19015,7 +19118,7 @@ function leatherDrumImprovisationEffect(messages, { mundaneDowngrade = false, sa
         const verb = rn2(2) ? 'butcher' : rn2(2) ? 'manage' : 'pull off';
         messages.push(`You ${verb} a drumbeat.`);
     }
-    awakenMonstersWithInstrument((game.u?.ulevel || 1) * (mundaneDowngrade ? 5 : 40));
+    messages.push(...awakenMonstersWithInstrument((game.u?.ulevel || 1) * (mundaneDowngrade ? 5 : 40)));
 }
 
 function normalizeManualTuneText(text) {
@@ -19299,7 +19402,7 @@ async function finishMusicalImprovisation(item) {
             : `${instrumentTheName(item)} ${calms ? 'trills' : 'toots'}${sameOldSong ? ' a familiar tune' : ''}.`);
         if (calms) charmSnakesWithWoodenFlute((game.u?.ulevel || 1) * 3, messages);
         exerciseAttribute(A_DEX, true);
-        await setMessage(messages.join('  '), messages.length > 1);
+        await setPackedToplineMessages(messages);
         game.context.move = 1;
         return true;
     }
@@ -19313,14 +19416,14 @@ async function finishMusicalImprovisation(item) {
         messages.push(heroIsDeaf() ? 'You feel soothing vibrations.' : normalMessage);
         if (calms) calmNymphsWithWoodenHarp((game.u?.ulevel || 1) * 3, messages);
         exerciseAttribute(A_DEX, true);
-        await setMessage(messages.join('  '), messages.length > 1);
+        await setPackedToplineMessages(messages);
         game.context.move = 1;
         return true;
     }
 
     if (effectiveKind === 'tooled horn') {
         tooledHornImprovisationEffect(messages, sameOldSong);
-        await setMessage(messages.join('  '), messages.length > 1);
+        await setPackedToplineMessages(messages);
         game.context.move = 1;
         return true;
     }
@@ -19331,14 +19434,22 @@ async function finishMusicalImprovisation(item) {
             : `You extract a loud${sameOldSong ? ', familiar' : ''} noise from ${instrumentDisplayName(item)}.`);
         awakenSoldiersWithBugle(messages);
         exerciseAttribute(A_WIS, false);
-        await setMessage(messages.join('  '), messages.length > 1);
+        await setPackedToplineMessages(messages);
         game.context.move = 1;
         return true;
     }
 
     if (effectiveKind === 'leather drum') {
         leatherDrumImprovisationEffect(messages, { mundaneDowngrade, sameOldSong });
-        await setMessage(messages.join('  '), messages.length > 1);
+        await setPackedToplineMessages(messages);
+        if (game._message_more) {
+            // a --More-- pauses before the status refresh; the Deaf suffix
+            // waits for the dismissal (see the _deaf_after_more handler).
+        } else {
+            game._deaf_after_more = 0;
+            if (game.u?._deafTimeout > 0 && !(game.u._statusSuffix || '').includes('Deaf'))
+                game.u._statusSuffix = `${game.u._statusSuffix || ''} Deaf`;
+        }
         game.context.move = 1;
         return true;
     }
@@ -19360,7 +19471,7 @@ async function finishMusicalImprovisation(item) {
         const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
         messages.push(`The entire ${earthquakeLevelDescription()} is shaking around you!`, ...earthquakeMessages);
         if (!earthquakeFatalEndsInstrument(earthquakeMessages.heroResult)) {
-            awakenMonstersWithInstrument(ROWNO * COLNO);
+            messages.push(...awakenMonstersWithInstrument(ROWNO * COLNO));
             item.known = true;
             item.dknown = true;
             updateChargedItemLine(item);
@@ -19368,15 +19479,26 @@ async function finishMusicalImprovisation(item) {
         await finishEarthquakeInstrumentMessages(messages, earthquakeMessages);
         return true;
     } else {
+        // C ref: music.c:611-637 (FIRE_HORN/FROST_HORN improvise) — charge is
+        // consumed, the opening message is pline()'d, then getdir() prompts.
+        // A getdir prompt cannot share a line with an unacknowledged message,
+        // so the tty first shows the message with --More-- and reveals the
+        // prompt after the dismissal (topl.c:251-282, update_topl()).
         game._zap_item = item;
-        game._zap_prelude_messages = messages;
-        game._command_mode = 'zapDirection';
-        await setMessage([...messages, 'In what direction?'].join('  '), messages.length > 0);
+        game._zap_prelude_messages = null;
+        if (messages.length) {
+            game._zap_direction_prompt_after_more = 1;
+            game._command_mode = null;
+            await setMessage(messages.join('  '), true);
+        } else {
+            game._command_mode = 'zapDirection';
+            await setMessage('In what direction?');
+        }
         return true;
     }
     if (effectiveKind === 'magic flute' || effectiveKind === 'magic harp')
         exerciseAttribute(A_DEX, true);
-    await setMessage(messages.join('  '), messages.length > 1);
+    await setPackedToplineMessages(messages);
     game.context.move = 1;
     return true;
 }
@@ -50743,9 +50865,17 @@ function applyHornOfPlentyOnce(horn) {
     const { obj, potion } = createHornOfPlentyObject(horn);
     messages.push(hornSpillMessage(obj, potion));
     billHornCreatedObject(horn, obj, messages);
-    if (horn.dknown) identifyChargedToolKind(horn, 'horn of plenty');
     updateChargedItemLine(horn);
     addAppliedHornObjectToInventory(obj, messages);
+    if (horn.dknown !== false) {
+        // C ref: mkobj.c:2932-2934 — hornoplenty() calls
+        // makeknown(HORN_OF_PLENTY) after the spilled object is placed when
+        // the horn's description is known (a carried inventory item is seen);
+        // discovering the type exercises wisdom (o_init.c:483).
+        const hornPlentyKnownBefore = toolDiscoveryKnown('horn of plenty');
+        identifyChargedToolKind(horn, 'horn of plenty');
+        if (!hornPlentyKnownBefore) exerciseAttribute(A_WIS, true);
+    }
     return messages;
 }
 
@@ -63431,6 +63561,17 @@ function tutorialEnterStash() {
                 }
                 return;
             }
+            if (game._zap_direction_prompt_after_more) {
+                // C ref: getdir() after an unacknowledged improvise message
+                // (music.c:613): dismissing the --More-- reveals the
+                // direction prompt on its own line; no time elapses.
+                game._zap_direction_prompt_after_more = 0;
+                game._pending_message = 'In what direction?';
+                game._message_more = 0;
+                game._keep_pending_message = 1;
+                game._command_mode = 'zapDirection';
+                return;
+            }
             if (game._potion_breathe_after_more) {
                 const potion = game._potion_breathe_after_more;
                 game._potion_breathe_after_more = null;
@@ -64503,6 +64644,7 @@ function tutorialEnterStash() {
                     exerciseAttribute(A_STR, false);
                 }
                 if (next.clearBeam) game._transient_beam_cells = null;
+                if (next.beamCells !== undefined) game._transient_beam_cells = next.beamCells;
                 game._pending_message = '';
                 game._message_more = 0;
                 if (next.wakeNearby) {
@@ -67074,6 +67216,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const amulet = (game.inventory || []).find(invItem => invItem.letter === ch && invItem.cls === 'amulet');
         if (amulet) {
             amulet.worn = true;
+            // C ref: Amulet_off()/Amulet_on() adjust the extrinsic-property
+            // bitmask (do_wear.c); the amulet of reflection sets Reflecting
+            // (artilist/worn EReflecting, muse.c:2847-2852 W_AMUL branch).
+            updateReflectionFromInventory();
             if (amulet.amuletIndex === 3 && game.u) {
                 const newNap = rnd(98) + 2;
                 const oldNap = game.u.sleepyTimeout || 0;
@@ -67531,10 +67677,45 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (coldWand) {
-                exerciseAttribute(A_WIS, true);
+                // C ref: weffects() exercises wisdom for wands
+                // (zap.c:3435-3436); the instrument improvise path makes no
+                // such exercise call (music.c:611-637).
+                if (!hornElement) exerciseAttribute(A_WIS, true);
+                // C ref: music.c:634 ubuzz(BZ_U_WAND(type), rn1(6, 6)) — the
+                // horn's damage-dice count is rolled before dobuzz()'s range
+                // roll (zap.c:4823); a wand of cold passes a fixed 6
+                // (zap.c:3464-3465).
+                const hornDamageDice = hornElement ? rn1(6, 6) : 6;
                 const beamCells = [];
                 const blast = hornBlastMessage(item);
-                const messages = [...preludeMessages, ...(blast ? [blast] : [])];
+                const messages = [...preludeMessages];
+                const hornFireColdPath = !!hornElement;
+                let beamExcludesHero = false;
+                const boltBeamSnapshots = [];
+                // C ref: zap.c:4845-4850 tmp_at(DISPLAY_BEAM...) — every
+                // pline during dobuzz() renders with the beam cells drawn so
+                // far; shieldeff() (display.c:1110) restores the hero glyph
+                // after a reflection.
+                const snapshotCurrentBeam = () => {
+                    const seen = new Set();
+                    const out = [];
+                    for (const cell of beamCells) {
+                        const key = `${cell.x},${cell.y}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+                        if (beamExcludesHero && cell.x === game.u?.ux && cell.y === game.u?.uy) continue;
+                        out.push(cell);
+                    }
+                    return out;
+                };
+                const pushBoltMessage = (textOrList) => {
+                    const list = Array.isArray(textOrList) ? textOrList : [textOrList];
+                    messages.push(...list);
+                    for (let k = 0; k < list.length; k++)
+                        boltBeamSnapshots.push(snapshotCurrentBeam());
+                };
+                // the blast pline (music.c:631) precedes ubuzz() entirely
+                if (blast) pushBoltMessage(blast);
                 let beamStopIndex = null;
                 let range = rn1(7, 7);
                 let sx = game.u?.ux || 0;
@@ -67553,10 +67734,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     let bounceNow = !inBounds || typ === STONE;
 
                     if (!bounceNow) {
-                        beamCells.push({ x: sx, y: sy, ch: zapBeamGlyph(dx, dy), color: CLR_CYAN });
+                        beamCells.push({ x: sx, y: sy, ch: zapBeamGlyph(dx, dy), color: CLR_WHITE }); // C: coloring of ZT_COLD zap glyph is white (drawing.c zap glyph tables)
 
                         const terrain = applyColdRayTerrain(sx, sy, { buriedMerchandiseDebtMessage });
-                        messages.push(...terrain.messages);
+                        pushBoltMessage(terrain.messages);
                         range += terrain.rangeMod;
                         if (terrain.stopped || range < 0) break;
 
@@ -67574,9 +67755,9 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                 const reflection = monsterReflectionSource(target);
                                 if (reflection) {
                                     if (visible) {
-                                        messages.push(`The bolt of cold hits ${coldRayMonsterName(target)}.`);
+                                        pushBoltMessage(`The bolt of cold hits ${coldRayMonsterName(target)}.`);
                                         recordMonsterReflectionDiscovery(reflection);
-                                        messages.push(`But it reflects from ${monsterPossessiveName(target)} ${reflection.source}!`);
+                                        pushBoltMessage(`But it reflects from ${monsterPossessiveName(target)} ${reflection.source}!`);
                                     }
                                     dx = -dx;
                                     dy = -dy;
@@ -67584,7 +67765,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                     let damage = 0;
                                     const resistsCold = !!(target.coldResistance || target.data?.resistsCold || target.data?.coldResistance);
                                     if (!resistsCold) {
-                                        const origDamage = d(6, 6);
+                                        const origDamage = d(hornDamageDice, 6);
                                         damage = origDamage;
                                         if (target.fireResistance || target.data?.resistsFire) damage += d(6, 3);
                                         if (!rn2(3))
@@ -67603,34 +67784,61 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                             createMonsterCorpseOrGlob(target, corpseData, target.mx, target.my, { messages });
                                         recordVanquished(target, true);
                                         newsym(target.mx, target.my);
-                                        messages.push(`You kill the ${target.data?.name || 'monster'}!`);
+                                        pushBoltMessage(`You kill the ${target.data?.name || 'monster'}!`);
                                         break;
                                     } else if (visible) {
-                                        messages.push(`The bolt of cold hits the ${target.data?.name || 'monster'}!`);
+                                        pushBoltMessage(`The bolt of cold hits the ${target.data?.name || 'monster'}!`);
                                     }
                                 }
                             } else if (visible) {
-                                messages.push(`The bolt of cold misses the ${target.data?.name || 'monster'}.`);
+                                pushBoltMessage(`The bolt of cold misses the ${target.data?.name || 'monster'}.`);
                             }
                         } else if (sx === game.u?.ux && sy === game.u?.uy && range >= 0) {
                             if (zapRayHitsArmorClass(game.u?.uac ?? 10)) {
                                 const hitBeamEnd = beamCells.length;
                                 range -= 2;
-                                messages.push('The bolt of cold hits you!');
+                                pushBoltMessage('The bolt of cold hits you!');
                                 if (game.u?.reflecting) {
                                     beamStopIndex ??= hitBeamEnd;
-                                    messages.push('But it reflects from your shield!');
+                                    // C ref: zap.c:4966-4976 — Reflecting
+                                    // reverses the bolt; ureflects()
+                                    // (muse.c:2836-2857) picks the source word
+                                    // and makeknown()'s it (shield of
+                                    // reflection -> / amulet of reflection,
+                                    // muse.c:2846-2849), which exercises
+                                    // wisdom when newly discovered
+                                    // (o_init.c:483).
+                                    const reflectSource = heroZapReflectSourceWord();
+                                    if (!game.u?.blind) {
+                                        pushBoltMessage(`But it reflects from your ${reflectSource || 'medallion'}!`);
+                                        if (reflectSource === 'shield') {
+                                            const shield = (game.inventory || []).find(invItem =>
+                                                isWornInventoryItem(invItem)
+                                                && String(invItem.kind || invItem.actualKind || '').toLowerCase() === 'shield of reflection');
+                                            identifyReflectedShieldOfReflection(shield);
+                                        } else if (reflectSource === 'medallion') {
+                                            const amulet = (game.inventory || []).find(invItem =>
+                                                invItem.cls === 'amulet' && isWornInventoryItem(invItem)
+                                                && (invItem.amuletIndex === 7
+                                                    || String(invItem.kind || invItem.actualKind || '').toLowerCase() === 'amulet of reflection'));
+                                            identifyReflectedAmuletOfReflection(amulet);
+                                        }
+                                    } else {
+                                        // zap.c:4969-4970 blind alternate text
+                                        pushBoltMessage('For some reason you are not affected.');
+                                    }
+                                    beamExcludesHero = true;
                                     dx = -dx;
                                     dy = -dy;
                                 } else {
-                                    const origDamage = d(6, 6);
+                                    const origDamage = d(hornDamageDice, 6);
                                     const resistsCold = heroHasColdResistance();
                                     const baseDamage = resistsCold ? 0 : origDamage;
-                                    if (resistsCold) messages.push("You don't feel cold.");
+                                    if (resistsCold) pushBoltMessage("You don't feel cold.");
                                     const coldInventory = !rn2(3)
                                         ? coldDamageInventory(origDamage)
                                         : { messages: [], damage: 0, deathCause: '' };
-                                    messages.push(...coldInventory.messages);
+                                    pushBoltMessage(coldInventory.messages);
                                     const damage = baseDamage + coldInventory.damage;
                                     const hpBefore = game.u?.uhp || 0;
                                     if (damage && game.u)
@@ -67639,11 +67847,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                         game._death_cause = coldInventory.damage >= hpBefore && coldInventory.deathCause
                                             ? coldInventory.deathCause
                                             : 'killed by a bolt of cold';
-                                        messages.push('You die...');
+                                        pushBoltMessage('You die...');
                                     }
                                 }
                             } else {
-                                messages.push('The bolt of cold whizzes by you!');
+                                pushBoltMessage('The bolt of cold whizzes by you!');
                             }
                         }
 
@@ -67656,7 +67864,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                         : (IS_WALL(typ) && game.u?.uz?.dnum === game.mines_dnum) ? 20
                             : 75;
                     if (--range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && couldsee(lsx, lsy))
-                        messages.push('The bolt of cold bounces!');
+                        pushBoltMessage('The bolt of cold bounces!');
                     if (!dx || !dy || (bchance > 0 && !rn2(bchance))) {
                         dx = -dx;
                         dy = -dy;
@@ -67697,6 +67905,61 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     }
                 }
 
+                if (hornElement) {
+                    // C ref: music.c:637 makeknown(instr->otyp) — discovering
+                    // the instrument type exercises wisdom (o_init.c:483).
+                    const hornKindName = hornElement === 'cold' ? 'frost horn' : 'fire horn';
+                    const hornTypeKnownBefore = toolDiscoveryKnown(hornKindName);
+                    identifyZapToolOrWand(item, hornElement);
+                    if (!hornTypeKnownBefore) exerciseAttribute(A_WIS, true);
+                    // C ref: topl.c:251-266 update_topl() — plines join the
+                    // pending topline while `len + 3 < CO - 8`, otherwise the
+                    // line ends in --More-- and the new text owns the next
+                    // line.  The beam glyphs rendered at the capture of a
+                    // line are the tmp_at cells live when the NEXT pline
+                    // is attempted (display.c:1110 tmp_at/DISP_BEAM, cleared
+                    // by DISP_END after dobuzz()).
+                    const width = game.nhDisplay?.cols || 80;
+                    const packed = [];
+                    let cur = '';
+                    let firstIdx = 0;
+                    messages.forEach((text, idx) => {
+                        if (!cur) {
+                            cur = text;
+                            firstIdx = idx;
+                            return;
+                        }
+                        if (cur.length + text.length + 3 < width - 8) {
+                            cur = `${cur}  ${text}`;
+                        } else {
+                            // capture-time beam state = snapshot when the
+                            // overflowing message is printed
+                            packed.push({ text: cur, beam: boltBeamSnapshots[idx] || [] });
+                            cur = text;
+                            firstIdx = idx;
+                        }
+                    });
+                    packed.push({ text: cur, beam: null }); // DISP_END clears
+                    const lastIndex = packed.length - 1;
+                    game._queued_messages_after_more ??= [];
+                    for (let k = 1; k < packed.length; k++) {
+                        game._queued_messages_after_more.push({
+                            text: packed[k].text,
+                            more: k < lastIndex,
+                            processTime: k === lastIndex,
+                            clearBeam: k === lastIndex,
+                            beamCells: packed[k].beam,
+                        });
+                    }
+                    game._transient_beam_cells = packed.length > 1
+                        ? (packed[0].beam && packed[0].beam.length ? packed[0].beam
+                            : beamStopIndex == null ? beamCells : beamCells.slice(0, beamStopIndex))
+                        : null;
+                    await setMessage(packed[0].text, packed.length > 1);
+                    game._command_mode = null;
+                    game.context.move = 1;
+                    return;
+                }
                 const messageMore = messages.length > 1;
                 game._transient_beam_cells = messageMore
                     ? beamStopIndex == null ? beamCells : beamCells.slice(0, beamStopIndex)
@@ -67712,7 +67975,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (fireWand) {
-                rn2(19);
+                // C ref: zap.c:3435 weffects() attribute exercise is wand-only
+                // (music.c:611-631 for horns); the rn2(19) below is that roll.
+                if (hornElement !== 'fire') rn2(19);
+                // C ref: music.c:634 — horns roll their damage-dice count
+                // (rn1(6, 6)) ahead of dobuzz()'s range roll (zap.c:4823).
+                const hornDamageDiceFire = hornElement === 'fire' ? rn1(6, 6) : 6;
+                void hornDamageDiceFire; // used by the fire bolt damage sites below
                 const beamCells = [];
                 const blast = hornBlastMessage(item);
                 const messages = [...preludeMessages, ...(blast ? [blast] : [])];
@@ -67942,7 +68211,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                         ...followups.map((entry, index) => typeof entry === 'string'
                             ? { text: entry, more: index < followups.length - 1 }
                             : { ...entry, more: entry.more ?? index < followups.length - 1 })];
-                identifyZapToolOrWand(item, 'fire');
+                {
+                    // C ref: music.c:637 makeknown(instr->otyp) exercises
+                    // wisdom when the instrument type is discovered
+                    // (o_init.c:483).
+                    const fireHornKnownBefore = hornElement === 'fire' && toolDiscoveryKnown('fire horn');
+                    identifyZapToolOrWand(item, 'fire');
+                    if (hornElement === 'fire' && !fireHornKnownBefore) exerciseAttribute(A_WIS, true);
+                }
                 await setMessage(messages.join('  '), messages.length > 1 || !!followups.length);
                 game._command_mode = null;
                 game.context.move = 1;
@@ -71725,7 +72001,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         if (isHornOfPlentyObject(item)) {
             const messages = applyHornOfPlentyOnce(item);
-            await setMessage(messages.join('  '), messages.length > 1);
+            await setPackedToplineMessages(messages);
             game.context.move = 1;
             return;
         }
