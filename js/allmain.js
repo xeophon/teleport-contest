@@ -6157,13 +6157,25 @@ export async function processMonsterTurns() {
                             /* mhitu.c hitmsg(): a monster hitting again with the
                              * same attack slot successor says "hits again!". */
                             let prevHitAgainKey = null;
+                            /* per-slot hit/miss history (sum[] in mhitu.c
+                             * mattacku) so a resumed chain can evaluate the
+                             * AT_HUGS "prev two hit" auto-hit rule
+                             * (mhitu.c:822-826). */
+                            const hitsSoFar = [];
 		                            for (let attackIndex = 0; attackIndex < attackCount; attackIndex++) {
 		                                let multiAttack = heroMultiAttacks[attackIndex];
                                         // C ref: mhitu.c:372-390 getmattk() — while
                                         // mspec_used > 0, grabs/engulfs/sticks/poly
                                         // downgrade to a plain 1d6 claw ("hits").
-                                        if (mon.mspec_used && (multiAttack.aatyp === 'engl' || multiAttack.aatyp === 'hugs'
-                                            || multiAttack.adtyp === 'stck' || multiAttack.adtyp === 'poly'))
+                                        /* mhitu.c:371-390 + :74 — substituted
+                                         * grab/engulf slots come from
+                                         * getmattk()'s alt_attk_buf scratch,
+                                         * which can never satisfy
+                                         * mattk == hitmsg_prev + 1 (" again"). */
+                                        const slotSubstituted = !!(mon.mspec_used
+                                            && (multiAttack.aatyp === 'engl' || multiAttack.aatyp === 'hugs'
+                                                || multiAttack.adtyp === 'stck' || multiAttack.adtyp === 'poly'));
+                                        if (slotSubstituted)
                                             multiAttack = { ...multiAttack, aatyp: 'claw', adtyp: 'phys', dice: 1, sides: 6, verb: 'hits' };
 		                                const deferredAttackRoll = attackIndex === 0
 		                                    ? mon._deferred_multi_attack_roll_after_more : null;
@@ -6175,10 +6187,11 @@ export async function processMonsterTurns() {
                                     // hitmsg_prev/hitmsg_mid — a miss breaks
                                     // the " again" chain.
                                     prevHitAgainKey = null;
+                                    hitsSoFar.push(false);
 	                                    const missMessage = `${shownSubject} ${toHit === attackRoll && game.flags?.verbose !== false ? 'just ' : ''}misses!`;
 	                                    if (deferMultiAttack) {
 	                                        multiMessages.push(missMessage);
-	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [false] };
+	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [...hitsSoFar] };
 	                                        continue;
 	                                    }
                                     if (!game._suppress_monster_attack_messages) {
@@ -6201,19 +6214,23 @@ export async function processMonsterTurns() {
                                 }
 
 	                                let damage = d(multiAttack.dice ?? 1, multiAttack.sides ?? 2);
+                                    hitsSoFar.push(true); // mattacku sum[] (mhitu.c:763+)
                                     // C ref: mhitu.c:72-76 hitmsg() — " again"
                                     // iff this is the slot right after the
                                     // previous (mattk == hitmsg_prev + 1) with
                                     // the SAME ATTACK TYPE, not just the same
                                     // verb (an ape's claw claw hug chain prints
                                     // "hits!  hits again!  hits!").
-                                    const againKey = `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex}`;
-                                    const hitsAgain = prevHitAgainKey === `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex - 1}`;
+                                    const againKey = slotSubstituted
+                                        ? `__subst@${attackIndex}` /* scratch buffer: no " again" for it or its successor (mhitu.c:74) */
+                                        : `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex}`;
+                                    const hitsAgain = !slotSubstituted
+                                        && prevHitAgainKey === `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex - 1}`;
                                     prevHitAgainKey = againKey;
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {
 	                                    multiMessages.push(hitMessage);
-	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [true] };
+	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [...hitsSoFar] };
 	                                    continue;
 	                                }
 	                                // C ref: mhitu.c hitmu() per-slot order (mhitu.c:1187-1265):
@@ -6233,6 +6250,14 @@ export async function processMonsterTurns() {
 	                                        attacks: heroMultiAttacks.slice(attackIndex + 1),
                                             prevAttack: heroMultiAttacks[attackIndex],
 	                                        nextIndex: attackIndex + 1, toHit, subject, name,
+                                            /* keep the attacker and this turn's
+                                             * per-slot results so the resumed chain
+                                             * can honor getmattk()'s mspec_used
+                                             * substitution (mhitu.c:371-390) and the
+                                             * AT_HUGS prev-two-hit auto-hit rule
+                                             * (mhitu.c:822-826). */
+                                            mon, hitsSoFar: [...hitsSoFar], /* this slot's
+                                             * push(true) already happened above */
 	                                    };
 	                                    game._attack_resume_after_more = 1;
 	                                    game._message_more = 1;
@@ -17449,7 +17474,8 @@ export async function moveloop_core() {
         // loop resumes only after revival.  Keep the pass loop parked while a
         // queued death waits behind --More--.
         && !(g._message_more && g._queued_message_after_more === 'You die...'
-             && (g.u?.uhp ?? 1) <= 0 && !g._dying_revived_mid_turn)
+             && ((g.u?.uhp ?? 1) <= 0 || g._death_healed_at_chain_crossing)
+             && !g._dying_revived_mid_turn)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
         if (process.env.WEREDBG) console.error(`WEREDBG timepass moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
@@ -18282,7 +18308,8 @@ export async function moveloop_core() {
 	        // C ref: end.c:1107-1118 — when the hero died mid-movemon, done()
 	        // blocks at "You die..."/"Die?" BEFORE the monster loop resumes;
 	        // keep the resume state frozen until revival lets it continue.
-	        && !(g._queued_message_after_more === 'You die...' && (g.u?.uhp || 0) <= 0)
+	        && !(g._queued_message_after_more === 'You die...'
+	            && ((g.u?.uhp || 0) <= 0 || g._death_healed_at_chain_crossing))
 	        && !(g._queued_message_after_more && g._search_pending_count > 0) ? 1 : 0;
     g._dismissed_more_this_command = 0;
     g._resume_run_after_queued_dead_more = 0;

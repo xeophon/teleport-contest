@@ -12766,6 +12766,7 @@ async function monsterSummonNasties(summoner) {
             const mon = await makemon(makeData, spot.x, spot.y, MM_NOMSG);
             if (!mon) continue;
             mon.msleeping = 0;                            // wizard.c:685
+            newsym(mon.mx, mon.my);                       // makemon.c:1472 — in-game spawn shows immediately
             mon.mpeaceful = 0;
             mon.mtame = 0;
             const mname = mon.data?.name || '';
@@ -64595,6 +64596,17 @@ function tutorialEnterStash() {
                 }
                 let pauseAfterDeferredMultiattack = false;
 		                if (game._deferred_multiattack_after_more) {
+	                    /* mhitu.c:1253+ mdamageu() -> done() (end.c:1025+) -> die()
+                     * -> wizard "Die?" -> savelife() (end.c:1108-1116,
+                     * 704-758) runs SYNCHRONOUSLY inside the fatal slot: the
+                     * refusal heals the hero before any later slot resolves. */
+                    let deathHealedThisResume = false;
+                    /* C's refused done() interrupts mattacku's slot loop
+                     * (mhitu.c:763-946) mid-chain — the tty stops at the
+                     * hitmsg/--More-- of the fatal slot, and the remaining
+                     * slots' hitmsg()s print only after "OK, so you don't
+                     * die."  Park those message texts until the refusal. */
+                    let deathChainMessageSink = null;
 	                    const deferred = game._deferred_multiattack_after_more;
 	                    game._deferred_multiattack_after_more = null;
 	                    const messages = game._pending_message ? [game._pending_message] : [];
@@ -64613,10 +64625,18 @@ function tutorialEnterStash() {
 	                        // C ref: display quirk verified against recording — the status
 	                        // HP line keeps the pre-damage value shown while the death
 	                        // --More-- chain plays when the killing blow lands at exactly -1.
-                            // C ref: mdamageu() -> done() -> savelife() is *synchronous*
-                            // mid-mattakm/mwildmw burst: on a wizard-mode "Die?" refusal
-                            // the hero is healed before the NEXT attack slot is rolled.
-                            if (BISD_REV && (game.u?.uhp || 0) <= 0) restoreHeroHpForUnresolvedWizardDeath();
+                            // C ref: end.c:1108-1116 + 704-758 — the refusal
+                            // heal lands BEFORE the chain's remaining slots,
+                            // so their damage applies to the restored hp.
+                            if ((game.u?.uhp || 0) <= 0 && !deathHealedThisResume
+                                && (game.flags?.debug || game.flags?.explore)
+                                && (deferred.attacks || []).length) {
+                                deathHealedThisResume = true;
+                                game._death_healed_at_chain_crossing = 1;
+                                restoreHeroHpForUnresolvedWizardDeath();
+                                deathChainMessageSink
+                                    = game._death_chain_after_refusal_messages = [];
+                            }
 		                    }
 		                    const hitsSoFar = [...(deferred.hitsSoFar || [])];
 		                    // mhitu.c:72-77 hitmsg() — " again" iff the same
@@ -64630,6 +64650,17 @@ function tutorialEnterStash() {
                     // ATTACK TYPE as the previous slot (mattk->aatyp ==
                     // hitmsg_prev->aatyp) for " again".
                     let prevAatyp = deferred.prevAttack?.aatyp ?? null;
+                    /* mhitu.c:74 — " again" requires mattk == hitmsg_prev + 1;
+                     * getmattk()'s mspec_used substitution (mhitu.c:371-390)
+                     * swaps the attack for a scratch-buffer copy
+                     * (alt_attk_buf), which is never adjacent to the previous
+                     * entry: neither a substituted slot nor its successor can
+                     * print " again". */
+                    const isSubstitutableAttack = (attk) => !!attk
+                        && (attk.aatyp === 'engl' || attk.aatyp === 'hugs'
+                            || attk.adtyp === 'stck' || attk.adtyp === 'poly');
+                    let prevWasSubstituted = !!(deferred.mon?.mspec_used
+                        && isSubstitutableAttack(deferred.prevAttack));
 		                for (let i = 0; i < (deferred.attacks || []).length; i++) {
 		                        const attackIndex = (deferred.nextIndex || 1) + i;
 		                        let attack = deferred.attacks[i];
@@ -64638,8 +64669,9 @@ function tutorialEnterStash() {
                                 // downgrade to a plain 1d6 claw, and the
                                 // downgraded slot then takes the normal AT_CLAW
                                 // to-hit roll path.
-                                if (deferred.mon?.mspec_used && (attack.aatyp === 'engl' || attack.aatyp === 'hugs'
-                                    || attack.adtyp === 'stck' || attack.adtyp === 'poly'))
+                                const slotWasSubstituted = !!(deferred.mon?.mspec_used
+                                    && isSubstitutableAttack(attack));
+                                if (slotWasSubstituted)
                                     attack = { ...attack, aatyp: 'claw', adtyp: 'phys', dice: 1, sides: 6, verb: 'hits' };
                                 // C ref: mhitu.c:822-826 AT_HUGS — automatic hit
                                 // when the previous two attacks both hit; no
@@ -64671,6 +64703,7 @@ function tutorialEnterStash() {
                                     prevSlotWasHit = false;
                                     prevBaseVerb = null;
                                     prevAatyp = null;
+                                    prevWasSubstituted = false;
 		                        } else {
 		                            hitsSoFar.push(true);
 		                            const damage = d(attack.dice ?? 1, attack.sides ?? 2);
@@ -64678,11 +64711,18 @@ function tutorialEnterStash() {
                                     // mhitu.c:73-76 — consecutive slots give
                                     // " again" only on the same attack type
                                     // (mattk->aatyp == hitmsg_prev->aatyp).
+                                    // mhitu.c:73-76 — " again" also requires
+                                    // adjacent *natural* attack table slots
+                                    // (mattk == hitmsg_prev + 1); a getmattk
+                                    // scratch-buffer substitution breaks the
+                                    // chain on both sides.
                                     const again = prevSlotWasHit && prevBaseVerb === baseVerb
-                                        && (attack.aatyp ?? null) === prevAatyp ? ' again' : '';
+                                        && (attack.aatyp ?? null) === prevAatyp
+                                        && !slotWasSubstituted && !prevWasSubstituted ? ' again' : '';
                                     prevSlotWasHit = true;
                                     prevBaseVerb = baseVerb;
                                     prevAatyp = attack.aatyp ?? null;
+                                    prevWasSubstituted = slotWasSubstituted;
 		                            nextMessage = `${shownSubject} ${baseVerb}${again}!`;
                                     nextFirst = { hit: true, damage, message: nextMessage };
                                 }
@@ -64708,7 +64748,7 @@ function tutorialEnterStash() {
                                     pauseAfterDeferredMultiattack = true;
                                     break;
                                 }
-		                        messages.push(nextMessage);
+		                        (deathChainMessageSink || messages).push(nextMessage);
                                 if (nextFirst?.hit) {
 		                            rn2(3);
 		                            rn2(6);
@@ -64725,10 +64765,17 @@ function tutorialEnterStash() {
 		                            // HP line keeps the pre-damage value shown while the death
 		                            // --More-- chain plays when the killing blow lands at exactly -1.
                                     // C ref: mdamageu() -> done() -> savelife() is
-                                    // synchronous mid-burst (end.c:704-758): on a
-                                    // wizard-mode "Die?" refusal the hero is healed
-                                    // before the NEXT attack slot is rolled.
-                                    if (BISD_REV && (game.u?.uhp || 0) <= 0) restoreHeroHpForUnresolvedWizardDeath();
+                                    // synchronous mid-burst (end.c:704-758 +
+                                    // end.c:1108-1116): the refusal heal lands
+                                    // before the NEXT attack slot resolves.
+                                    if ((game.u?.uhp || 0) <= 0 && !deathHealedThisResume
+                                        && (game.flags?.debug || game.flags?.explore)) {
+                                        deathHealedThisResume = true;
+                                        game._death_healed_at_chain_crossing = 1;
+                                        restoreHeroHpForUnresolvedWizardDeath();
+                                        deathChainMessageSink
+                                            = game._death_chain_after_refusal_messages = [];
+                                    }
                                 }
 	                    }
                         // C ref: mattacku()/movemon slot-loop continuation —
@@ -64745,7 +64792,8 @@ function tutorialEnterStash() {
                     // any queued non-fatal followup; only an already-queued death line defers a
                     // second.  When this fires, movemon must resume with the NEXT monster, not this
                     // monster's replayed slot chain (see resume-index resets below).
-                    const deferredHeroHpHitZero = (game.u?.uhp || 0) <= 0;
+                    const deferredHeroHpHitZero = deathHealedThisResume
+                        || (game.u?.uhp || 0) <= 0;
                     if (deferredHeroHpHitZero
                         && !(game._queued_message_after_more || '').startsWith('You die')) {
                             game._monster_resume_same_index = 0;
@@ -66478,7 +66526,9 @@ function tutorialEnterStash() {
             game.context.move = 0;
             game._process_command_time_now = 0;
             game._run_steps_remaining = 0;
-            if (game.u) game.u.uhp = 0;
+            // end.c:704-758 — a chain-crossing heal already restored hp
+            // synchronously; don't re-zero it for the prompt.
+            if (game.u && !game._death_healed_at_chain_crossing) game.u.uhp = 0;
             game._death_status_hp_before_zero = null;
             const deathTurn = game.moves || 1;
             game._death_moves ||= game._death_current_move ? deathTurn : Math.max(1, deathTurn - 1);
@@ -66506,8 +66556,12 @@ function tutorialEnterStash() {
 
     if (game._command_mode === 'wizardDieConfirm') {
         if (process.env.WEREDBG) console.error(`WEREDBG wizardDieConfirm key=${JSON.stringify(ch)} moves=${game.moves} rngidx=${getRngLog().length}`);
-        game._death_pending_confirm = false;
+        /* keys that don't answer the prompt (e.g. stray '5'/'s') must not
+         * disturb the pending-death display/zero state — C re-asks "Die?"
+         * and the status line keeps showing HP 0 until refusal prints. */
         if (ch === 'y') {
+        game._death_healed_at_chain_crossing = 0;
+        game._death_pending_confirm = false;
             game._gas_spore_explode_exercise_pending = 0;
             game._gas_spore_deferred_experience_mon = null;
             game._wizard_lava_refusal_clear_trap = 0;
@@ -66525,6 +66579,9 @@ function tutorialEnterStash() {
             return;
         }
         if (ch === 'n' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            const healedAtChainCrossing = !!game._death_healed_at_chain_crossing;
+            game._death_healed_at_chain_crossing = 0;
+            game._death_pending_confirm = false;
             if (game._gas_spore_explode_exercise_pending) {
                 game._gas_spore_explode_exercise_pending = 0;
                 // C ref: exercise(A_STR, FALSE) — explode.c:678, reached as
@@ -66537,7 +66594,10 @@ function tutorialEnterStash() {
             game._wizard_lava_refusal_clear_trap = 0;
             game._wizard_lava_refusal_safe_teleport = 0;
             game._wizard_lava_refusal_fatal_entry = 0;
-            restoreHeroHpAfterLifeSaving();
+            // end.c:1108-1116 — savelife() healed synchronously at the fatal
+            // slot already (restoreHeroHpForUnresolvedWizardDeath); healing
+            // again here would erase the chain's post-refusal damage.
+            if (!healedAtChainCrossing) restoreHeroHpAfterLifeSaving();
             clearLifeSavedDeathState();
             if (lavaRefusalClearTrap || game.u?.utraptype === TT_LAVA) {
                 game.u.utrap = 0;
@@ -66632,8 +66692,24 @@ function tutorialEnterStash() {
                     return;
                 }
             }
+            /* mhitu.c:763-946 + end.c:1108-1116 — the interrupted attack
+             * chain resumes from its fatal slot right after "OK, so you
+             * don't die.": its parked hitmsg()s print into the refusal line,
+             * and the survivor nomovemsg (end.c:727) follows past a forced
+             * --More-- (allmain.c:381-383 unmul cadence). */
+            const chainSlotMessages = game._death_chain_after_refusal_messages || [];
+            game._death_chain_after_refusal_messages = null;
+            if (chainSlotMessages.length)
+                survivalMessages.push(...chainSlotMessages);
             game._command_mode = null;
-            await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult);
+            await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult
+                || (chainSlotMessages.length ? true : undefined));
+            /* C's tty blocks only at getch: the refusal window completes the
+             * interrupted movemon pass and the new-turn block (allmain.c:
+             * 227-253 mcalcdistress/mcalcmove/svm.moves++) behind the pending
+             * --More--, so the status line shows the advanced turn while the
+             * chain's last hitmsg is still parked for dismissal. */
+
             if (landing?.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
 
             if (game._deferred_raven_blind_after_more) {
