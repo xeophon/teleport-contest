@@ -41978,6 +41978,16 @@ function sellobjReturnUnpaidToShop(obj, x, y) {
     return true;
 }
 
+// C ref: src/steed.c + src/dokick.c — riding-port surface exercised by
+// test/steed-kick.test.mjs (saddle attempts, mounting, steed kicks).
+export const __steedTestHooks = {
+    heroUseSaddle,
+    kickSteed,
+    monsterCanBeSaddled,
+    heroLegsInNoShapeMessage,
+    steedMonNam,
+};
+
 export const __shopBillingTestHooks = {
     addContainerTakeoutObjectToInventory,
     addContainerTakeoutObjectToShopBill,
