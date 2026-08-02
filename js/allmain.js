@@ -6141,6 +6141,11 @@ export async function processMonsterTurns() {
                             /* mhitu.c hitmsg(): a monster hitting again with the
                              * same attack slot successor says "hits again!". */
                             let prevHitAgainKey = null;
+                            /* per-slot hit/miss history (sum[] in mhitu.c
+                             * mattacku) so a resumed chain can evaluate the
+                             * AT_HUGS "prev two hit" auto-hit rule
+                             * (mhitu.c:822-826). */
+                            const hitsSoFar = [];
 		                            for (let attackIndex = 0; attackIndex < attackCount; attackIndex++) {
 		                                let multiAttack = heroMultiAttacks[attackIndex];
                                         // C ref: mhitu.c:372-390 getmattk() — while
@@ -6159,10 +6164,11 @@ export async function processMonsterTurns() {
                                     // hitmsg_prev/hitmsg_mid — a miss breaks
                                     // the " again" chain.
                                     prevHitAgainKey = null;
+                                    hitsSoFar.push(false);
 	                                    const missMessage = `${shownSubject} ${toHit === attackRoll && game.flags?.verbose !== false ? 'just ' : ''}misses!`;
 	                                    if (deferMultiAttack) {
 	                                        multiMessages.push(missMessage);
-	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [false] };
+	                                        deferredMultiAttack = { first: { hit: false, message: missMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [...hitsSoFar] };
 	                                        continue;
 	                                    }
                                     if (!game._suppress_monster_attack_messages) {
@@ -6185,6 +6191,7 @@ export async function processMonsterTurns() {
                                 }
 
 	                                let damage = d(multiAttack.dice ?? 1, multiAttack.sides ?? 2);
+                                    hitsSoFar.push(true); // mattacku sum[] (mhitu.c:763+)
                                     // C ref: mhitu.c:72-76 hitmsg() — " again"
                                     // iff this is the slot right after the
                                     // previous (mattk == hitmsg_prev + 1) with
@@ -6197,7 +6204,7 @@ export async function processMonsterTurns() {
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {
 	                                    multiMessages.push(hitMessage);
-	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [true] };
+	                                    deferredMultiAttack = { first: { hit: true, damage, message: hitMessage }, attacks: heroMultiAttacks.slice(attackIndex + 1), prevAttack: heroMultiAttacks[attackIndex], nextIndex: attackIndex + 1, toHit, subject, name, mon, hitsSoFar: [...hitsSoFar] };
 	                                    continue;
 	                                }
 	                                // C ref: mhitu.c hitmu() per-slot order (mhitu.c:1187-1265):
@@ -6217,6 +6224,14 @@ export async function processMonsterTurns() {
 	                                        attacks: heroMultiAttacks.slice(attackIndex + 1),
                                             prevAttack: heroMultiAttacks[attackIndex],
 	                                        nextIndex: attackIndex + 1, toHit, subject, name,
+                                            /* keep the attacker and this turn's
+                                             * per-slot results so the resumed chain
+                                             * can honor getmattk()'s mspec_used
+                                             * substitution (mhitu.c:371-390) and the
+                                             * AT_HUGS prev-two-hit auto-hit rule
+                                             * (mhitu.c:822-826). */
+                                            mon, hitsSoFar: [...hitsSoFar], /* this slot's
+                                             * push(true) already happened above */
 	                                    };
 	                                    game._attack_resume_after_more = 1;
 	                                    game._message_more = 1;
