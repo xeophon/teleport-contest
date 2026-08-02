@@ -10469,7 +10469,26 @@ function wizkillAutoDescribe(x, y) {
     const object = (game.level?.objects || []).find(obj =>
         !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
     if (object) return pickupObjectPhrase(object);
-    return '';
+    // C ref: pager.c do_screen_description -> lookat() (pager.c:690-740):
+    // falling past monsters and objects, the terrain under the cursor is
+    // described ("floor of a room", "dark part of a room", "corridor",
+    // "stone", traps, "wall", ...), matching the teleport-cursor autodescribe
+    // table above.
+    const loc = game.level?.at(x, y);
+    const seenTrap = (game.level?.traps || []).find(t => t.tx === x && t.ty === y && t.tseen);
+    const inSight = !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+    if (seenTrap) return showtrapTrapName(seenTrap.ttyp);
+    if (loc?.typ === STONE) return 'stone';
+    if (!loc || (!loc.seenv && !loc.remembered_glyph && loc.disp_ch === ' ')) return 'unexplored area';
+    if (loc.typ === CORR) return 'corridor';
+    if (loc.typ === DOOR) return doorDescription(loc);
+    if (loc?.typ === GRAVE) return 'grave';
+    if (loc.typ === ROOM && !inSight) return 'dark part of a room';
+    if (loc.typ === ROOM || loc.typ === STAIRS) return 'floor of a room';
+    if (loc.typ === MOAT) return 'moat';
+    if (loc.typ === TREE) return 'tree';
+    if (loc.typ && loc.typ < DOOR) return 'wall';
+    return 'unexplored area';
 }
 
 function farlookMonsterDescription(mon) {
@@ -15080,6 +15099,17 @@ async function advanceExperienceLevel(incremental = false) {
     if (abilityMessage && delayed) {
         pendingMessage = `Welcome to experience level ${level}.  ${abilityMessage}`;
         nextDelayed = 0;
+    } else if (abilityMessage && !incremental && level >= (game._level_change_target || level)) {
+        // C ref: #levelchange loops pluslvl(FALSE) (wizcmds.c:478-481);
+        // each pluslvl prints "You feel more experienced." then
+        // "Welcome to experience level N." (exper.c:315,357) and adjabil()
+        // prints the new intrinsic (exper.c:363; attrib.c wiz_abil 15:
+        // "sensitive").  update_topl() (win/tty/topl.c:251) can't fit the
+        // intrinsic message on the occupied top line, so it issues --More--
+        // first, then shows the intrinsic message alone with no further
+        // more.  Show that trailing intrinsic message via the pending path
+        // (which clears _message_more when ulevel >= target).
+        pendingMessage = abilityMessage;
     } else if (abilityMessage) {
         game._level_change_ability_prefix = abilityMessage;
     }
@@ -60926,6 +60956,27 @@ async function moveHero(dx, dy) {
             rows.push([i + 1, 41, BAG_OBJECT_TYPES.has(obj.otyp) ? 'a bag' : pickupObjectPhrase(obj)]);
         }
         rows.push([objects.length + 1, 41, '--More--']);
+        if (trapHere?.tseen) {
+            // C ref: pickup(1) -> check_here(FALSE) (pickup.c:873-880) ->
+            // look_here(obj_cnt) (invent.c:4104): a seen trap on the spot is
+            // announced first with "There is an arrow trap here."
+            // (invent.c:4170-4178), and because that leaves the top line
+            // occupied (TOPLINE_NEED_MORE), drawing the "Things that are
+            // here:" window forces a --More-- first
+            // (win/tty/wintty.c:1922-1925 tty_display_nhwindow NHW_MENU).
+            game._queued_overlay_after_more = {
+                lines: rows,
+                clearRows: objects.length + 2,
+                clearCol: 40,
+                mode: 'objectListMore',
+                message: 'text-window',
+                messageMore: true,
+                deferredContextMove: game.context.move || 1,
+            };
+            game.context.move = 0;
+            await setMessage(`There is ${articleForName(TRAP_NAMES[trapHere.ttyp] || 'trap')} here.`, true);
+            return;
+        }
         setOverlay(rows, objects.length + 2, false, 40);
         game._command_mode = 'objectListMore';
         game._deferred_context_move = game.context.move || 1;
@@ -75980,12 +76031,22 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 && mon.mx === targetX && mon.my === targetY);
             if (target) {
                 // C ref: wiz_kill() -> xkilled(mtmp, XKILL_NOMSG)
-                // (wizcmds.c:297-315).
+                // (wizcmds.c:297-315); the wiz_kill() loop then plines the
+                // next prompt immediately (wizcmds.c:257-258), and
+                // update_topl() (win/tty/topl.c:251) combines it with the
+                // kill message on one line when it fits ("You kill the newt!
+                // Next monster:"), --More-- otherwise.
                 const messages = [];
                 await killMonsterFromHeroProjectileHit(target, messages, `the ${target.data?.name || 'monster'}`);
-                await setMessage(messages.join('  '), true);
+                const killedText = messages.join('  ');
+                const nextPrompt = 'Next monster:';
                 game._wizkill_mon_locs = null;
-                game._command_mode = 'wizkillKillMore';
+                if (killedText && killedText.length + 2 + nextPrompt.length + 3 < (game.nhDisplay?.cols || 80) - 8) {
+                    await setMessage(`${killedText}  ${nextPrompt}`);
+                } else {
+                    await setMessage(killedText, true);
+                    game._command_mode = 'wizkillKillMore';
+                }
                 return;
             }
             // C ref: wiz_kill() — selecting a spot with no monster prints
@@ -76382,6 +76443,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     }
                 }
                 if (materializeMessage) await setMessage(materializeMessage, true);
+                else {
+                    // C ref: with !verbose, tele() prints nothing on landing
+                    // (teleport.c:544-546), so the tty top line keeps the last
+                    // getpos autodescribe text (wintty.c leaves toplines
+                    // untouched when no new message arrives).
+                    game._keep_pending_message = 1;
+                }
                 // C ref: shk.c u_left_shop() via spoteffects() ->
                 // check_special_room() after a same-level teleport out of a
                 // shop with unpaid merchandise.
@@ -76665,6 +76733,31 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             if (arrowTrap && await handleUntrapShootingTrap(arrowTrap, dir))
                 return;
+            // C ref: untrap() (trap.c:5848) — a seen floor trap at the
+            // target that has no disarm handler falls into the switch
+            // default: pits tell you to fill them (or that you're already
+            // at the edge); every other type (falling rock, teleport,
+            // anti-magic, ...) prints "You cannot disable %s trap."
+            // (trap.c:5962-5978).  These return 0: no turn passes.
+            const resistTrap = (game.level?.traps || []).find(candidate =>
+                candidate.tx === x && candidate.ty === y && candidate.tseen);
+            if (resistTrap) {
+                const here = !dir.dx && !dir.dy;
+                if (resistTrap.ttyp === PIT || resistTrap.ttyp === SPIKED_PIT) {
+                    if (here) {
+                        await setMessage('You are already on the edge of the pit.');
+                        return;
+                    }
+                    const pitMonster = (game.level?.monsters || []).find(mon =>
+                        !mon.hidden && mon.mx === x && mon.my === y);
+                    if (!pitMonster) {
+                        await setMessage('Try filling the pit instead.');
+                        return;
+                    }
+                }
+                await setMessage(`You cannot disable ${here ? 'this' : 'that'} trap.`);
+                return;
+            }
             if (boxes.length && await beginUntrapBoxPrompt(boxes, { force, x, y }))
                 return;
             const loc = game.level?.at?.(x, y);
