@@ -12758,6 +12758,7 @@ async function monsterSummonNasties(summoner) {
             const mon = await makemon(makeData, spot.x, spot.y, MM_NOMSG);
             if (!mon) continue;
             mon.msleeping = 0;                            // wizard.c:685
+            newsym(mon.mx, mon.my);                       // makemon.c:1472 — in-game spawn shows immediately
             mon.mpeaceful = 0;
             mon.mtame = 0;
             const mname = mon.data?.name || '';
