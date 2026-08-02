@@ -15081,7 +15081,17 @@ async function advanceExperienceLevel(incremental = false) {
         pendingMessage = `Welcome to experience level ${level}.  ${abilityMessage}`;
         nextDelayed = 0;
     } else if (abilityMessage) {
-        game._level_change_ability_prefix = abilityMessage;
+        // C ref: exper.c pluslvl() — pline("Welcome to experience level N.")
+        // is followed by adjabil() intrinsics in the same level gain; when N
+        // is the #levelchange target there is no following level whose
+        // message can absorb the ability line, so queue it as the pending
+        // after-More message ("Welcome...level 15.--More--" then
+        // "You feel sensitive!") instead of dropping it on the floor.
+        if (level >= (game._level_change_target || level)) {
+            pendingMessage = abilityMessage;
+        } else {
+            game._level_change_ability_prefix = abilityMessage;
+        }
     }
     const more = level < (game._level_change_target || level) || !!nextDelayed || !!pendingMessage;
     game._level_change_delayed_welcome = nextDelayed;
@@ -62706,6 +62716,9 @@ function tutorialEnterStash() {
         && game._command_mode !== 'travelIntroMore'
         && game._command_mode !== 'jumpIntroMore'
         && game._command_mode !== 'teleportIntroMore'
+        && game._command_mode !== 'stinkingCloudDisappearMore'
+        && game._command_mode !== 'stinkingCloudFoundMore'
+        && game._command_mode !== 'stinkingCloudWhereMore'
         && game._command_mode !== 'levelChangeMore'
         && game._command_mode !== 'questLeaderIntroMore'
         && game._command_mode !== 'questLeaderStatusMore'
@@ -65200,6 +65213,9 @@ function tutorialEnterStash() {
         && game._command_mode !== 'travelIntroMore'
         && game._command_mode !== 'jumpIntroMore'
         && game._command_mode !== 'teleportIntroMore'
+        && game._command_mode !== 'stinkingCloudDisappearMore'
+        && game._command_mode !== 'stinkingCloudFoundMore'
+        && game._command_mode !== 'stinkingCloudWhereMore'
         && game._command_mode !== 'levelChangeMore'
         && game._command_mode !== 'questLeaderIntroMore'
         && game._command_mode !== 'questLeaderStatusMore'
@@ -68853,6 +68869,74 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
+    if (game._command_mode === 'stinkingCloudDisappearMore') {
+        // C ref: read.c:617-634 ("As you read the scroll, it disappears."
+        // --More--) then read.c:1997-1998 ("You have found a scroll of
+        // stinking cloud!" --More--) for an unrecognized scroll.
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            const pending = game._stinking_cloud_pending || {};
+            if (!pending.alreadyKnown) {
+                await setMessage('You have found a scroll of stinking cloud!', true);
+                game._command_mode = 'stinkingCloudFoundMore';
+            } else {
+                await setMessage('Where do you want to center the stinking cloud?', true);
+                game._command_mode = 'stinkingCloudWhereMore';
+            }
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'stinkingCloudFoundMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            // C ref: read.c:1904 do_stinking_cloud() pline prompt; the
+            // pending "--More--" gate comes from the getpos() tip window
+            // (or the cursor prompt) displacing this line.
+            await setMessage('Where do you want to center the cloud?', true);
+            game._command_mode = 'stinkingCloudWhereMore';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'stinkingCloudWhereMore') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            // C ref: getpos.c:838 handle_tip(TIP_GETPOS) -> nhcore.lua
+            // show_getpos_tip() — one-time farlook tip text window before the
+            // cursor prompt on the first getpos() of the game.
+            if (game.flags?.tips !== false && !getposTipSeen()) {
+                game._getpos_tip_seen = 1;
+                setOverlay(TRAVEL_TIP_LINES, 9, false, 9);
+                game._command_mode = 'stinkingCloudTip';
+                return;
+            }
+            game._stinking_cloud_cursor = { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+            game._cursor_override = [(game.u?.ux || 0) - 1, (game.u?.uy || 0) + 1];
+            await setMessage('Move cursor to the desired position:');
+            game._command_mode = 'stinkingCloudCenter';
+            return;
+        }
+        game._keep_pending_message = 1;
+        return;
+    }
+
+    if (game._command_mode === 'stinkingCloudTip') {
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._stinking_cloud_cursor = { x: game.u?.ux || 0, y: game.u?.uy || 0 };
+            game._cursor_override = [(game.u?.ux || 0) - 1, (game.u?.uy || 0) + 1];
+            // C ref: getpos.c:838-841 — the tip overwrote the prompt, so the
+            // goal message is reprinted as "Move cursor to %s:" (and with
+            // !verbose the "(For instructions...)" line is suppressed).
+            await setMessage('Move cursor to the desired position:');
+            game._command_mode = 'stinkingCloudCenter';
+        }
+        return;
+    }
+
     if (game._command_mode === 'stinkingCloudCenter') {
         const pending = game._stinking_cloud_pending;
         if (!pending) {
@@ -68863,6 +68947,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const uy = game.u?.uy ?? 0;
         let x = game._stinking_cloud_cursor?.x ?? ux;
         let y = game._stinking_cloud_cursor?.y ?? uy;
+        if (process.env.REGION_DEBUG) console.error(`stinkCenter key=${JSON.stringify(ch)} cursor=${x},${y}`);
         const dir = movementDirection(ch);
         if (dir) {
             x = Math.max(1, Math.min(COLNO - 1, x + dir.dx));
@@ -68873,7 +68958,9 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             await setMessage(canCenterFireScroll(x, y) ? description : `${description} (invalid target)`);
             return;
         }
-        if (!(ch === '.' || ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n')) {
+        // C ref: getpos.c:909-913 — only the pick keys "." , ; : select the
+        // cursor position; space/return are not selectors here.
+        if (!(ch === '.' || ch === ',' || ch === ';' || ch === ':' || ch === '\x1b')) {
             game._keep_pending_message = 1;
             return;
         }
@@ -68883,10 +68970,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         game._command_mode = null;
         game.context.move = 1;
         if (ch === '\x1b') {
+            // C ref: getpos.c:891-896 (ESC -> result -1) then
+            // read.c:1909-1910 prints Never_mind.
             await setMessage('Never mind.');
             return;
         }
         if (!canCenterFireScroll(x, y)) {
+            // C ref: read.c:1911-1917 can_center_cloud() failure.
             await setMessage(game.u?.hallucinating
                 ? 'Ugh... someone cut the cheese.'
                 : 'The scroll crumbles with a whiff of rotten eggs.');
@@ -68895,6 +68985,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const wasInside = heroInsideGasCloud();
         const region = createGasCloud(x, y, pending.cloudsize, pending.damage);
         if (region) region.heroFault = true;
+        // C ref: doread() runs learnscroll() only after seffects() returns
+        // (read.c:634-641), i.e. after do_stinking_cloud() -> getpos() ->
+        // create_gas_cloud(); for an unrecognized scroll learnscrolltyp()
+        // (read.c:58-66) calls makeknown() (hack.h:1530), whose
+        // discover_object(..., credit_hero TRUE) exercises wisdom
+        // (o_init.c:475-483), firing exercise()'s attn rn2(19) (attrib.c:509).
+        if (!pending.alreadyKnown) exerciseAttribute(A_WIS, true);
         const enveloped = !wasInside && region?.coords?.some(coord => coord.x === ux && coord.y === uy);
         if (enveloped) await setMessage('You are enveloped in a cloud of noxious gas!');
         else {
@@ -69541,25 +69638,27 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (isScroll && (scrollName === 'stinking cloud' || item.scrollIndex === 20)) {
+            // C ref: read.c doread() -> seffects() -> seffect_stinking_cloud()
+            // (read.c:1991-2002) -> do_stinking_cloud() (read.c:1899-1924).
+            // Each pline lands on its own tty --More-- gate here because the
+            // 38+"You have found..."+"Where..." lines exceed 80 columns, so
+            // deliver them stepwise instead of joining them onto one line.
             const confusedReading = heroIsConfused();
             const alreadyKnown = scrollDiscoveryKnown('stinking cloud');
             const messages = scrollReadMessages(confusedReading);
             const cval = item.blessed ? 1 : item.cursed ? -1 : 0;
             removeInventoryItem(item);
             rn2(19);
-            if (!alreadyKnown) {
-                messages.push('You have found a scroll of stinking cloud!');
-                learnScrollByName('stinking cloud', item, 20);
-            }
-            messages.push(`Where do you want to center the ${alreadyKnown ? 'stinking ' : ''}cloud?`);
             game._stinking_cloud_pending = {
                 cloudsize: 15 + 10 * cval,
                 damage: 8 + 4 * cval,
+                // read.c:1997 already_known gates the discovery message
+                alreadyKnown,
+                confusedReading,
             };
-            game._stinking_cloud_cursor = { x: game.u?.ux || 0, y: game.u?.uy || 0 };
-            game._cursor_override = [(game.u?.ux || 0) - 1, (game.u?.uy || 0) + 1];
-            await setMessage(messages.join('  '), false);
-            game._command_mode = 'stinkingCloudCenter';
+            if (!alreadyKnown) learnScrollByName('stinking cloud', item, 20);
+            await setMessage(messages.join('  '), true);
+            game._command_mode = 'stinkingCloudDisappearMore';
             game.context.move = 0;
             return;
         }

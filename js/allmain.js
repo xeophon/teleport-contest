@@ -38,6 +38,7 @@ import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from '.
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
+import { MONS as PERMONST_MONS } from './permonst.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
@@ -10116,6 +10117,11 @@ async function finishMonsterTurnTail() {
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
     if (!resumeAfterSounds) {
+        // C ref: allmain.c:273-274 — nh_timeout(); run_regions() opens the
+        // once-per-turn block, BEFORE regen_hp()/gethungry()/exerchk() and
+        // the u_wipe_engr() gate (allmain.c:294/354/356/360-361), so region
+        // ticks (region.c inside_gas_cloud) draw their rolls first.
+        advanceRegions(game);
         if (game._finish_fumble_timeout) {
             game._finish_fumble_timeout = 0;
             if (game.u?.fumbling) game.u._fumblingTimeout = rnd(20);
@@ -16683,16 +16689,38 @@ function heroGasCloudImmune(g) {
         || magicalBreathing || form.breathless || form.nonliving);
 }
 
+// Spawned-monster `data` objects are sparse stubs; look up the canonical
+// permonst entry (full monsters.h flags) by name to evaluate m1/mres bits.
+// C ref: monsters.h MON() rows as read by mondata.h predicate macros.
+const PERMONST_BY_NAME = new Map(PERMONST_MONS.map(m => [m.name, m]));
+function canonicalMonstFlags(data) {
+    if (!data) return null;
+    if (Number.isInteger(data.m1)) return data;
+    return PERMONST_BY_NAME.get(data.name) || null;
+}
+
+// C ref: mon.c:329-355 m_poisongas_ok() — monsters gas never touches
+// (M_POISONGAS_OK): nonliving / vampshifter / breathless() / immune_poisongas,
+// plus swimmers at pools and poison-gas breath attackers; the m1 flag covers
+// breathless (monflag.h M1_BREATHLESS = 0x400, e.g. shriekers at
+// monsters.h:1660-1667), name fallbacks cover the rest.
 function monsterGasCloudImmune(mon) {
     const data = mon?.data || {};
-    return !!(data.breathless || data.nonliving || data.name === 'fog cloud'
+    const canon = canonicalMonstFlags(data);
+    return !!(data.breathless || data.nonliving
+        || (canon && (canon.m1 & 0x00000400) !== 0) /* M1_BREATHLESS */
+        || data.name === 'fog cloud'
         || data.name?.endsWith(' golem') || data.mlet === 'W'
         || data.mlet === 'Z' || data.mlet === 'M' || data.mlet === "'");
 }
 
+// C ref: monst.c resists_poison() (mres & MR_POISON=0x20) — region.c:1146
+// returns before the rnd(dam) roll for poison-resistant monsters.
 function monsterPoisonResistant(mon) {
     const data = mon?.data || {};
-    return !!(mon?.poisonResistance || data.resistsPoison || data.poisonResistance);
+    const canon = canonicalMonstFlags(data);
+    return !!(mon?.poisonResistance || data.resistsPoison || data.poisonResistance
+        || (canon && (canon.mres & 0x20) !== 0));
 }
 
 function applyHeroGasCloud(g, reg) {
@@ -16731,7 +16759,8 @@ function applyMonsterGasCloud(g, reg, mon) {
         mon.mtame = 0;
         mon.pet = false;
     }
-    if (!data.noeyes && mon.mcansee !== false) {
+    // C ref: region.c:1139-1142 haseyes(mtmp->data) gate (M1_NOEYES).
+    if (!(data.noeyes || (() => { const c = canonicalMonstFlags(data); return c && (c.m1 & 0x00001000) !== 0; })()) && mon.mcansee !== false) {
         mon.mblinded = Math.max(mon.mblinded || 0, 1);
         mon.mcansee = false;
     }
@@ -16931,7 +16960,6 @@ export async function moveloop_core() {
                 break;
             }
             advanceSpecialLevelFeatures(g);
-            advanceRegions(g);
             g._pending_time_passed = Math.max(0, (g._pending_time_passed || 0) - 1);
             turnAdvanced = true;
             skipMonsterTurnsThisPass = true;
@@ -17109,7 +17137,6 @@ export async function moveloop_core() {
                     break;
                 }
                 advanceSpecialLevelFeatures(g);
-                advanceRegions(g);
             }
             const occupation = g._armor_wear_occupation;
             if (occupation?.turns > 0) occupation.turns--;
@@ -17217,7 +17244,6 @@ export async function moveloop_core() {
                 break;
             }
             advanceSpecialLevelFeatures(g);
-            advanceRegions(g);
         }
         // C ref: allmain.c:481-511 & hack.c:4103-4127 — once the pass's
         // monster/time section has completed, monster_nearby() clears an
