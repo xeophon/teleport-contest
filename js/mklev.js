@@ -11297,6 +11297,8 @@ function castleFlipLevelX() {
         ez.lx = Math.min(a, b); ez.hx = Math.max(a, b);
     }
 
+    /* sp_lev.c:915 — flip_level always re-derives wall spines after the swap */
+    fix_wall_spines(1, 0, COLNO - 1, ROWNO - 1);
     return { minx, maxx };
 }
 
@@ -11315,8 +11317,15 @@ async function castleFinishSpecial() {
     let nlr = { lx: castleX(0), ly: castleY(0), hx: castleX(62), hy: castleY(16) };
     if (flip) {
         const { minx, maxx } = castleFlipLevelX();
-        if (typeof process !== 'undefined' && process.env.NH_DBG_LREG)
+        if (typeof process !== 'undefined' && process.env.NH_DBG_LREG) {
             console.error(`CASTLE FLIP bounds minx=${minx} maxx=${maxx}`);
+            const e = getLevelExtendsForFlip();
+            console.error(`raw extends ${JSON.stringify(e)} is_maze_lev=${game.level.flags.is_maze_lev}`);
+            const l = game.level;
+            const nz = [];
+            for (let x = 0; x <= 79; x++) { let has = false; for (let y = 0; y <= 20; y++) if (l.at(x,y)?.typ !== 0) has = true; if (has) nz.push(x); }
+            console.error('nonstone cols:', nz.join(','));
+        }
         /* flip_level lregion loop (sp_lev.c:717-731), flp & 2: flip the
            stair-up levregion's inarea/delarea x-bounds */
         const fx = v => maxx - v + minx;
@@ -15603,10 +15612,16 @@ export async function make_castle_level() {
     }
 
     for (const [mask, x, y] of CASTLE_DOORS) {
+        // C: sel_set_door (sp_lev.c:4647-4663) — the des.door stamps only set
+        // typ=DOOR when the cell isn't already DOOR/SDOOR; the throne doors
+        // land on map-text SDOORs ('S'), which stay secret (doormask keeps
+        // the stamped state, e.g. D_LOCKED).  Orientation via
+        // set_door_orientation (sp_lev.c:4647 comment ref to mklev.c dosdoor).
         const loc = g.level.at(castleX(x), castleY(y));
         if (loc) {
-            loc.typ = DOOR;
+            if (!(loc.typ === DOOR || loc.typ === SDOOR)) loc.typ = DOOR;
             loc.doormask = mask;
+            loc.horizontal = spDesDoorOrientation(castleX(x), castleY(y)) ? 1 : 0;
         }
     }
     const bridge = g.level.at(castleX(5), castleY(8));
@@ -23948,6 +23963,14 @@ function generate_stairs_find_room() {
 
 function mkstairs(x, y, up, croom) {
     const g = game;
+    // C ref: mklev.c:2183-2189 — no stairs can lead off an end of the
+    // dungeon; e.g. the castle (bottom of the main dungeon) makes no down
+    // stair: the generate_stairs_find_room()/somex/somey() rolls still
+    // happen, but mkstairs returns without changing the map.
+    const dungeon = g.dungeons?.[g.u?.uz?.dnum ?? 0];
+    const dunlev = (g.u?.uz?.dlevel ?? 1) - (dungeon?.ledger_start ?? 0);
+    const dunlevs = dungeon?.num_dunlevs ?? 1;
+    if (dunlev === (up ? 1 : dunlevs)) return;
     const loc = g.level.at(x, y);
     if (loc) {
         loc.typ = STAIRS;
