@@ -43,7 +43,9 @@
   "seed5002-wizard-coverage-pair.session.json",
   "seed5006-tourist-stress-disaster.session.json",
   "seed8000-tourist-starter.session.json",
+  "seed9010-wizard-instruments.session.json",
   "seed9102-wiz-werewolf-night.session.json",
   "seed9103-wiz-werewolf-day.session.json",
-  "seed9104-wiz-conflict-mvm.session.json"
+  "seed9104-wiz-conflict-mvm.session.json",
+  "seed9160-wiz-trap-disarm.session.json"
 ]
