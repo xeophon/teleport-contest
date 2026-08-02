@@ -798,6 +798,8 @@ export function seeNearbyObjects() {
 export function show_glyph_cell(x, y, ch, color = NO_COLOR, decgfx = false, attr = 0, meta = null) {
     const loc = game.level?.at(x, y);
     if (!loc) return;
+    if (process.env.NSYMDBG && x === 61 && y === 2)
+        console.error(`NSYMDBG set ${JSON.stringify(ch)} color=${color} moves=${game.moves}`, (new Error()).stack.split('\n').slice(2,5).join(' <- '));
     loc.disp_ch = ch;
     loc.disp_color = glyphColor(color);
     loc.disp_decgfx = !!decgfx;
@@ -808,9 +810,14 @@ export function show_glyph_cell(x, y, ch, color = NO_COLOR, decgfx = false, attr
     else delete loc.displayed_statue_glyph;
 }
 
+let _debugNewsymCell = null;
+export function debugNewsymCell(x, y) { _debugNewsymCell = { x, y }; }
+
 export function newsym(x, y) {
     const loc = game.level?.at(x, y);
     if (!loc) return;
+    if (_debugNewsymCell && _debugNewsymCell.x === x && _debugNewsymCell.y === y)
+        console.error(`NEWSYM(${x},${y}) visible=${!!(game.viz_array?.[y]?.[x] & 4)} couldsee INVIS`, new Error().stack.split('\n')[3]);
 
     if (game.u?.uswallow) {
         if (game.u.ux === x && game.u.uy === y
@@ -910,6 +917,7 @@ export function newsym(x, y) {
         }
     }
     const displayedMon = seesTelepathically ? rawMon : mon;
+    if (process.env.NSYMDBG && x === 61 && y === 2) console.error(`NSYMDEC blind=${!!game.u?.blind} monVisible=${monsterVisible} infrared=${seesInfrared} telepat=${seesTelepathically} warning=${warning ? warning.ch : null} raw=${rawMon?.data?.name} mon=${mon?.data?.name} visible=${visible} canSee=${canSee}`);
     if (displayedMon && (!game.u?.blind || seesTelepathically) && (monsterVisible || seesInfrared || seesTelepathically)) {
         if (monsterVisible || seesInfrared) recordVisibleMonsterInventoryDiscovery(displayedMon);
         const glyph = monsterGlyph(displayedMon);

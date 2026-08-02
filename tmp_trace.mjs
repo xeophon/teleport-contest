@@ -20,4 +20,4 @@ for (const seg of norm.segments||[]) {
   log = log.concat(g.getRngLog?.() || []);
 }
 const calls = log.filter(e=>/^(?:rn2|rnd|rn1|rnl|rne|rnz|d)\(/.test(e));
-for (let i=3000;i<3016;i++) console.log(i, calls[i]);
+const lo = parseInt(process.env.TR_LO||'3000'), hi = parseInt(process.env.TR_HI||'3016'); for (let i=lo;i<Math.min(hi,calls.length);i++) console.log(i, calls[i]);

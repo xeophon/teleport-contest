@@ -10117,10 +10117,26 @@ async function finishMonsterTurnTail() {
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
     if (!resumeAfterSounds) {
-        // C ref: allmain.c:273-274 — nh_timeout(); run_regions() opens the
-        // once-per-turn block, BEFORE regen_hp()/gethungry()/exerchk() and
-        // the u_wipe_engr() gate (allmain.c:294/354/356/360-361), so region
-        // ticks (region.c inside_gas_cloud) draw their rolls first.
+        if ((game.u?._blindTimeout || 0) > 0) {
+            game.u._blindTimeout--;
+            // C ref: allmain.c:273 nh_timeout() runs BEFORE run_regions()
+            // (allmain.c:274) — its BLINDED expiry (timeout.c:744-750)
+            // restores sight via make_blinded(0L, TRUE) (potion.c make_blinded)
+            // with "You can see again.", so a freshly-clouded hero
+            // (inside_gas_cloud sets 1, region.c:1115) stays blind through
+            // the current region tick and clears on the next turn.
+            if (game.u._blindTimeout === 0 && game.u.blind && !game.u.ucreamed
+                && !game.u.blindfolded && !game.u.Blindfolded) {
+                game.u.blind = false;
+                removeHeroStatusSuffix('Blind');
+                addToplineMessage((game.u._statusSuffix || '').includes('Hallu')
+                    ? 'Far out!  Everything is all cosmic again!'
+                    : 'You can see again.');
+                newsym(game.u.ux, game.u.uy);
+                for (const other of game.level?.monsters || []) newsym(other.mx, other.my);
+                game.vision_full_recalc = 1;
+            }
+        }
         advanceRegions(game);
         if (game._finish_fumble_timeout) {
             game._finish_fumble_timeout = 0;
@@ -10139,7 +10155,7 @@ async function finishMonsterTurnTail() {
                 game.u._invulnerableTimeout--;
                 if (!game.u._invulnerableTimeout) game.u.invulnerable = false;
             }
-            if ((game.u?._blindTimeout || 0) > 0) game.u._blindTimeout--;
+
         }
 	        let reachedFullHp = false;
         let reachedFullPower = false;
@@ -15139,6 +15155,8 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (appr !== 0) {
             for (let j = 0; j < jcnt; j++) {
                 if (tracks[j]?.x !== pos.x || tracks[j]?.y !== pos.y) continue;
+                if (process.env.TRACKDBG) console.error(`TRACKDBG rng=${getRngLog().length} ${mon.data?.name} @${mon.mx},${mon.my} j=${j} moveChoices=${moveChoices} pos=${pos.x},${pos.y} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info]))} tracks=${JSON.stringify(tracks.map(t=>[t.x,t.y]))} mux=${mon.mux},${mon.muy} appr=${appr}`);
+                if (process.env.MAPDDBG && moveChoices === 8 && !globalThis._mapdumpDone) { globalThis._mapdumpDone=1; let s='\n'; for (let yy=9;yy<=17;yy++){ let r='y'+yy+': '; for (let xx=58;xx<=66;xx++){ const L=game.level?.at(xx,yy); const m=(game.level?.monsters||[]).find(mn=>mn.mx===xx&&mn.my===yy&&!mn.dead); r+= (m?m.data?.name[0].toUpperCase():L?(L.typ<10?'0'+L.typ:''+L.typ):'--')+' '; } s+=r+'\n'; } const mm=(game.level?.monsters||[]).map(mn=>`${mn.data?.name}@${mn.mx},${mn.my}hp${mn.mhp}`).join(' '); console.error('MAPDUMP\n'+s+'mons: '+mm+' traps:'+JSON.stringify((game.level?.traps||[]).map(t=>[t.ttyp,t.tx,t.ty,t.tseen||0, t._monknow||0])))}
                 const roll = rn2(4 * (moveChoices - j));
                 if (roll) {
                     skipped = true;
@@ -15290,6 +15308,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     const oldx = mon.mx;
     const oldy = mon.my;
     updateMonsterTrack(mon, mon.mx, mon.my);
+    if (process.env.TRACKDBG && mon.data?.name === 'jackal') console.error(`JKMOVE moves=${game.moves} from ${oldx},${oldy} to ${next.x},${next.y} track=${JSON.stringify(mon.mtrack.map(t=>[t.x,t.y]))}`);
     mon.mx = next.x;
     mon.my = next.y;
     if (game._gas_spore_residue_mon === mon && !(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT))
