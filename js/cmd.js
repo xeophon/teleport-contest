@@ -15087,7 +15087,12 @@ async function advanceExperienceLevel(incremental = false) {
         // message can absorb the ability line, so queue it as the pending
         // after-More message ("Welcome...level 15.--More--" then
         // "You feel sensitive!") instead of dropping it on the floor.
-        if (level >= (game._level_change_target || level)) {
+        // Only the #levelchange walk-through flow (incremental == false):
+        // the kill/potion gain path (applyHeroKillLiveExperience) passes
+        // incremental == true and still wants the "ability prefix" consumed
+        // into its own message line ("You kill it!  Welcome to experience
+        // level 3.  You feel stealthy!").
+        if (!incremental && level >= (game._level_change_target || level)) {
             pendingMessage = abilityMessage;
         } else {
             game._level_change_ability_prefix = abilityMessage;
