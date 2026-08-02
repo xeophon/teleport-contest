@@ -5260,7 +5260,7 @@ export async function processMonsterTurns() {
                                 canseemon: m => !game.u?.blind
                                     && typeof cansee === 'function' && cansee(m.mx, m.my)
                                     && !m.mundetected && (game.u?.seeInvisible || !m.minvis),
-                                addToplineMessage: msg => { addToplineMessage(msg); },
+                                addToplineMessage: msg => addToplineMessage(msg),
                                 newsym,
                             };
                             // summonmu (mhitu.c:974-985): form switch attempt;
@@ -9968,7 +9968,7 @@ if (attack.adtyp === 'steal') {
         wereChange(mon, {
             g: game,
             monMoving: true,
-            addToplineMessage: msg => { addToplineMessage(msg); },
+            addToplineMessage: msg => addToplineMessage(msg),
             // C canseemon(): vision LOS + not blind + monster detectable.
             canseemon: m => !game.u?.blind
                 && typeof cansee === 'function' && cansee(m.mx, m.my)

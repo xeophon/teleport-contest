@@ -3,6 +3,7 @@
 
 import { game } from './gstate.js';
 import { KEY_BINDINGS } from './terminal.js';
+import { flushDeferredWereTransforms } from './were.js';
 
 const _inputQueue = [];
 
@@ -21,6 +22,13 @@ export async function nhgetch() {
     // Fire the capture hook before reading the next key
     const hook = game._preNhgetchHook;
     if (hook) await hook();
+
+    // C ref: pline() -> tty putmsg --More-- blocking (win/tty) — a were
+    // transformation whose feedback message overflowed the topline blocks
+    // inside new_were() (were.c:113-115); its map repaint (newsym,
+    // were.c:126-128) lands when the player dismisses the "--More--", i.e.
+    // after the pre-dismissal screen snapshot, at this keypress.
+    flushDeferredWereTransforms();
 
     if (_inputQueue.length > 0) {
         return _inputQueue.shift();
