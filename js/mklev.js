@@ -15696,6 +15696,15 @@ export async function make_castle_level() {
     }
     const scare = mksobj_at(SCR_SCARE_MONSTER, towerX, towerY, true, false);
     Object.assign(scare, { blessed: false, cursed: true });
+    // C ref: dat/castle.lua:147-149 — des.engraving({ coord = loc,
+    // type = "burn", text = "Elbereth" }) marks the wand-of-wishing tower
+    // square.  It stays unrevealed until seen/mapped (display.c
+    // map_engraving; wizcmds.c wiz_map reveals it).  Same handling as the
+    // Sokoban prize engraving in make_sokoban_reward_objects.
+    make_engr_at(towerX, towerY, 'Elbereth', false, 0, BURN);
+    const prizeEngraving = (g.level?.engravings || [])
+        .find(engr => engr.x === towerX && engr.y === towerY);
+    if (prizeEngraving) prizeEngraving.erevealed = false;
     mksobj_at(CHEST, castleX(37), castleY(8), true, false);
 
     for (const [x, y] of [[40, 8], [44, 8], [48, 8], [52, 8], [55, 8]]) {
