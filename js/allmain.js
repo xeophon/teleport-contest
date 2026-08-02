@@ -6151,8 +6151,15 @@ export async function processMonsterTurns() {
                                         // C ref: mhitu.c:372-390 getmattk() — while
                                         // mspec_used > 0, grabs/engulfs/sticks/poly
                                         // downgrade to a plain 1d6 claw ("hits").
-                                        if (mon.mspec_used && (multiAttack.aatyp === 'engl' || multiAttack.aatyp === 'hugs'
-                                            || multiAttack.adtyp === 'stck' || multiAttack.adtyp === 'poly'))
+                                        /* mhitu.c:371-390 + :74 — substituted
+                                         * grab/engulf slots come from
+                                         * getmattk()'s alt_attk_buf scratch,
+                                         * which can never satisfy
+                                         * mattk == hitmsg_prev + 1 (" again"). */
+                                        const slotSubstituted = !!(mon.mspec_used
+                                            && (multiAttack.aatyp === 'engl' || multiAttack.aatyp === 'hugs'
+                                                || multiAttack.adtyp === 'stck' || multiAttack.adtyp === 'poly'));
+                                        if (slotSubstituted)
                                             multiAttack = { ...multiAttack, aatyp: 'claw', adtyp: 'phys', dice: 1, sides: 6, verb: 'hits' };
 		                                const deferredAttackRoll = attackIndex === 0
 		                                    ? mon._deferred_multi_attack_roll_after_more : null;
@@ -6198,8 +6205,11 @@ export async function processMonsterTurns() {
                                     // the SAME ATTACK TYPE, not just the same
                                     // verb (an ape's claw claw hug chain prints
                                     // "hits!  hits again!  hits!").
-                                    const againKey = `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex}`;
-                                    const hitsAgain = prevHitAgainKey === `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex - 1}`;
+                                    const againKey = slotSubstituted
+                                        ? `__subst@${attackIndex}` /* scratch buffer: no " again" for it or its successor (mhitu.c:74) */
+                                        : `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex}`;
+                                    const hitsAgain = !slotSubstituted
+                                        && prevHitAgainKey === `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex - 1}`;
                                     prevHitAgainKey = againKey;
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {
@@ -17448,7 +17458,8 @@ export async function moveloop_core() {
         // loop resumes only after revival.  Keep the pass loop parked while a
         // queued death waits behind --More--.
         && !(g._message_more && g._queued_message_after_more === 'You die...'
-             && (g.u?.uhp ?? 1) <= 0 && !g._dying_revived_mid_turn)
+             && ((g.u?.uhp ?? 1) <= 0 || g._death_healed_at_chain_crossing)
+             && !g._dying_revived_mid_turn)
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
         if (process.env.WEREDBG) console.error(`WEREDBG timepass moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
@@ -18281,7 +18292,8 @@ export async function moveloop_core() {
 	        // C ref: end.c:1107-1118 — when the hero died mid-movemon, done()
 	        // blocks at "You die..."/"Die?" BEFORE the monster loop resumes;
 	        // keep the resume state frozen until revival lets it continue.
-	        && !(g._queued_message_after_more === 'You die...' && (g.u?.uhp || 0) <= 0)
+	        && !(g._queued_message_after_more === 'You die...'
+	            && ((g.u?.uhp || 0) <= 0 || g._death_healed_at_chain_crossing))
 	        && !(g._queued_message_after_more && g._search_pending_count > 0) ? 1 : 0;
     g._dismissed_more_this_command = 0;
     g._resume_run_after_queued_dead_more = 0;
