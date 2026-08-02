@@ -21689,7 +21689,13 @@ test('fire breath killed gas spore explodes outside hero melee', async () => {
     assert.equal(game.u.uhp, 50 - d4x6[1]);
 });
 
-test('gas cloud killed gas spore explodes outside monster melee', async () => {
+test('gas spore is unaffected by poison gas clouds (breathless; m_poisongas_ok)', async () => {
+    // C ref: mon.c:329-355 m_poisongas_ok() — monsters.h:325-333 gives the
+    // gas spore M1_BREATHLESS (with M1_NOLIMBS/NOHEAD/MINDLESS), so
+    // m_poisongas_ok(gas spore) == M_POISONGAS_OK and region.c:1109
+    // inside_gas_cloud() never reaches the monster cough/damage branch for
+    // it at all: no damage roll, no blind flag, no explosion queue, no
+    // death.
     installStableNonShopFloorState();
     initRng(1);
     enableRngLog({ reset: true });
@@ -21708,20 +21714,13 @@ test('gas cloud killed gas spore explodes outside monster melee', async () => {
 
     markHeroNeighborhoodVisible();
     advanceRegions(game);
-    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
 
-    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
-    assert.equal(d4x6.length, 2);
-    assert.match(messages, /The gas spore is killed!/);
-    assert.match(messages, /Boom!/);
-    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
-    assert.match(messages, /You are caught in the gas spore's explosion!/);
-    assert.equal(game.level.monsters.includes(spore), false);
-    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
-    assert.equal(victim.mhp, 30 - d4x6[1]);
-    assert.equal(game.u.uhp, 50 - d4x6[1]);
+    assert.equal(game.level.monsters.includes(spore), true);
+    assert.equal(spore.mhp, spore.mhpmax);
+    assert.equal(game.u.uhp, 50);
+    assert.equal(victim.mhp, 30);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(4,6)').length, 0);
 });
-
 test('sokoban pit trap killed gas spore explodes outside monster melee', async () => {
     installStableNonShopFloorState();
     initRng(1);
@@ -43328,6 +43327,20 @@ test('applying unpaid crystal ball while blind spends no charge and adds no usag
     assert.match(game._pending_message, /can't see|Too bad/i);
 });
 
+
+// The topline model follows the tty update_topl() packing rule
+// (nethack 5.0 win/tty/topl.c:251-266): a pline joins the pending topline
+// while `len(new) + len(cur) + 3 < CO - 8`; otherwise the pending line
+// ends in --More-- and overflow waits in game._queued_messages_after_more.
+// Assertions on an emitted command message therefore consult the pending
+// line plus that queue.
+function emittedToplineText() {
+    return [game._pending_message, ...(game._queued_messages_after_more || []).map(entry => entry.text)]
+        .filter(text => typeof text === 'string' && text !== '')
+        .join('  ');
+}
+
+
 test('applying unpaid magic flute and magic harp through improvise bills charged usage', async () => {
     for (const [kind, letter, spe, expectedSpe, effect] of [
         ['magic flute', 'f', 3, 2, /soft music/i],
@@ -43365,10 +43378,10 @@ test('applying unpaid magic flute and magic harp through improvise bills charged
         assert.equal(entry.useup, false);
         assert.equal(shop.shopBillEntryTotal(entry), 100);
         assert.equal(instrument.unpaid, true);
-        assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedDebit} zorkmids`));
-        assert.match(game._pending_message, effect);
-        assert.doesNotMatch(game._pending_message, /Nothing happens/i);
-        assert.doesNotMatch(game._pending_message, /In what direction/i);
+        assert.match(emittedToplineText(), new RegExp(`Usage fee, ${expectedDebit} zorkmids`));
+        assert.match(emittedToplineText(), effect);
+        assert.doesNotMatch(emittedToplineText(), /Nothing happens/i);
+        assert.doesNotMatch(emittedToplineText(), /In what direction/i);
     }
 });
 
@@ -43431,13 +43444,16 @@ test('applying unpaid fire horn bills before direction and keeps horn identity a
 
     await rhack('y');
 
-    assert.equal(game._command_mode, 'zapDirection');
+    assert.equal(game._command_mode, null);
     assert.equal(horn.spe, 1);
     assert.equal(shkp.debit, expectedFee);
-    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
-    assert.match(game._pending_message, /In what direction\?/);
+    assert.match(emittedToplineText(), new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 
     await rhack(' ');
+
+    assert.equal(game._command_mode, 'zapDirection');
+    assert.match(game._pending_message, /In what direction\?/);
+
     await rhack('l');
 
     assert.equal(game._command_mode, null);
@@ -43468,11 +43484,15 @@ test('canceling unpaid frost horn direction still spends charge and bills withou
     await rhack('f');
     await rhack('y');
 
-    assert.equal(game._command_mode, 'zapDirection');
+    assert.equal(game._command_mode, null);
     assert.equal(horn.spe, 0);
     assert.equal(shkp.debit, expectedFee);
+    assert.match(emittedToplineText(), new RegExp(`Usage fee, ${expectedFee} zorkmids`));
 
     await rhack(' ');
+
+    assert.equal(game._command_mode, 'zapDirection');
+
     await rhack('\x1b');
 
     assert.equal(game._command_mode, null);
@@ -43480,9 +43500,8 @@ test('canceling unpaid frost horn direction still spends charge and bills withou
     assert.equal(horn.spe, 0);
     assert.equal(horn.kind, 'horn');
     assert.equal(horn.actualKind, 'frost horn');
-    assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
     assert.match(game._pending_message, /horn vibrates/);
-    assert.doesNotMatch(game._pending_message, /frost horn/);
+    assert.doesNotMatch(emittedToplineText(), /frost horn/);
 });
 
 test('confused unpaid fire horn uses tooled-horn fallback without charge or billing', async () => {
@@ -43553,8 +43572,8 @@ test('ordinary flute and harp improvise with mundane sound and no billing', asyn
 
         assert.equal(game._command_mode, null);
         assert.equal(game.context.move, 1);
-        assert.match(game._pending_message, /start playing .*wooden/i);
-        assert.match(game._pending_message, sound);
+        assert.match(emittedToplineText(), /start playing .*wooden/i);
+        assert.match(emittedToplineText(), sound);
         assert.equal(shkp.debit || 0, 0);
         assert.equal(shop.shopBillEntryForObject(shkp, instrument).useup, false);
     }
@@ -43576,7 +43595,7 @@ test('tooled horn and bugle improvise wake appropriate monsters without billing'
 
         assert.equal(game._command_mode, null);
         assert.equal(game.context.move, 1);
-        assert.match(game._pending_message, /frightful, grave/i);
+        assert.match(emittedToplineText(), /frightful, grave/i);
         assert.equal(sleeper.msleeping, 0);
         assert.equal(sleeper.mcanmove, true);
         assert.equal(sleeper.mfrozen, 0);
@@ -43598,7 +43617,7 @@ test('tooled horn and bugle improvise wake appropriate monsters without billing'
 
         assert.equal(game._command_mode, null);
         assert.equal(game.context.move, 1);
-        assert.match(game._pending_message, /extract a loud.*bugle/i);
+        assert.match(emittedToplineText(), /extract a loud.*bugle/i);
         assert.equal(soldier.mpeaceful, 0);
         assert.equal(soldier.msleeping, 0);
         assert.equal(soldier.mcanmove, true);
@@ -43621,7 +43640,7 @@ test('leather drum skips improvise prompt and wakes monsters', async () => {
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.match(game._pending_message, /beat a .*deafening row/i);
+    assert.match(emittedToplineText(), /beat a .*deafening row/i);
     assert.ok(game.u._deafTimeout > 0);
     assert.equal(sleeper.msleeping, 0);
     assert.equal(sleeper.mcanmove, true);
@@ -43715,7 +43734,7 @@ test('no-blow form gates flutes horns and bugles but not harp or drum', async ()
 
         assert.equal(game._command_mode, null);
         assert.equal(game.context.move, 1);
-        assert.match(game._pending_message, /deafening row|pound on the drum/i);
+        assert.match(emittedToplineText(), /deafening row|pound on the drum/i);
     }
 });
 
