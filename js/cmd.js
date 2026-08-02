@@ -63536,7 +63536,6 @@ function tutorialEnterStash() {
                     if (game._damage_after_topline_more_needs_ac && deferredDamage && (game.u?.uac ?? 10) < 0)
                         deferredDamage = Math.max(1, deferredDamage - rnd(-(game.u?.uac ?? 10)));
                     const hpBeforeDeferredDamage = game.u?.uhp || 0;
-                    if (process.env.WEREDBG) console.error(`WEREDBG deferdmg-tail rng=${getRngLog().length} dmg=${deferredDamage} uhp=${game.u?.uhp}/${game.u?.uhpmax} qmam=${JSON.stringify(game._queued_message_after_more)} kb=${!!game._knockback_after_topline_more}`);
                     game.u.uhp = Math.max(0, hpBeforeDeferredDamage - deferredDamage);
                     game._damage_after_topline_more_needs_ac = 0;
                     game._damage_after_topline_more = 0;
@@ -63572,7 +63571,6 @@ function tutorialEnterStash() {
                         }
                         game._queued_message_after_more = 'You die...';
 	                        keepMore = true;
-                            if (process.env.WEREDBG) console.error(`WEREDBG tail-death-hold SET rng=${getRngLog().length} uhp=${game.u?.uhp}`);
                             // C ref: mhitu.c:1258 mdamageu() -> done_in_by()
                             // (end.c:184-196) -> done() (end.c:1025+) — a fatal
                             // monster hit runs C's die()/savelife() prompt chain
@@ -65777,6 +65775,10 @@ function tutorialEnterStash() {
             if (game._hero_hit_search_stop_after_survival) {
                 game._hero_hit_search_stop_after_survival = 0;
                 survivalMessages.push('You stop searching.');
+                // The survivor followup of such refusals emerges via C's
+                // allmain.c:381-383 ++gm.multi/unmul path while the hero keeps
+                // a multi-turn (search) count running — arm its late print.
+                game._survivor_via_search_stop = 1;
             }
             // C ref: savelife() (end.c:704-758) — a hero who refuses the "Die?"
             // prompt while held is released ("The salamander releases you.",
@@ -65855,6 +65857,10 @@ function tutorialEnterStash() {
             game._pending_explore_lifesaving_message = 1;
             game._queued_explore_lifesaving_message = 1;
             game._queued_message_after_more = 'You survived that attempt on your life.';
+            // C ref: end.c:727 + allmain.c:381-383 — savelife() nomul()s the
+            // hero (gm.multi = -1); the next completed immobile moveloop pass
+            // counts it up to 0 and unmul(NULL) prints nomovemsg.
+            game._survivor_emit_after_moves = (game.moves || 0) + 1;
             game._command_mode = null;
             if (game._prayer_pending_done) game._prayer_pending_done_delay = 3;
             game.context.move = 1;

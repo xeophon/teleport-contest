@@ -5269,7 +5269,6 @@ export async function processMonsterTurns() {
                             // carries the suspension point.
                             const wereResume = game._wereSummonResume?.mon === mon
                                 ? game._wereSummonResume : null;
-                            if (process.env.WEREDBG) console.error(`WEREDBG wereblock enter mon=${mon.data?.name} resume=${!!wereResume} keys=${wereResume?.kind} rng=${getRngLog().length}`);
                             if (wereResume) game._wereSummonResume = null;
                             const alreadyFleeing = wereResume ? wereResume.alreadyFleeing : !!mon.mflee; // mhitu.c:731
                             const wereCanSeeIt = wereResume ? wereResume.wereCanSeeIt : !game.u?.blind && !mon.mundetected
@@ -5287,7 +5286,6 @@ export async function processMonsterTurns() {
                             // monster's attack path after the --More-- dismissal.
                             const wereSuspend = (st) => {
                                 game._wereSummonResume = st;
-                                if (process.env.WEREDBG) console.error(`WEREDBG wereSuspend mon=${mon.data?.name} kind=${st.kind} rng=${getRngLog().length} list=${(game.level?.monsters || []).map(m => m.data?.name).join(',')}`);
                                 // Flag set mirrors the shared attack pause
                                 // ("deferred multi-attack roll" pattern below):
                                 // re-enter this monster's attack path after the
@@ -17864,15 +17862,50 @@ export async function moveloop_core() {
     if (!g._message_more
         && g._queued_explore_lifesaving_message
         && g._pending_explore_lifesaving_message) {
-        if (g._pending_message === "OK, so you don't die.") {
-            g._pending_message = `${g._pending_message}  ${g._queued_message_after_more}`;
+        const queuedSurvivor = g._queued_message_after_more || '';
+        const pendingLine = g._pending_message || '';
+        // C ref: end.c:727 + allmain.c:381-383 — savelife() nomul()s the
+        // hero (gm.multi = -1); the next completed immobile moveloop pass
+        // counts it up to 0 and unmul(NULL) pline()s nomovemsg
+        // ("You survived that attempt on your life."), joining the pending
+        // line when it fits (putmsg width) and splitting with --More--
+        // otherwise.  Until that boundary arrives the queued line must not
+        // be discarded.
+        // gm.multi < 0 gate too (allmain.c:381): the counting-up pass runs
+        // while a counted (multi-turn) action occupies the hero; free-game
+        // passes never print the survivor line (grep of savelife() callers:
+        // multi is only negative while an occupation/count is in flight).
+        const survivorUnmulDue = (g._survivor_emit_after_moves || 0) > 0
+            && (g.moves || 0) >= g._survivor_emit_after_moves
+            && !!g._survivor_via_search_stop;
+        if (pendingLine === "OK, so you don't die.") {
+            g._pending_message = `${pendingLine}  ${queuedSurvivor}`;
             g._keep_pending_message = 1;
-        } else if (!g._pending_message) {
-            g._pending_message = g._queued_message_after_more;
+            g._queued_message_after_more = '';
+            g._queued_explore_lifesaving_message = 0;
+            g._survivor_emit_after_moves = 0;
+            g._survivor_via_search_stop = 0;
+        } else if (!pendingLine) {
+            g._pending_message = queuedSurvivor;
             g._keep_pending_message = 1;
+            g._queued_message_after_more = '';
+            g._queued_explore_lifesaving_message = 0;
+            g._survivor_emit_after_moves = 0;
+            g._survivor_via_search_stop = 0;
+        } else if (survivorUnmulDue) {
+                if (pendingLine.length + queuedSurvivor.length + 3 < 72) {
+                g._pending_message = `${pendingLine}  ${queuedSurvivor}`;
+                g._keep_pending_message = 1;
+                g._queued_message_after_more = '';
+                g._queued_explore_lifesaving_message = 0;
+                g._survivor_emit_after_moves = 0;
+                g._survivor_via_search_stop = 0;
+            } else {
+                g._message_more = 1;
+                g._process_time_with_more = 0;
+                g._keep_pending_message = 1;
+            }
         }
-        g._queued_message_after_more = '';
-        g._queued_explore_lifesaving_message = 0;
     }
     if (g._clear_search_safety_message_next_flush && !g._keep_pending_message
         && !g._message_more && g._pending_message_is_search_safety_warning) {
