@@ -10422,6 +10422,16 @@ function genericAttributesPage2() {
     return page2;
 }
 
+// C ref: pager.c self_lookat()/look_at_monster() region suffix
+// (pager.c:120-132, 271-277): describing the hero/monster standing in a
+// visible gas region appends ", in a cloud of poison gas" (or "vapor").
+function gasCloudRegionSuffix(x, y) {
+    const reg = (game.level?.regions || []).find(r =>
+        r.visible !== false && (r.coords || []).some(coord => coord.x === x && coord.y === y));
+    if (!reg) return '';
+    return `, in a cloud of ${reg.damage ? 'poison gas' : 'vapor'}`;
+}
+
 function heroFarlookDescription() {
     const form = polyselfForm();
     const chained = game.u?.uball || isBuriedBallTrapActive() ? ', chained to a heavy iron ball' : '';
@@ -61219,6 +61229,7 @@ export async function rhack(_cmd) {
     game.context = game.context || {};
     game.context.move = 0;
     game.u.umoved = false;
+    if (process.env.KEYDBG) console.error(`KEYDBG moves=${game.moves} spc=${game._search_pending_count} pend=${game._pending_time_passed} key=${JSON.stringify(typeof _cmd === 'string' ? _cmd : String.fromCharCode(_cmd||0))} cmd${game._command_mode||''}`);
 
 	    const key = _cmd || await nhgetch();
 	    let ch = commandChar(key);
@@ -68959,7 +68970,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             y = Math.max(0, Math.min(ROWNO - 1, y + dir.dy));
             game._stinking_cloud_cursor = { x, y };
             game._cursor_override = [x - 1, y + 1];
-            const description = fireScrollTargetDescription(x, y);
+            // C ref: getpos.c auto_describe() -> pager.c do_screen_description()
+            // -> lookat() -> look_at_monster() — the cursor spot monster is
+            // named bare ("shrieker"), unlike the fire-scroll targeting text.
+            const cursorMon = (game.level?.monsters || []).find(mn =>
+                !mn.dead && (mn.mhp == null || mn.mhp > 0) && mn.mx === x && mn.my === y);
+            const description = cursorMon ? farlookMonsterDescription(cursorMon) : fireScrollTargetDescription(x, y);
             await setMessage(canCenterFireScroll(x, y) ? description : `${description} (invalid target)`);
             return;
         }
@@ -76255,7 +76271,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game.context.move = 1;
                 return;
             }
-            let text = targetX === game.u?.ux && targetY === game.u?.uy ? heroFarlookDescription()
+            // C ref: pager.c:271-277 (look_at_monster region suffix applied to
+            // self_lookat's hero description) — standing in a visible gas
+            // region reads "human wizard called wizard, in a cloud of poison
+            // gas".
+            let text = targetX === game.u?.ux && targetY === game.u?.uy
+                ? heroFarlookDescription() + gasCloudRegionSuffix(targetX, targetY)
                 : loc?.typ === STAIRS && game.level?.upstair?.x === targetX && game.level?.upstair?.y === targetY ? 'staircase up'
                 : loc?.typ === STAIRS && game.level?.dnstair?.x === targetX && game.level?.dnstair?.y === targetY ? 'staircase down'
                 : loc?.typ === CORR ? 'corridor'

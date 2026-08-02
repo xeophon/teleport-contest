@@ -917,7 +917,7 @@ export function newsym(x, y) {
         }
     }
     const displayedMon = seesTelepathically ? rawMon : mon;
-    if (process.env.NSYMDBG && x === 61 && y === 2) console.error(`NSYMDEC blind=${!!game.u?.blind} monVisible=${monsterVisible} infrared=${seesInfrared} telepat=${seesTelepathically} warning=${warning ? warning.ch : null} raw=${rawMon?.data?.name} mon=${mon?.data?.name} visible=${visible} canSee=${canSee}`);
+    if (process.env.NSYMDBG && x === 61 && y === 2) console.error(`NSYMDEC blind=${!!game.u?.blind} monVisible=${monsterVisible} infrared=${seesInfrared} telepat=${seesTelepathically} warning=${warning ? warning.ch : null} raw=${rawMon?.data?.name} mon=${mon?.data?.name} visible=${visible} canSee=${canSee} vizBits=${game.viz_array?.[2]?.[61]} regs=${JSON.stringify((game.level?.regions||[]).map(r=>[r.type,r.ttl,r.coords?.length]))} nseen=${''+(rawMon?.nseen)} mund=${''+(rawMon?.mundetected)}`);
     if (displayedMon && (!game.u?.blind || seesTelepathically) && (monsterVisible || seesInfrared || seesTelepathically)) {
         if (monsterVisible || seesInfrared) recordVisibleMonsterInventoryDiscovery(displayedMon);
         const glyph = monsterGlyph(displayedMon);

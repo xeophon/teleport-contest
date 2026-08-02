@@ -16805,19 +16805,34 @@ function applyGasCloudEffects(g, reg) {
 export function advanceRegions(g) {
     if (!g.level?.regions?.length) return;
     const regionCount = g.level.regions.length;
+    const removedRegions = [];
     g.level.regions = g.level.regions.filter(reg => {
         if (reg.ttl !== 0) return true;
         if (reg.type === 'gas_cloud' && (reg.damage || 0) >= 5) {
+            // C ref: region.c:1046-1061 expire_gas_cloud() — a thick cloud
+            // (damage >= 5) thins instead of expiring: damage halves and
+            // ttl resets to 2.
             reg.damage = Math.trunc((reg.damage || 0) / 2);
             reg.ttl = 2;
             return true;
         }
         reportGasCloudDissipation(g, reg);
+        removedRegions.push(reg);
         return false;
     });
     if (g.level.regions.length !== regionCount) {
+        // C ref: region.c remove_region() — after the region is dropped, each
+        // covered spot still in sight gets newsym() so cloud glyphs revert to
+        // their background; expiring first unblocks line-of-sight and then
+        // redraws (second pass is skipped while blind).
         vision_reset();
         g.vision_full_recalc = 1;
+        vision_recalc(0);
+        if (!g.u?.blind) {
+            for (const reg of removedRegions)
+                if (reg.visible !== false && reg.coords)
+                    for (const coord of reg.coords) newsym(coord.x, coord.y);
+        }
     }
     for (const reg of g.level.regions) {
         if (reg.ttl > 0) reg.ttl--;
@@ -16985,6 +17000,7 @@ export async function moveloop_core() {
             g._skip_pending_time_decrement = 1;
         }
         if (g._search_pending_count > 0) {
+            if (process.env.SRCHDBG) console.error(`SRCH tick moves=${g.moves} spc=${g._search_pending_count} hero=${g.u?.ux},${g.u?.uy} mons=${(g.level?.monsters||[]).map(m=>`${m.data?.name}@${m.mx},${m.my}`).join(' ')}`);
             const searchCountBeforeTurn = g._search_pending_count;
             let foundSearchMonster = false;
             let foundMessage = '';
@@ -17271,6 +17287,7 @@ export async function moveloop_core() {
         // so when the stop fires there is still exactly one more full time
         // passage (monsters act) before rhack(0) reads the next key
         // (hence this pass's unit plus one extra).
+        if (process.env.SRCHDBG) console.error(`SRCH stopcheck moves=${g.moves} pend=${g._pending_time_passed} spc=${g._search_pending_count}`);
         if (g._search_stop_check_after_monsters) {
             g._search_stop_check_after_monsters = 0;
             if (!armorTailOnly && !skipMonsterTurnsThisPass
