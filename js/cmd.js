@@ -18894,7 +18894,11 @@ function awakenMonstersWithInstrument(distance) {
             fleeMessages.push(`${name} turns to flee.`);
         }
     }
-    if (fleeMessages.length) game._topline_after_more = fleeMessages.join('  ');
+    // C ref: music.c:73 awaken_monsters() -> awaken_scare() -> monflee()
+    // (monmove.c:517): fleeing monsters pline immediately; messages flow
+    // through the topline packing rules, so callers fold these into their
+    // message stream rather than deferring to a separate line.
+    return fleeMessages;
 }
 
 function awakenSoldiersWithBugle(messages) {
@@ -19048,7 +19052,7 @@ function tooledHornImprovisationEffect(messages, sameOldSong = false) {
     messages.push(heroIsDeaf()
         ? 'You blow into the horn.'
         : `You produce a frightful, grave${sameOldSong ? ', yet familiar,' : ''} sound.`);
-    awakenMonstersWithInstrument((game.u?.ulevel || 1) * 30);
+    messages.push(...awakenMonstersWithInstrument((game.u?.ulevel || 1) * 30));
     exerciseAttribute(A_WIS, false);
 }
 
@@ -19057,13 +19061,14 @@ function leatherDrumImprovisationEffect(messages, { mundaneDowngrade = false, sa
         if (!heroIsDeaf()) {
             messages.push(`You beat a ${sameOldSong ? 'familiar ' : ''}deafening row!`);
             // C ref: music.c:706-711 incr_itimeout(&HDeaf, rn1(20, 30)) — the
-            // Deaf status applies immediately (visible on the status line of
-            // the same frame), not on the next --More-- dismissal.
-            if (game.u) {
+            // timeout applies inline; the visible status-wide Deaf suffix
+            // follows the botl redraw boundary: after an in-command --More--
+            // pauses before the status refresh, the suffix materializes after
+            // the dismissal (seed 0002), without the More it is already drawn
+            // on the same frame (seed 9010 step 162).
+            if (game.u)
                 game.u._deafTimeout = Math.max(game.u._deafTimeout || 0, rn1(20, 30));
-                if (!(game.u._statusSuffix || '').includes('Deaf'))
-                    game.u._statusSuffix = `${game.u._statusSuffix || ''} Deaf`;
-            }
+            game._deaf_after_more = 1;
         } else {
             messages.push('You pound on the drum.');
         }
@@ -19072,7 +19077,7 @@ function leatherDrumImprovisationEffect(messages, { mundaneDowngrade = false, sa
         const verb = rn2(2) ? 'butcher' : rn2(2) ? 'manage' : 'pull off';
         messages.push(`You ${verb} a drumbeat.`);
     }
-    awakenMonstersWithInstrument((game.u?.ulevel || 1) * (mundaneDowngrade ? 5 : 40));
+    messages.push(...awakenMonstersWithInstrument((game.u?.ulevel || 1) * (mundaneDowngrade ? 5 : 40)));
 }
 
 function normalizeManualTuneText(text) {
@@ -19396,6 +19401,14 @@ async function finishMusicalImprovisation(item) {
     if (effectiveKind === 'leather drum') {
         leatherDrumImprovisationEffect(messages, { mundaneDowngrade, sameOldSong });
         await setPackedToplineMessages(messages);
+        if (game._message_more) {
+            // a --More-- pauses before the status refresh; the Deaf suffix
+            // waits for the dismissal (see the _deaf_after_more handler).
+        } else {
+            game._deaf_after_more = 0;
+            if (game.u?._deafTimeout > 0 && !(game.u._statusSuffix || '').includes('Deaf'))
+                game.u._statusSuffix = `${game.u._statusSuffix || ''} Deaf`;
+        }
         game.context.move = 1;
         return true;
     }
@@ -19417,7 +19430,7 @@ async function finishMusicalImprovisation(item) {
         const earthquakeMessages = await doEarthquake(Math.trunc(((game.u?.ulevel || 1) - 1) / 3) + 1);
         messages.push(`The entire ${earthquakeLevelDescription()} is shaking around you!`, ...earthquakeMessages);
         if (!earthquakeFatalEndsInstrument(earthquakeMessages.heroResult)) {
-            awakenMonstersWithInstrument(ROWNO * COLNO);
+            messages.push(...awakenMonstersWithInstrument(ROWNO * COLNO));
             item.known = true;
             item.dknown = true;
             updateChargedItemLine(item);
