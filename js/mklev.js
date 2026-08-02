@@ -4276,6 +4276,23 @@ function mksobj_init(otmp, otyp, artif) {
     } else if (otyp === ICE_BOX || otyp === SACK || otyp === OILSKIN_SACK || otyp === BAG_OF_HOLDING) {
         mkbox_cnts(otmp);
     } else if (otyp === ELVEN_ARROW || otyp === ORCISH_ARROW || otyp === ARROW || otyp === DART || otyp === CROSSBOW_BOLT) {
+        // C ref: mksobj always knows its otyp identity (mkobj.c objects[]
+        // table); mongets() (mklev.js:6457-6478) assigns these same strings
+        // for monster-carried missiles — apply them here too so plain
+        // mksobj()/mktrap_victim() arrows/darts name correctly.
+        if (otyp === ELVEN_ARROW) Object.assign(otmp, {
+            cls: 'weapon', kind: 'runed arrow', actualKind: 'elven arrow',
+            singular: 'runed arrow', plural: 'runed arrows',
+            appearance: 'runed arrow', material: 'wood',
+        });
+        else if (otyp === ORCISH_ARROW) Object.assign(otmp, {
+            cls: 'weapon', kind: 'crude arrow', actualKind: 'orcish arrow',
+            singular: 'crude arrow', plural: 'crude arrows',
+            appearance: 'crude arrow', material: 'iron',
+        });
+        else if (otyp === ARROW) Object.assign(otmp, { cls: 'weapon', kind: 'arrow', plural: 'arrows' });
+        else if (otyp === CROSSBOW_BOLT) Object.assign(otmp, { cls: 'weapon', kind: 'crossbow bolt', plural: 'crossbow bolts' });
+        else Object.assign(otmp, { cls: 'weapon', kind: 'dart', plural: 'darts' });
         otmp.quan = rn1(6, 6);
         if (!rn2(11)) {
             otmp.spe = rne(3);

@@ -10469,7 +10469,26 @@ function wizkillAutoDescribe(x, y) {
     const object = (game.level?.objects || []).find(obj =>
         !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y);
     if (object) return pickupObjectPhrase(object);
-    return '';
+    // C ref: pager.c do_screen_description -> lookat() (pager.c:690-740):
+    // falling past monsters and objects, the terrain under the cursor is
+    // described ("floor of a room", "dark part of a room", "corridor",
+    // "stone", traps, "wall", ...), matching the teleport-cursor autodescribe
+    // table above.
+    const loc = game.level?.at(x, y);
+    const seenTrap = (game.level?.traps || []).find(t => t.tx === x && t.ty === y && t.tseen);
+    const inSight = !!(game.viz_array?.[y]?.[x] & IN_SIGHT);
+    if (seenTrap) return showtrapTrapName(seenTrap.ttyp);
+    if (loc?.typ === STONE) return 'stone';
+    if (!loc || (!loc.seenv && !loc.remembered_glyph && loc.disp_ch === ' ')) return 'unexplored area';
+    if (loc.typ === CORR) return 'corridor';
+    if (loc.typ === DOOR) return doorDescription(loc);
+    if (loc?.typ === GRAVE) return 'grave';
+    if (loc.typ === ROOM && !inSight) return 'dark part of a room';
+    if (loc.typ === ROOM || loc.typ === STAIRS) return 'floor of a room';
+    if (loc.typ === MOAT) return 'moat';
+    if (loc.typ === TREE) return 'tree';
+    if (loc.typ && loc.typ < DOOR) return 'wall';
+    return 'unexplored area';
 }
 
 function farlookMonsterDescription(mon) {
@@ -60923,6 +60942,27 @@ async function moveHero(dx, dy) {
             rows.push([i + 1, 41, BAG_OBJECT_TYPES.has(obj.otyp) ? 'a bag' : pickupObjectPhrase(obj)]);
         }
         rows.push([objects.length + 1, 41, '--More--']);
+        if (trapHere?.tseen) {
+            // C ref: pickup(1) -> check_here(FALSE) (pickup.c:873-880) ->
+            // look_here(obj_cnt) (invent.c:4104): a seen trap on the spot is
+            // announced first with "There is an arrow trap here."
+            // (invent.c:4170-4178), and because that leaves the top line
+            // occupied (TOPLINE_NEED_MORE), drawing the "Things that are
+            // here:" window forces a --More-- first
+            // (win/tty/wintty.c:1922-1925 tty_display_nhwindow NHW_MENU).
+            game._queued_overlay_after_more = {
+                lines: rows,
+                clearRows: objects.length + 2,
+                clearCol: 40,
+                mode: 'objectListMore',
+                message: 'text-window',
+                messageMore: true,
+                deferredContextMove: game.context.move || 1,
+            };
+            game.context.move = 0;
+            await setMessage(`There is ${articleForName(TRAP_NAMES[trapHere.ttyp] || 'trap')} here.`, true);
+            return;
+        }
         setOverlay(rows, objects.length + 2, false, 40);
         game._command_mode = 'objectListMore';
         game._deferred_context_move = game.context.move || 1;
@@ -75886,12 +75926,22 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 && mon.mx === targetX && mon.my === targetY);
             if (target) {
                 // C ref: wiz_kill() -> xkilled(mtmp, XKILL_NOMSG)
-                // (wizcmds.c:297-315).
+                // (wizcmds.c:297-315); the wiz_kill() loop then plines the
+                // next prompt immediately (wizcmds.c:257-258), and
+                // update_topl() (win/tty/topl.c:251) combines it with the
+                // kill message on one line when it fits ("You kill the newt!
+                // Next monster:"), --More-- otherwise.
                 const messages = [];
                 await killMonsterFromHeroProjectileHit(target, messages, `the ${target.data?.name || 'monster'}`);
-                await setMessage(messages.join('  '), true);
+                const killedText = messages.join('  ');
+                const nextPrompt = 'Next monster:';
                 game._wizkill_mon_locs = null;
-                game._command_mode = 'wizkillKillMore';
+                if (killedText && killedText.length + 2 + nextPrompt.length + 3 < (game.nhDisplay?.cols || 80) - 8) {
+                    await setMessage(`${killedText}  ${nextPrompt}`);
+                } else {
+                    await setMessage(killedText, true);
+                    game._command_mode = 'wizkillKillMore';
+                }
                 return;
             }
             // C ref: wiz_kill() — selecting a spot with no monster prints
@@ -76288,6 +76338,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     }
                 }
                 if (materializeMessage) await setMessage(materializeMessage, true);
+                else {
+                    // C ref: with !verbose, tele() prints nothing on landing
+                    // (teleport.c:544-546), so the tty top line keeps the last
+                    // getpos autodescribe text (wintty.c leaves toplines
+                    // untouched when no new message arrives).
+                    game._keep_pending_message = 1;
+                }
                 // C ref: shk.c u_left_shop() via spoteffects() ->
                 // check_special_room() after a same-level teleport out of a
                 // shop with unpaid merchandise.
