@@ -64592,6 +64592,12 @@ function tutorialEnterStash() {
                      * 704-758) runs SYNCHRONOUSLY inside the fatal slot: the
                      * refusal heals the hero before any later slot resolves. */
                     let deathHealedThisResume = false;
+                    /* C's refused done() interrupts mattacku's slot loop
+                     * (mhitu.c:763-946) mid-chain — the tty stops at the
+                     * hitmsg/--More-- of the fatal slot, and the remaining
+                     * slots' hitmsg()s print only after "OK, so you don't
+                     * die."  Park those message texts until the refusal. */
+                    let deathChainMessageSink = null;
 	                    const deferred = game._deferred_multiattack_after_more;
 	                    game._deferred_multiattack_after_more = null;
 	                    const messages = game._pending_message ? [game._pending_message] : [];
@@ -64619,6 +64625,8 @@ function tutorialEnterStash() {
                                 deathHealedThisResume = true;
                                 game._death_healed_at_chain_crossing = 1;
                                 restoreHeroHpForUnresolvedWizardDeath();
+                                deathChainMessageSink
+                                    = game._death_chain_after_refusal_messages = [];
                             }
 		                    }
 		                    const hitsSoFar = [...(deferred.hitsSoFar || [])];
@@ -64731,7 +64739,7 @@ function tutorialEnterStash() {
                                     pauseAfterDeferredMultiattack = true;
                                     break;
                                 }
-		                        messages.push(nextMessage);
+		                        (deathChainMessageSink || messages).push(nextMessage);
                                 if (nextFirst?.hit) {
 		                            rn2(3);
 		                            rn2(6);
@@ -64756,6 +64764,8 @@ function tutorialEnterStash() {
                                         deathHealedThisResume = true;
                                         game._death_healed_at_chain_crossing = 1;
                                         restoreHeroHpForUnresolvedWizardDeath();
+                                        deathChainMessageSink
+                                            = game._death_chain_after_refusal_messages = [];
                                     }
                                 }
 	                    }
@@ -66673,8 +66683,18 @@ function tutorialEnterStash() {
                     return;
                 }
             }
+            /* mhitu.c:763-946 + end.c:1108-1116 — the interrupted attack
+             * chain resumes from its fatal slot right after "OK, so you
+             * don't die.": its parked hitmsg()s print into the refusal line,
+             * and the survivor nomovemsg (end.c:727) follows past a forced
+             * --More-- (allmain.c:381-383 unmul cadence). */
+            const chainSlotMessages = game._death_chain_after_refusal_messages || [];
+            game._death_chain_after_refusal_messages = null;
+            if (chainSlotMessages.length)
+                survivalMessages.push(...chainSlotMessages);
             game._command_mode = null;
-            await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult);
+            await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult
+                || (chainSlotMessages.length ? true : undefined));
             if (landing?.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
 
             if (game._deferred_raven_blind_after_more) {
