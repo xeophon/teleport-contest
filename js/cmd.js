@@ -7811,6 +7811,14 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
                 }
             }
             await setMessage(`You remember this level as ${targetAnnotation}.`, true);
+        } else if (arrivalObjects.length === 1) {
+            // C ref: do.c goto_level tail — `(void) pickup(1)` (do.c:1996)
+            // with !flags.pickup (!autopickup option) -> pickup.c pickup()
+            // check_here(FALSE) branch (pickup.c:724-730) -> check_here()
+            // ct>0 -> look_here(ct=1, LOOKHERE_NOFLAGS) (pickup.c:447-453)
+            // -> invent.c look_here single-object branch
+            // `You("see here %s.", doname_with_price(otmp))` (invent.c:4282).
+            await setMessage(`You ${game.u?.blind ? 'feel' : 'see'} here ${pickupObjectPhrase(arrivalObjects[0])}.`);
         } else if (arrivalObjects.length > 1) {
             const rows = arrivalObjectListRows(arrivalObjects);
             setOverlay(rows, rows.length, false, 39);
