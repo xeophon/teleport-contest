@@ -2507,7 +2507,7 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 }
 
 function addToplineMessage(msg) {
-    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more, stack:new Error().stack.split('\n').slice(2,5).map(s=>{const m=s.match(/(allmain|cmd)\.js:(\d+)/);return m?m[1][0]+m[2]:'';}).join('<')});
+    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more});
     let text = String(msg || '');
     if (process.env.TLDBG) process.stderr.write(`TLDBG  msg="${text.slice(0,50)}" moves=${game.moves} pend=${game._pending_time_passed} spc=${game._search_pending_count} more=${game._message_more?1:0} cmd=${game._command_mode||''} rngidx=${getRngLog().length}
 `);
@@ -3516,7 +3516,6 @@ function processAttributeExercise() {
     const oneShotExerciseTurnOffset = game._exercise_turn_offset || 0;
     const exerciseTurnOffset = oneShotExerciseTurnOffset;
     const turn = (game.moves || 1) + 1 + exerciseTurnOffset;
-    if (process.env.EXDB) console.error(`EXDB turn=${turn} moves=${game.moves} off=${exerciseTurnOffset} hunger=${u.uhunger} mod10=${!(turn%10)} mod5=${!(turn%5)} rng=${getRngLog().length}`);
     const skipPeriodicExerciseTurn = game._skip_periodic_exercise_turn || 0;
     const skipPeriodicExerciseAtTurn = !!skipPeriodicExerciseTurn && turn === skipPeriodicExerciseTurn;
     if (skipPeriodicExerciseAtTurn) game._skip_periodic_exercise_turn = 0;
