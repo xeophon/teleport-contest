@@ -6620,38 +6620,6 @@ if (attack.adtyp === 'steal') {
 	                            } else {
 	                                game.u.uhp = hpBeforeDamage - damage;
 	                            }
-                            // C ref: mhitu.c:767-811 mattacku() NATTK loop — the
-                            // petrifying birds' second attack (AT_TUCH AD_STON 0d0,
-                            // monst.c: PM_COCKATRICE/PM_CHICKATRICE) follows the
-                            // landed bite: to-hit is rnd(20+i) at i=1
-                            // (mhitu.c:806) and hitmu() pays the d(damn,damd)=d(0,0)
-                            // damage roll (mhitu.c:1187).  hitmsg() for the touch
-                            // is pline()'d after any pending topline text (tty
-                            // --More--), so the hiss gate / new-moon stoning gate
-                            // (uhitm.c:4215/4245) and knockback rolls
-                            // (uhitm.c:5258/5269) resolve after the pause — see
-                            // the game._cockatrice_touch_after_more handler in
-                            // cmd.js rhack.
-                            if (PETRIFYING_TOUCH_MONSTERS.has(name) && attackShown
-                                && (game.u?.uhp || 0) > 0
-                                && !game._suppress_monster_attack_messages) {
-                                const touchRoll = rnd(21);
-                                const touchHit = toHit > touchRoll;
-                                if (touchHit) d(0, 0);
-                                const touchMessage = `${shownSubject} ${touchHit ? 'touches you' : 'misses'}!`;
-                                game._cockatrice_touch_after_more = {
-                                    mon,
-                                    hit: touchHit,
-                                    message: touchMessage,
-                                    killer: name,
-                                    resumeIndex: monIndex + 1,
-                                    somebodyCanMove,
-                                };
-                                game._message_more = 1;
-                                game._process_time_with_more = 0;
-                                game._monster_resume_index = monIndex + 1;
-                                game._monster_resume_somebody_can_move = somebodyCanMove;
-                            }
                             const brownMoldPassive = attackShown && (game.u?.uhp || 0) > 0
                                 && String(game.u?._polyself_form?.name || '').toLowerCase() === 'brown mold';
                             if (brownMoldPassive) {
@@ -6694,10 +6662,77 @@ if (attack.adtyp === 'steal') {
                                     game._monster_resume_index = monIndex + 1;
                                     game._monster_resume_somebody_can_move = somebodyCanMove;
                                 }
-                                if (!coldShown && game._message_more && !game._process_time_with_more) {
+                                if (!passiveKilled && name === 'cockatrice') {
+                                    const touchRoll = rnd(21);
+                                    const touchHit = toHit > touchRoll;
+                                    if (touchHit) d(0, 0);
+                                    const touchMessage = `${shownSubject} ${touchHit ? 'touches you' : 'misses'}!`;
+                                    if (passiveNeedsMore) {
+                                        game._cockatrice_touch_after_more = {
+                                            hit: touchHit,
+                                            message: touchMessage,
+                                            killer: name,
+                                            resumeIndex: monIndex + 1,
+                                            somebodyCanMove,
+                                        };
+                                    } else {
+                                        if (touchHit) {
+                                            const form = game.u?._polyself_form || {};
+                                            const stoningRoll = rn2(3);
+                                            if (!stoningRoll && game.u && !game.u.stoneResistance
+                                                && !form.stoneResistance && String(form.name || '').toLowerCase() !== 'stone golem'
+                                                && !(game.u._stonedTimeout || 0)) {
+                                                game.u._stonedTimeout = 5;
+                                                game.u._stonedKiller = name;
+                                            }
+                                            rn2(3);
+                                            rn2(6);
+                                        }
+                                        addToplineMessage(touchMessage);
+                                        if (game._message_more && !game._process_time_with_more) {
+                                            game._monster_resume_index = monIndex + 1;
+                                            game._monster_resume_somebody_can_move = somebodyCanMove;
+                                        }
+                                    }
+                                } else if (!coldShown && game._message_more && !game._process_time_with_more) {
                                     game._monster_resume_index = monIndex + 1;
                                     game._monster_resume_somebody_can_move = somebodyCanMove;
                                 }
+                            }
+                            // C ref: mhitu.c:767-811 mattacku() NATTK loop — the
+                            // petrifying birds' second attack (AT_TUCH AD_STON 0d0,
+                            // monst.c: PM_COCKATRICE/PM_CHICKATRICE) follows the
+                            // landed bite: to-hit is rnd(20+i) at i=1
+                            // (mhitu.c:806) and hitmu() pays the d(damn,damd)=d(0,0)
+                            // damage roll (mhitu.c:1187).  hitmsg() for the touch
+                            // is pline()'d after any pending topline text (tty
+                            // --More--), so the hiss gate / new-moon stoning gate
+                            // (uhitm.c:4215/4245) and knockback rolls
+                            // (uhitm.c:5258/5269) resolve after the pause — see
+                            // the game._cockatrice_touch_after_more handler in
+                            // cmd.js rhack.
+                            // (when the hero is polymorphed into a brown mold the
+                            // cold-passive block above owns the follow-up ordering —
+                            // see the brown mold branch)
+                            if (!brownMoldPassive && PETRIFYING_TOUCH_MONSTERS.has(name) && attackShown
+                                && (game.u?.uhp || 0) > 0
+                                && !game._suppress_monster_attack_messages) {
+                                const touchRoll = rnd(21);
+                                const touchHit = toHit > touchRoll;
+                                if (touchHit) d(0, 0);
+                                const touchMessage = `${shownSubject} ${touchHit ? 'touches you' : 'misses'}!`;
+                                game._cockatrice_touch_after_more = {
+                                    mon,
+                                    hit: touchHit,
+                                    message: touchMessage,
+                                    killer: name,
+                                    resumeIndex: monIndex + 1,
+                                    somebodyCanMove,
+                                };
+                                game._message_more = 1;
+                                game._process_time_with_more = 0;
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
                             }
                             if (attackShown && name === 'straw golem' && (game.u?.uhp || 0) > 0) {
                                 if (toHit > rnd(21)) {
