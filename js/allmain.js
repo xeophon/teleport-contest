@@ -16061,7 +16061,10 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 
     let droppedThisTurn = false;
     let pickedUpThisTurn = false;
-    if (!resumeAfterInventory && mon.minvent?.length) {
+    // C ref: dogmove.c:28-132 droppables() — worn gear (saddle) doesn't
+    // count as something the pet might drop.
+    const petCarriesDroppables = (mon.minvent || []).some(o => !(o.owornmask || o.worn));
+    if (!resumeAfterInventory && petCarriesDroppables) {
         if (!rn2(udist + 1) || !rn2(edog.apport || 3)) {
             if (rn2(10) < (edog.apport || 3)) {
                 const dropped = mon.minvent.shift();
@@ -16104,7 +16107,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 
     const hereStack = [...objects].reverse()
         .filter(obj => !obj.hidden && !obj.transientProjectile && obj.ox === mon.mx && obj.oy === mon.my);
-    const hereBlocked = resumeAfterInventory || mon.minvent?.length || droppedThisTurn;
+    const hereBlocked = resumeAfterInventory || petCarriesDroppables || droppedThisTurn;
     const hereCandidate = hereBlocked ? null
         : hereStack.find(obj => obj.otyp !== BOULDER && obj.otyp !== ROCK && obj.otyp !== STATUE);
     const staleHereCorpse = hereCandidate?.otyp === 'corpse'
@@ -16298,7 +16301,10 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
         appr = udist >= 9 ? 1 : mon.mflee ? -1 : 0;
         const heroLoc = game.level?.at(ux, uy);
         if (udist > 1) {
-            if (!IS_ROOM(heroLoc?.typ ?? 0) || !rn2(4) || whappr || ((mon.minvent?.length || 0) && rn2(edog.apport || 3))) appr = 1;
+            // C ref: dogmove.c:573-576 — the apport fallback only rolls for a
+            // pet carrying DROPPABLES (worn gear like a saddle doesn't count).
+            const dogHasMinvent = (mon.minvent || []).some(o => !(o.owornmask || o.worn));
+            if (!IS_ROOM(heroLoc?.typ ?? 0) || !rn2(4) || whappr || (dogHasMinvent && rn2(edog.apport || 3))) appr = 1;
         }
         if (!appr) {
             for (let stair = game.stairs; stair; stair = stair.next) {
