@@ -1391,7 +1391,8 @@ function drawGrid() {
             if (game._command_mode === 'extendedCommand') {
                 d.setCursor(2 + String(game._extended_command || '').length, 0);
                 cursorSet = true;
-            } else if (game._command_mode === 'wizardWish'
+            } else if (game._command_mode === 'instrumentTuneText'
+                       || game._command_mode === 'wizardWish'
                        || game._command_mode === 'wizGenesisMonster'
                        || game._command_mode === 'polyselfMonster'
                        || game._command_mode === 'engraveText'
@@ -1405,7 +1406,8 @@ function drawGrid() {
                        || pendingMessage.startsWith('Count: ')) {
                 if (pendingMessage.startsWith('Count: ')) d.setCursor(pendingMessage.length, 0);
                 else {
-                    const entry = game._command_mode === 'wizardWish' ? game._wish_text
+                    const entry = game._command_mode === 'instrumentTuneText' ? game._instrument_tune_text
+                        : game._command_mode === 'wizardWish' ? game._wish_text
                         : game._command_mode === 'wizGenesisMonster' ? game._wizgenesis_text
                         : game._command_mode === 'polyselfMonster' ? game._polyself_text
                         : game._command_mode === 'engraveText' ? game._engrave_text
@@ -1493,7 +1495,8 @@ function drawGrid() {
         } else if (game._command_mode === 'extendedCommand' && !extendedWrap) {
             d.setCursor(2 + String(game._extended_command || '').length, 0);
             cursorSet = true;
-        } else if (game._command_mode === 'wizardWish'
+        } else if (game._command_mode === 'instrumentTuneText'
+                   || game._command_mode === 'wizardWish'
                    || game._command_mode === 'wizGenesisMonster'
                    || game._command_mode === 'polyselfMonster'
                    || game._command_mode === 'engraveText'
@@ -1509,7 +1512,8 @@ function drawGrid() {
                    || displayMessage.startsWith('Count: ')) {
             if (displayMessage.startsWith('Count: ')) d.setCursor(displayMessage.length, 0);
             else {
-                const entry = game._command_mode === 'wizardWish' ? game._wish_text
+                const entry = game._command_mode === 'instrumentTuneText' ? game._instrument_tune_text
+                    : game._command_mode === 'wizardWish' ? game._wish_text
                     : game._command_mode === 'wizGenesisMonster' ? game._wizgenesis_text
                     : game._command_mode === 'polyselfMonster' ? game._polyself_text
                     : game._command_mode === 'engraveText' ? game._engrave_text
