@@ -10615,7 +10615,12 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             game.u._stonedTimeout--;
             if (!game.u._stonedTimeout) {
                 const killer = game.u._stonedKiller || 'cockatrice egg';
-                game.u.uhp = 0;
+                // C ref: end.c:1025+ done() / timeout.c:684 done_timeout —
+                // petrification through the timed intrinsic does NOT zero
+                // u.uhp (unlike losehp(): HP damage); the status line keeps
+                // the pre-death HP until the "Die?" prompt forces a bot()
+                // redraw.  The JS death chain zeroes HP in the deathDieMore
+                // dismissal handler instead.
                 game._death_cause = killer === 'petrification'
                     ? 'killed by petrification'
                     : `petrified by ${articleFor(killer)} ${killer}`;
