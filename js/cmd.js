@@ -15080,6 +15080,17 @@ async function advanceExperienceLevel(incremental = false) {
     if (abilityMessage && delayed) {
         pendingMessage = `Welcome to experience level ${level}.  ${abilityMessage}`;
         nextDelayed = 0;
+    } else if (abilityMessage && !incremental && level >= (game._level_change_target || level)) {
+        // C ref: #levelchange loops pluslvl(FALSE) (wizcmds.c:478-481);
+        // each pluslvl prints "You feel more experienced." then
+        // "Welcome to experience level N." (exper.c:315,357) and adjabil()
+        // prints the new intrinsic (exper.c:363; attrib.c wiz_abil 15:
+        // "sensitive").  update_topl() (win/tty/topl.c:251) can't fit the
+        // intrinsic message on the occupied top line, so it issues --More--
+        // first, then shows the intrinsic message alone with no further
+        // more.  Show that trailing intrinsic message via the pending path
+        // (which clears _message_more when ulevel >= target).
+        pendingMessage = abilityMessage;
     } else if (abilityMessage) {
         game._level_change_ability_prefix = abilityMessage;
     }
@@ -76560,6 +76571,31 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             if (arrowTrap && await handleUntrapShootingTrap(arrowTrap, dir))
                 return;
+            // C ref: untrap() (trap.c:5848) — a seen floor trap at the
+            // target that has no disarm handler falls into the switch
+            // default: pits tell you to fill them (or that you're already
+            // at the edge); every other type (falling rock, teleport,
+            // anti-magic, ...) prints "You cannot disable %s trap."
+            // (trap.c:5962-5978).  These return 0: no turn passes.
+            const resistTrap = (game.level?.traps || []).find(candidate =>
+                candidate.tx === x && candidate.ty === y && candidate.tseen);
+            if (resistTrap) {
+                const here = !dir.dx && !dir.dy;
+                if (resistTrap.ttyp === PIT || resistTrap.ttyp === SPIKED_PIT) {
+                    if (here) {
+                        await setMessage('You are already on the edge of the pit.');
+                        return;
+                    }
+                    const pitMonster = (game.level?.monsters || []).find(mon =>
+                        !mon.hidden && mon.mx === x && mon.my === y);
+                    if (!pitMonster) {
+                        await setMessage('Try filling the pit instead.');
+                        return;
+                    }
+                }
+                await setMessage(`You cannot disable ${here ? 'this' : 'that'} trap.`);
+                return;
+            }
             if (boxes.length && await beginUntrapBoxPrompt(boxes, { force, x, y }))
                 return;
             const loc = game.level?.at?.(x, y);
