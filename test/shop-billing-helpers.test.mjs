@@ -21689,7 +21689,13 @@ test('fire breath killed gas spore explodes outside hero melee', async () => {
     assert.equal(game.u.uhp, 50 - d4x6[1]);
 });
 
-test('gas cloud killed gas spore explodes outside monster melee', async () => {
+test('gas spore is unaffected by poison gas clouds (breathless; m_poisongas_ok)', async () => {
+    // C ref: mon.c:329-355 m_poisongas_ok() — monsters.h:325-333 gives the
+    // gas spore M1_BREATHLESS (with M1_NOLIMBS/NOHEAD/MINDLESS), so
+    // m_poisongas_ok(gas spore) == M_POISONGAS_OK and region.c:1109
+    // inside_gas_cloud() never reaches the monster cough/damage branch for
+    // it at all: no damage roll, no blind flag, no explosion queue, no
+    // death.
     installStableNonShopFloorState();
     initRng(1);
     enableRngLog({ reset: true });
@@ -21708,20 +21714,13 @@ test('gas cloud killed gas spore explodes outside monster melee', async () => {
 
     markHeroNeighborhoodVisible();
     advanceRegions(game);
-    const messages = [game._pending_message, ...(await drainQueuedMessagesAfterMore())].join(' ');
 
-    const d4x6 = rngValuesForCall(getRngLog(), 'd(4,6)');
-    assert.equal(d4x6.length, 2);
-    assert.match(messages, /The gas spore is killed!/);
-    assert.match(messages, /Boom!/);
-    assert.match(messages, /The goblin is caught in the gas spore's explosion!/);
-    assert.match(messages, /You are caught in the gas spore's explosion!/);
-    assert.equal(game.level.monsters.includes(spore), false);
-    assert.equal(game.level.objects.some(obj => obj.ox === 6 && obj.oy === 5), false);
-    assert.equal(victim.mhp, 30 - d4x6[1]);
-    assert.equal(game.u.uhp, 50 - d4x6[1]);
+    assert.equal(game.level.monsters.includes(spore), true);
+    assert.equal(spore.mhp, spore.mhpmax);
+    assert.equal(game.u.uhp, 50);
+    assert.equal(victim.mhp, 30);
+    assert.equal(rngValuesForCall(getRngLog(), 'd(4,6)').length, 0);
 });
-
 test('sokoban pit trap killed gas spore explodes outside monster melee', async () => {
     installStableNonShopFloorState();
     initRng(1);

@@ -10117,14 +10117,17 @@ async function finishMonsterTurnTail() {
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
     if (!resumeAfterSounds) {
-        if ((game.u?._blindTimeout || 0) > 0) {
+        // C ref: allmain.c:273-274 — nh_timeout() runs BEFORE run_regions()
+        // in moveloop_core; its BLINDED expiry (timeout.c:744-750 ->
+        // make_blinded(0L, TRUE), potion.c) decrements the timeout and, on
+        // reaching 0, restores sight with "You can see again."  Keeping the
+        // decrement ahead of advanceRegions() means a freshly-clouded hero
+        // (inside_gas_cloud sets the timeout to 1, region.c:1115-1117) stays
+        // blind for the current region tick and only clears on the next
+        // turn.  The !uinvulnerable guard matches the neighbouring veryfast/
+        // invulnerable timeout group below.
+        if (!game.u?.uinvulnerable && (game.u?._blindTimeout || 0) > 0) {
             game.u._blindTimeout--;
-            // C ref: allmain.c:273 nh_timeout() runs BEFORE run_regions()
-            // (allmain.c:274) — its BLINDED expiry (timeout.c:744-750)
-            // restores sight via make_blinded(0L, TRUE) (potion.c make_blinded)
-            // with "You can see again.", so a freshly-clouded hero
-            // (inside_gas_cloud sets 1, region.c:1115) stays blind through
-            // the current region tick and clears on the next turn.
             if (game.u._blindTimeout === 0 && game.u.blind && !game.u.ucreamed
                 && !game.u.blindfolded && !game.u.Blindfolded) {
                 game.u.blind = false;
