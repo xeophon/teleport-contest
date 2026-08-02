@@ -5651,6 +5651,22 @@ export async function processMonsterTurns() {
                                     if ((game.u?.uhp || 0) - chain.damage > 0) {
                                         game.u.uhp = hpBefore - chain.damage;
                                     } else {
+                                        // C ref: mdamageu() (mhitu.c:1902-1928) leaves
+                                        // u.uhp at the raw post-blow value; when it lands
+                                        // exactly at -1 (the dosave() sentinel), bot()
+                                        // *skips* repainting the status row even though it
+                                        // clears disp.botl (botl.c:253-261,
+                                        // `if (u.uhp != -1 && ...)`), so the
+                                        // vpline()->flush_screen() bot() inside
+                                        // done_in_by()'s You("die...") (end.c:185/195,
+                                        // pline.c:273-274) updates nothing and the tty
+                                        // keeps the pre-blow HP on the status row through
+                                        // the "hits!--More--"/"You die...--More--" frames;
+                                        // the HP:0 display appears only once done() has
+                                        // clamped u.uhp to 0 and re-dirtied it
+                                        // (end.c:1068-1077) ahead of the "Die?" prompt.
+                                        if (hpBefore - chain.damage === -1)
+                                            game._death_status_hp_before_zero = hpBefore;
                                         game.u.uhp = 0;
                                         // C ref: mdamageu() -> done_in_by() ->
                                         // done() (end.c:1025+1113): fatal blow defers
