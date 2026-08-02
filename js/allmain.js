@@ -15155,8 +15155,6 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (appr !== 0) {
             for (let j = 0; j < jcnt; j++) {
                 if (tracks[j]?.x !== pos.x || tracks[j]?.y !== pos.y) continue;
-                if (process.env.TRACKDBG) console.error(`TRACKDBG rng=${getRngLog().length} ${mon.data?.name} @${mon.mx},${mon.my} j=${j} moveChoices=${moveChoices} pos=${pos.x},${pos.y} poss=${JSON.stringify(poss.map(p=>[p.x,p.y,p.info]))} tracks=${JSON.stringify(tracks.map(t=>[t.x,t.y]))} mux=${mon.mux},${mon.muy} appr=${appr}`);
-                if (process.env.MAPDDBG && moveChoices === 8 && !globalThis._mapdumpDone) { globalThis._mapdumpDone=1; let s='\n'; for (let yy=9;yy<=17;yy++){ let r='y'+yy+': '; for (let xx=58;xx<=66;xx++){ const L=game.level?.at(xx,yy); const m=(game.level?.monsters||[]).find(mn=>mn.mx===xx&&mn.my===yy&&!mn.dead); r+= (m?m.data?.name[0].toUpperCase():L?(L.typ<10?'0'+L.typ:''+L.typ):'--')+' '; } s+=r+'\n'; } const mm=(game.level?.monsters||[]).map(mn=>`${mn.data?.name}@${mn.mx},${mn.my}hp${mn.mhp}`).join(' '); console.error('MAPDUMP\n'+s+'mons: '+mm+' traps:'+JSON.stringify((game.level?.traps||[]).map(t=>[t.ttyp,t.tx,t.ty,t.tseen||0, t._monknow||0])))}
                 const roll = rn2(4 * (moveChoices - j));
                 if (roll) {
                     skipped = true;
@@ -15308,7 +15306,6 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     const oldx = mon.mx;
     const oldy = mon.my;
     updateMonsterTrack(mon, mon.mx, mon.my);
-    if (process.env.TRACKDBG && mon.data?.name === 'jackal') console.error(`JKMOVE moves=${game.moves} from ${oldx},${oldy} to ${next.x},${next.y} track=${JSON.stringify(mon.mtrack.map(t=>[t.x,t.y]))}`);
     mon.mx = next.x;
     mon.my = next.y;
     if (game._gas_spore_residue_mon === mon && !(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT))
@@ -17000,7 +16997,6 @@ export async function moveloop_core() {
             g._skip_pending_time_decrement = 1;
         }
         if (g._search_pending_count > 0) {
-            if (process.env.SRCHDBG) console.error(`SRCH tick moves=${g.moves} spc=${g._search_pending_count} hero=${g.u?.ux},${g.u?.uy} mons=${(g.level?.monsters||[]).map(m=>`${m.data?.name}@${m.mx},${m.my}`).join(' ')}`);
             const searchCountBeforeTurn = g._search_pending_count;
             let foundSearchMonster = false;
             let foundMessage = '';
@@ -17287,7 +17283,6 @@ export async function moveloop_core() {
         // so when the stop fires there is still exactly one more full time
         // passage (monsters act) before rhack(0) reads the next key
         // (hence this pass's unit plus one extra).
-        if (process.env.SRCHDBG) console.error(`SRCH stopcheck moves=${g.moves} pend=${g._pending_time_passed} spc=${g._search_pending_count}`);
         if (g._search_stop_check_after_monsters) {
             g._search_stop_check_after_monsters = 0;
             if (!armorTailOnly && !skipMonsterTurnsThisPass

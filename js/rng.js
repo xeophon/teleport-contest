@@ -43,7 +43,6 @@ function logRng(name, args, value) {
         entry += ` @ ${frames}`;
     }
     _rngLog.push(entry);
-    if (process.env.RNG_ECHO) { globalThis._rngEchoN=(globalThis._rngEchoN||0)+1; console.error('RNG#' + globalThis._rngEchoN + ' ' + entry); }
 }
 
 function RND(x) {

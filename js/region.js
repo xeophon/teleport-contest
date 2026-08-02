@@ -8,13 +8,11 @@ export function createGasCloud(x, y, cloudsize, damage) {
     const maxCloudSize = 150;
     if (cloudsize > maxCloudSize) cloudsize = maxCloudSize;
 
-    if (process.env.REGION_DEBUG) console.error(`createGasCloud center=(${x},${y}) hero=(${game.u?.ux},${game.u?.uy})`);
     const coords = [{ x, y }];
     for (let curridx = 0; curridx < coords.length; curridx++) {
         if (coords.length >= cloudsize) break;
         const { x: xx, y: yy } = coords[curridx];
         const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
-        if (process.env.REGION_DEBUG) console.error(`START cell(${xx},${yy}) curridx=${curridx} size=${coords.length}`);
         for (let i = 4; i > 0; --i) {
             const swapidx = rn2(i);
             const tmp = dirs[swapidx];
@@ -27,12 +25,9 @@ export function createGasCloud(x, y, cloudsize, damage) {
             const nx = xx + dir.x;
             const ny = yy + dir.y;
             const loc = game.level?.at(nx, ny);
-            const ok = loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ) || IS_LAVA(loc.typ));
-            if (process.env.REGION_DEBUG) console.error(`cell(${xx},${yy}) dir(${dir.x},${dir.y}) -> (${nx},${ny}) typ=${loc?loc.typ:'none'} ok=${ok} nvalid=${nvalid+ (ok?1:0)}`);
             if (!loc || !(ACCESSIBLE(loc.typ) || IS_POOL(loc.typ) || IS_LAVA(loc.typ))) continue;
             nvalid++;
             const alreadyPicked = coords.some(coord => coord.x === nx && coord.y === ny);
-            if (nvalid === 4 && process.env.REGION_DEBUG) console.error(`ANTIRHOMBUS cell(${xx},${yy}) dir(${dir.x},${dir.y})`);
             if (nvalid === 4 && !rn2(2)) continue;
             if (!alreadyPicked) coords.push({ x: nx, y: ny });
             if (coords.length >= cloudsize) break;

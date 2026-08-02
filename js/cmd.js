@@ -61229,7 +61229,6 @@ export async function rhack(_cmd) {
     game.context = game.context || {};
     game.context.move = 0;
     game.u.umoved = false;
-    if (process.env.KEYDBG) console.error(`KEYDBG moves=${game.moves} spc=${game._search_pending_count} pend=${game._pending_time_passed} key=${JSON.stringify(typeof _cmd === 'string' ? _cmd : String.fromCharCode(_cmd||0))} cmd${game._command_mode||''}`);
 
 	    const key = _cmd || await nhgetch();
 	    let ch = commandChar(key);
@@ -68963,7 +68962,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const uy = game.u?.uy ?? 0;
         let x = game._stinking_cloud_cursor?.x ?? ux;
         let y = game._stinking_cloud_cursor?.y ?? uy;
-        if (process.env.REGION_DEBUG) console.error(`stinkCenter key=${JSON.stringify(ch)} cursor=${x},${y}`);
         const dir = movementDirection(ch);
         if (dir) {
             x = Math.max(1, Math.min(COLNO - 1, x + dir.dx));
