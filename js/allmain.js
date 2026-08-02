@@ -6125,7 +6125,22 @@ export async function processMonsterTurns() {
 			                                game._travel_finish_message = '';
                                 game._travel_keep_message = '';
                             }
-                            const deferMultiAttack = !!pendingBeforeAttack && !pendingHeroMeleeMessage;
+                            /* C ref: mhitu.c:798-830 mattacku() + topl.c
+                             * update_topl(): the burst's first hit message
+                             * appends onto any existing topline text when it
+                             * fits the tty width budget (toplin NEED_MORE,
+                             * topl.c:262-272); a --More-- breaks only when the
+                             * addition would overflow.  Deferring the whole
+                             * burst behind a --More-- is only correct when the
+                             * FIRST hit message itself does not fit — the
+                             * defer-after-overflow path below handles that. */
+                            const widthBudget = game.nhDisplay?.cols || 80;
+                            const firstAttackMsgLen = (heroMultiAttacks[0] || permonstAttacks?.[0] || data.attack || { verb: 'hits' }).verb
+                                ? String((heroMultiAttacks[0]?.verb || (data.attack?.verb ?? 'hits'))).length
+                                : 5;
+                            const stopOccupationPending = /^You stop (?:searching|waiting)\.$/.test(pendingBeforeAttack || '');
+                            const deferMultiAttack = !!pendingBeforeAttack && !pendingHeroMeleeMessage
+                                && !stopOccupationPending;
 	                            const multiMessages = [];
 	                            let showedAttack = false;
                             const countedRepeatActive = !!game._counted_repeat_interruptible;
@@ -6173,13 +6188,20 @@ export async function processMonsterTurns() {
                                         // counted search is armed (captured into
                                         // game._stop_occupation_text_for_hit above).
 	                                        if (missShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
-                                            game._pending_time_passed = 0;
-                                            game._skip_pending_time_decrement = 1;
-                                            game._search_pending_count = 0;
-                                            game._counted_repeat_interruptible = 0;
+	                                            // C ref: allmain.c:684-697 — hitmu's trailing stop_occupation()
+	                                            // (mhitu.c:1265) prints "You stop searching./waiting." while an
+	                                            // occupation is armed; nomul(0) cancels the rest of the batch
+	                                            // either way.  The armed test here combines the search batch
+	                                            // (_search_pending_count) with a counted rest/move batch
+	                                            // (_counted_repeat_interruptible), and a moveloop gate-stop clears
+	                                            // both first, so a gate-stopped burst prints nothing.
+	                                            game._pending_time_passed = 0;
+	                                            game._skip_pending_time_decrement = 1;
+	                                            game._search_pending_count = 0;
+	                                            game._counted_repeat_interruptible = 0;
 	                                            addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
-                                            stoppedCountedRepeat = true;
-                                        }
+	                                            stoppedCountedRepeat = true;
+	                                        }
                                     }
                                     continue;
                                 }
@@ -6238,13 +6260,20 @@ export async function processMonsterTurns() {
                                     showedAttack = showedAttack || hitShown;
 	                                    game.u.uhp = Math.max(0, hpBeforeDamage - damage);
 	                                    if (hitShown && !stoppedCountedRepeat && (countedRepeatActive || (game._search_pending_count || 0) > 0)) {
-                                        game._pending_time_passed = 0;
-                                        game._skip_pending_time_decrement = 1;
-                                        game._search_pending_count = 0;
-                                        game._counted_repeat_interruptible = 0;
+	                                        // C ref: allmain.c:684-697 — hitmu's trailing stop_occupation()
+	                                        // (mhitu.c:1265) prints "You stop searching./waiting." while an
+	                                        // occupation is armed; nomul(0) cancels the rest of the batch
+	                                        // either way.  The armed test here combines the search batch
+	                                        // (_search_pending_count) with a counted rest/move batch
+	                                        // (_counted_repeat_interruptible), and a moveloop gate-stop clears
+	                                        // both first, so a gate-stopped burst prints nothing.
+	                                        game._pending_time_passed = 0;
+	                                        game._skip_pending_time_decrement = 1;
+	                                        game._search_pending_count = 0;
+	                                        game._counted_repeat_interruptible = 0;
 	                                        addToplineMessage(game._stop_occupation_text_for_hit || ((game._search_pending_count || 0) > 0 ? 'You stop searching.' : 'You stop waiting.'));
-                                        stoppedCountedRepeat = true;
-                                    }
+	                                        stoppedCountedRepeat = true;
+	                                    }
                                 }
                                 if ((game.u?.uhp || 0) <= 0) {
                                     const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
@@ -17808,6 +17837,7 @@ export async function moveloop_core() {
                     && couldSeeCoord(candidate.mx, candidate.my))) {
                 addToplineMessage('You stop searching.');
                 g._search_pending_count = 0;
+                g._counted_repeat_interruptible = 0; // nomul(0) inside stop_occupation() (hack.c:4161-4174)
                 g._pending_time_passed = Math.min(g._pending_time_passed, 2);
                 g._keep_pending_message = 1;
                 // C ref: allmain.c:483 + 509-510 — unlike a mid-movemon
