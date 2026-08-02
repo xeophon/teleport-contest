@@ -66585,6 +66585,18 @@ function tutorialEnterStash() {
             game._wizard_lava_refusal_fatal_entry = 0;
             restoreHeroHpAfterLifeSaving();
             clearLifeSavedDeathState();
+            // C ref: timeout.c:684-685 done_timeout() -> done() -> die() ->
+            // savelife() (end.c:2040-2068) all run synchronously inside
+            // nh_timeout(); when the player refuses to die after a timed
+            // STONED expiry, the once-per-turn tail (dosounds allmain.c:344,
+            // gethungry allmain.c:355, u_wipe_engr allmain.c:360) resumes
+            // IMMEDIATELY — before any further monster phase — and any
+            // occupation stop_occupation()/multi resolution stays inside the
+            // same pass.  Flag the moveloop pass to run the resumed tail.
+            if (game._resume_turn_tail_after_stoning_death) {
+                game._resume_turn_tail_after_stoning_death = 0;
+                game._resume_turn_tail_now = 1;
+            }
             if (lavaRefusalClearTrap || game.u?.utraptype === TT_LAVA) {
                 game.u.utrap = 0;
                 game.u.utraptype = null;

@@ -803,6 +803,7 @@ export class NethackGame {
         return false;
     }
 
+    getStepMoves() { return this._stepMoves; }
     getScreens() { return this._screens; }
     getTraceSteps() { return this._traceSteps; }
     getCursors() { return this._cursors; }

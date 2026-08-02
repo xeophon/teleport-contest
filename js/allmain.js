@@ -3144,7 +3144,12 @@ function armHeroDeathMore(message = 'You die...') {
     if (game._pending_message) messages.push(game._pending_message);
     if (game._topline_after_more && !messages.includes(game._topline_after_more))
         messages.push(game._topline_after_more);
-    messages.push(message);
+    // C ref: hack.c:4287 — "You die..." comes from losehp() (hp-death paths);
+    // done() reached straight from a timed intrinsic expiry
+    // (timeout.c:684 done_timeout(STONING, STONED)) prints the stage text
+    // ("You are a statue.", timeout.c:141-145) and goes directly to die()
+    // without a "You die..." line.  Callers pass '' to skip it.
+    if (message) messages.push(message);
     game._pending_message = messages.join('  ');
     game._topline_after_more = '';
     game._message_more = 1;
@@ -3511,6 +3516,7 @@ function processAttributeExercise() {
     const oneShotExerciseTurnOffset = game._exercise_turn_offset || 0;
     const exerciseTurnOffset = oneShotExerciseTurnOffset;
     const turn = (game.moves || 1) + 1 + exerciseTurnOffset;
+    if (process.env.EXDB) console.error(`EXDB turn=${turn} moves=${game.moves} off=${exerciseTurnOffset} hunger=${u.uhunger} mod10=${!(turn%10)} mod5=${!(turn%5)} rng=${getRngLog().length}`);
     const skipPeriodicExerciseTurn = game._skip_periodic_exercise_turn || 0;
     const skipPeriodicExerciseAtTurn = !!skipPeriodicExerciseTurn && turn === skipPeriodicExerciseTurn;
     if (skipPeriodicExerciseAtTurn) game._skip_periodic_exercise_turn = 0;
@@ -10537,11 +10543,18 @@ if (attack.adtyp === 'steal') {
 	    return result;
 	}
 
-async function finishMonsterTurnTail() {
+async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
     if (!resumeAfterSounds) {
+    // Resume-after-stoning-death: the pre-nh_timeout()/run_regions prefix
+    // (blind/veryfast/invulnerable decrements, regions, fumble — moveloop
+    // once-per-turn items between allmain.c:267 and :294) already ran inside
+    // the aborted tail call; C continues nh_timeout()'s decrement loop from
+    // done_timeout()'s return and only the items AFTER the STONED expiry
+    // still execute.  Skip the prefix here.
+    if (!resumeAfterStoningDeath) {
         // C ref: allmain.c:273-274 — nh_timeout() runs BEFORE run_regions()
         // in moveloop_core; its BLINDED expiry (timeout.c:744-750 ->
         // make_blinded(0L, TRUE), potion.c) decrements the timeout and, on
@@ -10591,7 +10604,8 @@ async function finishMonsterTurnTail() {
         // petrification stage text, applies its stage side-effects, and
         // exercise(A_DEX, FALSE) costs one rn2(2) draw (attrib.c:509)
         // every turn, before regen_hp()'s rn2(100) (allmain.c:659).
-        if ((game.u?._stonedTimeout || 0) > 0) {
+    } /* !resumeAfterStoningDeath prefix */
+        if (!resumeAfterStoningDeath && (game.u?._stonedTimeout || 0) > 0) {
             addHeroStatusSuffix('Stone');
             const stonedStage = game.u._stonedTimeout;
             const stonedMessage = STONED_TEXTS[5 - stonedStage];
@@ -10611,7 +10625,26 @@ async function finishMonsterTurnTail() {
                     return false;
                 }
                 game._death_bones_body = 'statue';
-                armHeroDeathMore();
+                // C ref: end.c:726-735 die() -> savelife() — the refused
+                // petrification stomps gm.multi to -1 and rewrites
+                // gn.nomovemsg to "You survived that attempt on your
+                // life.", so the stoning stage-3 paralysis
+                // (timeout.c:163-166 nomul(-3), nomovemsg = "You can move
+                // again.") must not unwind later: kill the JS-side
+                // helpless/wake bookkeeping now, when done() runs.
+                game._helpless_time = 0;
+                game._sleeping_time = 0;
+                game._wake_message = '';
+                game._stoning_multi_reason = '';
+                // C ref: timeout.c:684-685 done_timeout() -> done() (end.c:1025+)
+                // -> die() (end.c:1085+) — wizard mode's "Die?" refusal runs
+                // savelife() inline and the SAME nh_timeout()/once-per-turn
+                // tail then continues (dosounds allmain.c:344, gethungry :355,
+                // u_wipe_engr :360).  The JS engine defers the prompt across
+                // input keys; the refusal handler (cmd.js wizardDieConfirm)
+                // resumes the tail via game._resume_turn_tail_after_stoning_death.
+                game._resume_turn_tail_after_stoning_death = 1;
+                armHeroDeathMore('');
                 return false;
             }
         }
@@ -11234,6 +11267,11 @@ async function finishMonsterTurnTail() {
     const suppressImmobileExtraTurns = !!game._suppress_immobile_extra_turns_once;
     game._suppress_immobile_extra_turns_once = 0;
     if (process.env.WEREDBG) console.error(`WEREDBG tail-guard moves=${game.moves} umov=${game.u?.umovement} supp=${suppressImmobileExtraTurns} rng=${getRngLog().length}`);
+    // Resume-after-stoning-death mode (C ref: end.c:1108-1135 — done()->die()
+    // -> savelife() runs inside the timeout's once-per-turn block and the
+    // remaining tail items then complete the SAME turn): do not cascade into
+    // the immobile-hero extra monster phase here; the next keyed pass owns it.
+    if (resumeAfterStoningDeath) return true;
     if ((game.u?.umovement ?? 0) < NORMAL_SPEED && !collapsedDoubleMiss && !suppressImmobileExtraTurns) {
         game.moves = (game.moves || 1) + 1;
         await afterMoveTurn(game, false);
@@ -17450,6 +17488,30 @@ export async function moveloop_core() {
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
         if (process.env.WEREDBG) console.error(`WEREDBG timepass moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
+        // C ref: timeout.c:684-685 done_timeout() -> done() -> die()/savelife()
+        // (end.c:1025+,1085+,2040+) — the wizard "Die?" refusal returns into
+        // the SAME nh_timeout()/once-per-turn block, whose remaining tail
+        // items (dosounds allmain.c:344, gethungry allmain.c:355, u_wipe_engr
+        // allmain.c:360) still complete this turn before any new monster
+        // phase runs.  finishMonsterTurnTail(true) resumes at the point the
+        // stoning-expiry armHeroDeathMore() interrupted it.
+        if (g._resume_turn_tail_now) {
+            g._resume_turn_tail_now = 0;
+            await finishMonsterTurnTail(true);
+            // C ref: allmain.c:243-244 — the death turn's svm.moves++
+            // happened in its turn-setup (before nh_timeout' stoned_dialogue
+            // stored the death); the JS tail abort above dropped this pass's
+            // post-turn increment, so the turn counter (and the %10 periodic
+            // exercise gate in processAttributeExercise in particular) must
+            // not fall one behind C's svm.moves from here on.
+            g.moves = (g.moves || 1) + 1;
+            // C ref: end.c:726-731 savelife() — svc.context.move = 0 and
+            // gm.multi = -1: the refusal pass ends after the completed
+            // once-per-turn tail; the next key is read by rhack(0) and only
+            // THEN does the next turn's movemon/turn-setup run.
+            g._pending_time_passed = 0;
+            break;
+        }
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
