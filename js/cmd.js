@@ -66696,6 +66696,12 @@ function tutorialEnterStash() {
             game._command_mode = null;
             await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult
                 || (chainSlotMessages.length ? true : undefined));
+            /* C's tty blocks only at getch: the refusal window completes the
+             * interrupted movemon pass and the new-turn block (allmain.c:
+             * 227-253 mcalcdistress/mcalcmove/svm.moves++) behind the pending
+             * --More--, so the status line shows the advanced turn while the
+             * chain's last hitmsg is still parked for dismissal. */
+
             if (landing?.trapResult && applyLifeSavingOrFatalCommandMode(landing.trapResult)) return;
 
             if (game._deferred_raven_blind_after_more) {

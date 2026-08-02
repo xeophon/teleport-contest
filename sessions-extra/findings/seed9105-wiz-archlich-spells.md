@@ -14,39 +14,52 @@ carnivorous ape), ape attacks, Die?-no revival cycles.
 
 Recorded with seed 9105. 115 steps, T:7; recorder exits cleanly.
 
-## Current JS score (after salvage of slice/fix9105, commit range …56e1756..HEAD)
+## Current JS score (after slice/fin9105b, audit 983)
 
-→ **FAIL — RNG 2352/2391, Screen 74/115 (cursors 93/115)**. RNG and every screen match
-up through the second ape attack round (~step 59; RNG prefix through 2351).
+→ **still FAIL on screens — RNG 2391/2391 (full match), Screen 101/115
+(cursors 115/115)**.  RNG and every screen now match except the 14 steps
+[45-49, 60-62, 75-77, 93-95], which differ *only* in the status-line turn
+counter (C shows the newly-started turn one window earlier).
 
-## Final diagnosis
+## Final diagnosis (this slice)
 
-The session layers four C behaviors that this port previously approximated:
+Five divergences were found and fixed here (details in
+docs/c-parity-audit/983-archlich-spells-death-chain-2026-08-02.md):
 
-1. **Frost touch chain (mhitu.c hitmu → uhitm.c mhitm_ad_cold)** — order is
-   damage d(5,6), magic-negation rn2(10) (uhitm.c mhitm_mgc_atk_negated), frost pline,
-   `m_lev > rn2(20)` gate, full destroy_items program (zap.c:5965-6110: limit calc
-   rn2(5), per-stack rnd(4) + rn2(3) x quan with shatter plines pausing per stack),
-   losehp+exercise rn2(2) (attrib.c:508) at each shatter display, then knockback
-   rn2(3)+rn2(6) (uhitm.c:5258/5269) and mdamageu.  Implement as
-   `coldTouchDestroyItemsProgram()` + `lichColdShatter` queue entries.
-2. **castmu() (mcastu.c:129-330) runs after hitmu even when done() was refused**
-   (wizard "Die?" → 'n'): choose_monster_spell / cursetxt / mspec_used / fumble rolls,
-   message boundaries per tty pline; the spell's damage die (mcastu.c:240-243) and
-   effect-side resolve on the window where the cast line displays.
-3. **nasty() summons (wizard.c:590-712)** exercised via SUMMON_MONS: carnivorous ape.
-4. **Coarse mechanics that bit us in passing**: monster_nearby stop_occupation
-   vs hitmu's own stop ordering (the "You stop searching." banner belongs to whichever
-   runs per C's pass structure), movemon attachment of the freshly-summoned monster,
-   dochug distfleeck/goblin quiescence, mcalcmove fractional allocation ordering.
+1. The deferred multiattack resume object dropped `mon` and the per-slot
+   hit history, so getmattk()'s `mspec_used` hug-downgrade
+   (mhitu.c:371-390, fed by nasty()'s `mspec_used = rnd(4)` summon
+   cooldown, wizard.c:692-695) never applied when the ape chain resumed
+   after --More--: C rolls d(1,6) for the downgraded claw, JS rolled
+   d(1,8).  (allmain.js/cmd.js resume threading.)
+2. end.c savelife() runs synchronously inside mdamageu/done/die
+   (end.c:1108-1116, 704-758): the refusal heal must land mid-chain, not
+   at prompt resolution; otherwise turn-boundary regen_hp
+   (allmain.c:659 rn2(100)) sees a fully-healed hero and skips its roll.
+   Added `_death_healed_at_chain_crossing` threading through
+   deathDieMore/wizardDieConfirm.
+3. hitmsg() " again" (mhitu.c:73-78) can never span a getmattk()
+   alt_attk_buf substitution; the ported chains appended " again" to the
+   downgraded hug slot.  Fixed on both the live-chain and resumed-chain
+   paths.
+4. The hitmsg()s of chain slots after a fatal hit print only after
+   "OK, so you don't die."; they are now sunk and re-emitted by the
+   refusal handler with the survivor line parked behind the forced
+   --More-- (nomovemsg cadence, allmain.c:381-383).
+5. nasty()/mcast_summon_mons spawns were not shown when a caster caused
+   them: makemon.c:1472-1473 newsyms every in-game spawn
+   unconditionally.
 
 ## Remaining divergences
 
-- **Steps 84-114 (ape multi-attack after the second hero-death)**: C lets a monster's
-  mid-pass attack chain continue THROUGH a refused done() (the ape's third slot lands
-  in the same input window as "OK, so you don't die.").  The port's deferred-multiattack
-  machinery currently halts the remaining slots at the death window; reconstructing the
-  continuation inside wizardDieConfirm was out of budget.
-- Turn-column cadence lag one window on cast boundaries (#60/#75 area screens match text
-  but the hooks/turn advance land one input window later than C).
-- RNG positional prefix ends at 2352 because of those last two windows.
+- **Turn-counter cadence on cast/death boundaries** (steps 45-49,
+  60-62, 75-77, 93-95): C's moveloop completes the interrupted movemon
+  sweep and the new-turn block (mcalcdistress -> mcalcmove reallocation
+  -> svm.moves++, allmain.c:227-253) synchronously, behind the parked
+  cast-chain --More-- lines.  The port parks the entire
+  processMonsterTurns() sweep while a lichChain entry is queued
+  (js/allmain.js processMonsterTurns early-return), delaying moves++ by
+  one or more input windows.  Lifting the park wholesale re-executes
+  already-acted monsters (extra distfleeck rolls), so the proper fix is
+  a sweep-resume index that continues from the caster's successor.
+  Everything else matches the recording bit-exactly.
