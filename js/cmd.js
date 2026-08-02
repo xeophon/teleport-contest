@@ -9,7 +9,7 @@ import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
-import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DELPHI, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, GLOC_DOOR, GLOC_EXPLORE, GLOC_MONS, GLOC_OBJS, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MON_LIMBO, MON_MIGRATING, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, MAX_CARR_CAP, WT_BABY_DRAGON, WT_DRAGON, WT_HUMAN, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_ARRIVE, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
+import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DELPHI, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, GLOC_DOOR, GLOC_EXPLORE, GLOC_MONS, GLOC_OBJS, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MON_LIMBO, MON_MIGRATING, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NEW_MOON, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, MAX_CARR_CAP, WT_BABY_DRAGON, WT_DRAGON, WT_HUMAN, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_ARRIVE, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz, getRngLog } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
@@ -64150,17 +64150,36 @@ function tutorialEnterStash() {
             if (game._cockatrice_touch_after_more) {
                 const attack = game._cockatrice_touch_after_more;
                 game._cockatrice_touch_after_more = null;
+                let touchMessage = attack.message || 'It touches you!';
                 if (attack.hit) {
-                    const stoningRoll = rn2(3);
-                    if (!stoningRoll && game.u && !game.u.stoneResistance && !heroPolyselfResistsStoning()
-                        && !(game.u._stonedTimeout || 0)) {
-                        game.u._stonedTimeout = 5;
-                        game.u._stonedKiller = attack.killer || 'cockatrice';
+                    // C ref: uhitm.c:4211-4254 mhitm_ad_ston() mhitu branch —
+                    // hitmsg() has printed "<Mon> touches you!"; the hissing
+                    // gate is !rn2(3) (uhitm.c:4215); when it fires the hearer
+                    // message "You hear <mon>'s hissing!" appears (uhitm.c:4226)
+                    // and delayed petrification starts when
+                    // !rn2(10) || moonphase == NEW_MOON (uhitm.c:4245 — the
+                    // rn2(10) draw happens regardless; 5.0 removed the
+                    // lizard-corpse new-moon override).  do_stone_u()
+                    // (uhitm.c:3924-3943) -> make_stoned(5L) (potion.c:222).
+                    const hissRoll = rn2(3);
+                    if (!hissRoll) {
+                        touchMessage = `${touchMessage}  You hear the ${attack.killer || ''}'s hissing!`;
+                        const stoningGateRoll = rn2(10);
+                        const newMoon = game.flags?.moonphase === NEW_MOON;
+                        if ((!stoningGateRoll || newMoon) && game.u
+                            && !game.u.stoneResistance && !heroPolyselfResistsStoning()
+                            && !(game.u._stonedTimeout || 0)) {
+                            game.u._stonedTimeout = 5;
+                            game.u._stonedKiller = attack.killer || 'cockatrice';
+                            addHeroStatusSuffix('Stone');
+                        }
                     }
+                    // C ref: uhitm.c:5247-5270 mhitm_knockback() always rolls
+                    // rn2(3) (distance) + rn2(6) (chance); AT_TUCH is ineligible.
                     rn2(3);
                     rn2(6);
                 }
-                await setMessage(attack.message || 'It touches you!');
+                await setMessage(touchMessage);
                 if (attack.resumeIndex != null) {
                     game._monster_resume_index = attack.resumeIndex;
                     game._monster_resume_somebody_can_move = !!attack.somebodyCanMove;
@@ -77284,6 +77303,41 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             if (corpse) {
                 const corpseName = item.corpsenm?.name || 'monster';
+                // C ref: eat.c:59 nonrotting_corpse() — PM_LIZARD never rots,
+                // so eatcorpse() skips the taint branch entirely and rolls
+                // only the fresh-corpse taste pair: palatable rn2(10)
+                // (eat.c:1987) and the palate-message bucket rn2(5)
+                // (eat.c:1994); the buckets in palate_msgs (eat.c:1989-1993)
+                // are Tokay/Istringy/Igamey/Ifatty/Itough — bucket 0 reads
+                // "This lizard corpse tastes okay." for non-hallucinating
+                // carnivorous heroes (eat.c:2000-2014).  cpostfx() case
+                // PM_LIZARD (eat.c:827-829) calls fix_petrification()
+                // (eat.c:865-876: "You feel limber!", clears the Stoned
+                // timer).  The meal continues as an eat occupation
+                // (eat.c:2069-2074) until monster_nearby() stops it with
+                // "You stop eating the lizard corpse." (allmain.c:505-508).
+                if (corpseName === 'lizard' && !item.oldCorpse) {
+                    const palatable = rn2(10);
+                    const palatBucket = rn2(5);
+                    const tasteMessage = palatable
+                        ? (palatBucket === 0 ? 'This lizard corpse tastes okay.'
+                            : `This lizard corpse is ${['stringy', 'gamey', 'fatty', 'tough'][palatBucket - 1]}.`)
+                        : 'This lizard corpse tastes terrible!';
+                    const limberMessage = fixHeroPetrification();
+                    game._pet_food_scan_inventory = game.inventory || [];
+                    game._eating_turns_remaining = 3;
+                    game._eating_finish_message = 'You finish eating the lizard corpse.';
+                    game._eating_inventory_object = item;
+                    game._eating_bite_nutrition = CORPSE_NUTRITION.get('lizard') || 80;
+                    game._eating_bite_hunger = CORPSE_NUTRITION.get('lizard') || 80;
+                    await setMessage(limberMessage
+                        ? `${tasteMessage}  ${limberMessage}`
+                        : tasteMessage);
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                    game._command_mode = null;
+                    game.context.move = 1;
+                    return;
+                }
                 if (corpseName === 'lichen') {
                     rn2(10);
                     removeInventoryItem(item);

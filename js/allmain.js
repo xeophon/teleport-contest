@@ -3397,6 +3397,21 @@ function clearActiveDelayedOccupations(options = {}) {
     if (options.clearInvulnerability && game.u) game.u.uinvulnerable = false;
 }
 
+// C ref: timeout.c:150-166 stoned_dialogue() stages 4 ("limbs
+// stiffening") and 3 ("limbs have turned to stone") call stop_occupation()
+// (allmain.c:684-697) — with a counted-search occupation armed C prints
+// "You stop searching." and clears the batch (nomul), so the current pass
+// finishes its turn and the moveloop then waits for input.
+function stopSearchOccupationForStoning() {
+    const searching = (game._search_pending_count || 0) > 0 || !!game._counted_repeat_interruptible;
+    if (!searching) return;
+    addToplineMessage('You stop searching.');
+    game._search_pending_count = 0;
+    game._counted_repeat_interruptible = 0;
+    game._pending_time_passed = Math.min(game._pending_time_passed || 0, 1);
+    game._keep_pending_message = 1;
+}
+
 function stopStoningOccupations() {
     clearActiveDelayedOccupations({
         clearEatingAlways: true,
@@ -3427,9 +3442,11 @@ function applyStoningDialogueSideEffects(timeout) {
         interruptPositiveMultiForStoning();
         break;
     case 4:
+        stopSearchOccupationForStoning();
         stopStoningOccupations();
         break;
     case 3:
+        stopSearchOccupationForStoning();
         stopStoningOccupations();
         game._helpless_time = Math.max(game._helpless_time || 0, 4);
         game._sleeping_time = 0;
@@ -6603,6 +6620,38 @@ if (attack.adtyp === 'steal') {
 	                            } else {
 	                                game.u.uhp = hpBeforeDamage - damage;
 	                            }
+                            // C ref: mhitu.c:767-811 mattacku() NATTK loop — the
+                            // petrifying birds' second attack (AT_TUCH AD_STON 0d0,
+                            // monst.c: PM_COCKATRICE/PM_CHICKATRICE) follows the
+                            // landed bite: to-hit is rnd(20+i) at i=1
+                            // (mhitu.c:806) and hitmu() pays the d(damn,damd)=d(0,0)
+                            // damage roll (mhitu.c:1187).  hitmsg() for the touch
+                            // is pline()'d after any pending topline text (tty
+                            // --More--), so the hiss gate / new-moon stoning gate
+                            // (uhitm.c:4215/4245) and knockback rolls
+                            // (uhitm.c:5258/5269) resolve after the pause — see
+                            // the game._cockatrice_touch_after_more handler in
+                            // cmd.js rhack.
+                            if (PETRIFYING_TOUCH_MONSTERS.has(name) && attackShown
+                                && (game.u?.uhp || 0) > 0
+                                && !game._suppress_monster_attack_messages) {
+                                const touchRoll = rnd(21);
+                                const touchHit = toHit > touchRoll;
+                                if (touchHit) d(0, 0);
+                                const touchMessage = `${shownSubject} ${touchHit ? 'touches you' : 'misses'}!`;
+                                game._cockatrice_touch_after_more = {
+                                    mon,
+                                    hit: touchHit,
+                                    message: touchMessage,
+                                    killer: name,
+                                    resumeIndex: monIndex + 1,
+                                    somebodyCanMove,
+                                };
+                                game._message_more = 1;
+                                game._process_time_with_more = 0;
+                                game._monster_resume_index = monIndex + 1;
+                                game._monster_resume_somebody_can_move = somebodyCanMove;
+                            }
                             const brownMoldPassive = attackShown && (game.u?.uhp || 0) > 0
                                 && String(game.u?._polyself_form?.name || '').toLowerCase() === 'brown mold';
                             if (brownMoldPassive) {
@@ -6645,39 +6694,7 @@ if (attack.adtyp === 'steal') {
                                     game._monster_resume_index = monIndex + 1;
                                     game._monster_resume_somebody_can_move = somebodyCanMove;
                                 }
-                                if (!passiveKilled && name === 'cockatrice') {
-                                    const touchRoll = rnd(21);
-                                    const touchHit = toHit > touchRoll;
-                                    if (touchHit) d(0, 0);
-                                    const touchMessage = `${shownSubject} ${touchHit ? 'touches you' : 'misses'}!`;
-                                    if (passiveNeedsMore) {
-                                        game._cockatrice_touch_after_more = {
-                                            hit: touchHit,
-                                            message: touchMessage,
-                                            killer: name,
-                                            resumeIndex: monIndex + 1,
-                                            somebodyCanMove,
-                                        };
-                                    } else {
-                                        if (touchHit) {
-                                            const form = game.u?._polyself_form || {};
-                                            const stoningRoll = rn2(3);
-                                            if (!stoningRoll && game.u && !game.u.stoneResistance
-                                                && !form.stoneResistance && String(form.name || '').toLowerCase() !== 'stone golem'
-                                                && !(game.u._stonedTimeout || 0)) {
-                                                game.u._stonedTimeout = 5;
-                                                game.u._stonedKiller = name;
-                                            }
-                                            rn2(3);
-                                            rn2(6);
-                                        }
-                                        addToplineMessage(touchMessage);
-                                        if (game._message_more && !game._process_time_with_more) {
-                                            game._monster_resume_index = monIndex + 1;
-                                            game._monster_resume_somebody_can_move = somebodyCanMove;
-                                        }
-                                    }
-                                } else if (!coldShown && game._message_more && !game._process_time_with_more) {
+                                if (!coldShown && game._message_more && !game._process_time_with_more) {
                                     game._monster_resume_index = monIndex + 1;
                                     game._monster_resume_somebody_can_move = somebodyCanMove;
                                 }
@@ -10135,6 +10152,36 @@ async function finishMonsterTurnTail() {
             }
             if ((game.u?._blindTimeout || 0) > 0) game.u._blindTimeout--;
         }
+        // C ref: allmain.c moveloop_core — nh_timeout() (allmain.c:267)
+        // runs at the once-per-turn point BEFORE regen_hp() (allmain.c:294);
+        // stoned_dialogue() (timeout.c:136-178) prints the current
+        // petrification stage text, applies its stage side-effects, and
+        // exercise(A_DEX, FALSE) costs one rn2(2) draw (attrib.c:509)
+        // every turn, before regen_hp()'s rn2(100) (allmain.c:659).
+        if ((game.u?._stonedTimeout || 0) > 0) {
+            addHeroStatusSuffix('Stone');
+            const stonedStage = game.u._stonedTimeout;
+            const stonedMessage = STONED_TEXTS[5 - stonedStage];
+            if (stonedMessage) addToplineMessage(stonedMessage);
+            applyStoningDialogueSideEffects(stonedStage);
+            exerciseAttribute(A_DEX, false);
+            game.u._stonedTimeout--;
+            if (!game.u._stonedTimeout) {
+                const killer = game.u._stonedKiller || 'cockatrice egg';
+                game.u.uhp = 0;
+                game._death_cause = killer === 'petrification'
+                    ? 'killed by petrification'
+                    : `petrified by ${articleFor(killer)} ${killer}`;
+                game._death_current_move = 1;
+                if (consumeLifeSavingAmulet({ clearStoning: true })) {
+                    armHeroLifeSavingMore();
+                    return false;
+                }
+                game._death_bones_body = 'statue';
+                armHeroDeathMore();
+                return false;
+            }
+        }
 	        let reachedFullHp = false;
         let reachedFullPower = false;
         if (process.env.WEREDBG) console.error(`WEREDBG regen-eval moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length} dp=${!!game._death_pending_confirm} poly=${!!game.u?._polyself_form}`);
@@ -10502,30 +10549,6 @@ async function finishMonsterTurnTail() {
     if ((game.u?._halluTimeout || 0) > 0) {
         game.u._halluTimeout--;
         if (!game.u._halluTimeout) clearHeroHallucinationTimeout();
-    }
-    if ((game.u?._stonedTimeout || 0) > 0) {
-        addHeroStatusSuffix('Stone');
-        const timeout = game.u._stonedTimeout;
-        const message = STONED_TEXTS[5 - timeout];
-        if (message) addToplineMessage(message);
-        applyStoningDialogueSideEffects(timeout);
-        exerciseAttribute(A_DEX, false);
-        game.u._stonedTimeout--;
-        if (!game.u._stonedTimeout) {
-            const killer = game.u._stonedKiller || 'cockatrice egg';
-            game.u.uhp = 0;
-            game._death_cause = killer === 'petrification'
-                ? 'killed by petrification'
-                : `petrified by ${articleFor(killer)} ${killer}`;
-            game._death_current_move = 1;
-            if (consumeLifeSavingAmulet({ clearStoning: true })) {
-                armHeroLifeSavingMore();
-                return false;
-            }
-            game._death_bones_body = 'statue';
-            armHeroDeathMore();
-            return false;
-        }
     }
     if ((game.u?._slimingTimeout || 0) > 0) {
         addHeroStatusSuffix('Slime');
