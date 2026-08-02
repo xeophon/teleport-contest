@@ -11,7 +11,7 @@ const nh = await runSegment({ ...seg, seed: seg.seed ?? norm.seed, datetime: seg
   nethackrc: seg.nethackrc ?? norm.nethackrc, moves: seg.moves, storage: sh });
 const ts = nh.getTraceSteps?.() || [];
 // print trace entries for steps 116-126 (each step = list of entries)
-const A = 116, B = 132;
+const A = 129, B = 151;
 for (let i=A;i<B;i++) {
   const e = ts[i] || [];
   const rel = e.filter(x => /iter|srch|mvup|queue-shift|cast-eff/.test(x)).map(x=>x.slice(0,120));

@@ -19,6 +19,6 @@ const mt = globalThis.__mt || [];
 // print entries with text around cockatrice bites + stop searching + stone
 for (const e of mt) {
   const t = e.text;
-  if ((e.moves ?? e.from ?? -1) >= 7 && (e.moves ?? e.from ?? -1) <= 12)
+  if ((e.moves ?? e.from ?? -1) >= 14 && (e.moves ?? e.from ?? -1) <= 24)
     console.log(`f=${(e.f||'').padEnd(10)} moves=${e.moves ?? e.from} mm=${e.mm} rng=${e.rngidx ?? ''} [${e.stack||''}] pend=${JSON.stringify(((e.pend)||'').slice(0,45))} :: ${String(t||'').slice(0,80)}`);
 }

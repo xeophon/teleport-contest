@@ -10625,6 +10625,13 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                     return false;
                 }
                 game._death_bones_body = 'statue';
+                // C ref: allmain.c:243-244 — svm.moves++ clocks in at the
+                // death turn's setup (before nh_timeout()), so the corpse
+                // count/status (T field) shows T+1 during the whole
+                // --More--/"Die?" chain; the aborted JS tail below loses the
+                // pass's post-turn increment — restore it at the arm point
+                // so stoning-death bookkeeping stays phase-locked with C.
+                game.moves = (game.moves || 1) + 1;
                 // C ref: end.c:726-735 die() -> savelife() — the refused
                 // petrification stomps gm.multi to -1 and rewrites
                 // gn.nomovemsg to "You survived that attempt on your
@@ -17497,14 +17504,12 @@ export async function moveloop_core() {
         // stoning-expiry armHeroDeathMore() interrupted it.
         if (g._resume_turn_tail_now) {
             g._resume_turn_tail_now = 0;
+            // C ref: timeout.c:684-685 done_timeout(STONING, STONED) — the
+            // timed intrinsic is EXPIRED (counter 0) when done() runs, so on
+            // the wizard-mode refuse the status line drops "Stone"
+            // (petrification timer no longer ticks down).
+            removeHeroStatusSuffix('Stone');
             await finishMonsterTurnTail(true);
-            // C ref: allmain.c:243-244 — the death turn's svm.moves++
-            // happened in its turn-setup (before nh_timeout' stoned_dialogue
-            // stored the death); the JS tail abort above dropped this pass's
-            // post-turn increment, so the turn counter (and the %10 periodic
-            // exercise gate in processAttributeExercise in particular) must
-            // not fall one behind C's svm.moves from here on.
-            g.moves = (g.moves || 1) + 1;
             // C ref: end.c:726-731 savelife() — svc.context.move = 0 and
             // gm.multi = -1: the refusal pass ends after the completed
             // once-per-turn tail; the next key is read by rhack(0) and only
