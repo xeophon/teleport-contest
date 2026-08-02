@@ -2507,7 +2507,7 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
 }
 
 function addToplineMessage(msg) {
-    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more});
+    if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more, stack:new Error().stack.split('\n').slice(2,5).map(s=>{const m=s.match(/(allmain|cmd)\.js:(\d+)/);return m?m[1][0]+m[2]:'';}).join('<')});
     let text = String(msg || '');
     if (process.env.TLDBG) process.stderr.write(`TLDBG  msg="${text.slice(0,50)}" moves=${game.moves} pend=${game._pending_time_passed} spc=${game._search_pending_count} more=${game._message_more?1:0} cmd=${game._command_mode||''} rngidx=${getRngLog().length}
 `);
@@ -6812,6 +6812,14 @@ if (attack.adtyp === 'steal') {
 	                                    game._deferred_soldier_ant_sting_after_topline = { toHit };
 	                                if (name === 'raven' && hpBeforeDamage - damage > 0)
 	                                    game._deferred_raven_blind_after_more = { toHit, subject };
+	                                // C ref: mhitu.c:767-811 mattacku() NATTK loop — the petrifying
+	                                // birds' second attack (AT_TUCH AD_STON 0d0, monst.c
+	                                // PM_COCKATRICE/PM_CHICKATRICE) still follows the landed bite
+	                                // even when the bite's hitmsg overflowed the topline; it is
+	                                // resolved from cmd.js when the --More-- is dismissed
+	                                // (game._deferred_petrifying_touch_after_topline).
+	                                if (PETRIFYING_TOUCH_MONSTERS.has(name) && hpBeforeDamage - damage > 0)
+	                                    game._deferred_petrifying_touch_after_topline = { toHit, subject: shownSubject, name, killer: name };
 	                                game._message_more = 1;
 	                                game._process_time_with_more = 0;
 	                                game._monster_resume_index = monIndex + 1;
@@ -6950,6 +6958,11 @@ if (attack.adtyp === 'steal') {
 	                                    game._deferred_soldier_ant_sting_after_topline = { toHit };
                                     if (name === 'raven' && hpBeforeDamage - damage > 0)
                                         game._deferred_raven_blind_after_more = { toHit, subject };
+                                    // C ref: mhitu.c:767-811 — as above: the petrifying touch
+                                    // attack survives the deferred-bite path and resolves on
+                                    // the --More-- dismissal in cmd.js.
+                                    if (PETRIFYING_TOUCH_MONSTERS.has(name) && hpBeforeDamage - damage > 0)
+                                        game._deferred_petrifying_touch_after_topline = { toHit, subject: shownSubject, name, killer: name };
 	                            } else {
 	                                game.u.uhp = hpBeforeDamage - damage;
 	                            }

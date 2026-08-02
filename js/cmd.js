@@ -64319,6 +64319,60 @@ function tutorialEnterStash() {
                             }
 	                    }
 	                }
+	                if (game._deferred_petrifying_touch_after_topline
+	                    && ((game.u?.uhp || 0) > 0 || game.flags?.debug)) {
+	                    const touchAttack = game._deferred_petrifying_touch_after_topline;
+	                    game._deferred_petrifying_touch_after_topline = null;
+	                    // C ref: mhitu.c:767-811 mattacku() NATTK loop — the petrifying
+	                    // birds' second attack (AT_TUCH AD_STON 0d0, monst.c
+	                    // PM_COCKATRICE/PM_CHICKATRICE) follows the landed bite in the same
+	                    // monster turn; when the bite's hitmsg overflowed the topline, C's
+	                    // tty --More-- blocks mid-mattacku and the touch resolves on the
+	                    // dismissal keypress.  To-hit is rnd(20+i) at i=1 (mhitu.c:806).
+	                    const touchRoll = rnd(21);
+	                    if (touchAttack.toHit > touchRoll) {
+	                        // C ref: mhitu.c:1187 — hitmu() pays d(damn,damd)=d(0,0) even
+	                        // for a 0d0 touch before the adtyp effects.
+	                        d(0, 0);
+	                        // C ref: uhitm.c:4215-4245 mhitm_ad_ston() — hiss gate
+	                        // !rn2(3); on a hiss the delayed-petrify gate
+	                        // (!rn2(10) || moonphase == NEW_MOON) runs do_stone_u() ->
+	                        // make_stoned(5L) (potion.c:222+).  5.0 removed the
+	                        // lizard-corpse new-moon override.
+	                        let touchMessage = `${touchAttack.subject} touches you!`;
+	                        if (!rn2(3)) {
+	                            touchMessage = `${touchMessage}  You hear the ${touchAttack.killer || touchAttack.name}'s hissing!`;
+	                            const stoningGateRoll = rn2(10);
+	                            const newMoon = game.flags?.moonphase === NEW_MOON;
+	                            if ((!stoningGateRoll || newMoon) && game.u
+	                                && !game.u.stoneResistance && !heroPolyselfResistsStoning()
+	                                && !(game.u._stonedTimeout || 0)) {
+	                                game.u._stonedTimeout = 5;
+	                                game.u._stonedKiller = touchAttack.killer || touchAttack.name;
+	                                addHeroStatusSuffix('Stone');
+	                            }
+	                        }
+	                        // C ref: uhitm.c:5247-5270 mhitm_knockback() always rolls
+	                        // rn2(3) (distance) + rn2(6) (chance) (mhitu.c:1192).
+	                        rn2(3);
+	                        rn2(6);
+	                        if (!escapeDismissedMore && !game._suppress_monster_attack_messages) {
+	                            const width = game.nhDisplay?.cols || 80;
+	                            if ((game._topline_after_more || '').length + touchMessage.length + 3 < width - 8)
+	                                game._topline_after_more = `${game._topline_after_more}  ${touchMessage}`;
+	                            else {
+	                                game._queued_messages_after_more ??= [];
+	                                game._queued_messages_after_more.push({ text: touchMessage, more: true });
+	                            }
+	                        }
+	                    } else if (!escapeDismissedMore && !game._suppress_monster_attack_messages) {
+	                        const missMessage = `${touchAttack.subject} misses!`;
+	                        const width = game.nhDisplay?.cols || 80;
+	                        if ((game._topline_after_more || '').length + missMessage.length + 3 < width - 8)
+	                            game._topline_after_more = `${game._topline_after_more}  ${missMessage}`;
+	                    }
+	                }
+	                game._deferred_petrifying_touch_after_topline = null;
 	                if (game._clear_transient_projectiles_after_more && !game._deferred_lethal_attack_after_more) {
                     const projectiles = (game.level?.objects || []).filter(obj => obj.transientProjectile);
                     game.level.objects = (game.level?.objects || []).filter(obj => !obj.transientProjectile);
