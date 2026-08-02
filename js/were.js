@@ -259,10 +259,10 @@ export function applyNewWereBody(mon, ctx = {}, nextArg = null, toHumanArg = nul
     if (lost > 0) mon.mhp = Math.min(mon.mhpmax, mon.mhp + Math.trunc(lost / 4));
     // were.c:126-128: newsym; mon_break_armor + possibly_unwield — beast
     // forms are M1_NOHANDS so wielded/worn gear is forced off.
-    if ((g._deferred_were_transforms || []).indexOf(mon) >= 0) {
+    if ((g._deferred_were_transforms || []).includes(mon)) {
         // deferred repaint: see newWere() comment above.
     } else if (typeof ctx.newsym === 'function') ctx.newsym(mon.mx, mon.my);
-    else newsym(mon.mx, mon.my);
+    else if (g?.level?.at) newsym(mon.mx, mon.my);
     if (next.nohands && mon.mw) { // possibly_unwield: drop monster weapon
         (mon.minvent ??= []).push(mon.mw);
         mon.mw = null;
