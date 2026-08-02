@@ -63538,7 +63538,12 @@ test('production monster sling sleeping target omon_adj can turn intervening mis
         mhp: 20,
         mhpmax: 20,
         msleeping: 1,
-        data: { name: 'goblin', mlevel: 1, mac: 13 },
+        /* C ref: dothrow.c:1918 omon_adj uses mon->data->msize and a goblin is
+         * MZ_SMALL (monsters.h goblin entry) => +1, which with rnd(20)=20 is a
+         * miss.  Pin msize here so this synthetic blocker still exercises the
+         * medium-size hit case (5 + 13 + 0 + 2 sleeping = 20 hits). */
+        msize: 2,
+        data: { name: 'goblin', mlevel: 1, mac: 13, msize: 2 },
     });
     const incomingLoadstone = monsterThrownGem(874513, 'loadstone', {
         otyp: LOADSTONE,

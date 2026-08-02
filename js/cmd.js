@@ -52,6 +52,7 @@ async function wizardMonsterSpellEffect(mon, spell) {
 }
 
 // cmd.js — Command dispatch and movement.
+const BISD_REV = !!process.env.BISD_REV;
 // C refs: src/cmd.c:rhack(), src/hack.c:domove().
 
 import { game } from './gstate.js';
@@ -64604,6 +64605,10 @@ function tutorialEnterStash() {
 	                        // C ref: display quirk verified against recording — the status
 	                        // HP line keeps the pre-damage value shown while the death
 	                        // --More-- chain plays when the killing blow lands at exactly -1.
+                            // C ref: mdamageu() -> done() -> savelife() is *synchronous*
+                            // mid-mattakm/mwildmw burst: on a wizard-mode "Die?" refusal
+                            // the hero is healed before the NEXT attack slot is rolled.
+                            if (BISD_REV && (game.u?.uhp || 0) <= 0) restoreHeroHpForUnresolvedWizardDeath();
 		                    }
 		                    const hitsSoFar = [...(deferred.hitsSoFar || [])];
 		                    // mhitu.c:72-77 hitmsg() — " again" iff the same
@@ -64711,6 +64716,11 @@ function tutorialEnterStash() {
 		                            // C ref: display quirk verified against recording — the status
 		                            // HP line keeps the pre-damage value shown while the death
 		                            // --More-- chain plays when the killing blow lands at exactly -1.
+                                    // C ref: mdamageu() -> done() -> savelife() is
+                                    // synchronous mid-burst (end.c:704-758): on a
+                                    // wizard-mode "Die?" refusal the hero is healed
+                                    // before the NEXT attack slot is rolled.
+                                    if (BISD_REV && (game.u?.uhp || 0) <= 0) restoreHeroHpForUnresolvedWizardDeath();
                                 }
 	                    }
                         // C ref: mattacku()/movemon slot-loop continuation —
@@ -64727,7 +64737,8 @@ function tutorialEnterStash() {
                     // any queued non-fatal followup; only an already-queued death line defers a
                     // second.  When this fires, movemon must resume with the NEXT monster, not this
                     // monster's replayed slot chain (see resume-index resets below).
-                    if ((game.u?.uhp || 0) <= 0
+                    const deferredHeroHpHitZero = (game.u?.uhp || 0) <= 0;
+                    if (deferredHeroHpHitZero
                         && !(game._queued_message_after_more || '').startsWith('You die')) {
                             game._monster_resume_same_index = 0;
                             game._monster_resume_after_preturn = 0;
@@ -64741,6 +64752,15 @@ function tutorialEnterStash() {
 	                        game._queued_message_after_more = 'You die...';
 	                        keepMore = true;
 	                    }
+                    if (deferredHeroHpHitZero && BISD_REV) {
+                        // C ref: done() -> die() -> savelife() (end.c:704-758,
+                        // 1108-1116): a wizard/explore "Die?" refusal heals the hero
+                        // immediately and the interrupted monster attack chain resumes
+                        // with the restored hp; every fresh zero-crossing during the
+                        // pending "You die..." stretch is another refusal+revival (the
+                        // recorder answers 'no' with plain space).
+                        restoreHeroHpForUnresolvedWizardDeath();
+                    }
 	                }
 	                game._pending_fumble_turn_message = toplineHadFumbleTurnMessage ? 1 : 0;
                 game._pending_fumble_turn_message_starts = toplineFumbleStartedMessage ? 1 : 0;

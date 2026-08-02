@@ -1,4 +1,5 @@
 // allmain.js — Main game setup and move loop.
+
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
@@ -36,6 +37,7 @@ import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, G
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
+import { MONS, MZ_SMALL } from './permonst.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
 import { MONS as PERMONST_MONS } from './permonst.js';
@@ -4574,7 +4576,7 @@ export async function processMonsterTurns() {
 		            for (let monIndex = startIndex; monIndex < mons.length; monIndex++) {
 		                const mon = mons[monIndex];
 		                if (!(game.level?.monsters || []).includes(mon)) continue;
-                    if (process.env.PROCDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.PROCDBG_WIN || '6360,6480').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`PROC rng=${L} idx=${monIndex} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement} peace=${!!mon.mpeaceful} shk=${!!mon.isshk} fol=${!!mon.following} roomno=${game.level?.at(mon.mx, mon.my)?.roomno}`); }
+                    if (process.env.PROCDBG) { const L = getRngLog().length; const [wlo, whi] = (process.env.PROCDBG_WIN || '6360,6480').split(',').map(Number); if (L >= wlo && L <= whi) console.error(`PROC rng=${L} idx=${monIndex} ${mon.data?.name} @${mon.mx},${mon.my} mv=${mon.movement} peace=${!!mon.mpeaceful} shk=${!!mon.isshk} fol=${!!mon.following} roomno=${game.level?.at(mon.mx, mon.my)?.roomno} hero=${game.u?.ux},${game.u?.uy} mux=${mon.mux},${mon.muy}`); }
 		                const resumingPetInventory = game._pet_inventory_resume === mon;
 	                const resumedAfterPreturn = resumeAfterPreturn && monIndex === startIndex;
 	                if (resumingSameMonster && monIndex === startIndex && mon._resume_web_after_more) {
@@ -6250,6 +6252,13 @@ export async function processMonsterTurns() {
                                     game._death_current_move = !!game._pending_time_passed;
                                     game._queued_message_after_more = 'You die...';
                                     game._message_more = 1;
+                                    // C ref: done() -> die() -> savelife()
+                                    // (end.c:704-758,1108-1116) — in wizard mode the
+                                    // "Die?" refusal heals the hero immediately and the
+                                    // interrupted monster turn keeps running.  The JS
+                                    // prompt chain is deferred across input boundaries,
+                                    // but HP must track C for hp-gated per-turn rolls
+                                    // (regen_hp, allmain.c:655-659) to line up.
                                     break;
                                 }
                             }
@@ -12300,9 +12309,13 @@ function monsterThrownPotionAccidentalHitValue(target, potion = null) {
     return monsterThrownObjectAccidentalHitValue(target, potion);
 }
 
+// C ref: trap.c m_harmless_trap() / mondata.c — msize (MZ_*) from the
+// permonst table when the runtime record's own fields don't carry it.
+const MONSTER_MSIZE_BY_NAME = new Map(MONS.map(m => [m.name, m.size]));
 function monsterObjectHitSizeValue(target) {
     const data = target?.data || {};
-    const value = target?.msize ?? target?.size ?? data.msize ?? data.size;
+    const value = target?.msize ?? target?.size ?? data.msize ?? data.size
+        ?? (data.name != null ? MONSTER_MSIZE_BY_NAME.get(data.name) : undefined);
     if (Number.isFinite(Number(value))) return Math.trunc(Number(value));
     const key = normalizedGemName(value);
     if (MONSTER_OBJECT_HIT_SIZE_VALUES.has(key)) return MONSTER_OBJECT_HIT_SIZE_VALUES.get(key);
@@ -13049,11 +13062,27 @@ function monsterTrapHarmless(mon, trap) {
     const ttyp = trap?.ttyp;
     const data = mon.data || {};
     if (monsterInAirAvoidsFloorTrigger(mon, trap)) return true;
-    if (ttyp === BEAR_TRAP) return data.verysmall || data.small || data.amorphous || data.unsolid;
+    // C ref: m_harmless_trap() BEAR_TRAP case (trap.c:1125-1129): harmless
+    // iff msize <= MZ_SMALL || amorphous || is_whirly || unsolid.  msize
+    // resolution mirrors monsterObjectHitSizeValue()'s chain.
+    if (ttyp === BEAR_TRAP) {
+        const msize = monsterObjectHitSizeValue(mon);
+        return msize <= MZ_SMALL || !!data.amorphous || !!data.whirly || !!data.unsolid;
+    }
     if (ttyp === RUST_TRAP) return data.name !== 'iron golem';
     if (ttyp === WEB) return monsterWebPassesThrough(data);
     if (ttyp === ANTI_MAGIC) return monsterResistsAntiMagicTrap(mon);
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
+}
+
+// C ref: trap.c:1555 wearing_iron_shoes() — a monster wearing iron shoes
+// (armorf slot, METAL==iron material) takes no d(2,4) damage from a bear
+// trap, though it is still caught.
+function monsterWearingIronShoes(mon) {
+    return (mon?.minvent || []).some(item => {
+        if (!item || !(item.worn || item.owornmask)) return false;
+        return /iron shoes/.test(String(item.actualKind || item.kind || '').toLowerCase());
+    });
 }
 
 function monsterWornIronFootwearForAntiMagic(mon) {
@@ -15836,6 +15865,34 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
         if (monsterFireTrapEffect(mon, trap)) return done();
     }
     if (monsterRockTrapEffect(mon, trap)) return done();
+    // C ref: trapeffect_bear_trap() monster branch (trap.c:1526-1560),
+    // reached via m_move() -> postmov() -> mintrap() (monmove.c:1509,2072,
+    // trap.c:3790-3840): a monster stepping onto a bear trap it does not
+    // already know about (already_seen && rn2(4) evade) is caught
+    // (mtmp->mtrapped = 1) and, unless it wears iron shoes, takes d(2,4)
+    // damage via thitm().
+    if (trap?.ttyp === BEAR_TRAP && !monsterTrapHarmless(mon, trap)) {
+        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
+        monsterTriggerTrap(mon, trap);
+        if (trap.madeby_u && rnl(5)) mon.mpeaceful = 0;
+        mon.mtrapped = 1;
+        const bearTrapInSight = !game.u?.blind && couldSeeCoord(mon.mx, mon.my)
+            && !mon.minvis && !mon.mundetected;
+        if (bearTrapInSight) {
+            trap.tseen = true;
+            addToplineMessage(`${monsterDisplayName(mon)} is caught in ${trap.madeby_u ? 'your' : 'a'} bear trap!`);
+        }
+        if (!monsterWearingIronShoes(mon)) {
+            const bearTrapDamage = d(2, 4);
+            mon.mhp = (mon.mhp || 1) - bearTrapDamage;
+            if ((mon.mhp || 0) < 1) {
+                if (bearTrapInSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
+                finishTrapKilledMonster(mon);
+                return done();
+            }
+        }
+        return done();
+    }
     if (monsterPitTrapEffect(mon, trap, { cavernTunnelRoom })) return done();
     if (monsterHoleTrapEffect(mon, trap)) return done();
     if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
@@ -17499,6 +17556,19 @@ export async function moveloop_core() {
                 g._search_pending_count = 0;
                 g._pending_time_passed = Math.min(g._pending_time_passed, 1);
             }
+            // C ref: allmain.c:495-510 — moveloop: after each occupation tick,
+            // monster_nearby() (hack.c:4103-4127) stops an active search with
+            // "You stop searching." when a visible hostile non-helpless monster
+            // is adjacent to the hero.  Because this JS pass's monster section
+            // runs BELOW (JS runs the search tick at pass start), a monster
+            // that was already adjacent when the previous pass ended is
+            // handled here immediately — this reproduces C's end-of-previous-
+            // pass stop text ahead of that monster's next attack rounds
+            // ("You stop searching.  The leocrotta hits!" ordering).  The
+            // pass-end deferral below (g._search_stop_check_after_monsters)
+            // covers the case where adjacency is created DURING this pass's
+            // monster section; it stays disarmed here because this block
+            // already cleared _search_pending_count.
             // C ref: allmain.c:481-511 — moveloop runs the occupation tick
             // at the END of its pass (after the monster/time section), then
             // evaluates monster_nearby() (hack.c:4103-4127) and only then
