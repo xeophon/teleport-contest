@@ -143,7 +143,7 @@ export function wereBeastieSpecies(name) {
 
 // C ref: include/youprop.h:359-360 Protection_from_shape_changers —
 // hero-only worn/extrinsic property.
-function heroProtectionFromShapeChangers(g) {
+export function heroProtectionFromShapeChangers(g) {
     const u = g?.u;
     if (u?.protectionFromShapeChangers || u?.Protection_from_shape_changers) return true;
     return (g?.inventory || []).some(item => {
@@ -352,6 +352,21 @@ export function wereChange(mon, ctx = {}) {
         return false;
     }
     return false;
+}
+
+// C ref: were.c:142-189 were_summon() attempt species selection —
+// one conditional rn2 chain per roll table row (were.c:150-168), rolled
+// per summon attempt.  Shared between wereSummon() and the suspending
+// werewolf-attack summon loop in allmain.js.
+export function wereSummonSpeciesPick(data) {
+    const species = wereSpeciesOf(data);
+    const entry = species && WERE_SPECIES.get(species);
+    if (!entry) return null;
+    let typ = entry.summonKinds.fallback;
+    for (const [n, name] of entry.summonKinds.rolls) {
+        if (rn2(n)) { typ = name; break; }
+    }
+    return typ;
 }
 
 // C ref: were.c:142-189 were_summon() — a were-creature (maybe the hero in
