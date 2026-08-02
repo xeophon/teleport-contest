@@ -6104,6 +6104,10 @@ export async function processMonsterTurns() {
 		                                const attackRoll = deferredAttackRoll ?? rnd(20 + attackIndex);
                                     const shownSubject = game.u?.blind || hiddenBullwhip ? 'It' : monsterDisplayName(mon, true);
 	                                if (toHit <= attackRoll) {
+                                    // C ref: mhitu.c:83-88 missmu() resets
+                                    // hitmsg_prev/hitmsg_mid — a miss breaks
+                                    // the " again" chain.
+                                    prevHitAgainKey = null;
 	                                    const missMessage = `${shownSubject} ${toHit === attackRoll && game.flags?.verbose !== false ? 'just ' : ''}misses!`;
 	                                    if (deferMultiAttack) {
 	                                        multiMessages.push(missMessage);
@@ -6130,8 +6134,14 @@ export async function processMonsterTurns() {
                                 }
 
 	                                let damage = d(multiAttack.dice ?? 1, multiAttack.sides ?? 2);
-                                    const againKey = `${multiAttack.verb || 'hits'}@${attackIndex}`;
-                                    const hitsAgain = prevHitAgainKey === `${multiAttack.verb || 'hits'}@${attackIndex - 1}`;
+                                    // C ref: mhitu.c:72-76 hitmsg() — " again"
+                                    // iff this is the slot right after the
+                                    // previous (mattk == hitmsg_prev + 1) with
+                                    // the SAME ATTACK TYPE, not just the same
+                                    // verb (an ape's claw claw hug chain prints
+                                    // "hits!  hits again!  hits!").
+                                    const againKey = `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex}`;
+                                    const hitsAgain = prevHitAgainKey === `${multiAttack.verb || 'hits'}|${multiAttack.aatyp}@${attackIndex - 1}`;
                                     prevHitAgainKey = againKey;
 	                                const hitMessage = `${shownSubject} ${multiAttack.verb || 'hits'}${hitsAgain ? ' again' : ''}!`;
 	                                if (deferMultiAttack) {

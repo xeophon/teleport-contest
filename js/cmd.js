@@ -64612,6 +64612,10 @@ function tutorialEnterStash() {
                     let prevSlotWasHit = !!deferred.first?.hit;
                     let prevBaseVerb = deferred.prevAttack
                         ? String(deferred.prevAttack.verb || 'hits').replace(/ again$/, '') : null;
+                    // C ref: mhitu.c:72-76 hitmsg() also requires the SAME
+                    // ATTACK TYPE as the previous slot (mattk->aatyp ==
+                    // hitmsg_prev->aatyp) for " again".
+                    let prevAatyp = deferred.prevAttack?.aatyp ?? null;
 		                for (let i = 0; i < (deferred.attacks || []).length; i++) {
 		                        const attackIndex = (deferred.nextIndex || 1) + i;
 		                        let attack = deferred.attacks[i];
@@ -64652,15 +64656,19 @@ function tutorialEnterStash() {
                                     // hitmsg_prev/hitmsg_mid tracker.
                                     prevSlotWasHit = false;
                                     prevBaseVerb = null;
+                                    prevAatyp = null;
 		                        } else {
 		                            hitsSoFar.push(true);
 		                            const damage = d(attack.dice ?? 1, attack.sides ?? 2);
                                     const baseVerb = String(attack.verb || 'hits').replace(/ again$/, '');
-                                    // mhitu.c:73-76 — consecutive same-aatyp
-                                    // slots give " again"; data verbs proxy it.
-                                    const again = prevSlotWasHit && prevBaseVerb === baseVerb ? ' again' : '';
+                                    // mhitu.c:73-76 — consecutive slots give
+                                    // " again" only on the same attack type
+                                    // (mattk->aatyp == hitmsg_prev->aatyp).
+                                    const again = prevSlotWasHit && prevBaseVerb === baseVerb
+                                        && (attack.aatyp ?? null) === prevAatyp ? ' again' : '';
                                     prevSlotWasHit = true;
                                     prevBaseVerb = baseVerb;
+                                    prevAatyp = attack.aatyp ?? null;
 		                            nextMessage = `${shownSubject} ${baseVerb}${again}!`;
                                     nextFirst = { hit: true, damage, message: nextMessage };
                                 }
