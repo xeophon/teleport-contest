@@ -65550,6 +65550,23 @@ function tutorialEnterStash() {
                 }
                 if (next.clearBeam) game._transient_beam_cells = null;
                 if (next.beamCells !== undefined) game._transient_beam_cells = next.beamCells;
+                // C ref: allmain.c:227-253 — when the message that just became
+                // the parked top line is the LAST pline still owed by the
+                // current monster sweep (nothing with cast/death-drain effects
+                // left in the chain: the whole sweep output behind it has been
+                // consumed), C's tty --More-- does not pause game state: the
+                // rest of movemon(), the new-turn block (allmain.c:227-253,
+                // svm.moves++ :244) and the once-per-turn tail run
+                // synchronously behind the pending --More--.  This engine
+                // runs that tail only once the parked queue fully drains, so
+                // during the window the status line must render as if the
+                // tail's moves++ already landed (game_display.js
+                // statusTurn()); the marker self-clears on the real moves++.
+                if ((next.lichChain || next.lichCastEffect || next.lichCastRndcurse || next.lichColdShatter)
+                    && !game._queued_message_after_more
+                    && !(game._queued_messages_after_more || []).some(e =>
+                        e.lichColdShatter || e.lichCastRndcurse || e.lichCastEffect))
+                    game._status_turn_display_ahead_moves = game.moves || 1;
                 game._pending_message = '';
                 game._message_more = 0;
                 if (next.wakeNearby) {
@@ -67085,6 +67102,15 @@ function tutorialEnterStash() {
             game._death_chain_after_refusal_messages = null;
             if (chainSlotMessages.length)
                 survivalMessages.push(...chainSlotMessages);
+            if (chainSlotMessages.length)
+                // C ref: allmain.c:227-253 — with the attack chain's parked
+                // hitmsg()s re-emitted into the refusal line, the rest of
+                // movemon(), the new-turn block and the once-per-turn tail
+                // (incl. svm.moves++, allmain.c:244) run synchronously behind
+                // the pending --More--; the JS tail still waits for the queue
+                // drain, so render the status T one turn ahead during the
+                // window (self-clears when the real moves++ lands).
+                game._status_turn_display_ahead_moves = game.moves || 1;
             game._command_mode = null;
             await setMessage(survivalMessages.join('  '), landing?.more || landing?.trapResult
                 || (chainSlotMessages.length ? true : undefined));
