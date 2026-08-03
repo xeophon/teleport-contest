@@ -33,7 +33,7 @@ import {
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
 import { DIGTYP_BOULDER, DIGTYP_DOOR, DIGTYP_ROCK, DIGTYP_STATUE, DIGTYP_TREE, DIGTYP_UNDIGGABLE, digBoulderAt, digCheckFailed, digCheckFailMessage, digCheckHero, digDbon, digEffortIncrement, digFumblingResult, digHardnessBlockMessage, digOccupationAborted, digTargetName, digTypeOf, digVerb, finishDigContext, finishWallDigTerrain, fractureDigBoulder, inShopBaseAt, pickDigDirectionPrompt, wakeNearbyForDig } from './dig.js';
-import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, ZAP_POS, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
+import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, Is_waterlevel, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, ZAP_POS, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
@@ -14645,6 +14645,13 @@ function mfndpos(mon, flag) {
         if (rockOk || treeOk) thruDoor = true;
     }
 
+    /* C ref: mon.c:2171-2174 mfndpos() — monsters harmed by poison gas
+     * refuse to step into visible poison clouds (poisoncloud-glyph regions)
+     * unless they are already standing in one.  Computed once per mfndpos
+     * call, like C's poisongas_ok / in_poisongas. */
+    const poisongasOk = monsterPoisongasOk(mon);
+    const inPoisongas = visiblePoisonGasRegionAt(x, y) != null;
+
     for (;;) {
         if (mon.mconf) {
             flag |= ALLOW_ALL;
@@ -14666,6 +14673,9 @@ function mfndpos(mon, flag) {
                 const closedDoor = loc.typ === DOOR && (loc.doormask & D_CLOSED);
                 const lockedDoor = loc.typ === DOOR && (loc.doormask & D_LOCKED);
                 if ((closedDoor && !(flag & OPENDOOR) || lockedDoor && !(flag & UNLOCKDOOR)) && !thruDoor) continue;
+
+                // C ref: mon.c:2239-2243 "avoid poison gas?"
+                if (!poisongasOk && !inPoisongas && visiblePoisonGasRegionAt(nx, ny)) continue;
 
                 if (nx !== x && ny !== y) {
                     const diagonalDoor = (nowLoc?.typ === DOOR && (nowLoc.doormask & ~D_BROKEN))
@@ -17244,6 +17254,38 @@ function monsterGasCloudImmune(mon) {
         || data.name === 'fog cloud'
         || data.name?.endsWith(' golem') || data.mlet === 'W'
         || data.mlet === 'Z' || data.mlet === 'M' || data.mlet === "'");
+}
+
+// C ref: mon.c:329-356 m_poisongas_ok() — only the M_POISONGAS_OK tier counts.
+// mfndpos (mon.c:2172) lets a monster route through poison gas only when gas
+// never touches it at all; M_POISONGAS_MINOR (mere poison resistance, e.g.
+// from an amulet) still avoids cloud cells while pathfinding.
+function monsterPoisongasOk(mon) {
+    const data = mon?.data || {};
+    const canon = canonicalMonstFlags(data);
+    if (mon?.cham === 'vampire' || mon?.cham === 'vampire leader'
+        || mon?.cham === 'Vlad the Impaler') return true; // is_vampshifter, monst.h:217-219
+    if (monsterGasCloudImmune(mon)) return true; // mon.c:335-338 nonliving/breathless/immune_poisongas
+    const loc = game.level?.at(mon?.mx ?? -1, mon?.my ?? -1);
+    if ((canon?.mlet === 57 /* S_EEL */ || data.mlet === 57 || data.mlet === ';'
+         || Is_waterlevel()) && loc && IS_POOL(loc.typ))
+        return true; // mon.c:340-346 eels in pools / plane of water
+    const attacks = canon?.attacks || data.attacks || [];
+    if (attacks.some(a => a && a.aatyp === 12 /* AT_BREA, monattk.h:22 */
+        && (a.adtyp === 7 /* AD_DRST, monattk.h:49 */ || a.adtyp === 242 /* AD_RBRE, monattk.h:89 */)))
+        return true; // mon.c:347-352 poison-gas breath attackers
+    return false;
+}
+
+// C ref: region.c:716-730 visible_region_at() restricted to the
+// S_poisoncloud glyph (make_gas_cloud, region.c:1194: glyph is S_poisoncloud
+// iff damage > 0 at creation; thinning never drops live damage below 2
+// (region.c:1057-1061), so a poison cloud keeps its glyph until removal —
+// the (reg.damage > 0) test is exactly the poisoncloud-glyph test).
+function visiblePoisonGasRegionAt(x, y) {
+    return (game.level?.regions || []).find(reg => reg.type === 'gas_cloud'
+        && reg.visible !== false && (reg.damage || 0) > 0
+        && regionContains(reg, x, y)) || null;
 }
 
 // C ref: monst.c resists_poison() (mres & MR_POISON=0x20) — region.c:1146
