@@ -3144,7 +3144,12 @@ function armHeroDeathMore(message = 'You die...') {
     if (game._pending_message) messages.push(game._pending_message);
     if (game._topline_after_more && !messages.includes(game._topline_after_more))
         messages.push(game._topline_after_more);
-    messages.push(message);
+    // C ref: hack.c:4287 — "You die..." comes from losehp() (hp-death paths);
+    // done() reached straight from a timed intrinsic expiry
+    // (timeout.c:684 done_timeout(STONING, STONED)) prints the stage text
+    // ("You are a statue.", timeout.c:141-145) and goes directly to die()
+    // without a "You die..." line.  Callers pass '' to skip it.
+    if (message) messages.push(message);
     game._pending_message = messages.join('  ');
     game._topline_after_more = '';
     game._message_more = 1;
@@ -6882,6 +6887,14 @@ if (attack.adtyp === 'steal') {
 	                                    game._deferred_soldier_ant_sting_after_topline = { toHit };
 	                                if (name === 'raven' && hpBeforeDamage - damage > 0)
 	                                    game._deferred_raven_blind_after_more = { toHit, subject };
+	                                // C ref: mhitu.c:767-811 mattacku() NATTK loop — the petrifying
+	                                // birds' second attack (AT_TUCH AD_STON 0d0, monst.c
+	                                // PM_COCKATRICE/PM_CHICKATRICE) still follows the landed bite
+	                                // even when the bite's hitmsg overflowed the topline; it is
+	                                // resolved from cmd.js when the --More-- is dismissed
+	                                // (game._deferred_petrifying_touch_after_topline).
+	                                if (PETRIFYING_TOUCH_MONSTERS.has(name) && hpBeforeDamage - damage > 0)
+	                                    game._deferred_petrifying_touch_after_topline = { toHit, subject: shownSubject, name, killer: name };
 	                                game._message_more = 1;
 	                                game._process_time_with_more = 0;
 	                                game._monster_resume_index = monIndex + 1;
@@ -7020,6 +7033,11 @@ if (attack.adtyp === 'steal') {
 	                                    game._deferred_soldier_ant_sting_after_topline = { toHit };
                                     if (name === 'raven' && hpBeforeDamage - damage > 0)
                                         game._deferred_raven_blind_after_more = { toHit, subject };
+                                    // C ref: mhitu.c:767-811 — as above: the petrifying touch
+                                    // attack survives the deferred-bite path and resolves on
+                                    // the --More-- dismissal in cmd.js.
+                                    if (PETRIFYING_TOUCH_MONSTERS.has(name) && hpBeforeDamage - damage > 0)
+                                        game._deferred_petrifying_touch_after_topline = { toHit, subject: shownSubject, name, killer: name };
 	                            } else {
 	                                game.u.uhp = hpBeforeDamage - damage;
 	                            }
@@ -10594,11 +10612,18 @@ if (attack.adtyp === 'steal') {
 	    return result;
 	}
 
-async function finishMonsterTurnTail() {
+async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
     if (!resumeAfterSounds) {
+    // Resume-after-stoning-death: the pre-nh_timeout()/run_regions prefix
+    // (blind/veryfast/invulnerable decrements, regions, fumble — moveloop
+    // once-per-turn items between allmain.c:267 and :294) already ran inside
+    // the aborted tail call; C continues nh_timeout()'s decrement loop from
+    // done_timeout()'s return and only the items AFTER the STONED expiry
+    // still execute.  Skip the prefix here.
+    if (!resumeAfterStoningDeath) {
         // C ref: allmain.c:273-274 — nh_timeout() runs BEFORE run_regions()
         // in moveloop_core; its BLINDED expiry (timeout.c:744-750 ->
         // make_blinded(0L, TRUE), potion.c) decrements the timeout and, on
@@ -10648,7 +10673,8 @@ async function finishMonsterTurnTail() {
         // petrification stage text, applies its stage side-effects, and
         // exercise(A_DEX, FALSE) costs one rn2(2) draw (attrib.c:509)
         // every turn, before regen_hp()'s rn2(100) (allmain.c:659).
-        if ((game.u?._stonedTimeout || 0) > 0) {
+    } /* !resumeAfterStoningDeath prefix */
+        if (!resumeAfterStoningDeath && (game.u?._stonedTimeout || 0) > 0) {
             addHeroStatusSuffix('Stone');
             const stonedStage = game.u._stonedTimeout;
             const stonedMessage = STONED_TEXTS[5 - stonedStage];
@@ -10658,7 +10684,12 @@ async function finishMonsterTurnTail() {
             game.u._stonedTimeout--;
             if (!game.u._stonedTimeout) {
                 const killer = game.u._stonedKiller || 'cockatrice egg';
-                game.u.uhp = 0;
+                // C ref: end.c:1025+ done() / timeout.c:684 done_timeout —
+                // petrification through the timed intrinsic does NOT zero
+                // u.uhp (unlike losehp(): HP damage); the status line keeps
+                // the pre-death HP until the "Die?" prompt forces a bot()
+                // redraw.  The JS death chain zeroes HP in the deathDieMore
+                // dismissal handler instead.
                 game._death_cause = killer === 'petrification'
                     ? 'killed by petrification'
                     : `petrified by ${articleFor(killer)} ${killer}`;
@@ -10668,7 +10699,33 @@ async function finishMonsterTurnTail() {
                     return false;
                 }
                 game._death_bones_body = 'statue';
-                armHeroDeathMore();
+                // C ref: allmain.c:243-244 — svm.moves++ clocks in at the
+                // death turn's setup (before nh_timeout()), so the corpse
+                // count/status (T field) shows T+1 during the whole
+                // --More--/"Die?" chain; the aborted JS tail below loses the
+                // pass's post-turn increment — restore it at the arm point
+                // so stoning-death bookkeeping stays phase-locked with C.
+                game.moves = (game.moves || 1) + 1;
+                // C ref: end.c:726-735 die() -> savelife() — the refused
+                // petrification stomps gm.multi to -1 and rewrites
+                // gn.nomovemsg to "You survived that attempt on your
+                // life.", so the stoning stage-3 paralysis
+                // (timeout.c:163-166 nomul(-3), nomovemsg = "You can move
+                // again.") must not unwind later: kill the JS-side
+                // helpless/wake bookkeeping now, when done() runs.
+                game._helpless_time = 0;
+                game._sleeping_time = 0;
+                game._wake_message = '';
+                game._stoning_multi_reason = '';
+                // C ref: timeout.c:684-685 done_timeout() -> done() (end.c:1025+)
+                // -> die() (end.c:1085+) — wizard mode's "Die?" refusal runs
+                // savelife() inline and the SAME nh_timeout()/once-per-turn
+                // tail then continues (dosounds allmain.c:344, gethungry :355,
+                // u_wipe_engr :360).  The JS engine defers the prompt across
+                // input keys; the refusal handler (cmd.js wizardDieConfirm)
+                // resumes the tail via game._resume_turn_tail_after_stoning_death.
+                game._resume_turn_tail_after_stoning_death = 1;
+                armHeroDeathMore('');
                 return false;
             }
         }
@@ -11291,6 +11348,11 @@ async function finishMonsterTurnTail() {
     const suppressImmobileExtraTurns = !!game._suppress_immobile_extra_turns_once;
     game._suppress_immobile_extra_turns_once = 0;
     if (process.env.WEREDBG) console.error(`WEREDBG tail-guard moves=${game.moves} umov=${game.u?.umovement} supp=${suppressImmobileExtraTurns} rng=${getRngLog().length}`);
+    // Resume-after-stoning-death mode (C ref: end.c:1108-1135 — done()->die()
+    // -> savelife() runs inside the timeout's once-per-turn block and the
+    // remaining tail items then complete the SAME turn): do not cascade into
+    // the immobile-hero extra monster phase here; the next keyed pass owns it.
+    if (resumeAfterStoningDeath) return true;
     if ((game.u?.umovement ?? 0) < NORMAL_SPEED && !collapsedDoubleMiss && !suppressImmobileExtraTurns) {
         game.moves = (game.moves || 1) + 1;
         await afterMoveTurn(game, false);
@@ -17556,6 +17618,28 @@ export async function moveloop_core() {
         && (!(g._pending_message && g._message_more) || g._process_time_with_more)) {
         if (process.env.NH_DBG_TRACE) (g._traceLog ??= []).push(`[iter] ptime=${g._pending_time_passed} pend=${JSON.stringify(g._pending_message||'')} more=${g._message_more} ptwm=${g._process_time_with_more} cmon=${g._continue_monsters_after_more} ridx=${g._monster_resume_index||0} atkr=${g._attack_resume_after_more||0} qq=${(g._queued_messages_after_more||[]).length} q1=${JSON.stringify(g._queued_message_after_more||'')}`);
         if (process.env.WEREDBG) console.error(`WEREDBG timepass moves=${g.moves} pt=${g._pending_time_passed} spc=${g._search_pending_count} pmsg=${JSON.stringify(g._pending_message)} more=${g._message_more} rng=${getRngLog().length}`);
+        // C ref: timeout.c:684-685 done_timeout() -> done() -> die()/savelife()
+        // (end.c:1025+,1085+,2040+) — the wizard "Die?" refusal returns into
+        // the SAME nh_timeout()/once-per-turn block, whose remaining tail
+        // items (dosounds allmain.c:344, gethungry allmain.c:355, u_wipe_engr
+        // allmain.c:360) still complete this turn before any new monster
+        // phase runs.  finishMonsterTurnTail(true) resumes at the point the
+        // stoning-expiry armHeroDeathMore() interrupted it.
+        if (g._resume_turn_tail_now) {
+            g._resume_turn_tail_now = 0;
+            // C ref: timeout.c:684-685 done_timeout(STONING, STONED) — the
+            // timed intrinsic is EXPIRED (counter 0) when done() runs, so on
+            // the wizard-mode refuse the status line drops "Stone"
+            // (petrification timer no longer ticks down).
+            removeHeroStatusSuffix('Stone');
+            await finishMonsterTurnTail(true);
+            // C ref: end.c:726-731 savelife() — svc.context.move = 0 and
+            // gm.multi = -1: the refusal pass ends after the completed
+            // once-per-turn tail; the next key is read by rhack(0) and only
+            // THEN does the next turn's movemon/turn-setup run.
+            g._pending_time_passed = 0;
+            break;
+        }
         let turnAdvanced = false;
         let skipMonsterTurnsThisPass = false;
         let ballDragNoResumePass = false;
