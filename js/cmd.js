@@ -41237,6 +41237,94 @@ function floorPolymorphShopkeeperAngerMessage(obj, x, y) {
     return `${name} is furious!`;
 }
 
+// C ref: objects[].oc_magic (include/objects.h) as consulted by poly_obj()'s
+// magic-match retry loop (zap.c:1715-1727).
+// Potions: POT_GAIN_ABILITY..POT_POLYMORPH (indexes 0..19) are magical,
+// booze..water (20..25; 25/"water" rolls land past POTION_PROBS) are not.
+// Scrolls: everything is magical except blank paper and mail.
+// Armor: magical kinds enumerated from include/objects.h (mgc field).
+const FLOOR_POLY_MAGIC_ARMOR_KINDS = new Set([
+    'cornuthaum', 'dunce cap', 'helm of brilliance', 'helm of caution',
+    'helm of opposite alignment', 'helm of telepathy',
+    'elven cloak', 'robe', 'alchemy smock',
+    'cloak of protection', 'cloak of invisibility',
+    'cloak of magic resistance', 'cloak of displacement',
+    'shield of drain resistance', 'shield of shock resistance',
+    'shield of reflection',
+    'gauntlets of fumbling', 'gauntlets of power', 'gauntlets of dexterity',
+    'speed boots', 'water walking boots', 'jumping boots', 'elven boots',
+    'kicking boots', 'fumble boots', 'levitation boots',
+]);
+const FLOOR_POLY_POT_POLYMORPH_INDEX = 19; // C POT_POLYMORPH (objects.h order)
+const FLOOR_POLY_SCR_BLANK_INDEX = 21; // scrollIndexForRoll -> SCROLL_PROBS.length
+
+// Returns true/false for classes whose oc_magic this port models exactly,
+// or null when unknown (then no retries occur, matching prior behavior).
+function floorPolymorphObjectIsMagical(obj) {
+    if (!obj) return null;
+    if (obj.potionIndex != null) return obj.potionIndex <= FLOOR_POLY_POT_POLYMORPH_INDEX;
+    if (obj.scrollIndex != null) return obj.scrollIndex !== FLOOR_POLY_SCR_BLANK_INDEX;
+    const kind = objectKindKey(obj);
+    if ((obj.cls === 'armor' || obj.glyph === '[')
+        && FLOOR_POLY_MAGIC_ARMOR_KINDS.has(kind)) return true;
+    if ((obj.cls === 'armor' || obj.glyph === '[') && kind) return false;
+    return null;
+}
+
+// C ref: poly_obj(obj, STRANGE_OBJECT) making one candidate (zap.c:1719-1726)
+// via mkobj(obj->oclass, FALSE) (mkobj.c:270-298 -> mksobj()).
+function floorPolymorphReplacementAttempt(obj, x, y) {
+    const oclass = polymorphObjectClassCode(obj);
+    if (oclass === ARMOR_CLASS) {
+        // C ref: mkobj(ARMOR_CLASS, FALSE) — full mksobj_init armor branch
+        // (mkobj.c:1084-1099) plus mkobj_erosions (mkobj.c:195-223); every
+        // attempt pays these rolls, not only the one that is kept.
+        const made = mkobj(ARMOR_CLASS, false);
+        const newObj = { ...obj, id: made.id, cls: 'armor', glyph: '[',
+            ox: x, oy: y, quan: obj.quan || 1,
+            cursed: obj.cursed, blessed: obj.blessed,
+            // C ref: zap.c:1771-1772 charged_objs includes ARMOR_CLASS, so
+            // the original's spe/enchantment carries over.
+            spe: obj.spe ?? 0,
+            kind: made.kind,
+            actualKind: made.actualKind,
+        };
+        if (made._display_color !== undefined) newObj._display_color = made._display_color;
+        newObj._polyMagic = FLOOR_POLY_MAGIC_ARMOR_KINDS.has(made.kind || '');
+        return newObj;
+    }
+    const roll = rnd(1000);
+    const newObjId = next_ident();
+    if (oclass === POTION_CLASS || oclass === SCROLL_CLASS) {
+        // C ref: mksobj_init() blessorcurse(otmp, 4) (mkobj.c:1075-1079)
+        if (!rn2(4)) rn2(2);
+    }
+    const newObj = { ...obj, id: newObjId, ox: x, oy: y, quan: obj.quan || 1, cursed: obj.cursed, blessed: obj.blessed };
+    if (oclass === POTION_CLASS) {
+        Object.assign(newObj, { cls: 'potion', glyph: '!', otyp: 'potion', color: NO_COLOR });
+        // C ref: zap.c:1855-1857 — wands/potions/spellbooks of polymorph are
+        // never produced; rnd_class(POT_GAIN_ABILITY, POT_WATER) rerolls.
+        let potionIndex = potionIndexForRoll(roll);
+        while (potionIndex === FLOOR_POLY_POT_POLYMORPH_INDEX)
+            potionIndex = potionIndexForRoll(rnd(1000));
+        const appearance = game._object_descriptions?.potions?.[potionIndex]?.description || 'clear';
+        newObj.kind = `${appearance} potion`;
+        newObj.potionIndex = potionIndex;
+        newObj._polyMagic = potionIndex == null ? false
+            : potionIndex <= FLOOR_POLY_POT_POLYMORPH_INDEX;
+    } else if (oclass === SCROLL_CLASS) {
+        Object.assign(newObj, { cls: 'scroll', glyph: '?', otyp: 'scroll', color: CLR_WHITE });
+        const scrollIndex = scrollIndexForRoll(roll);
+        const label = game._object_descriptions?.scrolls?.[scrollIndex] || 'ELBIB YLOH';
+        newObj.kind = `scroll labeled ${label}`;
+        newObj.scrollIndex = scrollIndex;
+        newObj._polyMagic = scrollIndex !== FLOOR_POLY_SCR_BLANK_INDEX;
+    } else {
+        newObj.kind = obj.kind || obj.cls;
+    }
+    return newObj;
+}
+
 function prepareFloorPolymorphReplacement(oldObj, newObj) {
     markObjectTreeShopBillsUsedUp(oldObj);
     delete newObj.contents;
@@ -41337,23 +41425,19 @@ async function polymorphFloorPileResultAt(x, y, {
         if (polymorphObjectClassCode(obj) === ROCK_CLASS) {
             newObj = rockClassPolymorphReplacement(obj, x, y);
         } else {
-            const roll = rnd(1000);
-            const newObjId = next_ident();
-            if (obj.cls === 'potion' || obj.cls === 'scroll') {
-                if (!rn2(4)) rn2(2);
-            }
-            newObj = { ...obj, id: newObjId, ox: x, oy: y, quan: obj.quan || 1, cursed: obj.cursed, blessed: obj.blessed };
-            if (obj.cls === 'potion') {
-                Object.assign(newObj, { cls: 'potion', glyph: '!', otyp: 'potion', color: NO_COLOR });
-                const appearance = game._object_descriptions?.potions?.[potionIndexForRoll(roll)]?.description || 'clear';
-                newObj.kind = `${appearance} potion`;
-            } else if (obj.cls === 'scroll') {
-                Object.assign(newObj, { cls: 'scroll', glyph: '?', otyp: 'scroll', color: CLR_WHITE });
-                const label = game._object_descriptions?.scrolls?.[scrollIndexForRoll(roll)] || 'ELBIB YLOH';
-                newObj.kind = `scroll labeled ${label}`;
-            } else {
-                newObj.kind = obj.kind || obj.cls;
-            }
+            // C ref: poly_obj(obj, STRANGE_OBJECT) (zap.c:1713-1728): the
+            // replacement comes from mkobj(obj->oclass, FALSE) and up to 3
+            // attempts are made to match the original's magic-ness
+            // (objects[].oc_magic); each discarded attempt runs delobj()
+            // whose obj_resists(,0,0) consumes rn2(100) (invent.c:1438-1446).
+            const srcMagic = floorPolymorphObjectIsMagical(obj);
+            let tryLimit = 3;
+            do {
+                if (newObj) rn2(100); // delobj() of the discarded attempt
+                newObj = floorPolymorphReplacementAttempt(obj, x, y);
+            } while (--tryLimit > 0 && srcMagic !== null
+                     && newObj._polyMagic !== undefined
+                     && newObj._polyMagic !== srcMagic);
         }
         prepareFloorPolymorphReplacement(obj, newObj);
         const angerMessage = floorPolymorphShopkeeperAngerMessage(obj, x, y);
