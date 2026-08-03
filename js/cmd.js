@@ -66972,6 +66972,7 @@ function tutorialEnterStash() {
             if (game._resume_turn_tail_after_stoning_death) {
                 game._resume_turn_tail_after_stoning_death = 0;
                 game._resume_turn_tail_now = 1;
+            }
             if (game._steed_thrown_resume) {
                 // C ref: done() (end.c:1107-1118) returns into losehp() ->
                 // dismount_steed() (steed.c:612-815), which only now rolls
