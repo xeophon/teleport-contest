@@ -11403,7 +11403,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             game.u._fumblingTimeout = timeout;
         }
     }
-    await processSpellbookStudyOccupation();
     if (game._ball_drag_subtract_after_forced_tail) {
         game._ball_drag_subtract_after_forced_tail = 0;
         if (game.u) game.u.umovement = Math.max(0, (game.u.umovement || 0) - NORMAL_SPEED);
@@ -18551,6 +18550,12 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
         if (!earlyPickLock) processPickLockOccupation();
         if (!earlyPickDig) await processPickDigOccupation();
         if (!earlyTinOpening) await processTinOpeningTurn();
+        // C allmain.c calls occupations once per hero action, after the full
+        // turn loop. Slow heroes must not study twice during one action.
+        if (g._spellbook_study_occupation && !g._message_more) {
+            await processSpellbookStudyOccupation();
+            g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
+        }
         if (g._force_lock_continue_time) {
             g._force_lock_continue_time = 0;
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);

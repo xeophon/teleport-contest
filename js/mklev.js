@@ -40,6 +40,7 @@ import { selectHwep } from './mhitm.js';
 import { QUEST_LEVELS } from './quest_level_data.js';
 import { DEFSYMS } from './defsym.js';
 import { canSaddle } from './mondata.js';
+import { monCatchupElapsedTime } from './dog.js';
 import { heroProtectionFromShapeChangers } from './were.js';
 import * as questSpecies from './permonst.js';
 import { MONS as QUEST_MONSTERS, is_swimmer, amphibious, is_flyer, is_floater,
@@ -65,7 +66,8 @@ import {
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     ARMORSHOP, WEAPONSHOP,
     NO_MINVENT, MM_NOGRP, MM_EMIN, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
-    STRAT_WAITFORU, STRAT_CLOSE, STRAT_APPEARMSG,
+    STRAT_WAITFORU, STRAT_CLOSE, STRAT_APPEARMSG, STRAT_ARRIVE,
+    MIGR_RANDOM, MIGR_APPROX_XY, MON_LIMBO, MON_MIGRATING, MAX_NUM_WORMS,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     DB_EAST, DB_NORTH, DB_SOUTH, DB_UNDER, DB_FLOOR, DB_MOAT, DB_LAVA,
@@ -3770,7 +3772,7 @@ function bad_location(x, y, nlx, nly, nhx, nhy) {
 
 // mkmaze.c:put_lregion_here removes a misplaced, destroyable trap when the
 // entrance has only one possible square or has reached its exhaustive scan.
-function lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, oneshot) {
+function putLregionHere(x, y, nlx, nly, nhx, nhy, rtype, oneshot, lev) {
     if (bad_location(x, y, nlx, nly, nhx, nhy) || is_exclusion_zone(rtype, x, y)) {
         if (!oneshot) return false;
         const trap = t_at(x, y);
@@ -3781,6 +3783,20 @@ function lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, oneshot) {
             game.level.traps.splice(game.level.traps.indexOf(trap), 1);
         }
         if (bad_location(x, y, nlx, nly, nhx, nhy) || is_exclusion_zone(rtype, x, y)) return false;
+    }
+    if (rtype === LR_TELE || rtype === LR_UPTELE || rtype === LR_DOWNTELE) {
+        const mon = monster_at(x, y);
+        if (mon) {
+            if (!oneshot) return false;
+            if (!rlocNoMsg(mon)) mIntoLimbo(mon);
+        }
+        if (rtype === LR_TELE) game._mklev_lregion_arrival = true;
+        u_on_newpos(x, y);
+    } else if (rtype === LR_BRANCH) place_branch(is_branchlev(), x, y);
+    else if (rtype === LR_UPSTAIR || rtype === LR_DOWNSTAIR) mkstairs(x, y, rtype === LR_UPSTAIR, null);
+    else if (rtype === LR_PORTAL) {
+        game.level.traps ??= [];
+        game.level.traps.push({ tx: x, ty: y, ttyp: MAGIC_PORTAL, tseen: false, once: false, launch: { x: 0, y: 0 }, dst: lev });
     }
     return true;
 }
@@ -3835,49 +3851,12 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
             const loc = game.level?.at(x, y);
             console.error(`DBG place_lregion rtype=${rtype} args=${JSON.stringify([lx,ly,hx,hy,nlx,nly,nhx,nhy])} try=${trycnt} cand=(${x},${y}) typ=${loc?.typ} occupied=${occupied(x,y)}`);
         }
-        const occupiedByMonster = rtype >= LR_TELE && rtype <= LR_DOWNTELE
-            && game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
-        if (lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, lx === hx && ly === hy)
-            && !occupiedByMonster) {
-            if (rtype === LR_BRANCH) {
-                place_branch(is_branchlev(), x, y);
-                return;
-            }
-            if (rtype === LR_UPSTAIR || rtype === LR_DOWNSTAIR) {
-                mkstairs(x, y, rtype === LR_UPSTAIR, null);
-                return;
-            }
-            if (rtype === LR_PORTAL) {
-                game.level.traps ??= [];
-                game.level.traps.push({ tx: x, ty: y, ttyp: MAGIC_PORTAL, tseen: false, once: false, launch: { x: 0, y: 0 }, dst: lev });
-                return;
-            }
-            if (rtype === LR_TELE) game._mklev_lregion_arrival = true;
-            u_on_newpos(x, y);
-            return;
-        }
+        if (putLregionHere(x, y, nlx, nly, nhx, nhy, rtype, lx === hx && ly === hy, lev)) return;
     }
-    // Deterministic fallback
+    // The exhaustive pass may relocate a blocking monster on each candidate.
     for (let x = lx; x <= hx; x++)
         for (let y = ly; y <= hy; y++)
-            if (lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, true)) {
-                if (rtype === LR_BRANCH) {
-                    place_branch(is_branchlev(), x, y);
-                    return;
-                }
-                if (rtype === LR_UPSTAIR || rtype === LR_DOWNSTAIR) {
-                    mkstairs(x, y, rtype === LR_UPSTAIR, null);
-                    return;
-                }
-                if (rtype === LR_PORTAL) {
-                    game.level.traps ??= [];
-                    game.level.traps.push({ tx: x, ty: y, ttyp: MAGIC_PORTAL, tseen: false, once: false, launch: { x: 0, y: 0 }, dst: lev });
-                    return;
-                }
-                if (rtype === LR_TELE) game._mklev_lregion_arrival = true;
-                u_on_newpos(x, y);
-                return;
-            }
+            if (putLregionHere(x, y, nlx, nly, nhx, nhy, rtype, true, lev)) return;
 }
 
 // C ref: stairs.c u_on_upstairs — place hero on upstairs or fallback
@@ -7055,6 +7034,118 @@ export function rlocNoMsg(mon, { allowUnset = false } = {}) {
     if (!backup) return false;
     rlocToCoreNoMsg(mon, backup.x, backup.y);
     return true;
+}
+
+// mon.c:m_into_limbo/migrate_mon and dog.c:migrate_to_level. A failed
+// relocation preserves this monster for a later arrival on the same level.
+export function mIntoLimbo(mon) {
+    const { mx, my } = mon;
+    const level = game.u.uz;
+    if (mx) {
+        if (game.u.ustuck === mon) {
+            game.u.ustuck = null;
+            if (game.u.uswallow) {
+                game.u.uswallow = false;
+                game.u.ux = mx; game.u.uy = my;
+                game.mswallower = null;
+                game.vision_full_recalc = 1;
+            }
+            const species = QUEST_MONSTERS.find(species => species.name === mon.data?.name);
+            if (!mon.mspec_used && species?.attacks.some(attack => attack.adtyp === questSpecies.AD_STCK
+                || attack.aatyp === questSpecies.AT_ENGL || attack.aatyp === questSpecies.AT_HUGS)) mon.mspec_used = rnd(2);
+        }
+        const rescued = mdropSpecialObjs(mon, {
+            objResists: obj => {
+                const corpse = typeof obj.corpsenm === 'number' ? QUEST_MONSTERS[obj.corpsenm] : obj.corpsenm;
+                if (['Amulet of Yendor', 'Book of the Dead', 'Candelabrum of Invocation', 'Bell of Opening'].includes(obj.actualKind || obj.kind)
+                    || (obj.otyp === CORPSE && ['Death', 'Famine', 'Pestilence'].includes(corpse?.name))) return true;
+                rn2(100);
+                return false;
+            },
+            isQuestArtifact: obj => isCurrentRoleQuestArtifact(artifactDefinitionForName(obj.artifact || obj.oartifact)),
+        });
+        for (const obj of rescued) {
+            if (obj.owornmask && obj.lamplit && artifactLight(obj)) endBurn(obj, false);
+            mon.misc_worn_check = (mon.misc_worn_check || 0) & ~(obj.owornmask || 0);
+            if (mon.mw === obj) mon.mw = null;
+            if (mon.weapon === obj) mon.weapon = null;
+            obj.owornmask = 0; obj.worn = obj.wielded = false;
+            delete obj.ocarry;
+            mon.minvent.splice(mon.minvent.indexOf(obj), 1);
+            stack_floor_object(place_object(obj, mx, my));
+        }
+    }
+    if (mon.mleashed) {
+        mon.mtame--;
+        for (const leash of game.inventory || []) if (leash.leashmon === mon.m_id) leash.leashmon = 0;
+        mon.mleashed = false;
+    }
+    for (const obj of objectLocations({ inventory: mon.minvent || [] }).keys()) obj.no_charge = 0;
+    for (const room of game.level.rooms || []) if (room.resident === mon) room.resident = null;
+    mon.wormno = Math.min(mon.wormSegments?.length || 0, MAX_NUM_WORMS - 1);
+    mon.wormSegments = [];
+    const bounds = game.level.wizardTowerBounds;
+    const tower = game.level.flags?.wizard_tower_level && bounds
+        && mx >= bounds.lx && mx <= bounds.hx && my >= bounds.ly && my <= bounds.hy;
+    mon.mtrack = [{ x: MIGR_APPROX_XY, y: tower ? 2 : 0 }, { x: mx, y: my }, { x: level.dnum, y: level.dlevel }];
+    mon.mux = level.dnum; mon.muy = level.dlevel;
+    mon.mx = mon.my = 0;
+    mon.mlstmv = game.moves;
+    mon.mstate = (mon.mstate || 0) | MON_MIGRATING | MON_LIMBO;
+    game.level.monsters = game.level.monsters.filter(other => other !== mon);
+    game.migrating_mons ??= [];
+    if (!game.migrating_mons.includes(mon)) game.migrating_mons.push(mon);
+    if (mx) newsym(mx, my);
+}
+
+// dog.c:mon_arrive's independent RANDOM and APPROX_XY destinations. Limbo
+// uses the latter, with elapsed-time wandering before near-position placement.
+export function arriveMigratingMonsters() {
+    const queue = game.migrating_mons;
+    if (!queue?.length || !game.level) return;
+    for (const mon of [...queue]) {
+        if (!mon || mon.mux !== game.u.uz.dnum || mon.muy !== game.u.uz.dlevel) continue;
+        const xyloc = mon.mtrack?.[0]?.x;
+        if (xyloc !== MIGR_RANDOM && xyloc !== MIGR_APPROX_XY) continue;
+        const xyflags = mon.mtrack?.[0]?.y || 0;
+        let x = xyloc === MIGR_APPROX_XY ? mon.mtrack?.[1]?.x || 0 : 0;
+        let y = xyloc === MIGR_APPROX_XY ? mon.mtrack?.[1]?.y || 0 : 0;
+        queue.splice(queue.indexOf(mon), 1);
+        game.level.monsters.push(mon);
+        for (const room of game.level.rooms || [])
+            if (mon.isshk && (room.roomnoidx ?? game.level.rooms.indexOf(room)) + ROOMOFFSET === mon.shoproom) room.resident = mon;
+        const segments = mon.wormno || 0;
+        mon.wormSegments = mon.data?.name === 'long worm' ? Array.from({ length: segments }, () => ({ x: 0, y: 0 })) : [];
+        mon.wormno = mon.data?.name === 'long worm' ? segments : 0;
+        mon.mstate = (mon.mstate || 0) & ~(MON_MIGRATING | MON_LIMBO);
+        mon.mstrategy = (mon.mstrategy || 0) | STRAT_ARRIVE;
+        mon.mux = game.u.ux; mon.muy = game.u.uy;
+        mon.mtrack = [];
+        const elapsed = Math.max(0, (game.moves || 1) - 1 - (mon.mlstmv || 0));
+        if (elapsed) monCatchupElapsedTime(mon, elapsed);
+        if (x && elapsed) {
+            const room = roomByRoomno(in_rooms(x, y, 0)[0]);
+            if (room) {
+                const spot = {};
+                if (somexy(room, spot)) { x = spot.x; y = spot.y; }
+                else x = y = 0;
+            } else {
+                const wander = Math.min(elapsed, 8);
+                let low = Math.max(1, x - wander), high = Math.min(COLNO - 1, x + wander);
+                x = rn1(high - low, low);
+                low = Math.max(0, y - wander); high = Math.min(ROWNO - 1, y + wander);
+                y = rn1(high - low, low);
+            }
+        }
+        mon.mx = 0; mon.my = xyflags;
+        let placed;
+        if (x) {
+            const spot = rlocGoodpos(mon, x, y) ? { x, y } : enextoMonsterSpot(x, y, mon.data, true);
+            placed = !!spot;
+            if (spot) rlocToCoreNoMsg(mon, spot.x, spot.y);
+        } else placed = rlocNoMsg(mon, { allowUnset: true });
+        if (!placed) mIntoLimbo(mon);
+    }
 }
 
 function placeLongWormTailRandomly(mon, x, y, segmentCount) {
@@ -21032,12 +21123,18 @@ function collectEnextoCoords(x, y, maxradius) {
     return coords;
 }
 
-export function enextoMonsterSpot(x, y, ptr = {}) {
-    const near = collectEnextoCoords(x, y, 3);
-    const spot = near.find(candidate => makemon_goodpos(ptr, candidate.x, candidate.y));
-    if (spot) return spot;
-    const all = collectEnextoCoords(x, y, 0);
-    return all.slice(near.length).find(candidate => makemon_goodpos(ptr, candidate.x, candidate.y)) || null;
+export function enextoMonsterSpot(x, y, ptr = {}, checkScary = false) {
+    for (const scary of checkScary ? [true, false] : [false]) {
+        const good = candidate => checkScary ? rlocGoodpos({ data: ptr }, candidate.x, candidate.y, scary)
+            : makemon_goodpos(ptr, candidate.x, candidate.y);
+        const near = collectEnextoCoords(x, y, 3);
+        const spot = near.find(good);
+        if (spot) return spot;
+        const all = collectEnextoCoords(x, y, 0);
+        const far = all.slice(near.length).find(good);
+        if (far) return far;
+    }
+    return null;
 }
 
 function setSpecialTerrainLit(x, y, typ, lit = SET_LIT_NOCHANGE) {

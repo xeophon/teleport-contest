@@ -328,8 +328,22 @@ tests cover these boundaries, including live drop and kick commands; eight
 reproduced failures before their fixes. Controls verify that surviving shipped
 containers and protected spilled eggs keep their timers.
 
-This is not a complete transfer audit: hero throw/fire object copies, other
-direct floor-removal destruction callers, migration mode variations and the
-remaining non-timer stack compatibility properties still need review. Full
-drowning effects between every individual pline also remain broader than the
-successful-crawl continuation implemented here.
+Upward hero throws now use one split/free-inventory/continuation path in the
+order of `dothrow.c:throw_obj:249-272`, preserving the actual singleton and
+copying timers only for a split. The wielded remainder stays equipped while
+the thrown portion clears equipment flags. All upward variants reuse their
+existing impact effects; ordinary nonweapon tools also reach C's weight-based
+`toss_up` damage instead of the unsupported-direction prompt. Shared broken
+throw cleanup stops object timers before pyrolisk explosions. Thirteen new
+tests cover fertile egg species, rotting corpses, oil, lamps, candle splits,
+and active Heart detachment; seven initially reproduced failures. Heart
+float-down uses the shared artifact detachment API and serializable projectile
+continuation, with a save/restore test proving that water escape retains the
+detached object and does not repeat its cooldown before the upward flight.
+
+This is not a complete transfer audit: horizontal hero throw/fire object
+copies and returning weapons, other direct floor-removal destruction callers,
+migration mode variations and the remaining non-timer stack compatibility
+properties still need review. Full drowning effects between every individual
+pline also remain broader than the successful-crawl continuation implemented
+here.

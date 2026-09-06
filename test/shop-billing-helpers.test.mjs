@@ -16697,6 +16697,8 @@ test('completing study of an unpaid spellbook bills library usage and keeps live
     assert.ok(game._spellbook_study_occupation);
     assert.equal(shkp.debit || 0, 0);
 
+    // C learn consumes both delay ticks before its completion call.
+    await processSpellbookStudyOccupation();
     await processSpellbookStudyOccupation();
     await processSpellbookStudyOccupation();
 
@@ -59688,14 +59690,14 @@ test('tipping into a magic bag explosion leaves later source contents in source'
     assert.equal(game.inventory.includes(target), false);
 });
 
-test('putting part of an unpaid carried stack into a carried bag splits the bill row', () => {
+test('putting part of an unpaid carried stack into a carried bag splits the bill row', async () => {
     const { shkp } = installShopState();
     const bag = sack(6960, 'b');
     const stack = foodRationStack(6961, 3, 'f');
     game.inventory = [bag, stack];
     shop.addObjectToShopBill(shkp, stack, 135);
 
-    const result = shop.putInventoryObjectIntoBag(bag, stack, 1);
+    const result = await shop.putInventoryObjectIntoBag(bag, stack, 1);
 
     assert.equal(result.moved, true);
     assert.equal(stack.quan, 2);

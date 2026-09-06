@@ -95,7 +95,7 @@ for (const [name, role, align, prop, field] of powers) {
         const bag = { id: 2, letter: 'b', cls: 'tool', kind: 'sack', contents: [], quan: 1 };
         game.inventory.push(bag);
         await command('invokeObject');
-        const result = shop.putInventoryObjectIntoBag(bag, item);
+        const result = await shop.putInventoryObjectIntoBag(bag, item);
         assert.equal(result.moved, true);
         assert.equal(game.u[field], false);
         assert.ok(bag.contents.includes(item));

@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,103 passing tests**, with no
+The latest source-driven checkpoint has **5,171 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -48,7 +48,9 @@ timers through the shared ownership operations. Monster projectile and landmine 
 missiles retain identity, and destroyed missiles cancel their timers. Burning
 oil is extracted before its explosion, preventing self-reignition (seven tests).
 Projectile shipping, kicked-stack splitting and terrain destruction now retain
-or cancel timers correctly (11 further tests). Hero throw/fire transfers remain.
+or cancel timers correctly (11 further tests). Upward hero throws now use the
+actual detached object, split timers and resume after artifact landings (13
+tests). Horizontal throw/fire transfers remain.
 Sunsword and gold dragon armor now start/stop untimed light through ordinary
 wield, swap, removal, dressing, quiver and tool-driven weapon changes. Thirty
 new tests cover equipment state, BCU light radii and welded-weapon refusal.
@@ -58,7 +60,9 @@ messages and independent property sources retained (27 new tests). Other touch
 callers and transformation retouch remain unfinished. Heart of Ahriman drop and
 invocation now follow C's floor-first special case, cooldown rules, independent
 sources and suspended water/lava/trap landings (22 tests). Other Heart transfers
-and the remaining float-down branches are still open.
+and the remaining float-down branches are still open. Carried-bag insertion
+now waits for Heart landing before insertion or subsequent selections, including
+saved prompts and life saving (13 tests). Floor boxes and ice boxes remain.
 
 Spell memory now ages per full turn, restores on relearning, survives amnesia
 as an empty retained slot, warns while fading and backfires when forgotten
@@ -66,7 +70,12 @@ as an empty retained slot, warns while fading and backfires when forgotten
 timeouts and C blindness/fainting behavior (seven new tests).
 Casting now uses C's effective attributes, role/intelligence nutrition costs,
 hunger-state transitions, load gate and peak-energy messages (43 tests).
-General hunger processing and complete occupation timing remain to be audited.
+Spell study now follows the C refresh threshold and confirmations, effective
+reading ability, Wizard difficulty warnings, lens speed rolls, book fading,
+object identity and per-action occupation scheduling (30 tests). New learning
+and relearning preserve their distinct wisdom-exercise/message order. General
+hunger, study interruption/restart and dull-book sleep remain to be ported;
+cursed-book fatal/teleport callbacks need their own completion audit.
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
 Knight, Ranger and Rogue starts now execute their source operations, including
@@ -76,8 +85,12 @@ does not establish every level-generation branch or seed matches C.
 Source-ordered player-monster equipment, first Astral arrival
 population and guardian creation are present. Artificial Astral stair entry
 and later guardian loss under conflict remain follow-ups.
+Fixed teleport-region arrivals now relocate blocking monsters or preserve them
+in same-level limbo. Approximate returns retain position/wandering state and
+failed placement retries keep their destination (12 tests). Other migration
+modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit 1ba9cd5, passed 52/53
+The last complete recording run, at preceding commit 518c7a6, passed 52/53
 public sessions (12,711/12,712 screens, 832,102/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,132/141,728 RNG calls), with
 zero worker errors. One Knight spell-retention screen still differs. Current

@@ -2,16 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM, W_WEP, LANDMINE, LAVAPOOL, LADDER, HOLE } from '../js/const.js';
+import { ROOM, W_WEP, LANDMINE, LAVAPOOL, LADDER, HOLE, POOL, LEVITATION, W_ARTI } from '../js/const.js';
 import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
 import { rhack, holdCaughtThrownObject, landMonsterThrownObject, earthFloorEffects, queueImpactDroppedObjects,
     __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { beginBurn, processBurnTimers } from '../js/burn.js';
 import { attachEggHatchTimeout } from '../js/egg_timers.js';
-import { BURN_OBJECT, HATCH_EGG, peekTimer } from '../js/timeout.js';
+import { BURN_OBJECT, HATCH_EGG, ROT_CORPSE, TIMER_OBJECT, startTimer, peekTimer } from '../js/timeout.js';
 import { objectLocations } from '../js/obj_location.js';
-import { dropMonsterInventory, monsterByRndName } from '../js/mklev.js';
+import { dropMonsterInventory, monsterByRndName, artifactDefinitionForName } from '../js/mklev.js';
+import { encodeSaveState, restoreSaveState } from '../js/save.js';
 import { processMonsterTurns } from '../js/allmain.js';
 import { stealarm } from '../js/steal.js';
 
@@ -593,5 +594,151 @@ for (const resistsBreak of [false, true]) {
             assert.equal(eggs.timed, 0);
             assert.equal(game.timers.length, 0);
         }
+    });
+}
+
+for (const species of ['newt', 'cockatrice', 'pyrolisk']) {
+    for (const quantity of [1, 3]) {
+        test(`throwing ${quantity} ${species} egg${quantity > 1 ? 's' : ''} upward deletes only the broken egg timer`, async () => {
+            // C dothrow.c:throw_obj splits/freeinv before toss_up's breakobj.
+            setup();
+            game.u.uhp = game.u.uhpmax = 100;
+            game.u.stoneResistance = true;
+            const eggs = { kind: 'egg', cls: 'food', otyp: 10001, letter: 'a', quan: quantity,
+                corpsenm: { name: species }, age: 100 };
+            game.inventory.push(eggs);
+            attachEggHatchTimeout(eggs, 100);
+            await rhack('t'); await rhack('a'); await rhack('<');
+            assert.equal(game.level.objects.some(obj => obj.kind === 'egg'), false);
+            assert.equal(game.inventory.includes(eggs), quantity > 1);
+            assert.equal(game.timers.length, quantity > 1 ? 1 : 0);
+            assert.equal(peekTimer(HATCH_EGG, eggs), quantity > 1 ? 200 : 0);
+            if (quantity > 1) assert.equal(eggs.quan, quantity - 1);
+        });
+    }
+}
+
+for (const quantity of [1, 3]) {
+    test(`an upward-thrown corpse from quantity ${quantity} keeps its rot timer on the landed object`, async () => {
+        setup();
+        const corpse = { kind: 'newt corpse', cls: 'food', otyp: 'corpse', letter: 'a', quan: quantity,
+            corpsenm: { name: 'newt', cwt: 10 }, age: 100 };
+        game.inventory.push(corpse);
+        startTimer(100, TIMER_OBJECT, ROT_CORPSE, corpse);
+        await rhack('t'); await rhack('a'); await rhack('<');
+        const landed = game.level.objects.find(obj => obj.kind === 'newt corpse');
+        assert.ok(landed);
+        assert.equal(landed.quan, 1);
+        assert.equal(peekTimer(ROT_CORPSE, landed), 200);
+        assert.equal(game.timers.length, quantity > 1 ? 2 : 1);
+        if (quantity === 1) assert.equal(landed, corpse);
+        else {
+            assert.notEqual(landed, corpse);
+            assert.equal(corpse.quan, quantity - 1);
+            assert.equal(peekTimer(ROT_CORPSE, corpse), 200);
+        }
+    });
+}
+
+test('throwing a wielded burning lamp upward detaches the real object and preserves extinction', async () => {
+    setup();
+    const lamp = { kind: 'oil lamp', cls: 'tool', otyp: 227, letter: 'a', quan: 1, age: 1,
+        wielded: true, owornmask: W_WEP };
+    game.inventory.push(lamp); game.u.uwep = lamp;
+    beginBurn(lamp);
+    await rhack('t'); await rhack('a'); await rhack('<');
+    assert.equal(game.level.objects[0], lamp);
+    assert.equal(game.inventory.includes(lamp), false);
+    assert.equal(game.u.uwep, null);
+    assert.equal(lamp.owornmask, 0);
+    assert.equal(lamp.wielded, false);
+    assert.equal(peekTimer(BURN_OBJECT, lamp), 101);
+    game.moves = 101;
+    await processBurnTimers();
+    assert.equal(lamp.lamplit, false);
+});
+
+test('throwing one burning candle upward leaves the wielded remainder and splits its timer', async () => {
+    setup();
+    const candles = { kind: 'tallow candle', cls: 'tool', otyp: 370, letter: 'a', quan: 3, age: 100,
+        wielded: true, owornmask: W_WEP };
+    game.inventory.push(candles); game.u.uwep = candles;
+    beginBurn(candles);
+    await rhack('t'); await rhack('a'); await rhack('<');
+    const thrown = game.level.objects.find(obj => obj.kind === 'tallow candle');
+    assert.ok(thrown);
+    assert.equal(thrown.quan, 1);
+    assert.equal(candles.quan, 2);
+    assert.equal(game.u.uwep, candles);
+    assert.equal(candles.wielded, true);
+    assert.equal(thrown.wielded, false);
+    assert.equal(thrown.owornmask, 0);
+    assert.equal(peekTimer(BURN_OBJECT, thrown), 125);
+    assert.equal(peekTimer(BURN_OBJECT, candles), 125);
+});
+
+test('upward-thrown burning oil is detached before exploding and leaves no burn callback', async () => {
+    setup();
+    game.u.uhp = game.u.uhpmax = 100;
+    const oil = { kind: 'potion of oil', cls: 'potion', otyp: 252, letter: 'a', quan: 1, age: 100 };
+    game.inventory.push(oil);
+    beginBurn(oil);
+    await rhack('t'); await rhack('a'); await rhack('<');
+    assert.equal(game.inventory.includes(oil), false);
+    assert.equal(game.level.objects.includes(oil), false);
+    assert.equal(oil.lamplit, false);
+    assert.equal(oil.timed, 0);
+    assert.equal(game.timers.length, 0);
+});
+
+for (const water of [false, true]) {
+    test(`throwing the active Heart upward ${water ? 'resumes its detached identity after saved water escape' : 'lands the hero before the projectile flight'}`, async () => {
+        // C throw_obj:freeinv ends invocation before throwit starts toss_up.
+        setup();
+        initRng(31);
+        game._startup_role = 'Barbarian'; game._startup_align = 'neutral';
+        game.u.uhp = game.u.uhpmax = 100;
+        game.u.uen = game.u.uenmax = 30;
+        game.u.ualign = { type: 0, record: 10 };
+        const def = artifactDefinitionForName('The Heart of Ahriman');
+        let heart = { id: 1, artifact: def.name, kind: def.base, cls: def.cls, otyp: def.otyp,
+            glyph: def.glyph, letter: 'a', quan: 1, age: 0, wielded: true, owornmask: W_WEP };
+        game.inventory.push(heart); game.u.uwep = heart;
+        game.u.uprops = { [LEVITATION]: { intrinsic: 0, extrinsic: W_ARTI } };
+        game.u.levitating = game.u.levitation = true;
+        if (water) {
+            Object.assign(game.u, { ulevel: 12, teleportation: true, teleportControl: true });
+            game.level.at(10, 10).typ = POOL;
+        }
+        enableRngLog();
+        await rhack('t'); await rhack('a'); await rhack('<');
+        assert.equal(game.inventory.includes(heart), false);
+        assert.equal(game.u.uwep, null);
+        assert.equal(heart.owornmask, 0);
+        assert.equal(heart.wielded, false);
+        assert.equal(game.u.uprops[LEVITATION].extrinsic & W_ARTI, 0);
+        assert.equal(getRngLog().filter(entry => entry.startsWith('rnz(100)')).length, 1);
+        if (water) {
+            assert.equal(game._command_mode, 'waterTeleportCursor');
+            assert.equal(game.level.objects.includes(heart), false);
+            assert.equal(game._artifact_float_continuation.after.object, heart);
+            assert.equal(getRngLog().some(entry => entry.startsWith('rn2(5)')), false);
+            const cooldown = heart.age;
+            const saved = encodeSaveState();
+            resetGame(); restoreSaveState(saved);
+            initRng(31, { resetLog: false }); // The runtime initializes RNG outside the saved state.
+            heart = game._artifact_float_continuation.after.object;
+            while (game._message_more) await rhack(' ');
+            await rhack('l'); await rhack('.');
+            assert.equal(heart.age, cooldown);
+            assert.equal(getRngLog().filter(entry => entry.startsWith('rnz(100)')).length, 1);
+            assert.equal(game._artifact_float_continuation, null);
+            assert.deepEqual([heart.ox, heart.oy], [11, 10]);
+        } else {
+            assert.match(game._pending_message, /float gently.*Heart of Ahriman.*(?:hits|flies)/);
+        }
+        assert.equal(game.level.objects.includes(heart), true);
+        assert.equal(heart.age > game.moves, true);
+        assert.equal(game.u.levitating, false);
     });
 }
