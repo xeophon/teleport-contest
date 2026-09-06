@@ -8,6 +8,30 @@ export const TIN_VARIETY_TEXTS = [
     'stir fried', 'sauteed', 'candied', 'pureed',
 ];
 
+// eat.c:set_tin_variety stores preparation in spe; cknown controls whether
+// the player can see it. Health food shops retain vegetarian contents.
+export function setTinVariety(item, force = -2) {
+    const monster = typeof item.corpsenm === 'number' ? MONS[item.corpsenm]
+        : MONS.find(mon => mon.name === item.corpsenm?.name);
+    if (force === -1 || force === -3 && (!monster || !vegetarian(monster))) {
+        item.corpsenm = -1;
+        item.spe = 1;
+        return;
+    }
+    let variety;
+    if (force === -3) {
+        variety = tinVariety(item, false);
+        if (variety < 0 || variety >= 16) variety = 0;
+        while (variety === 0 && !item.cursed || ![1, 2, 4, 5, 6, 7, 9, 13, 14].includes(variety))
+            variety = rn2(TIN_VARIETY_TEXTS.length);
+    } else if (force >= 0 && force < TIN_VARIETY_TEXTS.length) variety = force;
+    else {
+        variety = rn2(TIN_VARIETY_TEXTS.length);
+        if (variety === 0 && monster && (['lizard', 'lichen', 'acid blob'].includes(monster.name) || is_rider(monster))) variety = 1;
+    }
+    item.spe = -(variety + 1);
+}
+
 export function tinVariety(item, display = false) {
     let variety;
     if (item.spe === 1) variety = -1;

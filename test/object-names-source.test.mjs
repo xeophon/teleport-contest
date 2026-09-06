@@ -5,7 +5,7 @@ import { OBJECT_DATA } from '../js/object_data.js';
 import { MONS, vegetarian } from '../js/permonst.js';
 import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { xname, indefiniteArticle, objectMonsterName, armorSimpleName } from '../js/objnam.js';
-import { tinDetails, tinVariety } from '../js/eat.js';
+import { tinDetails, tinVariety, setTinVariety } from '../js/eat.js';
 
 function object(symbol, fields = {}, typeKnown = false) {
     const type = OBJECT_DATA.find(type => type.symbol === symbol);
@@ -188,6 +188,32 @@ test('tin contents knowledge hides preparation independently of instance identif
     assert.equal(xname(item), 'tin of giant ant meat');
     item.cknown = true; assert.equal(xname(item), 'tin of boiled giant ant meat');
     item.spe = 1; assert.equal(xname(item), 'tin of spinach');
+});
+
+for (let variety = 0; variety < 15; variety++) test(`set_tin_variety preserves explicit preparation ${variety} without revealing it`, () => {
+    resetGame(); initRng(7); enableRngLog({ reset: true });
+    const item = object('TIN', { corpsenm: 0 });
+    setTinVariety(item, variety);
+    assert.equal(item.spe, -(variety + 1));
+    assert.equal(item.cknown, undefined);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(tinDetails(item), 'tin of giant ant meat');
+});
+
+for (const name of ['giant ant', 'lichen', 'acid blob', 'newt']) test(`healthy tins use C vegetarian contents for ${name}`, () => {
+    resetGame(); initRng(7); enableRngLog({ reset: true });
+    const species = MONS.find(mon => mon.name === name);
+    const item = object('TIN', { corpsenm: species.pm, spe: -4 });
+    setTinVariety(item, -3);
+    if (!vegetarian(species)) {
+        assert.equal(item.spe, 1);
+        assert.equal(item.corpsenm, -1);
+        assert.deepEqual(getRngLog(), []);
+    } else {
+        assert.equal(item.corpsenm, species.pm);
+        assert.ok([1, 2, 4, 5, 6, 7, 9, 13, 14].includes(-item.spe - 1));
+        assert.ok(getRngLog().every(call => call.startsWith('rn2(15)')));
+    }
 });
 
 for (const [name, expected] of [['gray ooze', true], ['brown pudding', true], ['black pudding', false],

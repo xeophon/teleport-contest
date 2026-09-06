@@ -1,5 +1,19 @@
 # Objects, player magic, and attributes
 
+## Type-state follow-up (2026-09-06)
+
+`mkobj.c:925-940`, `u_init.c:1208-1250`, `eat.c:1462-1511` and
+`mkobj.c:1104-1113` now supply tin contents, stored preparation and Samurai
+rustproofing to the shared name owner. Canonical lookup resolves the generator's
+class tags and localized names before inventory classification. Discovery
+lookup keeps the C class when resolving ambiguous names such as protection.
+The 39 added state tests and two fresh C recordings cover these integrations.
+The complete 72-recording run reports 47/53 public and 12/19 supplemental
+passes, with no worker errors. Four naming/state regressions remain relative
+to the earlier checkpoint and are listed in `../PORT_STATE.md`. A separate
+Samurai swap probe (`/tmp/samurai-swap-time.recipe.json`) exposes missing swap
+turn timing; completion and C artifact/contact gates still need a wield pass.
+
 Reference: `nethack-c/upstream` commit `16ff59115315917b93185d026aeefea06db9b0f4` (NetHack 5.0.0). This partition contains 31 C translation units. Each has a source-body inspection below and an identified JS owner. The inspection is of the named functions/slices, **not every branch of these 31 files**. Functions outside those slices remain unverified. A mapped owner, matching name, or passing recording does not establish implementation completeness.
 
 The main ownership issue is that most player behavior lives in `js/cmd.js`, with initialization and turn processing in `js/allmain.js`. There is no one-C-file/one-JS-file relationship. Monster species also have both canonical `permonst.js` records and runtime records with different field names; a predicate tested against one representation does not establish the other representation works.

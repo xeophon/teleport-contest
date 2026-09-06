@@ -4,6 +4,7 @@ import { game, resetGame } from '../js/gstate.js';
 import { OBJECT_DATA } from '../js/object_data.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from '../js/object_knowledge.js';
 import { artifactObjectName } from '../js/mklev.js';
+import { recordObservedObjectDiscovery } from '../js/display.js';
 
 function identified(symbol) {
     resetGame();
@@ -27,6 +28,18 @@ for (const [item, symbol] of [
     [{ cls: 'gem', kind: 'flint stone' }, 'FLINT'],
     [{ cls: 'coin' }, 'GOLD_PIECE'],
     [{ cls: 'potion', kind: 'holy water' }, 'POT_WATER'],
+    [{ cls: 'weapon', kind: 'wakizashi' }, 'SHORT_SWORD'],
+    [{ cls: 'tool', kind: 'osaku' }, 'LOCK_PICK'],
+    [{ cls: 'potion', kind: 'sake' }, 'POT_BOOZE'],
+    [{ cls: 'food', kind: 'tripe' }, 'TRIPE_RATION'],
+    [{ cls: 'food', kind: 'gunyoki' }, 'FOOD_RATION'],
+    [{ otyp: 14, actualKind: 'chrysoberyl stone' }, 'CHRYSOBERYL'],
+    [{ otyp: 14, actualKind: 'amethyst stone' }, 'AMETHYST'],
+    [{ otyp: 9, potionIndex: 21 }, 'POT_SICKNESS'],
+    [{ otyp: 8, scrollIndex: 4 }, 'SCR_REMOVE_CURSE'],
+    [{ otyp: 10, wandIndex: 4 }, 'WAN_WISHING'],
+    [{ otyp: 11, spellbookIndex: 0 }, 'SPE_DIG'],
+    [{ otyp: 466 }, 'GOLD_PIECE'],
 ]) test(`existing JS object resolves to canonical ${symbol}`, () => {
     assert.equal(objectTypeData(item).symbol, symbol);
 });
@@ -34,6 +47,31 @@ for (const [item, symbol] of [
 test('an untagged JS integer is never mistaken for a native C object ID', () => {
     assert.equal(objectTypeData({ otyp: 18 }), null);
     assert.equal(objectTypeData({ _c_otyp: 18 }).symbol, 'ARROW');
+});
+
+for (const [symbol, kind] of [['POT_HEALING', 'healing'], ['POT_SICKNESS', 'sickness'],
+    ['POT_WATER', 'holy water'], ['POT_WATER', 'unholy water']])
+    test(`observing an identified ${kind} does not append a second unknown discovery`, () => {
+        resetGame();
+        const type = OBJECT_DATA.find(type => type.symbol === symbol);
+        game._discoveries = [{ section: 'Potions', name: 'potion of ' + type.name, text: type.name, known: true }];
+        const before = structuredClone(game._discoveries);
+        recordObservedObjectDiscovery({ cls: 'potion', kind, dknown: true });
+        assert.deepEqual(game._discoveries, before);
+    });
+
+for (const [symbol, section, name] of [
+    ['FLINT', 'Gems/Stones', 'flint stone'],
+    ['SHORT_SWORD', 'Weapons', 'wakizashi'],
+    ['SPE_PROTECTION', 'Spellbooks', 'spellbook of protection'],
+    ['RIN_PROTECTION', 'Rings', 'ring of protection'],
+]) test(`discovery names retain class and canonical identity for ${symbol}`, () => {
+    resetGame();
+    game._discoveries = [{ section, name, known: true }];
+    const type = OBJECT_DATA.find(type => type.symbol === symbol);
+    assert.equal(objectTypeIsKnown({ _c_otyp: type.id }), true);
+    game._discoveries[0].known = false;
+    assert.equal(objectTypeIsKnown({ _c_otyp: type.id }), !!type.nameKnown);
 });
 
 for (const symbol of ['LONG_SWORD', 'WAN_WISHING', 'RIN_ADORNMENT'])

@@ -1,4 +1,5 @@
 import { objectIsFullyIdentified } from './object_knowledge.js';
+import { setTinVariety } from './eat.js';
 import { OBJECT_DATA } from './object_data.js';
 import { GAUNTLETS_OF_POWER, DUNCE_CAP } from './armor.js';
 // mklev.js — Level generation.
@@ -4451,6 +4452,7 @@ function mksobj_init(otmp, otyp, artif) {
         otmp.spe = 1;
         blessorcurse(otmp, 2);
     } else if (otyp === TIN) {
+        otmp.corpsenm = -1;
         if (rn2(6)) {
             for (let tryct = 200; tryct > 0; tryct--) {
                 const ptr = rndmonnum();
@@ -4458,13 +4460,13 @@ function mksobj_init(otmp, otyp, artif) {
                 const corpse = corpseName
                     ? (RANDOM_MONSTER_BY_NAME.get(corpseName) || { name: corpseName, neuter: false })
                     : (ptr.corpse || ptr);
-                if (!corpse.noCorpse) {
+                if (!corpse.noCorpse && questSpecies.MONS.find(mon => mon.name === corpse.name)?.nutrition) {
                     otmp.corpsenm = corpse;
-                    rn2(15);
+                    setTinVariety(otmp);
                     break;
                 }
             }
-        }
+        } else setTinVariety(otmp, -1);
         blessorcurse(otmp, 10);
         if (!rn2(6)) otmp.quan = 2;
     } else if (otyp === CANDY_BAR) {

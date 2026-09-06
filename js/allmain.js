@@ -26,6 +26,7 @@ import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inv
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
+import { setTinVariety } from './eat.js';
 import { alignGodName, GOD_VOICES } from './offer.js';
 import { init_dungeons_rng } from './dungeon.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, rnl, rne, rnz, d, getRngLog } from './rng.js';
@@ -1046,13 +1047,15 @@ function initFoodFromRoll(roll) {
     if (roll > 925) {
         if (rn2(6)) {
             const monster = rndmonnumLevelOne();
-            rn2(15);
+            obj.corpsenm = MONS.find(mon => mon.name === monster);
+            setTinVariety(obj);
             const meat = monster === 'lichen' ? monster : `${monster} meat`;
             obj.kind = `tin:${monster}`;
             obj.singular = `tin of ${meat}`;
             obj.plural = `tins of ${meat}`;
         } else {
             obj.kind = 'tin:spinach';
+            setTinVariety(obj, -1);
             obj.singular = 'tin of spinach';
             obj.plural = 'tins of spinach';
         }
@@ -1286,6 +1289,7 @@ function initInventoryObject(item, state, recordInventory = true, stackQuan = 1)
         obj.cursed = false;
     }
     obj.cursed = false;
+    if (state.roleName === 'Samurai' && obj.kind === 'splint mail') obj.oerodeproof = true;
     if (obj.cls !== 'coin') {
         obj.dknown = true;
         obj.bknown = true;

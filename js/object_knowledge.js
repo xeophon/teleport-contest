@@ -2,10 +2,12 @@
 import { game } from './gstate.js';
 import { A_WIS } from './const.js';
 import { OBJECT_DATA } from './object_data.js';
+import { JAPANESE_ITEM_ALIASES } from './o_init.js';
 
 const CLASSES = { weapon: 2, armor: 3, ring: 4, amulet: 5, tool: 6, food: 7,
     potion: 8, scroll: 9, spellbook: 10, wand: 11, coin: 12, gem: 13, rock: 14,
     ball: 15, chain: 16, venom: 17 };
+const CLASS_NAMES = Object.fromEntries(Object.entries(CLASSES).map(([name, id]) => [id, name]));
 const SYMBOLS = new Map(OBJECT_DATA.map(type => [type.symbol, type]));
 const CLASS_TYPES = Array.from({ length: 18 }, (_, cls) => OBJECT_DATA.filter(type => type.class === cls && type.id >= 18));
 const SECTIONS = ['', '', 'Weapons', 'Armor', 'Rings', 'Amulets', 'Tools', 'Comestibles',
@@ -18,13 +20,17 @@ const SECTIONS = ['', '', 'Weapons', 'Armor', 'Rings', 'Amulets', 'Tools', 'Come
 export function objectTypeData(item) {
     if (item._c_otyp != null) return OBJECT_DATA[item._c_otyp];
     const cls = CLASSES[item.cls] || ({ ')': 2, '[': 3, '=': 4, '"': 5, '(': 6,
-        '%': 7, '!': 8, '?': 9, '+': 10, '/': 11, '$': 12, '*': 13, '`': 14 }[item.glyph]);
+        '%': 7, '!': 8, '?': 9, '+': 10, '/': 11, '$': 12, '*': 13, '`': 14 }[item.glyph])
+        || ({ 1: 2, 2: 3, 3: 4, 7: 7, 8: 9, 9: 8, 10: 11, 11: 10, 12: 6, 14: 13, 15: 5, 466: 12 }[item.otyp]);
     const candidates = cls ? CLASS_TYPES[cls] : OBJECT_DATA;
     for (const name of [item.actualKind, item.kind, item.spellName, item.spell?.name, item.wand,
         typeof item.otyp === 'string' ? item.otyp : '', item.gemDescription]) {
         if (!name) continue;
-        const normalized = String(name).toLowerCase().replace(/ named .+$/, '')
+        let normalized = String(name).toLowerCase().replace(/ named .+$/, '');
+        normalized = (JAPANESE_ITEM_ALIASES.get(normalized) || normalized)
             .replace(/^(?:potion|scroll|spellbook|ring|wand)(?::| of )/, '').replace(/^pair of /, '');
+        if (cls === 13) normalized = normalized.replace(/ stone$/, '');
+        if (normalized === 'tripe') normalized = 'tripe ration';
         const type = candidates.find(type => type.name?.toLowerCase() === normalized);
         if (type) return type;
         if (/^tin:/.test(normalized)) return SYMBOLS.get('TIN');
@@ -42,13 +48,11 @@ export function objectTypeData(item) {
 export function objectTypeIsKnown(item, type = objectTypeData(item)) {
     if (!type) return false;
     if (type.nameKnown || game._known_object_types?.includes(type.id)) return true;
-    const name = type.name?.toLowerCase();
     return (game._discoveries || []).some(entry => {
         if (entry.section !== SECTIONS[type.class] || entry.known === false) return false;
-        const discovered = String(entry.name || '').toLowerCase()
-            .replace(/^(?:potion|scroll|spellbook|ring|wand)(?::| of )/, '')
-            .replace(/^pair of /, '');
-        return discovered === name;
+        const discovered = objectTypeData({ cls: CLASS_NAMES[type.class],
+            kind: entry.name, _c_otyp: entry.typeId });
+        return discovered?.id === type.id;
     });
 }
 

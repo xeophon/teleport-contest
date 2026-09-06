@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,075 passing tests**, with no
+The latest source-driven checkpoint has **7,116 passing tests**, with no
 failures, skips or TODOs. All seven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -46,6 +46,16 @@ variety state. Twenty-five new state tests and two fresh recordings pass
 (118 screens, including cursors, and 4,396 random calls). Other name consumers,
 cached price quotes, full discovery integration and rejected-wish prompt pauses
 still need source passes.
+
+Canonical lookup now accepts the existing generator class tags, Japanese names,
+and gem names with "stone", preserving class identity in discovery and sorting.
+Tin generation stores C monster/preparation fields, including spinach and the
+nonrotting-species rule; `set_tin_variety` also implements health-shop selection.
+Samurai starting splint mail carries its rustproof state. Known potion sightings
+no longer append duplicate unknown discoveries. Thirty-nine new state tests and
+two fresh C recordings pass (17 screens and 5,357 random calls).
+The fresh Samurai swap probe also exposed incomplete swap turn timing; it is
+retained as a follow-up alongside wand learning, discovery and armor callbacks.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
 bonuses, movement/load gates, sleeping regeneration, separate active monster HP
@@ -427,14 +437,15 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at commit b01d161, passed 51/53 public
-sessions (11,891/12,712 screens, 809,608/832,102 RNG calls) and 12/19
+The complete recording run after the type-state follow-up passes 47/53 public
+sessions (11,877/12,712 screens, 809,621/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
-zero worker errors. These measurements include the artifact-wish and
-observation follow-ups; they precede the new generated object metadata.
-The two failing public recordings remain seeds 0116 and 4500; restoring all
-passing-session counts does not imply every trace within failing sessions
-improved. These measurements do not establish full C behavior.
+zero worker errors. Public failures are seeds 0002, 0014, 0116, 0373, 0383 and
+4500. The shared naming switch initially reduced public passes to 32/53 at
+40caf6c; source-state fixes restored 15 recordings. Four regressions relative
+to the earlier 51/53 checkpoint remain under investigation: reflection type
+knowledge, ray-wand learning, the granted amulet discovery, and interrupted
+armor completion. These measurements do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

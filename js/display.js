@@ -2,6 +2,7 @@
 // C refs: src/display.c, src/botl.c, win/tty.
 
 import { game } from './gstate.js';
+import { objectTypeIsKnown } from './object_knowledge.js';
 import { mindless } from './permonst.js';
 import { pmOf } from './mhitm.js';
 import {
@@ -591,6 +592,7 @@ function debugPriestDiscoveryExtras() {
 
 export function recordObservedObjectDiscovery(obj) {
     if (!obj || (game.u?._statusSuffix || '').includes('Hallu')) return;
+    if (objectTypeIsKnown(obj)) return;
     const priestDebugExtras = debugPriestDiscoveryExtras();
     if (obj.otyp === SCROLL_CLASS || obj.cls === 'scroll') {
         if (!priestDebugExtras) return;

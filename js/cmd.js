@@ -50937,10 +50937,11 @@ export function pickupObjectName(obj) {
     if (obj.cls === 'armor') {
         const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
         const armorAppearance = ARMOR_WISH_APPEARANCES[kind];
-        const typeKnown = objectTypeIsKnown(obj);
-        if (!typeKnown && (obj.appearance || armorAppearance)) {
+        const type = objectTypeData(obj);
+        const typeKnown = objectTypeIsKnown(obj, type);
+        if (!typeKnown && (obj.appearance || armorAppearance || type?.description)) {
             const [group, index, fallback] = armorAppearance || [];
-            return named(obj.appearance || game._object_descriptions?.[group]?.[index] || fallback);
+            return named(game._object_descriptions?.[group]?.[index] || obj.appearance || fallback || type.description);
         }
         return named(obj.kind || 'armor');
     }
