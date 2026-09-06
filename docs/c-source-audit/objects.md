@@ -15,7 +15,7 @@ All C paths below are relative to `nethack-c/upstream/src/`. “No new gap estab
 | `ball.c:882` `drop_ball` trap-release branch | `cmd.js` `heroDropAttachedBallAfterThrow`, `heroDropBall…` helpers | Pit/web/lava/bear-trap release branches exist, including leg wound RNG. JS bear-trap injury writes base HP directly; full C `losehp` polymorph/life-saving equivalence remains unverified. Blind glyph ordering and full ball movement are outside this slice. |
 | `detect.c:1792` `findit`, initial aggregation and `do_clear_area` call | `spell.js` `spellDetectUnseenEffect`; `cmd.js` scroll detection helpers | **Confirmed geometric omission:** spell detect-unseen examines eight radial spokes for secret terrain, while C traverses a clear area and also invokes `findone` for concealed monsters. Non-spoke secret doors and hidden-monster discovery are not handled by this spell helper. Current generic “hidden passage” message also omits C's discovered-category counts. No direct non-spoke assertion identified. |
 | `dig.c:1548` `zap_dig`, swallowed/vertical/pit setup | `dig.js`; `cmd.js` wand/dig helpers; `spell.js` `spellDigBeam`/`spellZapUpDown` | **Spell path missing swallowed behavior:** C wounds a non-whirly engulfer and expels the hero before map digging; spell beam edits terrain. Spell up-dig also lacks C's air/water/underwater guard. `digging.test.mjs` asserts pick occupations, effort, nondiggable walls, pits, holes and flooding; `spell-effects.test.mjs` asserts horizontal spell dig-depth RNG, not those missing branches. |
-| `do_wear.c:2473` `find_ac` | `cmd.js` equipment changes and `recomputePolyselfArmorClass`; `armor.js` shared armor values | **Incomplete polymorph AC recomputation:** that helper subtracts worn armor only, omitting protection rings, guarding amulet, intrinsic protection, spell protection and C's ±99 clamp. The monster equipment tests exercise monster MC and wielding, not this hero calculation. Remaining on/off effects unverified. |
+| `do_wear.c:1190–1459` `learnring`, `adjust_attrib`, `Ring_on`, `Ring_off_or_gone`; `2473` `find_ac` | `ring.js` metadata; `cmd.js` shared `changeHeroRing`, equipment commands and electrical destruction; `armor.js` armor values | Normal ring wear/removal and asynchronous electrical destruction now share property masks, hand references, stat changes, discovery and awaited levitation landing; recharge pairs removal/replacement. The 35 source-derived ring tests and remaining owner gaps are detailed below. **Incomplete polymorph AC recomputation:** `recomputePolyselfArmorClass` still subtracts worn armor only, omitting protection rings, guarding amulet, intrinsic protection, spell protection and C's ±99 clamp. Other equipment on/off effects remain outside this slice. |
 | `dokick.c:412` `container_impact_dmg` | `cmd.js` `projectileContainerImpactDmg`, kick/throw/drop callers | Normal-container contents breakage, stack splitting, knowledge clearing and shop-debt paths exist. C body and JS helper were compared; no new concrete omission established in this slice. `steed-kick.test.mjs` is about mounted kicking, not evidence for container impacts. |
 | `dothrow.c:1976` `should_mulch_missile` | `cmd.js` `shouldMulchHeroProjectileMissile`; monster counterpart in `allmain.js` | Hero helper has C erosion/enchantment chance, blessed `rnl(4)` rescue and hard-gem coin flip. No new gap established in this slice. Projectile death, hit, recoil, return, and delivery branches outside the reviewed slice remain unverified. |
 | `eat.c:325` `obj_nutrition`, 338 `adj_victual_nutrition` | `cmd.js` `foodObjectNutrition`, `adjustedDelayedFoodBiteHunger`; `allmain.js` eating ticks | Lembas elf/orc and cram dwarf per-bite adjustments match the inspected formulas. Corpse/glob nutrition and interrupted eating require further cross-path review. No whole-eating coverage claim. |
@@ -42,6 +42,39 @@ All C paths below are relative to `nethack-c/upstream/src/`. “No new gap estab
 | `attrib.c:317` `poisoned` through damage branches | `cmd.js` `applyChestTrapPoison` and projectile poison; `allmain.js` attacks | Chest trap helper models resistance, deadly-poison dice, CON loss and gas-cloud wet-towel reduction. C uses HP maximum/scaled-loss helpers; JS direct HP writes require further polymorph/minimum-max-HP comparison. Other attribute functions remain unverified. |
 | `exper.c:85–169` `experience` | `exper.js` `monsterExperienceValue`, re-exported by `cmd.js` → `recordVanquished` / live kill XP; `mhitm.js` `findMac` | **Inspected arithmetic now ported:** equipment AC, speed, attack/damage bonuses, extra-nasty and level>8 bonuses, eel drowning, mail daemon override and repeated revived/cloned kill discounts. Source-derived XP tests cover numerical boundaries and actual force-bolt kills; details and the separate true-form death gap are below. Other `exper.c` functions remain outside this audit. |
 
+## Ring equipment and electrical destruction
+
+C `do_wear.c:1190–1459` now supplies a shared ring on/off operation for normal
+`P`/`R`, charged-ring recharge and asynchronous electrical inventory damage.
+The 28 ring definitions retain their source property and stat identities.
+Canonical hand pointers and property source masks change before effects;
+paired rings, intrinsic levitation, boots and invoked Heart sources survive
+removal of an independent ring. Attribute, accuracy, damage and protection
+bonuses reverse exactly once. Source discovery distinguishes observable
+attribute changes, saturated attributes, known zero enchantments, and the
+accuracy/damage rings which do not reveal enchantment merely by being worn.
+Terrain-blocked levitation does not discover the ring.
+
+C `zap.c:5789–6009` removes a worn ring before destroying it and waits for
+landing before continuing inventory damage. Mjollnir's failed return and
+cleric lightning now use that saved electrical operation. The ring remains
+carried but unworn during water, trap death, life saving and wizard-refusal
+prompts; destruction and the parent attack resume once afterward.
+`read.c:801–833` recharge removes the old stat effect before changing charges
+and reapplies the new effect without a wish-enchantment cap.
+`electric-ring-effects.test.mjs` has 35 passing tests: the initial 11 failed
+before implementation, and six later source-boundary tests failed before
+their corrections. Live command tests include saved Mjollnir water/pit
+landings and ordinary ring removal over water.
+
+This is a bounded ring-owner port. Ring-on sink `spoteffects`, full float-up
+and flight-block synchronization, shape-changer suppression/restart, mimic
+blocking and complete monster refresh remain to be integrated. Legacy
+synchronous chest and explosion electrical consumers still need conversion
+to the saved operation. Other forced equipment removal, normal accessory
+on/off properties, source armor-class recomputation and canonical property
+production by all older armor/intrinsic consumers remain separate work.
+
 ## Landing automatic pickup
 
 C `trap.c:4157–4176` now enters a shared `pickup(1)` command operation after
@@ -65,8 +98,9 @@ engraving feedback, every carried-artifact touch refusal/death branch during
 pickup, engulfed inventory pickup and all pickup_prinv encumbrance messages
 remain outside this checkpoint. Autopickup exception evaluation is supported
 for serialized patterns; the complete source exception configuration UI/parser
-has not been ported here. General ring-removal levitation and all other
-float-down owners still require integration.
+has not been ported here. Normal ring removal and asynchronous electrical
+ring destruction now share landing as described above; remaining equipment
+and legacy damage owners still require integration.
 
 ## Casting prerequisites and costs
 

@@ -64,7 +64,7 @@ import {
     is_animal, is_golem, is_whirly, touch_petrifies, acidic, is_undead, is_demon, is_were,
     is_giant, is_minion, thick_skinned, PM_WOOD_GOLEM,
 } from './permonst.js';
-import { W_ARM, W_ARMOR, W_ACCESSORY, W_AMUL, W_WEP, W_ARMC, W_ARMG, W_ARMH, W_ARMF, MSLOW, MFAST, G_GENOD } from './const.js';
+import { W_ARM, W_ARMOR, W_ACCESSORY, W_AMUL, W_WEP, W_ARMC, W_ARMG, W_ARMH, W_ARMF, MSLOW, MFAST, G_GENOD, PROTECTION } from './const.js';
 
 /* include/monattk.h:108-112 combat result bits. */
 export const M_ATTK_MISS = 0x0;    /* aggressor missed */
@@ -740,13 +740,15 @@ function placeMonsterCorpseDrop(mon) {
 /* ------------------------------------------------------------------ */
 /* Per-attack-type damage resolution (uhitm.c mhitm branches)          */
 /* ------------------------------------------------------------------ */
-function monsterMagicNegation(mon) {
+export function monsterMagicNegation(mon, kindOf = monsterObjectKind) {
     // mhitu.c:1089-1145. Protection augments the best worn armor once;
     // innate priest/minion protection only supplies a minimum of MC1.
     const pm = pmOf(mon);
-    let mc = 0, viaAmulet = false, protection = pm?.pm === PM_HIGH_CLERIC;
-    for (const obj of mon.minvent || []) {
-        const kind = monsterObjectKind(obj);
+    const hero = !!mon.isHero, u = game.u || {};
+    let mc = 0, viaAmulet = false, protection = hero
+        ? !!(u.EProtection || u.uprops?.[PROTECTION]?.extrinsic) : pm?.pm === PM_HIGH_CLERIC;
+    for (const obj of (hero ? game.inventory : mon.minvent) || []) {
+        const kind = kindOf(obj);
         const wornArmor = (obj.owornmask & W_ARMOR) || (obj.worn && obj.cls === 'armor');
         const wornAmulet = (obj.owornmask & W_AMUL) || (obj.worn && obj.cls === 'amulet');
         if (wornArmor) mc = Math.max(mc, ARMOR_MAGIC_NEGATION[kind] || 0);
@@ -760,7 +762,8 @@ function monsterMagicNegation(mon) {
             || ['mitre of holiness', 'tsurugi of muramasa'].includes(artifact))) protection = true;
     }
     if (protection) return Math.min(3, mc + (viaAmulet ? 2 : 1));
-    if (mc < 1 && (pm?.pm === PM_ALIGNED_CLERIC || is_minion(pm || {}))) mc = 1;
+    if (mc < 1 && (hero ? ((u.HProtection || u.uprops?.[PROTECTION]?.intrinsic) && u.ublessed > 0) || u.uspellprot
+        : pm?.pm === PM_ALIGNED_CLERIC || is_minion(pm || {}))) mc = 1;
     return mc;
 }
 
@@ -1032,7 +1035,7 @@ function monWep(mon) { return mon?.mw || null; }
 /* uhitm.c:5247+ mhitm_knockback(): the rn2(3)/rn2(6) preamble ALWAYS
  * consumes draws; only the physical displacement (needs enexto/move
  * placement) is JS-unported.  Returns false: no reposition applied. */
-function mhitmKnockback(magr, _mdef, mattk) {
+export function mhitmKnockback(magr, _mdef, mattk) {
     const knockdistance = !rn2(3) ? 2 : 1; /* rn2(3) ? 1 : 2 */
     let chance = 6;
     void knockdistance;

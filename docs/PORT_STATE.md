@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 70 JavaScript modules and approximately 172,000 lines;
+The port now has 72 JavaScript modules and approximately 172,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,526 passing tests**, with no
+The latest source-driven checkpoint has **5,649 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -106,7 +106,7 @@ and saved death continuations. Float-down and spellbook teleport use this
 shared owner; movement and arrival still have older pickup paths to migrate.
 Fifteen more returning-weapon tests now cover Mjollnir shock, resistance and
 sequential electrical inventory damage with saved per-item death recovery.
-Worn-ring property removal and old aggregate electrical callers remain open.
+Worn-ring property removal is covered below; old aggregate electrical callers remain open.
 
 The cursed-book suite now has 48 tests. Controlled teleport respects level
 restrictions, Amulet/tower disorientation, wizard override, shared getpos tips,
@@ -114,8 +114,25 @@ saved targeting and landing pickup/death/menu continuations. Non-pit pickup
 precedes trap activation; pit pickup follows it. Shared immobility now counts
 full turns, correcting recovery for slow and fast heroes. A newly generated
 C trace confirms the 80-turn recovery and default unmul message; all 43 screens
-match, but its RNG trace exposed missing unseen monster arrow-trap handling.
-That source gap is queued for the next implementation.
+and all 3,879 RNG calls now match after porting unseen monster arrow-trap
+handling. Ordinary and pet arrow/dart traps share source AC, missile creation,
+stacking, life saving and death/drop behavior (13 new tests). Six additional
+tests cover clean `#wipe` action cost and preservation of earned movement after
+fountain vomiting; the previous scheduler had masked both omissions.
+
+Spell selection now applies C's pre-selection casting restrictions and uses
+all 52 casting letters, tty pages, current trained skills, sorting, retained
+ordering and full spell-slot swaps. Thirty-four independent tests cover these
+branches; two additional freshly recorded C fixtures match all 41 screens,
+cursors and RNG calls across sorting/swapping and traditional retry prompts.
+C's wizard-only turns-column indexing quirk remains intact. Menu search,
+debug casting and remaining effect/HP continuations are further work.
+
+Shared ring on/off/gone handling now owns property masks, charged bonuses,
+recharging and discovery. Electrical destruction retains the worn object
+through float-down, trap/water landings and saved death continuations before
+using it up (35 new tests). Full AC recomputation, sink/shapechanger/mimic
+callbacks and older aggregate electrical consumers remain separate work.
 
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
@@ -123,8 +140,12 @@ resident monsters and temple entry drive combat and hostility (11 new tests).
 Five cleric spell effects and the real Sanctum Amulet now follow C (24 further
 tests including spell feedback/visibility). C's paralysis duration also reaches
 its damage caller; that executable behavior is intentionally preserved.
-The full monster attack sequence, remaining spells and magic attack slots still
-require continued source comparison.
+Canonical serial attack slots now drive 26 of the 42 magic-casting species,
+including physical/cold contact and cleric lightning, with saved inventory,
+landing and death continuations (33 new tests). The driver preserves attack
+armor rolls, protection, sleeping wakeups, occupation interruption and queued
+death-message order. The remaining 16 caster arrays, polymorph passives,
+special weapons and unfinished spell effects require continued source work.
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
 Knight, Ranger and Rogue starts now execute their source operations, including

@@ -1,6 +1,7 @@
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
 import { setArtifactEquipmentLight } from './artifact.js';
-import { monsterCastSpell, afterMeltHeroSpotEffects } from './cmd.js';
+import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn } from './cmd.js';
+import { supportsMonsterAttackSlots } from './mhitu.js';
 import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster } from './cmd.js';
 import { AT_BOOM, AT_MAGC, AD_SPEL, AD_CLRC, is_hider } from './permonst.js';
 // allmain.js — Main game setup and move loop.
@@ -39,7 +40,7 @@ import {
     MM_AGGR as MONSTER_MM_AGGR_FLAG,
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
-import { foodObjectNutrition, CARRIED_DELAYED_FOOD_VICTUALS, heroMetalNonFoodNutrition, applyHeroProjectileMonsterLifeSaving, tipHatMonsterNoise, dismountSteedThrown } from './cmd.js';
+import { foodObjectNutrition, CARRIED_DELAYED_FOOD_VICTUALS, heroMetalNonFoodNutrition, applyHeroProjectileMonsterLifeSaving, tipHatMonsterNoise, dismountSteedThrown, stackMonsterThrownObject } from './cmd.js';
 import { DIGTYP_BOULDER, DIGTYP_DOOR, DIGTYP_ROCK, DIGTYP_STATUE, DIGTYP_TREE, DIGTYP_UNDIGGABLE, digBoulderAt, digCheckFailed, digCheckFailMessage, digCheckHero, digDbon, digEffortIncrement, digFumblingResult, digHardnessBlockMessage, digOccupationAborted, digTargetName, digTypeOf, digVerb, finishDigContext, finishWallDigTerrain, fractureDigBoulder, inShopBaseAt, pickDigDirectionPrompt, wakeNearbyForDig } from './dig.js';
 import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, Is_waterlevel, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, ZAP_POS, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
@@ -1712,6 +1713,7 @@ const CORPSE = 471;
 const STATUE = 472;
 const POISONOUS_CORPSES = new Set(['kobold', 'large kobold', 'kobold leader', 'kobold shaman']);
 const CORPSE_EATER_MONSTERS = new Set(['purple worm', 'baby purple worm', 'ghoul', 'piranha']);
+const ARROW = 349;
 const DART = 353;
 const CREAM_PIE = 10081;
 const BLINDING_VENOM = 10184;
@@ -2487,7 +2489,7 @@ function petrifyMonsterAttacker(attacker, defender, { visible = false, messages 
     return true;
 }
 
-function addToplineMessage(msg) {
+export function addToplineMessage(msg) {
     if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'addTopline', text:String(msg||''), moves:game.moves, uhp:game.u?.uhp, pend:game._pending_message, mm:game._message_more});
     let text = String(msg || '');
     if (process.env.TLDBG) process.stderr.write(`TLDBG  msg="${text.slice(0,50)}" moves=${game.moves} pend=${game._pending_time_passed} spc=${game._search_pending_count} more=${game._message_more?1:0} cmd=${game._command_mode||''} rngidx=${getRngLog().length}
@@ -2591,7 +2593,7 @@ function addToplineMessage(msg) {
 // charged turn in its wake: the pass it happened in is the last one, after
 // which rhack(0) reads the next key (allmain.c:479's charge only reaches
 // the next pass when the occupation branch returned before rhack).
-function stopCountedSearchOccupationOnHeroHit(fatalHit = false) {
+export function stopCountedSearchOccupationOnHeroHit(fatalHit = false) {
     if (!fatalHit) interruptSpellbookStudy();
     if (!game._counted_repeat_interruptible || !(game._search_pending_count > 0))
         return;
@@ -4329,6 +4331,7 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    if (game._monster_attack_continuation) return false;
     if (game._turn_tail_phase === 'timers') {
         game._deferred_monster_turn_tail = 0;
         return await finishMonsterTurnTail();
@@ -5946,6 +5949,10 @@ export async function processMonsterTurns() {
                         if (game.u?.blind && !hiddenBullwhip) {
                             if (attackLoc) attackLoc.map_invisible = true;
                             newsym(mon.mx, mon.my);
+                        }
+                        if (supportsMonsterAttackSlots(mon)) {
+                            if (!await runMonsterAttackTurn(mon, { resumeIndex: monIndex + 1, somebodyCanMove })) return false;
+                            continue;
                         }
                         /* mhitu.c:894-898: fighting with no weapon wielded
                          * triggers weapon.c:801 mon_wield_item -> select_hwep,
@@ -13776,18 +13783,79 @@ function monsterSqueakyBoardTrapEffect(mon, trap) {
     return true;
 }
 
-function trapDartDamage(dart, mon) {
+function trapMissileDamage(missile, mon) {
     const data = mon?.data || {};
-    const die = mon?.big || mon?.bigmonst || data.big || data.bigmonst ? 2 : 3;
-    let damage = rnd(die) + Math.trunc(Number(dart?.spe || 0));
+    const large = monsterObjectHitSizeValue(mon) >= 3 || mon?.big || mon?.bigmonst || data.big || data.bigmonst;
+    const die = missile.otyp === ARROW ? 6 : large ? 2 : 3;
+    let damage = rnd(die) + Math.trunc(Number(missile?.spe || 0));
     if (damage < 0) damage = 0;
-    damage += monsterThrownObjectBlessedHitDamage(mon, dart);
+    damage += monsterThrownObjectBlessedHitDamage(mon, missile);
     if (damage > 0) {
-        const erosion = Math.max(0, Math.trunc(Number(dart?.oeroded || 0)),
-            Math.trunc(Number(dart?.oeroded2 || 0)), Math.trunc(Number(dart?.erosion || 0)));
+        const erosion = Math.max(0, Math.trunc(Number(missile?.oeroded || 0)),
+            Math.trunc(Number(missile?.oeroded2 || 0)), Math.trunc(Number(missile?.erosion || 0)));
         damage = Math.max(1, damage - erosion);
     }
     return Math.max(1, damage);
+}
+
+// trap.c:t_missile and trapeffect_arrow/dart_trap call thitm even when the
+// monster is unseen. A missed missile is placed directly, without drop_throw.
+function monsterMissileTrapEffect(mon, trap, { skipPetPostMoveRoll = false } = {}) {
+    if (![ARROW_TRAP, DART_TRAP].includes(trap?.ttyp) || monsterTrapHarmless(mon, trap)) return false;
+    if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return true;
+    monsterTriggerTrap(mon, trap);
+    if (trap.madeby_u && rnl(5)) mon.mpeaceful = false;
+    const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
+    const seeIt = !game.u?.blind && cansee(mon.mx, mon.my);
+    if (trap.once && trap.tseen && !rn2(15)) {
+        if (inSight && seeIt) addToplineMessage(`${monsterDisplayName(mon)} triggers a trap but nothing happens.`);
+        game.level.traps = (game.level.traps || []).filter(item => item !== trap);
+        newsym(mon.mx, mon.my);
+        return true;
+    }
+    trap.once = true;
+    const arrow = trap.ttyp === ARROW_TRAP;
+    const missile = mksobj(arrow ? ARROW : DART, true, false);
+    // Both arrow and dart have unit weight 1 in objects.h.
+    Object.assign(missile, { quan: 1, owt: 1, opoisoned: false, ox: trap.tx, oy: trap.ty });
+    if (!arrow) missile.opoisoned = !rn2(6);
+    if (inSight) trap.tseen = true;
+    const hit = monsterFindMac(mon) + (arrow ? 8 : 7) + (missile.spe || 0) <= rnd(20);
+    if (seeIt) {
+        const name = pickupObjectName(missile);
+        addToplineMessage(`${monsterDisplayName(mon)} is ${hit ? '' : 'almost '}hit by ${articleFor(name)} ${name}!`);
+    }
+    if (hit) {
+        mon.mhp -= trapMissileDamage(missile, mon);
+        if (mon.mhp < 1) {
+            if (seeIt) addToplineMessage(`${monsterDisplayName(mon)} is ${monsterProjectileDeathIsDestroyed(mon, true) ? 'destroyed' : 'killed'}!`);
+            const messages = [];
+            const saved = applyHeroProjectileMonsterLifeSaving(mon, messages, { unseenMaybeNot: false, visibleSquare: seeIt });
+            for (const message of messages) addToplineMessage(message);
+            if (!saved && !reviveVampshifterFromProjectileKill(mon, seeIt)) {
+                if (!seeIt && mon.mtame) addToplineMessage('You have a sad feeling for a moment, then it passes.');
+                mon.dead = true;
+                mon.mhp = 0;
+                if (mon.mleashed) {
+                    const leash = (game.inventory || []).find(obj => obj.leashmon === (mon.m_id ?? mon.id));
+                    if (leash) leash.leashmon = 0;
+                    mon.mleashed = false;
+                }
+                finishTrapKilledMonster(mon, { skipPetPostMoveRoll });
+            }
+        }
+    } else {
+        missile.petFetchable = true;
+        const stacked = stackMonsterThrownObject(missile);
+        if (stacked === missile) game.level.objects.push(missile);
+        else stacked.owt = stacked.quan;
+        newsym(mon.mx, mon.my);
+    }
+    if (skipPetPostMoveRoll && game._message_more) {
+        game._pet_delayed_post_move_roll = 1;
+        game._pet_skip_post_move_roll = 1;
+    }
+    return true;
 }
 
 function monsterPossessiveName(mon) {
@@ -15910,43 +15978,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     }
     if (monsterPitTrapEffect(mon, trap, { cavernTunnelRoom })) return done();
     if (monsterHoleTrapEffect(mon, trap)) return done();
-    if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
-        if (monsterAvoidsKnownTrapBeforeEffect(mon, trap)) return done();
-        if (trap.once && trap.tseen && !rn2(15)) {
-            game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
-            newsym(mon.mx, mon.my);
-            return done();
-        }
-        monsterTriggerTrap(mon, trap);
-        trap.once = true;
-        const dart = mksobj(DART, true, false);
-        dart.quan = 1;
-        dart.opoisoned = !rn2(6);
-        const inSight = !game.u?.blind && couldSeeCoord(mon.mx, mon.my) && !mon.minvis && !mon.mundetected;
-        if (inSight) trap.tseen = true;
-        const hit = (mon.data?.mac ?? 10) + 7 + Math.trunc(Number(dart.spe || 0)) <= rnd(20);
-        if (hit) {
-            mon.mhp = (mon.mhp || 1) - trapDartDamage(dart, mon);
-            if (inSight) addToplineMessage(`${monsterDisplayName(mon, true)} is hit by a dart!`);
-            if (mon.mhp < 1) {
-                if (inSight) addToplineMessage(`${monsterDisplayName(mon)} is killed!`);
-                finishTrapKilledMonster(mon);
-            }
-        } else {
-            Object.assign(dart, {
-                kind: 'dart',
-                ox: mon.mx,
-                oy: mon.my,
-                glyph: ')',
-                color: CLR_CYAN,
-                petFetchable: true,
-            });
-            game.level.objects.push(dart);
-            if (inSight) addToplineMessage(`${monsterDisplayName(mon, true)} is almost hit by a dart!`);
-            newsym(mon.mx, mon.my);
-        }
-        return done();
-    }
+    if (monsterMissileTrapEffect(mon, trap)) return done();
     if (monsterLandmineTrapEffect(mon, trap)) return done();
     if (monsterSqueakyBoardTrapEffect(mon, trap)) return done();
     if (monsterRollingBoulderTrapEffect(mon, trap)) return done();
@@ -17171,44 +17203,7 @@ async function movePet(mon, resumeAfterInventory = false, conflictActive = false
     }
     if (monsterPitTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (monsterHoleTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
-    if (trap?.ttyp === DART_TRAP && !monsterTrapHarmless(mon, trap)) {
-        if (trap.once && trap.tseen && !rn2(15)) {
-            game.level.traps = (game.level?.traps || []).filter(item => item !== trap);
-            newsym(mon.mx, mon.my);
-            return;
-        }
-        trap.once = true;
-        trap.tseen = true;
-        const dart = mksobj(DART, true, false);
-        dart.quan = 1;
-        dart.opoisoned = !rn2(6);
-        const hit = (mon.data?.mac ?? 6) + 7 + Math.trunc(Number(dart.spe || 0)) <= rnd(20);
-        if (hit) {
-            mon.mhp = Math.max(0, (mon.mhp || 1) - trapDartDamage(dart, mon));
-            addToplineMessage(`The ${mon.data?.name || 'creature'} is hit by a dart!`);
-            if (mon.mhp < 1) {
-                addToplineMessage(`The ${mon.data?.name || 'creature'} is killed!`);
-                finishTrapKilledMonster(mon, { skipPetPostMoveRoll: true });
-                return;
-            }
-        } else {
-            Object.assign(dart, {
-                kind: 'dart',
-                ox: mon.mx,
-                oy: mon.my,
-                glyph: ')',
-                color: CLR_CYAN,
-                petFetchable: true,
-            });
-            game.level.objects.push(dart);
-            addToplineMessage(`The ${mon.data?.name || 'creature'} is almost hit by a dart!`);
-            newsym(mon.mx, mon.my);
-        }
-        if (game._message_more) {
-            game._pet_delayed_post_move_roll = 1;
-            game._pet_skip_post_move_roll = 1;
-        }
-    }
+    if (monsterMissileTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (monsterLandmineTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
     if (monsterRollingBoulderTrapEffect(mon, trap, { skipPetPostMoveRoll: true })) return;
 }
@@ -19042,7 +19037,7 @@ function monsterWieldWeaponDoname(obj) {
  * "<Monnam> swings his <weapon> at <target>."  Pure-pierce weapons
  * thrust deterministically; pierce-plus-slash weapons burn rn2(2).
  * Only called when flags.verbose && !Blind. */
-function monsterSwingMessage(magr, mdef, mwep) {
+export function monsterSwingMessage(magr, mdef, mwep) {
     const real = String(mwep.actualKind || mwep.kind || '').toLowerCase();
     /* include/objects.h direction bits: P=pierce, S=slash, W=whack. */
     const WHIP_KINDS = new Set(['bullwhip', 'rubber hose']);
@@ -19057,7 +19052,8 @@ function monsterSwingMessage(magr, mdef, mwep) {
     else if (PIERCE_AND_SLASH.has(real)) verb = !rn2(2) ? 'thrusts' : 'swings';
     else verb = 'swings';
     const his = magr.female ? 'her' : 'his';
-    return `${monsterDisplayName(magr)} ${verb} ${his} ${String(monsterWieldWeaponDoname(mwep)).replace(/^an? /, '')} at ${mdef?.givenName || `the ${mdef?.data?.name || 'creature'}`}.`;
+    const weapon = String(monsterWieldWeaponDoname({ ...mwep, quan: 1 })).replace(/^an? /, '');
+    return `${monsterDisplayName(magr)} ${verb} ${(mwep.quan || 1) > 1 ? 'one of ' : ''}${his} ${weapon}${mdef?.isHero ? '' : ` at ${mdef?.givenName || `the ${mdef?.data?.name || 'creature'}`}`}.`;
 }
 function monsterCombatKill(mdef /* , how */) {
     if (monsterVisibleToHero(mdef))
@@ -19112,6 +19108,7 @@ export const __allmainTestHooks = {
     monsterAntiMagicTrapEffectForTest: monsterAntiMagicTrapEffect,
     monsterFireTrapEffectForTest: monsterFireTrapEffect,
     monsterRockTrapEffectForTest: monsterRockTrapEffect,
+    monsterMissileTrapEffectForTest: monsterMissileTrapEffect,
     monsterLandmineTrapEffectForTest: monsterLandmineTrapEffect,
     monsterRollingBoulderTrapEffectForTest: monsterRollingBoulderTrapEffect,
     monsterPitTrapEffectForTest: monsterPitTrapEffect,

@@ -12,6 +12,19 @@ used to mark a subsystem complete.
 
 ## Changes driven by source inspection
 
+- `spell.c:rejectcasting/getspell/dovspell/dospellmenu/sortspells` and
+  `mondata.c:can_chant`: casting now rejects stunned, strangled, silent,
+  buzzing, burbling and headless forms before selection, and applies C's
+  welded-arm gate with its quarterstaff exception. Spell menus use all 52
+  casting letters, tty pagination, current trained skills, seven sort orders,
+  retained ordering and full spell-slot swaps. Saved swapping and traditional
+  selection preserve their prompts. Two fresh C recordings verify every
+  screen, cursor and RNG call for sorting/swapping and traditional invalid
+  selection/retry limits; 34 independent tests exercise additional branches.
+  The wizard turns-column indexing quirk is preserved. Menu search and the
+  debug `#wizcast` path are still separate work, as are remaining spell-effect
+  and HP/life-saving continuations. The old stone-golem self-casting assertion
+  was corrected: the C monster is silent and cannot chant an incantation.
 - `cfgfiles.c:cnf_line_BINDINGS`, `options.c:parsebindings/txt2key/escapes`,
   and `cmd.c:bind_key/rhack`: parse binding lists and byte/control/Meta
   syntax, preserve right-to-left precedence, ignore invalid bindings, and

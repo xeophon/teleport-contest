@@ -18480,20 +18480,20 @@ test('self-cast stone to flesh rescues stoning before transforming inventory', a
     assert.equal(game._pending_message, 'You feel limber!  You smell the odor of meat.');
 });
 
-test('self-cast stone to flesh turns stone golem polyself into flesh golem', async () => {
+test('a stone golem cannot chant a stone-to-flesh spell', async () => {
     installCommandShopState();
     initRng(1);
     game.inventory = [];
     installStoneGolemPolyself();
 
-    await castStoneToFleshAtSelf();
+    game._known_spells = [{ name: 'stone to flesh', level: 3, skill: 'healing', knowledge: 20000 }];
+    enableRngLog({ reset: true });
+    await rhack('Z');
 
-    assert.equal(game.u._polyself_form?.name, 'flesh golem');
-    assert.equal(game.u.uhp, 40);
-    assert.equal(game.u.uhpmax, 40);
-    assert.equal(game.u.uac, 9);
-    assert.equal(game.u._statusSuffix || '', '');
-    assert.match(game._pending_message, /You turn into a flesh golem!/);
+    assert.equal(game.u._polyself_form?.name, 'stone golem');
+    assert.equal(game._pending_message, 'You are unable to chant the incantation.');
+    assert.equal(game.context.move, 0);
+    assert.deepEqual(getRngLog(), []);
 });
 
 test('failed read that leaves an unpaid spellbook intact does not mark it used-up', async () => {
@@ -24128,7 +24128,7 @@ test('dart trap killed grounded monster drops inventory before removal', async (
 
 test('pet dart trap killed grounded monster is removed immediately', async () => {
     installStableNonShopFloorState();
-    initRng(1);
+    initRng(6); // Hit the goblin using its source AC through find_mac.
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -24168,7 +24168,7 @@ test('pet dart trap killed grounded monster is removed immediately', async () =>
 
 test('pet dart trap hit uses dart damage roll', async () => {
     installStableNonShopFloorState();
-    initRng(1);
+    initRng(6); // Hit the goblin using its source AC through find_mac.
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -24320,7 +24320,7 @@ test('dart trap damage uses generated blessed dart enchantment', async () => {
     enableRngLog({ reset: true });
     installCoreRngValues([
         0, 0, 0, 0, 0, 1, 1, 1,
-        1, 1, 1, 2,
+        1, 19, 1, 2, // thitm hits the manes using its source AC.
     ]);
     Object.assign(game.u, {
         ux: 5,

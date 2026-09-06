@@ -410,3 +410,39 @@ migration mode variations and the remaining non-timer stack compatibility
 properties still need review. Full drowning effects between every individual
 pline also remain broader than the successful-crawl continuation implemented
 here.
+
+Monster projectile traps now share `monsterMissileTrapEffect` between ordinary
+and pet movement (`monmove.c:postmov:1509` → `trap.c:mintrap`). It implements
+arrow and dart trap branches (`trap.c:1190-1322`) with known-trap avoidance,
+aerial avoidance, spent trap removal, trap learning and visibility, source
+`find_mac`, and `t_missile` quantity/weight/poison normalization. `thitm` places
+and stacks missed projectiles directly; a hit consumes the missile after
+source-sized damage, blessing/enchantment and erosion adjustments. Lethal
+hits use existing monster life saving and vampire revival before ordinary
+inventory/corpse cleanup, without hero XP. Thirteen tests cover live ordinary
+and pet movement plus hidden activation, normalization, stacking, avoidance,
+death/drop and life saving. Five initially failed; the combined 13 new and
+3,134 shop tests pass. Three older damage tests now select actual hit rolls
+under source AC instead of depending on a synthetic species-AC override.
+
+A newly generated C oracle and its recipe are preserved under
+`test/fixtures/oracles/cursed-book-arrow-trap.*`. It exposed the omitted arrow
+trap when a distant jackal stepped onto it during cursed-book helplessness.
+The independent regression now matches all 43 screens and all 3,879 RNG calls;
+there was no later RNG divergence after porting the trap. This does not assert
+full trap parity: other trap families still have separate kill paths, and
+forced steed activation is owned by the hero trap code.
+
+Two command-time omissions exposed by the source-correct full-turn immobility
+scheduler are also corrected. `do.c:dowipe:2390-2403` spends an action even
+when the face is clean; the command now consumes ordinary or spare fast
+movement accordingly. `hack.c:unmul:4177` preserves movement credit when
+printing the wake message; fountain vomiting no longer installs a later
+`--More--` handler that zeroes that credit. Six new live command tests first
+failed, then passed, including ordinary/very-fast heroes and save/restore
+while the vomiting message is pending. The trap, command-time and timer-phase
+suites pass 33/33; all 3,134 shop tests also pass. The Monk replay is restored
+to 308/308 screens and 13,878/13,878 RNG entries. The Knight replay again reaches
+its previously documented later Sanctum divergence, with 1,760/1,814 screens
+and 106,553/108,275 RNG entries matched; that separate monster-driver gap is
+not claimed resolved here.
