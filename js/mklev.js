@@ -1,3 +1,4 @@
+import { objectIsFullyIdentified } from './object_knowledge.js';
 import { OBJECT_DATA } from './object_data.js';
 import { GAUNTLETS_OF_POWER, DUNCE_CAP } from './armor.js';
 // mklev.js — Level generation.
@@ -4111,6 +4112,7 @@ function artifactObjectNameForDef(def) {
 export function artifactObjectName(obj) {
     const def = artifactDefinitionForName(obj?.artifact || obj?.oartifact);
     if (!def) return obj?.kind || '';
+    if (objectIsFullyIdentified(obj)) return def.name.replace(/^The /, '');
     let base = def.base;
     // xname uses the base type's description until that type is discovered.
     // Seeing or naming an artifact does not identify its underlying type.

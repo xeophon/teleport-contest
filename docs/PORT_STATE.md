@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 79 JavaScript modules and approximately 176,000 lines;
+The port now has 80 JavaScript modules and approximately 176,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,610 passing tests**, with no
+The latest source-driven checkpoint has **6,654 passing tests**, with no
 failures, skips or TODOs. All six generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -98,8 +98,14 @@ materials, weights, prices and damage fields. The generator compiles C's own
 initializer and enum macros against unmodified source; its check detects drift.
 Artifact base descriptions consume this table, replacing their local subset.
 Fourteen source-data tests pass. Native C IDs remain distinct from the existing
-JavaScript IDs. Identification, general generation and combat consumers still
-need to be moved to the canonical metadata.
+JavaScript IDs. General generation and combat consumers still need to be moved to the
+canonical metadata. A shared `not_fully_identified` predicate now distinguishes
+type knowledge from enchantment/charges, blessing, observation, contents, locks,
+artifact discovery and applicable erosion proofing. Native tags and existing
+class/name/index fields resolve without confusing the two ID namespaces.
+Artifact personal names use that predicate; 44 new source-state tests pass.
+The wizard selection UI and the remaining identify/discovery side effects
+are the next integration work.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
