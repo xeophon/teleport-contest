@@ -27,6 +27,8 @@ import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
 import { QUEST_FILLERS } from './quest_filler_data.js';
+import { QUEST_LEVELS } from './quest_level_data.js';
+import * as questSpecies from './permonst.js';
 import { MONS as QUEST_MONSTERS, is_swimmer, amphibious, is_flyer, is_floater,
     passes_walls, noncorporeal, is_male, is_female } from './permonst.js';
 import {
@@ -8737,6 +8739,11 @@ export async function mklev() {
         await specialQuestBuilder();
         return;
     }
+    const questProgram = QUEST_LEVELS[g.urole?.name?.m || g._startup_role || '']?.[special?.name];
+    if (questProgram) {
+        await make_quest_filler_level(questProgram);
+        return;
+    }
     if (!special && g.dungeons?.[g.u?.uz?.dnum]?.name === 'The Quest' && questBuilder?.fill) {
         await questBuilder.fill(g.u?.uz?.dlevel ?? 1);
         return;
@@ -9260,8 +9267,10 @@ async function make_bar_loca_level() {
 }
 
 // sp_lev.c:get_location and is_ok_location, shared by the declarative fillers.
-function questFillerLocation(area, croom = null, humidity = DRY, stairs = false) {
+function questFillerLocation(area, croom = null, humidity = DRY, stairs = false, coord = null) {
     const bounds = croom || area;
+    if (coord && coord[0] >= 0 && coord[1] >= 0)
+        return { x: bounds.lx + coord[0], y: bounds.ly + coord[1] };
     const good = (x, y) => {
         const typ = game.level.at(x, y)?.typ;
         if (stairs) return typ === ROOM || typ === CORR || typ === ICE;
@@ -9284,11 +9293,43 @@ function questFillerLocation(area, croom = null, humidity = DRY, stairs = false)
     return null;
 }
 
-async function questFillerMonster(spec, area, croom) {
+// The random-generation metadata omits quest-only species. Adapt their full
+// canonical rows to the legacy fields consumed by makemon and combat.
+function questMonsterData(data) {
+    const attackCodes = new Map(Object.entries(questSpecies).filter(([key]) => key.startsWith('AT_')).map(([key, val]) => [val, key.slice(3).toLowerCase()]));
+    const damageCodes = new Map(Object.entries(questSpecies).filter(([key]) => key.startsWith('AD_')).map(([key, val]) => [val, key.slice(3).toLowerCase()]));
+    return {
+        ...data, mlet: RNDMONST_MLET_BY_GLYPH.get(data.sym) || data.sym, glyph: data.sym,
+        mlevel: data.lvl, hpLevel: adjustedMonsterLevel({ mlevel: data.lvl }),
+        mac: data.ac, maligntyp: data.align, randomInventory: true,
+        male: is_male(data), female: is_female(data), neuter: questSpecies.is_neuter(data),
+        unique: !!(data.geno & questSpecies.G_UNIQ), noCorpse: !!(data.geno & questSpecies.G_NOCORPSE),
+        nemesis: data.sound === questSpecies.MS_NEMESIS, waiting: !!(data.m3 & questSpecies.M3_WAITFORU),
+        alwaysHostile: questSpecies.always_hostile(data), alwaysPeaceful: questSpecies.always_peaceful(data),
+        strong: questSpecies.strongmonst(data), nasty: questSpecies.extra_nasty(data),
+        armed: data.attacks.some(attack => attack.aatyp === questSpecies.AT_WEAP),
+        nohands: questSpecies.nohands(data), noeyes: !questSpecies.haseyes(data),
+        big: questSpecies.bigmonst(data), animal: questSpecies.is_animal(data),
+        inAir: is_flyer(data), swimmer: is_swimmer(data), passWalls: passes_walls(data),
+        covetous: questSpecies.is_covetous(data), seeInvisible: questSpecies.perceives(data),
+        likesGold: questSpecies.likes_gold(data), likesGems: questSpecies.likes_gems(data),
+        likesMagic: questSpecies.likes_magic(data), throwsRocks: questSpecies.throws_rocks(data),
+        resistsFire: !!(data.mres & questSpecies.MR_FIRE), resistsCold: !!(data.mres & questSpecies.MR_COLD),
+        resistsElec: !!(data.mres & questSpecies.MR_ELEC),
+        attacks: data.attacks.filter(attack => attack.aatyp || attack.damn || attack.damd).map(attack => ({
+            dice: attack.damn, sides: attack.damd, aatyp: attackCodes.get(attack.aatyp), adtyp: damageCodes.get(attack.adtyp),
+            verb: ({ [questSpecies.AT_BITE]: 'bites', [questSpecies.AT_KICK]: 'kicks',
+                [questSpecies.AT_STNG]: 'stings', [questSpecies.AT_TUCH]: 'touches you' })[attack.aatyp] || 'hits',
+        })),
+    };
+}
+
+async function questFillerMonster(spec, area, croom, coord = null) {
     const name = typeof spec === 'string' ? spec : spec.id || spec.class;
     const named = name.length > 1;
     let ptr = named ? monsterByRndName(name) : null;
     let pm = named ? QUEST_MONSTERS.find(mon => mon.name === name) : null;
+    if (!ptr && pm) ptr = questMonsterData(pm);
     const gender = !named ? 0 : is_female(pm) ? 1 : is_male(pm) ? 0 : rn2(2);
     // sp_lev.c:find_montype precedes create_monster's alignment and class rolls.
     inducedAlign80();
@@ -9301,7 +9342,8 @@ async function questFillerMonster(spec, area, croom) {
     if (pm && (is_flyer(pm) || is_floater(pm))) humidity |= HOT | WET;
     if (pm && (passes_walls(pm) || noncorporeal(pm))) humidity |= SOLID;
     if (['fire elemental', 'salamander', 'fire vortex', 'flaming sphere'].includes(pm?.name)) humidity |= HOT;
-    let pos = questFillerLocation(area, croom, humidity);
+    coord = coord || spec.coord || (spec.x != null ? [spec.x, spec.y] : null);
+    let pos = questFillerLocation(area, croom, humidity, false, coord);
     // get_location_coord retries the same humidity before create_monster
     // permits dry land for water-loving species with no water available.
     if (!pos) pos = questFillerLocation(area, croom, humidity);
@@ -9314,7 +9356,10 @@ async function questFillerMonster(spec, area, croom) {
     if (mon) {
         mon.female = !!gender;
         setMonsterPeaceful(mon, typeof spec === 'string' ? null : spec.peaceful);
+        if (spec.asleep != null) mon.msleeping = spec.asleep ? 1 : 0;
+        if (spec.name) mon.givenName = spec.name;
     }
+    return mon;
 }
 
 // Ordered des operations extracted from the upstream Lua source. Existing
@@ -9350,6 +9395,7 @@ async function questFillerOperations(operations, state, croom = null) {
         case 'level_flags':
             for (const flag of [arg, ...rest]) {
                 if (flag === 'mazelevel') game.level.flags.is_maze_lev = true;
+                else if (['noteleport', 'hardfloor', 'shortsighted', 'arboreal'].includes(flag)) game.level.flags[flag] = true;
                 else state[flag] = true;
             }
             break;
@@ -9360,30 +9406,52 @@ async function questFillerOperations(operations, state, croom = null) {
             await makecorridors();
             break;
         case 'map': {
-            const width = Math.max(...arg.map(row => row.length)), height = arg.length;
+            const rows = typeof arg === 'string' ? arg.split('\n') : arg;
+            const width = Math.max(...rows.map(row => row.length)), height = rows.length;
             const lx = (2 + Math.trunc((COLNO - 4 - width) / 2)) | 1;
-            const ly = (2 + Math.trunc((ROWNO - 3 - height) / 2)) | 1;
+            let ly = (2 + Math.trunc((ROWNO - 3 - height) / 2)) | 1;
+            if (ly < 0 || ly + height > ROWNO) ly = height === ROWNO ? 0 : Math.max(0, ly - 2);
             state.area = { lx, ly, hx: lx + width - 1, hy: ly + height - 1 };
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
-                    const ch = arg[y][x] || ' ';
-                    Object.assign(game.level.at(lx + x, ly + y), {
-                        typ: ch === '+' ? DOOR : ch === 'S' ? SDOOR : SPECIAL_TERRAIN[ch],
-                        doormask: '+S'.includes(ch) ? D_CLOSED : D_NODOOR, lit: false, horizontal: ch === '-',
+                    const ch = rows[y][x] || ' ';
+                    if (ch === 'x') continue;
+                    const loc = game.level.at(lx + x, ly + y);
+                    Object.assign(loc, {
+                        typ: splevMapCharToTyp(ch),
+                        doormask: ch === 'S' ? D_CLOSED : D_NODOOR, lit: ch === 'L', flags: 0,
+                        horizontal: ch === '-' || ch === 'F', roomno: 0, edge: 0,
                     });
+                    if ('+S'.includes(ch) && x && (IS_WALL(game.level.at(lx + x - 1, ly + y).typ)
+                        || game.level.at(lx + x - 1, ly + y).horizontal)) loc.horizontal = true;
+                    if (ch === 'I') loc.icedpool = state.icedpools ? ICED_POOL : ICED_MOAT;
                 }
             }
             break;
         }
-        case 'region':
-            for (let x = arg[0]; x <= arg[2]; x++)
-                for (let y = arg[1]; y <= arg[3]; y++) game.level.at(state.area.lx + x, state.area.ly + y).lit = rest[0] === 'lit';
+        case 'region': {
+            const bounds = arg.selection === 'area' ? arg.args : arg;
+            spDesSelectionLit(state.area.lx + bounds[0], state.area.ly + bounds[1],
+                state.area.lx + bounds[2], state.area.ly + bounds[3], rest[0] === 'lit');
             break;
-        case 'door':
-            game.level.at(state.area.lx + rest[0], state.area.ly + rest[1]).doormask = D_CLOSED;
+        }
+        case 'non_diggable':
+        case 'non_passwall': {
+            const bounds = arg.args;
+            spDesWallProperty(state.area.lx + bounds[0], state.area.ly + bounds[1],
+                state.area.lx + bounds[2], state.area.ly + bounds[3], operation === 'non_diggable' ? W_NONDIGGABLE : W_NONPASSWALL);
             break;
+        }
+        case 'wallify':
+            wallification(state.area.lx, state.area.ly, state.area.hx, state.area.hy);
+            break;
+        case 'door': {
+            const doorState = arg === 'random' ? ['nodoor', 'broken', 'open', 'closed', 'locked'][rn2(5)] : arg;
+            spDesDoor(doorState, state.area.lx + rest[0], state.area.ly + rest[1]);
+            break;
+        }
         case 'stair': {
-            const pos = questFillerLocation(state.area, croom, DRY, true);
+            const pos = questFillerLocation(state.area, croom, DRY, true, rest.length ? rest : null);
             if (pos) {
                 game.level.traps = game.level.traps.filter(trap => trap.tx !== pos.x || trap.ty !== pos.y);
                 mkstairs(pos.x, pos.y, arg === 'up', croom);
@@ -9391,8 +9459,41 @@ async function questFillerOperations(operations, state, croom = null) {
             break;
         }
         case 'object': {
-            const pos = questFillerLocation(state.area, croom);
-            if (pos) mkobj_at(RANDOM_CLASS, pos.x, pos.y, true);
+            const spec = typeof arg === 'string' ? { id: arg, coord: rest.length ? rest : null } : arg || {};
+            const coord = spec.coord || (spec.x != null ? [spec.x, spec.y] : null);
+            const pos = questFillerLocation(state.area, croom, DRY, false, coord);
+            if (!pos) break;
+            const def = artifactDefinitionForName(spec.name);
+            const types = { chest: CHEST, 'wand of lightning': WAN_LIGHTNING };
+            const otyp = def?.otyp ?? types[spec.id];
+            if (spec.id && otyp == null) throw new Error(`Unsupported quest object ${spec.id}`);
+            const obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
+                : mkobj_at(RANDOM_CLASS, pos.x, pos.y, !spec.name);
+            if (otyp === WAN_LIGHTNING) Object.assign(obj, { kind: 'lightning', cls: 'wand', wandIndex: 24,
+                glyph: '/', color: game._object_descriptions?.wands?.[24]?.color ?? CLR_BROWN });
+            if (spec.spe != null) obj.spe = spec.spe;
+            if (spec.buc === 'blessed') bless(obj);
+            else if (spec.buc === 'cursed') curse(obj);
+            else if (spec.buc === 'uncursed') { unbless(obj); uncurse(obj); }
+            if (def && !artifactExists(def.name)) applyArtifactFields(obj, def, { dknown: false });
+            else if (spec.name) obj.oname = spec.name;
+            obj.oeroded = obj.oeroded2 = 0;
+            obj.oerodeproof = false;
+            stack_floor_object(obj);
+            break;
+        }
+        case 'altar': {
+            const coord = arg.coord || [arg.x, arg.y];
+            const pos = questFillerLocation(state.area, croom, DRY, false, coord);
+            const original = game.u.ualignbase?.[0] ?? game.u.ualign?.type ?? A_NEUTRAL;
+            let align = ({ law: A_LAWFUL, lawful: A_LAWFUL, neutral: A_NEUTRAL,
+                chaos: A_CHAOTIC, chaotic: A_CHAOTIC, noalign: A_NONE, coaligned: original })[arg.align];
+            if (arg.align === 'noncoaligned') {
+                const k = rn2(2);
+                align = original ? (k ? -original : 0) : (k ? -1 : 1);
+            }
+            const mask = align == null ? inducedAlign80() : Align2amask(align);
+            Object.assign(game.level.at(pos.x, pos.y), { typ: ALTAR, flags: mask });
             break;
         }
         case 'trap':
@@ -9400,7 +9501,7 @@ async function questFillerOperations(operations, state, croom = null) {
             else await barFillTrap(arg === 'fire' ? FIRE_TRAP : null, () => questFillerLocation(state.area));
             break;
         case 'monster':
-            await questFillerMonster(arg, state.area, croom);
+            await questFillerMonster(arg, state.area, croom, rest.length ? rest : null);
             break;
         default:
             throw new Error(`Unsupported quest filler operation: ${operation}`);
