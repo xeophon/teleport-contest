@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 81 JavaScript modules and approximately 176,000 lines;
+The port now has 82 JavaScript modules and approximately 176,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,8 +25,8 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,814 passing tests**, with no
-failures, skips or TODOs. All six generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **6,835 passing tests**, with no
+failures, skips or TODOs. All seven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
@@ -143,6 +143,15 @@ and current-level worm polymorph markers. Twenty-nine new state tests and five
 fresh C recordings pass (514 screens, including cursors, and 13,739 random
 calls). General inventory actions, complete naming under hallucination and
 remaining discovery callers still need source passes.
+
+Object-name pluralization and singularization now share C's full noun rules,
+including compounds, irregular pairs, invariant suffixes, pronouns and mixed
+case. Monster display and named fruit use that owner. Genocide input no longer
+accepts generated display plurals as extra aliases: C's name_to_monplus accepts
+only its explicit alternatives and canonical-name suffixes. Twenty-one new
+tests pass. An oracle compiled from the unmodified C functions verifies both
+results for 4,947 inputs covering all object/monster names and additional edge
+cases; a fresh fruit-wish recording matches 20 screens and 2,730 random calls.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

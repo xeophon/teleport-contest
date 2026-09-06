@@ -1,3 +1,4 @@
+import { makePlural as pluralizeMonsterName } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
 import { FUMBLING, STONE_RES } from './const.js';
@@ -38799,8 +38800,6 @@ const GENOCIDE_FORBIDDEN_MONSTER_NAMES = new Set([
     'ice devil', 'nalfeshnee', 'pit fiend', 'sandestin', 'balrog',
     'salamander', 'ghost', 'shade',
 ]);
-const C_AS_IS_MONSTER_PLURAL_NAMES = new Set(['manes', 'tengu', 'ki-rin', 'nazgul', 'piranha', 'master of thieves']);
-const C_AS_IS_MONSTER_PLURAL_SUFFIXES = ['-hai', 'fish'];
 const C_GENOCIDE_NAME_ALIASES = new Map([
     ['grey dragon', 'gray dragon'],
     ['baby grey dragon', 'baby gray dragon'],
@@ -38859,12 +38858,6 @@ const C_GENOCIDE_NAME_ALIASES = new Map([
     ['mumakil', 'mumak'],
     ['erinyes', 'erinys'],
 ]);
-
-function isCAsIsMonsterPlural(name) {
-    const lower = String(name || '').toLowerCase();
-    return C_AS_IS_MONSTER_PLURAL_NAMES.has(lower)
-        || C_AS_IS_MONSTER_PLURAL_SUFFIXES.some(suffix => lower.endsWith(suffix));
-}
 
 function normalizeGenocideName(name) {
     let lower = String(name || '').trim().toLowerCase();
@@ -38926,27 +38919,6 @@ function cNamePrefixMatches(input, candidate, remainderMatches) {
     return remainderMatches(input.slice(candidate.length));
 }
 
-function pluralizeMonsterName(name) {
-    const lower = String(name || '').toLowerCase();
-    if (isCAsIsMonsterPlural(name)) return name;
-    if (lower === 'human') return 'humans';
-    if (lower === 'dwarf') return 'dwarves';
-    if (lower === 'elf') return 'elves';
-    if (lower.endsWith('-elf')) return `${name.slice(0, -3)}elves`;
-    if (lower.endsWith('monarch')) return `${name}s`;
-    if (/ above$/i.test(name)) return `${pluralizeMonsterName(name.slice(0, -6))} above`;
-    if (/fungus$/i.test(name)) return `${name.slice(0, -6)}fungi`;
-    if (/culus$/i.test(name)) return `${name.slice(0, -5)}culi`;
-    if (/mumak$/i.test(name)) return `${name.slice(0, -5)}mumakil`;
-    if (lower === 'erinys') return 'erinyes';
-    if (/watchman$/i.test(name)) return `${name.slice(0, -3)}men`;
-    if (/rtex$/i.test(name)) return `${name.slice(0, -4)}rtices`;
-    if (/ium$/i.test(name)) return `${name.slice(0, -3)}ia`;
-    if (lower.endsWith('y')) return `${name.slice(0, -1)}ies`;
-    if (/(?:s|x|z|ch|sh)$/i.test(name)) return `${name}es`;
-    return `${name}s`;
-}
-
 function genocideMonsterCatalog() {
     const entries = [];
     const seen = new Set();
@@ -38995,22 +38967,7 @@ function genocideMonsterByName(name) {
             bestLength = candidate.length;
         }
     }
-    if (bestMatch) return bestMatch;
-    for (const data of catalog) {
-        const genderNames = GENDERED_CORPSTAT_MONSTER_NAMES.get(normalizeGenocideName(data.name));
-        const candidates = [
-            data.name,
-            pluralizeMonsterName(data.name || ''),
-            genderNames?.male,
-            genderNames?.male ? pluralizeMonsterName(genderNames.male) : null,
-            genderNames?.female,
-            genderNames?.female ? pluralizeMonsterName(genderNames.female) : null,
-            genderNames?.male === 'incubus' ? 'incubi' : null,
-            genderNames?.female === 'succubus' ? 'succubi' : null,
-        ].filter(Boolean).map(normalizeGenocideName);
-        if (candidates.includes(wanted)) return data;
-    }
-    return null;
+    return bestMatch;
 }
 
 function genocidedMonsterNames() {
