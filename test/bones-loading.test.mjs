@@ -7,6 +7,7 @@ import { fixupRestoredBonesLevel, getbones } from '../js/mklev.js';
 import { enableRngLog, getRngLog, initRng, rn2 } from '../js/rng.js';
 import { encodeBonesLevel } from '../js/save.js';
 import { InMemoryStorage, vfsReadFile, vfsWriteFile } from '../js/storage.js';
+import { PM_WIZARD } from '../js/permonst.js';
 
 function ghostOf(name, x, y) {
     return {
@@ -56,7 +57,9 @@ test('bones load rebuilds ghost, corpse, and dropped inventory, then unlinks', a
     game.inventory = [{ id: 11, kind: 'dagger', quan: 1, cursed: true }];
     game.stairs = null;
     game.level = new GameMap();
-    game.level.objects = [{ id: 10, kind: 'corpse', quan: 1, ox: 5, oy: 5, oname: 'Elara' }];
+    // C bones.c preserves names on role corpses (corpsenm >= SPECIAL_PM).
+    game.level.objects = [{ id: 10, kind: 'corpse', quan: 1, ox: 5, oy: 5,
+        oname: 'Elara', corpsenm: { name: 'wizard', pm: PM_WIZARD } }];
     game.level.monsters = [{
         id: 20,
         mx: 8,

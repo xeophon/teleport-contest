@@ -25,7 +25,22 @@ import {
 } from './const.js';
 import { newsym } from './display.js';
 import { couldsee } from './vision.js';
+import { aggravate } from './wizard.js';
+import { newWere, isWereData, isWereHumanForm } from './were.js';
 import { makemon, monsterByRndName, rlocNoMsg } from './mklev.js';
+import {
+    MONS, MR_COLD, MR_FIRE, PM_BLACK_DRAGON, PM_DEATH,
+    PM_GRAY_DRAGON, S_DRAGON, nonliving, perceives, is_demon, is_golem, is_undead, is_were,
+} from './permonst.js';
+
+const SPELL_MONSTERS_BY_NAME = new Map(MONS.flatMap(mon =>
+    [mon.name, ...(mon.names || [])].map(name => [name.toLowerCase(), mon])));
+// C makemon.c:golemhp(): fixed species HP, independent of current HP/level.
+const GOLEM_HP = new Map([
+    ['straw golem', 20], ['paper golem', 20], ['rope golem', 30], ['gold golem', 60],
+    ['leather golem', 40], ['wood golem', 50], ['flesh golem', 40], ['clay golem', 70],
+    ['stone golem', 100], ['glass golem', 80], ['iron golem', 120],
+]);
 
 // C objects.h SPELL(...) oc_dir for the spells routed through the
 // wand-duplicate group in spelleffects().  NODIR spells never prompt.
@@ -124,10 +139,12 @@ function heroIsUndeadForm() {
 
 // C ref: zap.c:resist() with oclass == SPBOOK_CLASS (alev = u.ulevel):
 // roll, halve damage when resisted, apply damage, report resisted.
-function spellResistDamage(mon, dmg, D) {
+async function spellResistDamage(mon, dmg, D, messages) {
     const resisted = D.monsterResistsEffect(mon, game.u?.ulevel || 1);
     const applied = resisted ? Math.trunc((dmg + 1) / 2) : dmg;
     if (applied) mon.mhp = (mon.mhp ?? 1) - applied;
+    if ((mon.mhp ?? 1) <= 0)
+        await D.killMonsterFromHeroProjectileHit(mon, messages, D.monsterTheName(mon));
     return resisted;
 }
 
@@ -356,6 +373,8 @@ async function spellBeamHitMonster(spell, mon, D, messages) {
     const ulevel = game.u?.ulevel || 1;
     const skilled = D.spellRoleSkillLevel(spell) >= P_SKILLED;
     const seen = D.visibleMonsterForScroll(mon);
+    let wake = true;
+    let stopped = false;
     switch (name) {
     case 'force bolt': {
         // C zap.c:bhitm() case SPE_FORCE_BOLT
@@ -366,11 +385,57 @@ async function spellBeamHitMonster(spell, mon, D, messages) {
             if (D.heroIsKnightWithQuestArtifact()) dmg *= 2;
             dmg = spellDamageBonus(dmg);
             messages.push(`The spell hits ${D.monsterTheName(mon)}${dmg > 4 ? '!' : '.'}`);
-            spellResistDamage(mon, dmg, D);
+            await spellResistDamage(mon, dmg, D, messages);
         } else {
             messages.push(`The spell misses ${D.monsterTheName(mon)}.`);
         }
-        return false;
+        break;
+    }
+    case 'drain life': {
+        // C monhp_per_lvl() always draws d8 before species overrides,
+        // even when innate life-drain resistance will prevent the effect.
+        D.revealHeroProjectileHitMimicAppearance(mon);
+        const data = SPELL_MONSTERS_BY_NAME.get(monsterName(mon).toLowerCase()) || mon.data;
+        const baseLevel = data.lvl ?? data.mlevel ?? 0;
+        const level = mon.m_lev ?? mon.mlevel ?? mon.data?.hpLevel ?? baseLevel;
+        let dmg = rnd(8);
+        if (is_golem(data)) dmg = Math.trunc(GOLEM_HP.get(data.name) / baseLevel);
+        else if (baseLevel > 49) dmg = 4 + rnd(4);
+        else if (data.mlet === S_DRAGON && data.pm >= PM_GRAY_DRAGON) dmg = 4 + rn2(5);
+        else if (!level) dmg = rnd(4);
+        if (D.heroIsKnightWithQuestArtifact()) dmg *= 2;
+        dmg = spellDamageBonus(dmg);
+
+        // C resists_drli()/defended(): intrinsic species protection,
+        // vampire shifters, wielded artifacts, and worn dragon armor.
+        const weapon = mon.mw;
+        const artifact = String(weapon?.artifact || weapon?.oartifactName || '').toLowerCase();
+        const protectedWeapon = (weapon?.artifact || weapon?.oartifact) && (D.drainItemProtectedByDrainResistance(weapon)
+            || ['excalibur', 'stormbringer', 'the staff of aesculapius'].includes(artifact));
+        const protectedArmor = (mon.minvent || []).some(item =>
+            (item.worn || item.owornmask) && (item.otyp === D.BLACK_DRAGON_SCALES
+                || item.otyp === D.BLACK_DRAGON_SCALE_MAIL
+                || D.dragonArmorSpecForItem(item)?.colorName === 'black'));
+        const immune = is_undead(data) || is_demon(data) || is_were(data)
+            || data.pm === PM_DEATH || data.pm === PM_BLACK_DRAGON
+            || D.monsterIsVampireShifterForLifeSaving(mon) || protectedWeapon || protectedArmor;
+        if (!immune) {
+            const resisted = await spellResistDamage(mon, dmg, D, messages);
+            // resist() can kill, including a death reversed by life saving.
+            // Only a surviving, unresisted target receives the second drain.
+            if (!resisted && !mon.dead && (mon.mhp ?? 1) > 0) {
+                mon.mhp -= dmg;
+                mon.mhpmax -= dmg;
+                if (mon.mhp <= 0 || mon.mhpmax <= 0 || level < 1) {
+                    await D.killMonsterFromHeroProjectileHit(mon, messages, D.monsterTheName(mon));
+                } else {
+                    mon.m_lev = level - 1;
+                    if (D.visibleMonsterForScroll(mon))
+                        messages.push(`${D.monsterTheName(mon, true)} suddenly seems weaker!`);
+                }
+            }
+        }
+        break;
     }
     case 'slow monster': {
         if (!D.monsterResistsEffect(mon, ulevel)) {
@@ -383,14 +448,17 @@ async function spellBeamHitMonster(spell, mon, D, messages) {
                 && !mon.mfrozen && !mon.msleeping && seen)
                 messages.push(`${D.monsterTheName(mon, true)} seems to be moving slower.`);
         }
-        return false;
+        break;
     }
     case 'turn undead': {
+        wake = false;
         if (D.monsterIsUndead(mon)) {
+            wake = true;
             let dmg = rnd(8);
             if (D.heroIsKnightWithQuestArtifact()) dmg *= 2;
             dmg = spellDamageBonus(dmg);
-            const resisted = spellResistDamage(mon, dmg, D);
+            game.context.bypasses = true;
+            const resisted = await spellResistDamage(mon, dmg, D, messages);
             if (!resisted && !mon.dead && (mon.mhp ?? 1) > 0) {
                 // C mon.c:monflee(0, FALSE, TRUE)
                 mon.mflee = 1;
@@ -399,17 +467,43 @@ async function spellBeamHitMonster(spell, mon, D, messages) {
                 if (seen) messages.push(`${D.monsterTheName(mon, true)} turns to flee.`);
             }
         }
-        return false;
+        break;
     }
     case 'teleport away': {
         // C teleport.c:u_teleport_mon()
         if (D.monsterIsRider(mon) && rn2(13)) rlocNoMsg(mon);
         else rlocNoMsg(mon);
-        return false;
+        break;
     }
     case 'cancellation': {
-        D.cancelMonster(mon, seen, messages);
-        return false;
+        D.revealHeroProjectileHitMimicAppearance(mon);
+        if (!D.monsterResistsEffect(mon, ulevel)) {
+            mon.mcan = 1;
+            // C normal_shape() restores the base species and then removes
+            // its shapechanging identity; newcham must not undo mcan.
+            const rawBase = mon.cham ?? mon.chamName ?? mon.chamBase ?? mon.vampBase
+                ?? mon.data?.cham ?? mon.data?.chamName ?? mon.data?.vampBase;
+            const base = typeof rawBase === 'number' ? MONS[rawBase]
+                : SPELL_MONSTERS_BY_NAME.get(String(rawBase || '').toLowerCase());
+            if (base) {
+                if (monsterName(mon).toLowerCase() !== base.name.toLowerCase())
+                    D.applyMonsterPolymorphTarget(mon, monsterByRndName(base.name) || base, messages);
+                mon.cham = -1;
+                delete mon.chamName;
+                delete mon.chamBase;
+                delete mon.vampBase;
+                mon.vampshifter = false;
+                mon.mcan = 1;
+            }
+            if (isWereData(mon.data) && !isWereHumanForm(mon.data))
+                newWere(mon, { g: game, canseemon: D.visibleMonsterForScroll,
+                    addToplineMessage: message => messages.push(message), newsym });
+            if (monsterName(mon).toLowerCase() === 'clay golem') {
+                if (seen) messages.push(`Some writing vanishes from ${D.monsterPossessiveName(mon)} head!`);
+                await D.killMonsterFromHeroProjectileHit(mon, messages, D.monsterTheName(mon));
+            }
+        }
+        break;
     }
     case 'knock': {
         if (mon === game.u?.ustuck) {
@@ -430,21 +524,23 @@ async function spellBeamHitMonster(spell, mon, D, messages) {
             D.wakeupMonster(mon);
             D.abuseDog(mon);
         }
-        return true; // C bhitm() returns 1 for SPE_KNOCK
+        stopped = true; // C bhitm() returns 1 for SPE_KNOCK
+        break;
     }
     case 'wizard lock': {
-        D.closeMonsterHoldingTrap(mon);
-        return false;
+        wake = D.closeMonsterHoldingTrap(mon);
+        break;
     }
     case 'healing':
     case 'extra healing': {
         // C zap.c:bhitm() case SPE_HEALING/SPE_EXTRA_HEALING
         const extra = name === 'extra healing';
         const healamt = d(6, extra ? 8 : 4);
-        if (monsterName(mon) === 'pestilence') {
-            spellResistDamage(mon, Math.trunc(healamt / 2), D);
-            return false;
+        if (monsterName(mon).toLowerCase() === 'pestilence') {
+            await spellResistDamage(mon, Math.trunc(healamt / 2), D, messages);
+            break;
         }
+        wake = false;
         mon.mhp = Math.min(mon.mhpmax ?? mon.mhp ?? 1, (mon.mhp ?? 1) + healamt);
         if ((skilled || extra) && (mon.blinded || mon.mblinded)) {
             mon.blinded = false;
@@ -452,11 +548,90 @@ async function spellBeamHitMonster(spell, mon, D, messages) {
             if (seen) messages.push(`${D.monsterTheName(mon, true)} can see again.`);
         }
         if (seen) messages.push(`${D.monsterTheName(mon, true)} looks${extra ? ' much' : ''} better.`);
-        return false;
+        break;
+    }
+    case 'stone to flesh': {
+        const data = SPELL_MONSTERS_BY_NAME.get(monsterName(mon).toLowerCase()) || mon.data;
+        if (is_golem(data)) {
+            const oldName = D.monsterTheName(mon, true);
+            if (data.name === 'stone golem')
+                D.applyMonsterPolymorphTarget(mon, monsterByRndName('flesh golem'), [], false);
+            if (seen) messages.push(`${oldName} ${data.name === 'stone golem' && monsterName(mon) === 'flesh golem'
+                ? 'turns to flesh!' : data.name === 'flesh golem' ? 'seems fleshier...'
+                    : 'looks rather fleshy for a moment.'}`);
+        } else {
+            wake = false;
+        }
+        break;
     }
     default:
-        return false;
+        wake = false;
     }
+    if (wake && !mon.dead && (mon.mhp ?? 1) > 0) {
+        D.directMeleeNonlethalWakeupTail(mon, messages, { ...mon }, { ordinaryMelee: true, visible: seen });
+        // C bhitm() shares m_respond() across harmful immediate effects.
+        const species = monsterName(mon).toLowerCase();
+        if (species === 'shrieker' && Math.max(Math.abs(mon.mx - game.u.ux), Math.abs(mon.my - game.u.uy)) <= 1) {
+            if (!D.heroIsDeaf()) {
+                messages.push(`${D.monsterTheName(mon, true)} shrieks.`);
+                game.occupation = null;
+            }
+            if (!rn2(10)) {
+                const worm = SPELL_MONSTERS_BY_NAME.get('purple worm');
+                const maxDifficulty = Math.trunc((D.levelDifficulty() + ulevel) / 2);
+                const summoned = rn2(13) ? null : monsterByRndName(
+                    worm.difficulty > maxDifficulty ? 'baby purple worm' : 'purple worm');
+                await makemon(summoned, 0, 0, 0);
+            }
+            aggravate();
+        }
+        if (species === 'erinys' && !mon.mpeaceful && mon.mcansee !== false && mon.mcansee !== 0
+            && !(mon.mblinded > 0) && couldsee(mon.mx, mon.my)
+            && (!game.u.invisible || mon.data?.seeInvisible
+                || perceives(SPELL_MONSTERS_BY_NAME.get(species)))) aggravate();
+        if (species === 'medusa' && couldsee(mon.mx, mon.my)) {
+            const visible = !D.heroIsBlind() && D.visibleMonsterForScroll(mon);
+            const unaware = D.heroIsUnaware();
+            const reflectable = !!game.u.reflecting;
+            const hallucinating = D.heroIsHallucinating();
+            const cancelled = mon.mcan || (hallucinating && rn2(4)) || (unaware && !reflectable);
+            if (cancelled || mon.mcansee === false || mon.mcansee === 0 || mon.mblinded > 0) {
+                if (visible) messages.push(unaware ? 'Medusa seems irritated.'
+                    : hallucinating && !rn2(3) ? 'Someone seems overdue for a serpent cut.'
+                        : 'Medusa gazes ineffectually.');
+            } else if (reflectable) {
+                if (visible) messages.push(`Medusa's gaze is reflected by your ${D.heroZapReflectSourceWord() || 'medallion'}.`);
+                const reflection = D.monsterReflectionSource(mon);
+                if (reflection) {
+                    if (visible) messages.push(`The gaze is reflected away by ${D.monsterPossessiveName(mon)} ${reflection.source}!`);
+                } else if (game.u.invisible && !mon.data.seeInvisible && !perceives(SPELL_MONSTERS_BY_NAME.get(species))) {
+                    if (visible) messages.push("Medusa doesn't seem to notice that her gaze was reflected.");
+                } else {
+                    if (visible) messages.push('Medusa is turned to stone!');
+                    mon.mhp = 0;
+                    if (!D.applyHeroProjectileMonsterLifeSaving(mon, messages))
+                        D.stoneMonster(mon, messages, { awardExperience: true });
+                }
+            } else if (visible && !unaware && !game.u.stoneResistance && !D.heroPolyselfResistsStoning()) {
+                messages.push("You meet Medusa's gaze.");
+                game.occupation = null;
+                const transformed = D.maybeTurnPolyselfIntoStoneGolem();
+                if (transformed) messages.push(transformed);
+                else {
+                    messages.push('You turn to stone...');
+                    game.u.uhp = 0;
+                    game._death_cause = 'Medusa';
+                    game._death_bones_body = 'statue';
+                    if (D.consumeLifeSavingAmulet({ clearStoning: true })) {
+                        messages.push('You die...  But wait...  Your medallion begins to glow!');
+                        messages.lifeSaving = true;
+                    } else messages.fatal = true;
+                    stopped = true;
+                }
+            }
+        }
+    }
+    return stopped;
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +685,28 @@ async function spellImmediateBeam(spell, dir, D) {
             }
         }
 
+        if (name === 'drain life') {
+            // C bhitpile()/bhito(): visit the floor chain from its head,
+            // after the monster; a nonempty affected pile costs one range
+            // step even if no object can actually lose an enchantment.
+            let hitPile = false;
+            for (const item of [...(game.level?.objects || [])].reverse()) {
+                if (!item || item.hidden || item.transientProjectile || item.ox !== x || item.oy !== y
+                    || item === game.u?.uball || item === game.u?.uchain) continue;
+                if (item.bypass && game.context?.bypasses) continue;
+                if (item.bypass) item.bypass = 0;
+                D.drainItem(item, { byYou: true, messages });
+                hitPile = true;
+            }
+            if (hitPile) range--;
+        }
+
+        if (name === 'stone to flesh') {
+            const result = await D.stoneToFleshFloorEffect(x, y);
+            messages.push(...result.messages);
+            if (result.transformed) range--;
+        }
+
         // C bhit() door handling for opening/locking/striking spells.
         if ((typ === DOOR || typ === SDOOR)
             && (name === 'knock' || name === 'wizard lock' || name === 'force bolt')) {
@@ -521,11 +718,11 @@ async function spellImmediateBeam(spell, dir, D) {
         beamCells.push({ x, y, ch: beamGlyph(dir.dx, dir.dy) });
     }
     if (beamCells.length > 1 && !D.heroIsBlind()) game._transient_beam_cells = beamCells;
-    return { messages };
+    return { messages, more: !!messages.more, fatal: !!messages.fatal, lifeSaving: !!messages.lifeSaving };
 }
 
 // ---------------------------------------------------------------------------
-// C ref: zap.c:dobuzz() — ray walk for magic missile and sleep spells.
+// C ref: zap.c:dobuzz() — reflected rays; fireball uses explosion targeting.
 // ---------------------------------------------------------------------------
 async function spellRay(spell, dir, D) {
     const name = spellName(spell);
@@ -535,7 +732,8 @@ async function spellRay(spell, dir, D) {
     const nd = Math.trunc(ulevel / 2) + 1; // C ubuzz(BZ_U_SPELL(...), u.ulevel / 2 + 1)
     const hitBon = spellHitBonus(spell, D);
     const rayColor = name === 'sleep' ? 'bright blue' : 'white';
-    const rayName = name === 'sleep' ? 'sleep ray' : 'magic missile';
+    const rayName = name === 'sleep' ? 'sleep ray' : name === 'cone of cold' ? 'cone of cold'
+        : name === 'finger of death' ? 'death ray' : 'magic missile';
     if (D.heroIsHallucinating()) rn2(6); // C dobuzz(): Hallucination ? rn2(6) : damgtype
     let range = rn1(7, 7); // C dobuzz() range
     let sx = u.ux || 0;
@@ -557,11 +755,18 @@ async function spellRay(spell, dir, D) {
 
         if (!bounceNow) {
             beamCells.push({ x: sx, y: sy, ch: beamGlyph(dx, dy), color: rayColor });
+            if (name === 'cone of cold') {
+                const terrain = D.applyColdRayTerrain(sx, sy);
+                messages.push(...terrain.messages);
+                range += terrain.rangeMod;
+                if (terrain.stopped || range < 0) break;
+            }
             const mon = (game.level?.monsters || []).find(candidate =>
                 candidate && !candidate.dead && (candidate.mhp ?? 1) > 0
                 && candidate.mx === sx && candidate.my === sy);
             if (mon) {
                 if (spellZapHit(monsterAc(mon), hitBon)) {
+                    range -= 2;
                     const reflection = D.monsterReflectionSource(mon);
                     if (reflection) {
                         if (D.visibleMonsterForScroll(mon)) {
@@ -572,7 +777,6 @@ async function spellRay(spell, dir, D) {
                         dx = -dx;
                         dy = -dy;
                     } else {
-                        range -= 2;
                         if (name === 'sleep') {
                             // C zap.c:zhitm() ZT_SLEEP -> sleep_monst(d(nd,25))
                             const amt = d(nd, 25);
@@ -586,15 +790,45 @@ async function spellRay(spell, dir, D) {
                             if (D.visibleMonsterForScroll(mon))
                                 messages.push(`The ${rayName} hits ${D.monsterTheName(mon)}.`);
                         } else {
-                            const dmg = spellDamageBonus(d(nd, 6));
-                            if (D.visibleMonsterForScroll(mon))
-                                messages.push(`The ${rayName} hits ${D.monsterTheName(mon)}${dmg > 4 ? '!' : '.'}`);
-                            spellResistDamage(mon, dmg, D);
-                            if (mon.dead || (mon.mhp ?? 1) <= 0) {
-                                D.killSpellBeamMonster(mon, messages);
-                                break;
+                            const data = SPELL_MONSTERS_BY_NAME.get(monsterName(mon).toLowerCase()) || mon.data;
+                            let dmg = 0;
+                            if (name === 'finger of death') {
+                                if (data.pm === PM_DEATH) {
+                                    mon.mhpmax = Math.min(999, mon.mhpmax + Math.trunc(mon.mhpmax / 2));
+                                    mon.mhp = mon.mhpmax;
+                                    if (D.visibleMonsterForScroll(mon)) messages.push(
+                                        `The death ray hits ${D.monsterTheName(mon)}.`,
+                                        `${D.monsterTheName(mon, true)} absorbs the deadly ray!`,
+                                        'It seems even stronger than before.');
+                                    break;
+                                }
+                                if (!nonliving(data) && !is_demon(data)
+                                    && !D.monsterIsVampireShifterForLifeSaving(mon) && !D.monsterResistsMagm(mon))
+                                    dmg = mon.mhp + 1;
+                            } else if (name === 'cone of cold') {
+                                if (!(data.mres & MR_COLD) && !D.monsterResistsCold(mon)) {
+                                    const originalDamage = spellDamageBonus(d(nd, 6));
+                                    dmg = originalDamage;
+                                    if ((data.mres & MR_FIRE) || D.monsterResistsFire(mon)) dmg += d(nd, 3);
+                                    if (!rn2(3)) dmg += D.monsterColdInventoryDamage(mon, originalDamage, messages, D.visibleMonsterForScroll(mon));
+                                }
+                            } else if (!D.monsterResistsMagm(mon)) {
+                                dmg = spellDamageBonus(d(nd, 6));
                             }
-                            D.wakeupMonster(mon);
+                            // C zhitm saves against ray damage separately: it
+                            // halves downward, and death rays get no save.
+                            if (name !== 'finger of death') {
+                                if (D.heroIsKnightWithQuestArtifact()) dmg *= 2;
+                                if (dmg > 0 && D.monsterResistsEffect(mon, ulevel)) dmg = Math.trunc(dmg / 2);
+                            }
+                            mon.mhp -= dmg;
+                            if (mon.mhp <= 0)
+                                await D.killMonsterFromHeroProjectileHit(mon, messages, D.monsterTheName(mon));
+                            else {
+                                if (D.visibleMonsterForScroll(mon))
+                                    messages.push(`The ${rayName} hits ${D.monsterTheName(mon)}${dmg > 4 ? '!' : '.'}`);
+                                D.directMeleeNonlethalWakeupTail(mon, messages, { ...mon }, { ordinaryMelee: true, visible: D.visibleMonsterForScroll(mon) });
+                            }
                         }
                     }
                 } else if (D.visibleMonsterForScroll(mon)) {
@@ -612,6 +846,24 @@ async function spellRay(spell, dir, D) {
                     } else if (name === 'sleep') {
                         if (D.heroHasSleepResistance()) messages.push('You don\'t feel sleepy!');
                         else hitHero = { sleepTime: rnd(50) };
+                    } else if (name === 'cone of cold') {
+                        const originalDamage = d(nd, 6);
+                        let dmg = D.heroHasColdResistance() ? 0 : originalDamage;
+                        if (!dmg) messages.push("You don't feel cold.");
+                        if (!rn2(3)) {
+                            const inventory = D.coldDamageInventory(originalDamage);
+                            messages.push(...inventory.messages);
+                            dmg += inventory.damage;
+                        }
+                        if (D.loseHeroHp(dmg, 'killed by a cone of cold')) hitHero = { dead: true };
+                    } else if (name === 'finger of death') {
+                        const form = SPELL_MONSTERS_BY_NAME.get(String(u._polyself_form?.name || '').toLowerCase());
+                        if (D.heroHasAntimagic() || (form && (nonliving(form) || is_demon(form))))
+                            messages.push("You aren't affected.");
+                        else {
+                            D.loseHeroHp(u.uhp, 'killed by a death ray');
+                            hitHero = { dead: true };
+                        }
                     } else {
                         const dmg = D.maybeHalfPhysicalDamage(d(nd, 6));
                         const dead = D.loseHeroHp(dmg, 'killed by a magic missile');
@@ -788,12 +1040,10 @@ async function castSpellBeamDispatch(spell, dir, D) {
     D.exerciseAttribute(A_WIS, true);
     if (SPELL_DIR[name] === 'ray') {
         if (name === 'dig') return spellDigBeam(spell, dir, D);
-        if (name === 'fireball' || name === 'cone of cold' || name === 'finger of death')
+        if (name === 'fireball')
             return { castFallback: true }; // outside the covered subset
         return spellRay(spell, dir, D);
     }
-    if (name === 'stone to flesh') return { castFallback: true }; // kept message-only
-    if (name === 'drain life') return { castFallback: true }; // outside the covered subset
     return spellImmediateBeam(spell, dir, D);
 }
 

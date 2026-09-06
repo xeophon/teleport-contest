@@ -20,6 +20,14 @@ const DESCRIPTION_SHUFFLE_LENGTHS = [
     7,  // boots: speed boots through levitation boots
 ];
 
+// Canonical identities are separate from the shuffled appearance strings.
+export const IDENTIFIED_AMULET_NAMES = [
+    'amulet of esp', 'amulet of life saving', 'amulet of strangulation',
+    'amulet of restful sleep', 'amulet versus poison', 'amulet of change',
+    'amulet of unchanging', 'amulet of reflection', 'amulet of magical breathing',
+    'amulet of guarding', 'amulet of flying',
+];
+
 const AMULET_DESCRIPTIONS = [
     'circular', 'spherical', 'oval', 'triangular', 'pyramidal', 'square',
     'concave', 'hexagonal', 'octagonal', 'perforated', 'cubical',

@@ -11,13 +11,14 @@
 // best-effort and annotated inline.
 
 import { game } from './gstate.js';
+import { monCatchupElapsedTime } from './dog.js';
 import { rn2, rnd, rn1 } from './rng.js';
 import { newsym } from './display.js';
 import {
     M_AP_MONSTER, STRAT_WAITMASK, STRAT_WAITFORU, STRAT_APPEARMSG,
     STRAT_NONE, M3_WANTSAMUL, M3_WANTSBELL, M3_WANTSCAND, M3_WANTSBOOK,
     M3_WANTSARTI, MM_NOWAIT, MM_NOMSG, NO_MM_FLAGS, MAGIC_PORTAL, IN_SIGHT,
-    Is_astralevel, Is_rogue_level,
+    Is_astralevel, Is_rogue_level, LARGEST_INT,
 } from './const.js';
 import {
     makemon, monsterByRndName, set_malign, add_to_minv,
@@ -651,12 +652,13 @@ export async function resurrect() {
         for (let i = 0; i < queue.length; i++) {
             const cand = queue[i];
             if (!cand?.iswiz || monHasAmulet(cand)) continue;
-            let elapsed = Math.max(0, (game.moves || 1) - (cand.mlstmv || 0));
+            let elapsed = (game.moves || 1) - (cand.mlstmv || 0);
             if (!(elapsed > 0)) continue;
-            elapsed = Math.trunc(elapsed / 50);
+            monCatchupElapsedTime(cand, elapsed);
+            elapsed = Math.trunc(Math.min(elapsed, LARGEST_INT - 1) / 50);
             if (cand.msleeping && rn2(elapsed + 1)) cand.msleeping = 0;
             if (cand.mfrozen === 1) { cand.mfrozen = 0; cand.mcanmove = 1; }
-            if (cand.mfrozen || cand.mcanmove === 0) continue;
+            if (cand.msleeping || cand.mfrozen || cand.mcanmove === 0 || cand.mcanmove === false) continue;
             queue.splice(i, 1);
             /* mon_arrive(mtmp, -1) — Wiz_arrive: place near the hero. */
             const spot = enextoMonsterSpot(game.u?.ux || 0, game.u?.uy || 0, cand.data || {});

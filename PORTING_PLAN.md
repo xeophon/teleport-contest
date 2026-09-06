@@ -1,12 +1,17 @@
 # NetHack C-to-JS Porting Plan
 
-Last refreshed: 2026-06-07.
+Last refreshed: 2026-09-06.
+
+Start with [the current repository audit](docs/PORT_STATE.md) for verified
+coverage gaps, implemented work, and repeatable progress measurements. The
+numbered history below describes earlier slices rather than a complete
+inventory of today's missing behavior.
 
 ## Purpose
 
 Port NetHack 5.0 behavior from the upstream C tree in `nethack-c/upstream` to plain JavaScript. Public session fixtures are regression tests only; they must not be embedded into runtime behavior or used to infer hidden tests.
 
-The current audit source of truth is `docs/c-parity-audit/`.
+The current per-file audit is [docs/c-source-audit/README.md](docs/c-source-audit/README.md). Earlier focused slice notes remain in `docs/c-parity-audit/`.
 
 ## Ground Rules
 

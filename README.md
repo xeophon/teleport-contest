@@ -1,5 +1,10 @@
 # The Teleport Coding Challenge
 
+Current fork status and source-backed next work are in
+[docs/PORT_STATE.md](docs/PORT_STATE.md). Run `npm test` for unit tests or
+`npm run progress` for unit, public-recording, and supplemental-recording
+results. This checkout contains 53 public and 19 supplemental recordings.
+
 *A guide to porting the Mazes of Menace from C to JavaScript, for
 adventurers traveling with a small swarm of LLM coding assistants.
 [Fork it now.](https://github.com/davidbau/teleport-contest/fork)*
@@ -102,12 +107,12 @@ js/
 ├── terminal.js        ← FROZEN: 24×80 grid + serialize(). Don't touch.
 ├── storage.js         ← FROZEN: VFS for save/restore + bones. Don't touch.
 ├── rng.js             ← PRNG wrappers (rn2, rnd, d, …). Edit freely.
-├── nethack.js         ← top-level NetHack class. Mostly a stub.
+├── nethack.js         ← interactive browser startup.
 ├── const.js           ← 2,000+ constants imported from upstream headers.
-├── allmain.js         ← the move loop. Currently very polite.
-├── cmd.js             ← command dispatch. Knows about ~5 commands.
-├── display.js         ← screen rendering. Renders some things.
-├── mklev.js           ← level generation. Almost entirely unwritten.
+├── allmain.js         ← turns, monsters, pets, and timed effects.
+├── cmd.js             ← commands and most hero/object interactions.
+├── display.js         ← map, message, status, and observation rendering.
+├── mklev.js           ← levels, objects, and monster creation.
 ├── input.js           ← input handling. Partially wired.
 └── …
 ```
@@ -124,10 +129,10 @@ locally, and compare against the C reference when a subsystem diverges.
 
 **A brief tour:** start in `js/jsmain.js` to see the contest API
 entry point, then follow the call chain into `js/nethack.js` →
-`js/allmain.js` → `js/cmd.js`. The actual game logic to fill in is
-mostly under `js/mklev.js`, `js/cmd.js`, and a long list of files that
-don't exist yet but need to (`js/mon.js`, `js/dog.js`, `js/spell.js`,
-etc. — a complete NetHack port has on the order of 80 source files).
+`js/allmain.js` → `js/cmd.js`. Most game logic is under `js/mklev.js`,
+`js/cmd.js`, and `js/allmain.js`, with focused modules such as `js/spell.js`,
+`js/mhitm.js`, and `js/save.js`. C subsystems are often combined in the
+JavaScript files, so compare live behavior and tests when choosing missing work.
 
 **About replay code:** generated seed/session replay modules and the
 old fast-forward path are not part of the runtime port. Replace missing

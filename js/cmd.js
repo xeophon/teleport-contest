@@ -1,15 +1,43 @@
-// mcastu.c:800-895 mcast_spell() effects — castmu computes dmg=d(ml/2+1, 6)
-// (mcastu.c:240-243, mattk->damd==0 for ATTK(AT_MAGC, AD_SPEL, 0, 0)) right
-// before dispatching here.  Only the branches the recorded sessions exercise
-// are meaningful; the rest are best-effort placeholders (see the audit doc).
+import { monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations } from './allmain.js';
+import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
+import { monCatchupElapsedTime } from './dog.js';
+import { M_SEEN_MAGR, MFAST, MSLOW } from './const.js';
+import { AD_BLND, AT_ENGL, perceives } from './permonst.js';
+import { pmOf } from './mhitm.js';
+
+// mondata.c:1558-1583 and vision.h:m_canseeu: this observation is shared by
+// every monster in line of sight, including one other than the caster.
+function monstersObserveHeroAntimagic(resisted) {
+    if (game.u?.uswallow || game.u?.underwater || game.u?.uinwater) return;
+    for (const mon of game.level?.monsters || []) {
+        if (mon.dead || mon.mhp <= 0 || !couldsee(mon.mx, mon.my)) continue;
+        if (game.u?.invisible && !perceives(pmOf(mon) || mon.data || {})) continue;
+        mon.m_seenres = resisted ? (mon.m_seenres || 0) | M_SEEN_MAGR
+            : (mon.m_seenres || 0) & ~M_SEEN_MAGR;
+    }
+}
+
+// mcastu.c:800-895 effects at the deferred castmu boundary. The initial
+// damage roll precedes all effects, including spells that discard that damage.
 async function wizardMonsterSpellEffect(mon, spell) {
     const ml = Math.max(0, mon.m_lev ?? mon.data?.mlevel ?? 0);
-    const dmg = d(Math.trunc(ml / 2) + 1, 6);             // mcastu.c:240-243
+    const halfSpell = !!(game.u?.halfSpellDamage || game.u?.Half_spell_damage
+        || game.u?.extrinsics?.halfSpellDamage || (game.inventory || []).some(item =>
+            ['the orb of detection', 'the platinum yendorian express card',
+                'the orb of fate', 'the eye of the aethiopica'].includes(
+                String(item.artifact || item.oartifact || '').toLowerCase())));
+    let dmg = d(Math.trunc(ml / 2) + 1, 6);             // mcastu.c:240-245
+    if (halfSpell) dmg = Math.ceil(dmg / 2);
+    const messages = [];
+    const visible = cansee(mon.mx, mon.my) && !heroIsBlind() && !mon.mundetected
+        && (!mon.minvis || game.u?.seeInvisible);
+    const subject = mon.givenName || `The ${mon.data?.name || 'monster'}`;
     switch (spell) {
     case 'CURSE_ITEMS': {                                 // mcastu.c:831-834
         (game._queued_messages_after_more ??= []).push(
             { text: 'You feel as if you need some help.', more: true, lichChain: 1 },
             { text: 'You feel a malignant aura surround you.', more: true, lichCastRndcurse: 1, lichChain: 1 });
+        dmg = 0;
         break;
     }
     case 'SUMMON_MONS': {                                 // mcastu.c:822-824
@@ -17,38 +45,111 @@ async function wizardMonsterSpellEffect(mon, spell) {
         if (process.env.NH_DBG_TRACE) (game._traceLog ??= []).push(`[summon] count=${count} pend=${JSON.stringify(game._pending_message||'')}`);
         // mcast_summon_mons() (mcastu.c:418-449) plines the appearance right
         // after the cast line; the tty folds them together when they fit.
-        const summonMsg = count === 1 ? 'A monster appears from nowhere!' : 'Monsters appear from nowhere!';
-        game._lichCastEffectCombine = summonMsg;
+        if (count) game._lichCastEffectCombine = mon.iswiz
+            ? `"Destroy the thief, my pet${count === 1 ? '' : 's'}!"`
+            : count === 1 ? 'A monster appears from nowhere!' : 'Monsters appear from nowhere!';
+        dmg = 0;
         break;
     }
     case 'DESTRY_ARMR': {                                 // mcastu.c:450-468
-        (game._queued_messages_after_more ??= []).push({
-            text: heroHasAntimagic() ? 'A field of force surrounds you!' : 'Your skin itches.',
-            more: true, lichChain: 1,
-        });
+        if (heroHasAntimagic()) {
+            monstersObserveHeroAntimagic(true);
+            messages.push('A field of force surrounds you!');
+        } else if (!destroyArm(messages)) messages.push('Your skin itches.');
+        else monstersObserveHeroAntimagic(false);
+        dmg = 0;
         break;
     }
     case 'AGGRAVATION': {                                 // mcastu.c:826-828
-        (game._queued_messages_after_more ??= []).push({
-            text: 'You feel that monsters are aware of your presence.', more: true, lichChain: 1,
-        });
-        for (const other of game.level?.monsters || []) {
-            other.msleeping = 0;
-            if (other.mfrozen) other.mfrozen = 0;
+        messages.push('You feel that monsters are aware of your presence.');
+        wizardAggravate();
+        dmg = 0;
+        break;
+    }
+    case 'STUN_YOU': {
+        const wasStunned = heroIsStunned();
+        if (heroHasAntimagic() || heroHasFreeAction()) {
+            monstersObserveHeroAntimagic(true);
+            if (!wasStunned) messages.push('You feel momentarily disoriented.');
+            game.u._stunTimeout = 0;
+            addHeroStun(1);
+        } else {
+            messages.push(wasStunned ? 'You struggle to keep your balance.' : 'You reel...');
+            const duration = d((game.u?.acurr?.a?.[A_DEX] ?? 10) < 12 ? 6 : 4, 4);
+            addHeroStun(halfSpell ? Math.ceil(duration / 2) : duration);
+            monstersObserveHeroAntimagic(false);
+        }
+        dmg = 0;
+        break;
+    }
+    case 'CURE_SELF':
+        if (mon.mhp < mon.mhpmax) {
+            if (visible) messages.push(`${subject} looks better.`);
+            mon.mhp = Math.min(mon.mhpmax, mon.mhp + d(3, 6));
+            dmg = 0;
         }
         break;
+    case 'HASTE_SELF': {
+        const oldSpeed = mon.mspeed || 0;
+        mon.permspeed = ['slow', MSLOW, -1].includes(mon.permspeed) ? 0 : 'fast';
+        const boots = (mon.minvent || []).some(item => (item.worn || item.owornmask)
+            && objectKindKey(item) === 'speed boots');
+        mon.mspeed = boots ? 'fast' : mon.permspeed;
+        const changed = mon.mspeed !== oldSpeed && !(oldSpeed === MFAST && mon.mspeed === 'fast');
+        if (changed && visible && mon.data?.mmove && !mon.msleeping && !mon.mfrozen)
+            messages.push(`${subject} is suddenly moving ${['slow', MSLOW, -1].includes(oldSpeed) && mon.mspeed === 'fast' ? 'much ' : ''}faster.`);
+        dmg = 0;
+        break;
     }
+    case 'DISAPPEAR':
+        if (!mon.minvis && !mon.invis_blkd) {
+            if (visible) messages.push(`${subject} suddenly ${game.u?.seeInvisible ? 'becomes transparent' : 'disappears'}!`);
+            mon.minvis = mon.perminvis = 1;
+            newsym(mon.mx, mon.my);
+            if (cansee(mon.mx, mon.my) && !heroHorizontalThrowRecoilCanSpotMonster(mon))
+                mapInvisibleMonsterAt(mon);
+        }
+        dmg = 0;
+        break;
+    case 'CLONE_WIZ':
+        if (mon.iswiz && noOfWizards() === 1) {
+            messages.push('Double Trouble...');
+            await clonewiz();
+        }
+        dmg = 0;
+        break;
     case 'PSI_BOLT': {                                    // mcastu.c:606-622 mcast_psi_bolt
-        (game._queued_messages_after_more ??= []).push({
-            text: dmg <= 5 ? 'You get a slight headache.' : dmg <= 10 ? 'Your brain is on fire!' : dmg <= 20 ? 'Your head suddenly aches painfully!' : 'Your head suddenly aches very painfully!',
-            more: true, lichChain: 1,
-        });
-        if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 1) - dmg);
+        const antimagic = heroHasAntimagic();
+        monstersObserveHeroAntimagic(antimagic);
+        if (antimagic) dmg = Math.ceil(dmg / 2);
+        const head = bodyPart(polyselfForm(), 'head');
+        messages.push(dmg <= 5 ? `You get a slight ${head}ache.` : dmg <= 10 ? 'Your brain is on fire!'
+            : dmg <= 20 ? `Your ${head} suddenly aches painfully!` : `Your ${head} suddenly aches very painfully!`);
         break;
     }
-    default:                                              // unported branches — see audit
+    default: // Strength drain and touch of death require their own lifecycles.
+        dmg = 0;
         break;
     }
+    if (dmg) {
+        if (game.u?._polyself_form) {
+            game.u.mh = (game.u.mh || 0) - dmg;
+            if (game.u.mh < 1) {
+                if (heroHasUnchanging())
+                    Object.assign(messages, heroDartTrapFatalResult(messages, 'killed while stuck in creature form'));
+                else appendRehumanizeDeathResultMessages(messages, rehumanizeAfterPolyselfDeath(), { allowLifeSaving: true });
+            }
+        } else {
+            game.u.uhp = Math.max(0, (game.u.uhp || 0) - dmg);
+            if (game.u.uhp < 1)
+                Object.assign(messages, heroDartTrapFatalResult(messages, `killed by ${an(mon.data?.name || 'monster')}`));
+        }
+    }
+    const entries = messages.map(text => ({ text, more: true, lichChain: 1 }));
+    if (entries.length && (messages.fatal || messages.lifeSaving || messages.genocideDeathArmed))
+        Object.assign(entries[entries.length - 1], { fatal: messages.fatal, lifeSaving: messages.lifeSaving,
+            genocideDeathArmed: messages.genocideDeathArmed });
+    (game._queued_messages_after_more ??= []).push(...entries);
 }
 
 // cmd.js — Command dispatch and movement.
@@ -56,9 +157,14 @@ const BISD_REV = !!process.env.BISD_REV;
 // C refs: src/cmd.c:rhack(), src/hack.c:domove().
 
 import { game } from './gstate.js';
-import { wizardCussMessage, wizdeadorgone } from './wizard.js';
+import { COMMAND_KEYS } from './command_keys.js';
+import { IDENTIFIED_AMULET_NAMES } from './o_init.js';
+import { monsterExperienceValue } from './exper.js';
+export { monsterExperienceValue } from './exper.js';
+import { bodyPart, heroLocomotion } from './mondata.js';
+import { wizardCussMessage, wizdeadorgone, aggravate as wizardAggravate, clonewiz, noOfWizards } from './wizard.js';
 import { WERE_SPECIES } from './were.js';
-import { MONS, MZ_MEDIUM, amorphous, humanoid, is_whirly, noncorporeal, unsolid } from './permonst.js'; // js port of include/monsters.h rows (natural AC via .ac)
+import { MONS, MZ_MEDIUM, amphibious, amorphous, humanoid, is_clinger, is_swimmer, is_whirly, noncorporeal, unsolid, haseyes, throws_rocks } from './permonst.js'; // js port of include/monsters.h rows (natural AC via .ac)
 import { nhgetch } from './input.js';
 import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
@@ -79,7 +185,7 @@ import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { TRIBUTE_DEATH_QUOTES, TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt, performFountainDryup } from './fountain.js';
-import { DIGTYP_STATUE, beginDigOccupation, digActionMessage, digDbon, digSurfaceText, digUpGrave, digVerbing, downDigStartBlock, fillHoleType, pickDigDirectionPrompt, planHorizontalDig, shopWallDamageCost } from './dig.js';
+import { DIGTYP_STATUE, beginDigOccupation, clearConjoinedPits, conjoinedPits, digActionMessage, digDbon, digSurfaceText, digUpGrave, digVerbing, downDigStartBlock, fillHoleType, pickDigDirectionPrompt, planHorizontalDig, shopWallDamageCost } from './dig.js';
 import {
     applyColdRayTerrain, buriedBallToFreedom, buriedBallToPunishment,
     clearCorpseTimeout, corpseName, freezeObjectInIcebox,
@@ -109,9 +215,6 @@ const LIFE_SAVING_VAMPIRE_NAMES = new Set([
     'vampire', 'vampire lady', 'vampire leader', 'vampire lord',
     'vampire mage', 'vlad the impaler',
 ]);
-const XP_SPECIAL_ATTACK_TYPES = new Set(['tuch', 'stng', 'hugs', 'spit', 'engl', 'brea', 'expl', 'boom', 'gaze', 'tent']);
-const XP_DOUBLE_DAMAGE_TYPES = new Set(['magm', 'fire', 'cold', 'slee', 'disn', 'elec', 'drst', 'acid', 'spc1', 'spc2']);
-const XP_FLAT_DAMAGE_TYPES = new Set(['drli', 'ston', 'slim']);
 const DEATH_CORPSE_BY_RACE = {
     human: { name: 'human', neuter: false },
     elf: { name: 'elf', neuter: false },
@@ -3336,6 +3439,91 @@ const TRAP_NAMES = {
     22: 'polymorph trap',
     23: 'vibrating square',
 };
+// C trap.c:trapname uses the display stream except for the role/rank choice.
+const HALLUCINATED_TRAP_NAMES = [
+    "bottomless pit",
+    "polymorphism trap",
+    "devil teleporter",
+    "falling boulder trap",
+    "anti-anti-magic field",
+    "weeping gas trap",
+    "queasy board",
+    "electrified web",
+    "owlbear trap",
+    "sand mine",
+    "vacillating triangle",
+    "death trap",
+    "disintegration trap",
+    "ice trap",
+    "monochrome trap",
+    "axeblade trap",
+    "pool of boiling oil",
+    "pool of quicksand",
+    "field of caltrops",
+    "buzzsaw trap",
+    "spiked floor",
+    "revolving wall",
+    "uneven floor",
+    "finger trap",
+    "jack-in-a-box",
+    "yellow snow",
+    "booby trap",
+    "rat trap",
+    "poisoned nail",
+    "snare",
+    "whirlpool",
+    "trip wire",
+    "roach motel (tm)",
+    "negative space",
+    "tensor field",
+    "singularity",
+    "imperial fleet",
+    "black hole",
+    "thermal detonator",
+    "event horizon",
+    "entoptic phenomenon",
+    "sweet-smelling gas vent",
+    "phone booth",
+    "exploding runes",
+    "never-ending elevator",
+    "slime pit",
+    "warp zone",
+    "illusory floor",
+    "pile of poo",
+    "honey trap",
+    "tourist trap",
+    "banana peel",
+    "garden rake",
+    "whoopie cushion",
+    "box and stick trap",
+    "fly trap",
+    "legal trap",
+    "pit of snakes",
+    "pollywog trap",
+    "slippery slope",
+    "thirst trap",
+    "suntrap"
+];
+
+function trapName(type) {
+    if (heroIsHallucinating()) {
+        const total = 24 + HALLUCINATED_TRAP_NAMES.length; // trap.h TRAPNUM
+        const index = rn2_on_display_rng(total + 1);
+        if (index === total) {
+            const female = polyselfForm() ? game.u.mfemale : game.flags?.female;
+            const role = game.urole?.name?.m || game._startup_role || 'Archeologist';
+            const level = game.u.ulevel || 1;
+            const rank = ROLE_RANKS[role]?.[level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8];
+            const name = rn2(3) ? (female && game.urole?.name?.f ? game.urole.name.f : role)
+                : (female && rank?.[1] ? rank[1] : rank?.[0] || role);
+            return name.slice(0, 27).toLowerCase() + ' trap';
+        }
+        if (index >= 24) return HALLUCINATED_TRAP_NAMES[index - 24];
+        if (index) type = index;
+    }
+    return TRAP_NAMES[type];
+}
+
 const WIZARD_WISH_TRAP_TYPES = new Map([
     ['arrow trap', 1],
     ['dart trap', DART_TRAP],
@@ -3569,7 +3757,7 @@ const FOOD_NUTRITION = new Map([
     ['c-ration', 300],
     ['tin', 0],
 ]);
-const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
+export const CARRIED_DELAYED_FOOD_VICTUALS = new Map([
     ['tripe ration', { delay: 2, finishName: 'tripe ration' }],
     ['tripe', { delay: 2, finishName: 'tripe ration' }],
     ['enormous meatball', { otyp: ENORMOUS_MEATBALL, delay: 20, finishName: 'enormous meatball' }],
@@ -4515,16 +4703,52 @@ function sameLevelTeleportTrapAt(x, y) {
     return (game.level?.traps || []).find(trap => trap.tx === x && trap.ty === y);
 }
 
-function sameLevelTeleportOk(x, y, trapok = false) {
+export function sameLevelTeleportOk(x, y, trapok = false) {
+    if (!isok(x, y)) return false;
     const loc = game.level?.at(x, y);
     if (!loc) return false;
-    if (!trapok && sameLevelTeleportTrapAt(x, y)) return false;
-    if (!ACCESSIBLE(loc.typ)) return false;
-    if (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) return false;
+    const inAir = game.u?.levitating || game.u?.flying;
+    const trap = sameLevelTeleportTrapAt(x, y);
+    if (!trapok && trap && trap.ttyp !== VIBRATING_SQUARE
+        && !(inAir && (is_pit(trap.ttyp) || is_hole(trap.ttyp)))) return false;
     if ((game.level?.monsters || []).some(mon => mon.mx === x && mon.my === y)) return false;
-    if ((game.level?.objects || []).some(obj =>
-        obj.otyp === BOULDER && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y))
+
+    // C teleport.c:goodpos uses the hero's form and properties, including
+    // early returns for liquids, wall passing, and amorphous door entry.
+    const form = heroFormData();
+    const data = permonstRowForMonster({ data: form }) || form;
+    const typ = movementSurfaceTerrain(loc);
+    let terrainOk;
+    if (IS_POOL(typ)) {
+        terrainOk = game.u?.swimming || game.u?.Swimming || form.swimmer || is_swimmer(data)
+            || game.u?.amphibious || game.u?.Amphibious || form.amphibious || amphibious(data)
+            || (typ !== WATER && !Is_waterlevel(game.u?.uz) && (inAir || heroHasWaterWalking()));
+    } else if (data.sym === ';' && rn2(13)) {
         return false;
+    } else if (IS_LAVA(typ)) {
+        terrainOk = data.name !== 'floating eye' && (inAir || form.likesLava
+            || ['fire elemental', 'salamander'].includes(data.name)
+            || (heroHasFireResistance() && heroHasWaterWalking()
+                && wornArmorItemsBySlotOrder(['boots'])[0]?.oerodeproof));
+    } else if ((heroPassesWalls() && untrapMayPasswall(loc))
+        || ((form.amorphous || amorphous(data)) && loc.typ === DOOR
+            && (loc.doormask & (D_CLOSED | D_LOCKED)))) {
+        terrainOk = true;
+    } else {
+        terrainOk = ACCESSIBLE(loc.typ) && !(loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)));
+        if (!throws_rocks(data) && (game.level?.objects || []).some(obj =>
+        obj.otyp === BOULDER && !obj.hidden && !obj.transientProjectile && obj.ox === x && obj.oy === y))
+            terrainOk = false;
+    }
+    if (!terrainOk) return false;
+    // C tele_jump_ok prevents crossing either special-level exclusion box.
+    for (const area of [game.level?.dndest, game.level?.updest]) {
+        if (!(area?.nlx > 0)) continue;
+        const wasInside = game.u.ux >= area.nlx && game.u.ux <= area.nhx
+            && game.u.uy >= area.nly && game.u.uy <= area.nhy;
+        const isInside = x >= area.nlx && x <= area.nhx && y >= area.nly && y <= area.nhy;
+        if (wasInside !== isInside) return false;
+    }
     return true;
 }
 
@@ -4563,7 +4787,7 @@ function collectSameLevelTeleportCoords(cx, cy) {
     return coords;
 }
 
-function teleportHeroSameLevel(x, y, { recalcVision = true } = {}) {
+export function teleportHeroSameLevel(x, y, { recalcVision = true } = {}) {
     if (isBuriedBallTrapActive()) buriedBallToPunishment();
     const oldX = game.u?.ux || 0;
     const oldY = game.u?.uy || 0;
@@ -4572,6 +4796,19 @@ function teleportHeroSameLevel(x, y, { recalcVision = true } = {}) {
     const oldChainX = game.u?.uchain?.ox;
     const oldChainY = game.u?.uchain?.oy;
     if (game.u) {
+        // C teleds resets traps and set_ustuck before changing position.
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+        game.u.ustuck = null;
+        game.u.uswldtim = 0;
+        if (game.u.uswallow) {
+            game._swallow_overlay_active = 0;
+            game._swallow_overlay_before_command = null;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._overlay_hide_status_only = 0;
+        }
+        game.u.uswallow = 0;
         game.u.ux0 = oldX;
         game.u.uy0 = oldY;
         game.u.ux = x;
@@ -5825,6 +6062,7 @@ function restoredLevelMonsterCatchup(monsters, elapsed) {
     if (elapsed <= 0) return;
     const restoreOrder = [...(monsters || [])].reverse();
     for (const mon of restoreOrder) {
+        monCatchupElapsedTime(mon, elapsed);
         if (elapsed <= rnd(10)) continue;
         if (!restoredLevelHiderNeedsRestrap(mon)) continue;
         if (rn2(3)) continue;
@@ -6308,9 +6546,8 @@ function placeFollowerAfterLevelChange(follower, first = false) {
 // MIGR_RANDOM case can be queued today; it lands via rloc (teleport.c),
 // whose per-attempt rolls (rnd(COLNO-1), rn2(ROWNO)) must happen exactly
 // here, between obj_delivery and the fall-damage site (do.c:1816,1990).
-// mon_catchup_elapsed_time and the mnearto/xlocale modes consume no RNG and
-// are not needed for MIGR_RANDOM; on total placement failure the monster
-// goes back into limbo (dog.c failed_arrivals -> m_into_limbo).
+// dog.c:491 catches up elapsed monster state before placement; random
+// arrivals use moves-1-mlstmv. Placement failure sends it back into limbo.
 function arriveMigratingMonsters() {
     const queue = game.migrating_mons;
     if (!queue?.length || !game.level) return;
@@ -6331,6 +6568,9 @@ function arriveMigratingMonsters() {
         mon.mux = game.u?.ux ?? 0;
         mon.muy = game.u?.uy ?? 0;
         mon.mtrack = [];
+        const now = game.moves || 1;
+        if ((mon.mlstmv || 0) < now - 1)
+            monCatchupElapsedTime(mon, now - 1 - (mon.mlstmv || 0));
         const placed = rlocNoMsg(mon, { allowUnset: true });
         if (!placed || !mon.mx) {
             // back into limbo: re-queue and remove from the map list
@@ -6781,6 +7021,7 @@ function downwardDigTrapAt(x, y) {
 
 function removeDownwardDigTrap(trap) {
     if (!trap || !game.level?.traps) return;
+    clearConjoinedPits(trap);
     game.level.traps = game.level.traps.filter(candidate => candidate !== trap);
 }
 
@@ -7537,8 +7778,6 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
         await mklev();
     }
     const specialArrival = !!game._mklev_lregion_arrival;
-    const targetSpecialBeforePlacement = game.specialLevels?.find(level =>
-        level.dnum === targetLevel.dnum && level.dlevel === targetLevel.dlevel);
     game._mklev_lregion_arrival = false;
     if (targetIsNew && (game._startup_role || game.urole?.name?.m) === 'Tourist') {
         const exper = level_difficulty();
@@ -7566,33 +7805,8 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
             u_on_rndspot(false);
         }
     } else if (!specialArrival) {
-        if (savedTarget && targetSpecialBeforePlacement?.name === 'valley'
-            && game.dungeons?.[fromLevel.dnum]?.name !== 'Gehennom'
-            && game.dungeons?.[targetLevel.dnum]?.name === 'Gehennom'
-            && game.u?.blind && polyselfForm()?.name === 'brown mold') {
-            const dest = game.level?.dndest;
-            if (dest) {
-                rn2(Math.max(1, dest.hx - dest.lx + 1));
-                rn2(Math.max(1, dest.hy - dest.ly + 1));
-            }
-            game.u.ux = 64;
-            game.u.uy = 16;
-            game.u._monsterMoveRollQueue = [2, 2, 1, 2, 2, 2, 0];
-        } else if (savedTarget && targetSpecialBeforePlacement?.name === 'sanctum'
-            && game.u?.blind && polyselfForm()?.name === 'brown mold') {
-            const dest = game.level?.dndest;
-            if (dest) {
-                rn2(Math.max(1, dest.hx - dest.lx + 1));
-                rn2(Math.max(1, dest.hy - dest.ly + 1));
-                rn2(Math.max(1, dest.hx - dest.lx + 1));
-                rn2(Math.max(1, dest.hy - dest.ly + 1));
-            }
-            game.u.ux = 67;
-            game.u.uy = 16;
-            game.u._monsterMoveRollQueue = [2];
-        } else {
-            u_on_rndspot(arrivingUp);
-        }
+        // C: do.c:goto_level uses the destination region for every hero form.
+        u_on_rndspot(arrivingUp);
     }
     if (ballAndChain.length && game.level) {
         game.level.objects = (game.level.objects || []).filter(obj => !ballAndChain.includes(obj));
@@ -8046,119 +8260,6 @@ function applyPrayerZapArmorDestruction() {
     }
 }
 
-const ARMOR_AC_BONUS = {
-    'cloak of magic resistance': 1,
-    'cloak of displacement': 1,
-    'cloak of invisibility': 1,
-    'cloak of protection': 3,
-    'mummy wrapping': 0,
-    'elven cloak': 1,
-    'orcish cloak': 0,
-    'dwarvish cloak': 0,
-    'alchemy smock': 1,
-    'leather cloak': 1,
-    'oilskin cloak': 1,
-    robe: 2,
-    'leather jacket': 1,
-    'leather armor': 2,
-    'ring mail': 3,
-    'orcish ring mail': 2,
-    'scale mail': 4,
-    'orcish chain mail': 4,
-    'chain mail': 5,
-    'gray dragon scale mail': 9,
-    'gold dragon scale mail': 9,
-    'silver dragon scale mail': 9,
-    'red dragon scale mail': 9,
-    'white dragon scale mail': 9,
-    'orange dragon scale mail': 9,
-    'black dragon scale mail': 9,
-    'blue dragon scale mail': 9,
-    'green dragon scale mail': 9,
-    'yellow dragon scale mail': 9,
-    'gray dragon scales': 3,
-    'gold dragon scales': 3,
-    'silver dragon scales': 3,
-    'red dragon scales': 3,
-    'white dragon scales': 3,
-    'orange dragon scales': 3,
-    'black dragon scales': 3,
-    'blue dragon scales': 3,
-    'green dragon scales': 3,
-    'yellow dragon scales': 3,
-    'studded leather armor': 3,
-    'banded mail': 6,
-    'splint mail': 6,
-    'dwarvish mithril-coat': 6,
-    'elven mithril-coat': 5,
-    'plate mail': 7,
-    helmet: 1,
-    'orcish helm': 1,
-    'elven leather helm': 1,
-    'dwarvish iron helm': 2,
-    fedora: 0,
-    cornuthaum: 0,
-    'dunce cap': 0,
-    'dented pot': 1,
-    'helm of brilliance': 1,
-    'helm of caution': 1,
-    'helm of opposite alignment': 1,
-    'helm of telepathy': 1,
-    'small shield': 1,
-    'large shield': 2,
-    'elven shield': 2,
-    'orcish shield': 1,
-    'Uruk-hai shield': 1,
-    'uruk-hai shield': 1,
-    'shield of drain resistance': 1,
-    'shield of shock resistance': 1,
-    'dwarvish roundshield': 2,
-    'shield of reflection': 2,
-    'leather gloves': 1,
-    'gauntlets of fumbling': 1,
-    'gauntlets of power': 1,
-    'gauntlets of dexterity': 1,
-    'low boots': 1,
-    'iron shoes': 2,
-    'high boots': 2,
-    'speed boots': 1,
-    'water walking boots': 1,
-    'jumping boots': 1,
-    'elven boots': 1,
-    'kicking boots': 1,
-    'fumble boots': 1,
-    'levitation boots': 1,
-    'hawaiian shirt': 0,
-    't-shirt': 0,
-};
-const ARMOR_MAGIC_NEGATION = {
-    'plate mail': 2,
-    'crystal plate mail': 2,
-    'bronze plate mail': 1,
-    'splint mail': 1,
-    'banded mail': 1,
-    'dwarvish mithril-coat': 2,
-    'elven mithril-coat': 2,
-    'chain mail': 1,
-    'orcish chain mail': 1,
-    'scale mail': 1,
-    'studded leather armor': 1,
-    'ring mail': 1,
-    'orcish ring mail': 1,
-    'leather armor': 1,
-    'mummy wrapping': 1,
-    'elven cloak': 1,
-    'orcish cloak': 1,
-    'dwarvish cloak': 1,
-    'oilskin cloak': 2,
-    robe: 2,
-    'alchemy smock': 1,
-    'leather cloak': 1,
-    'cloak of protection': 3,
-    'cloak of invisibility': 1,
-    'cloak of magic resistance': 1,
-    'cloak of displacement': 1,
-};
 const ARMOR_APPEARANCE_KINDS = {
     'polished silver shield': 'shield of reflection',
     'white-handed shield': 'uruk-hai shield',
@@ -12679,16 +12780,9 @@ export function coldTouchDestroyItemsProgram(origDamage) {
     return entries;
 }
 
-// ---------------------------------------------------------------------------
-// mcastu.c monster wizard spellcasting — scoped port of what the arch-lich
-// session exercises: castmu() (mcastu.c:129-330) after hitmu() from the
-// AT_MAGC/AD_SPEL attack slot (monsters.h:1889-1891), choose_monster_spell()
-// (mcastu.c:96-128), the wizard spell table (mcastu.c:31-35 with levels/flags
-// from include/mcastu.h:22-42), cursetxt() (mcastu.c:66-95), and the
-// session-exercised spell effects: CURSE_ITEMS (mcastu.c:831-834 → rndcurse()
-// sit.c:571-617) and SUMMON_MONS (mcastu.c:822-824 → mcast_summon_mons()
-// mcastu.c:418-449 → nasty() wizard.c:590-712).  Effects not exercised by the
-// recorded sessions are left unported (see the audit doc).
+// mcastu.c:castmu wizard-list selection for the lich touch continuation.
+// Effects run at the cast message boundary in wizardMonsterSpellEffect;
+// allmain's undirected casting path currently has a separate dispatcher.
 
 const MCAST_WIZARD_SPELLS = ['PSI_BOLT', 'CURE_SELF', 'HASTE_SELF', 'STUN_YOU',
     'DISAPPEAR', 'WEAKEN_YOU', 'DESTRY_ARMR', 'CURSE_ITEMS',
@@ -15260,7 +15354,7 @@ function heroSetWoundedLegsBothSides(extraTurns) {
 // damage can kill the hero before the wounded-legs roll (die-at-losehp), so
 // a wizard-mode death interrupts here and is resumed via
 // _steed_thrown_resume from the "Die?" refusal handler.
-async function dismountSteedThrown(messages) { // messages begins with "You kick <steed>."
+export async function dismountSteedThrown(messages) {
     const steed = game.u?.usteed;
     if (!steed) return;
     game.context.move = 1; // kick consumed the turn even if the hero dies
@@ -26780,7 +26874,7 @@ function monsterLifeSavingAmulet(mon) {
     }) || null;
 }
 
-function applyHeroProjectileMonsterLifeSaving(mon, messages, {
+export function applyHeroProjectileMonsterLifeSaving(mon, messages, {
     unseenMaybeNot = true,
     visibleSquare = cansee(mon.mx, mon.my),
 } = {}) {
@@ -26801,10 +26895,64 @@ function applyHeroProjectileMonsterLifeSaving(mon, messages, {
     mon.hasInventory = !!(mon.minvent || []).length;
     mon.mcanmove = true;
     mon.mfrozen = 0;
+    mon._gear_next_turn = 1;
+    const genocided = isMonsterGenocidedName(mon.data?.name || mon.name || '');
+    // mon.c:2870 -> dog.c:1292-1368 wary_dog(). Restore starvation
+    // health before imposing the life-saving minimum; death at the
+    // hero's hands and previous abuse can make a revived pet go wild.
+    if (mon.mtame && !mon.isminion) {
+        mon.meating = 0;
+        const edog = mon.mextra?.edog;
+        if (edog?.mhpmax_penalty) {
+            mon.mhpmax += edog.mhpmax_penalty;
+            edog.mhpmax_penalty = 0;
+        }
+        if (edog && (edog.killed_by_u === 1 || edog.abuse > 2)) {
+            mon.mtame = 0;
+            const abuse = edog.abuse || 0;
+            mon.mpeaceful = abuse >= 0 && abuse < 10 && !rn2(abuse + 1);
+            if (!genocided && visibleSquare && !game.u?._polyself_form?.noeyes) {
+                const row = permonstRowForMonster(mon);
+                if (!row || haseyes(row)) messages.push(`${fireScrollMonsterName(mon)} ${mon.mpeaceful ? 'seems unable' : 'refuses'} to look you in the eye.`);
+                else messages.push(`${fireScrollMonsterName(mon)} avoids your gaze.`);
+            }
+        } else {
+            mon.mtame = rn2(mon.mtame + 1);
+            if (!mon.mtame) mon.mpeaceful = !!rn2(2);
+        }
+        mon.pet = !!mon.mtame;
+        if (!mon.mtame) {
+            if (!genocided && monsterCanBeSeenForPotionEffect(mon))
+                messages.push(`${fireScrollMonsterName(mon)} ${mon.mpeaceful ? 'is no longer tame' : 'has become feral'}.`);
+            if (mon.mleashed) {
+                messages.push(monsterCanBeSeenForPotionEffect(mon)
+                    ? `${fireScrollMonsterName(mon)} pulls free of ${mon.female ? 'her' : 'his'} leash!`
+                    : 'Your leash falls slack.');
+                const leash = (game.inventory || []).find(obj => obj.leashmon === (mon.m_id ?? mon.id ?? mon.mid));
+                if (leash) leash.leashmon = 0;
+                mon.mleashed = false;
+            }
+            // Monster death can run in a synchronous projectile effect.
+            // The move loop performs the existing async thrown dismount.
+            if (mon === game.u?.usteed) game._pending_feral_steed_dismount = mon;
+            newsym(mon.mx, mon.my);
+        } else if (edog) {
+            edog.revivals = (edog.revivals || 0) + 1;
+            edog.killed_by_u = edog.abuse = 0;
+            edog.ogoal = { x: -1, y: -1 };
+            edog.hungrytime = Math.max(edog.hungrytime || 0, (game.moves || 1) + 500);
+            if (genocided) {
+                edog.hungrytime = (game.moves || 1) + 500;
+                edog.droptime = edog.whistletime = 0;
+                edog.dropdist = 10000;
+                edog.apport = 5;
+            }
+        }
+    }
     mon.mhpmax = Math.max(mon.mhpmax || 0, (mon.m_lev || mon.mlevel || mon.data?.mlevel || 0) + 1, 10);
     mon.mhp = mon.mhpmax;
 
-    if (isMonsterGenocidedName(mon.data?.name || mon.name || '')) {
+    if (genocided) {
         if (visibleSquare) messages.push(`Unfortunately, ${heroThrownVenomTargetName(mon)} is still genocided...`);
         mon.mhp = 0;
         return false;
@@ -27506,7 +27654,7 @@ function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAc
 
 async function applyHeroKillLiveExperience(mon, messages) {
     if (!game.u || !mon) return false;
-    const experience = monsterExperienceValue(mon);
+    const experience = monsterExperienceValue(mon, game._vanquished_counts?.[mon.data?.name] || 1);
     game.u.uexp = (game.u.uexp || 0) + experience;
     const oldLevel = game.u?.ulevel || 1;
     const nextLevelExp = oldLevel < 10 ? 10 * (2 ** oldLevel)
@@ -30138,14 +30286,16 @@ async function rubLampObject(item) {
     game.context.move = 1;
 }
 
-function foodObjectNutrition(item) {
+export function foodObjectNutrition(item) {
     if (!item) return 0;
     if (item.globby) return item.owt || 20;
     if (item.otyp === 'corpse' || item.otyp === CORPSE || /\bcorpse$/.test(objectKindKey(item))) {
         const corpseName = item.corpsenm?.name || objectKindKey(item).replace(/\s+corpse$/, '');
         return CORPSE_NUTRITION.get(corpseName) || 0;
     }
-    const kind = objectKindKey(item).replace(/^partly eaten /, '');
+    const kind = objectKindKey(item).replace(/^partly eaten /, '')
+        || [...CARRIED_DELAYED_FOOD_VICTUALS, ...DELAY_ONE_FOOD_VICTUALS]
+            .find(([, food]) => food.otyp != null && food.otyp === item.otyp)?.[0] || '';
     if ((item.foodRoll || 1000) <= 140) return FOOD_NUTRITION.get('tripe ration') || 200;
     if (kind.startsWith('tin:')) return 0;
     return FOOD_NUTRITION.get(kind) ?? 0;
@@ -30664,7 +30814,7 @@ function heroIsSick() {
         || (u._statusSuffix || '').includes('Sick') || (u._statusSuffix || '').includes('Ill'));
 }
 
-function clearHeroSickness() {
+export function clearHeroSickness() {
     if (!game.u) return;
     game.u.sick = false;
     game.u.Sick = false;
@@ -30673,8 +30823,168 @@ function clearHeroSickness() {
     game.u.ill = false;
     game.u._sickTimeout = 0;
     game.u._sicknessTimeout = 0;
+    game.u.usick_type = 0;
+    delete game.u._sicknessCause;
     removeHeroStatusSuffix('Sick');
     removeHeroStatusSuffix('Ill');
+}
+
+// C apply.c:use_unicorn_horn(): only timed property troubles are curable.
+// Blessing changes the number cured; it never restores lost attributes.
+function applyUnicornHorn(horn) {
+    const u = game.u;
+    const messages = [];
+    const talk = !heroIsUnaware();
+    const sickTime = u._sickTimeout || u._sicknessTimeout || 0;
+    if (horn.cursed) {
+        const duration = rn1(90, 10);
+        switch (Math.trunc(rn2(13) / 2)) {
+        case 0: {
+            const timeout = sickTime ? Math.trunc(sickTime / 3) + 1 : rn1(u.acurr?.a?.[A_CON] || 10, 20);
+            if (u.sickResistance || u.sicknessResistance || polyselfForm()?.sickResistance) break;
+            messages.push(sickTime ? 'You feel much worse.' : 'You feel deathly sick.');
+            u._sickTimeout = timeout;
+            u._sicknessTimeout = 0;
+            u.sick = true;
+            u.usick_type = (u.usick_type || 0) | 2; // SICK_NONVOMITABLE
+            u._sicknessCause = 'a unicorn horn';
+            addHeroStatusSuffix('Ill');
+            exerciseAttribute(A_CON, false);
+            break;
+        }
+        case 1: {
+            const blind = heroIsBlind();
+            u._blindTimeout = (u._blindTimeout || 0) + duration;
+            u.blind = true;
+            addHeroStatusSuffix('Blind');
+            if (!blind && talk) messages.push(heroIsHallucinating()
+                ? 'Oh, bummer!  Everything is dark!  Help!' : 'A cloud of darkness falls upon you.');
+            vision_recalc(0);
+            game._redraw_level_after_more = 1;
+            break;
+        }
+        case 2:
+            if (!heroIsConfused()) messages.push(`You suddenly feel ${heroIsHallucinating() ? 'trippy' : 'confused'}.`);
+            addHeroConfusion(duration);
+            break;
+        case 3: {
+            const onset = heroStunOnsetMessage(heroIsStunned());
+            if (onset && talk) messages.push(onset);
+            addHeroStun(duration);
+            break;
+        }
+        case 4:
+            if (heroIsVomiting()) {
+                // C eat.c:vomit() can cure food poisoning, but not illness.
+                if (heroCannotVomitForChoke()) messages.push('Your jaw gapes convulsively.');
+                else if (u.usick_type & 1) {
+                    u.usick_type &= ~1;
+                    if (u.usick_type) {
+                        u._sickTimeout = sickTime * 2;
+                        messages.push('You feel somewhat better.');
+                    } else {
+                        clearHeroSickness();
+                        delete u._sicknessCause;
+                        messages.push('You feel cured.  What a relief!');
+                    }
+                }
+                if ((game._helpless_time || 0) <= 2) {
+                    game._helpless_time = 2;
+                    game._wake_message = 'You can move again.';
+                }
+            } else addHeroVomiting(14);
+            break;
+        case 5: {
+            const hallucinating = heroIsHallucinating();
+            addHeroHallucination(duration);
+            if (!hallucinating && !heroHasHallucinationResistance() && talk)
+                messages.push(`Oh wow!  Everything ${heroIsBlind() ? 'feels' : 'looks'} so cosmic!`);
+            game._redraw_level_after_more = 1;
+            break;
+        }
+        case 6: {
+            const deaf = heroIsDeaf();
+            u._deafTimeout = (u._deafTimeout || 0) + duration;
+            addHeroStatusSuffix('Deaf');
+            if (deaf) messages.push('Nothing seems to happen.');
+            else if (talk) messages.push('You are unable to hear anything.');
+            break;
+        }
+        }
+        return messages;
+    }
+
+    const troubles = [];
+    if (sickTime > 0) troubles.push('sick');
+    const engulfer = pmOf(u.ustuck) || u.ustuck?.data;
+    const attacks = engulfer?.attacks || [engulfer?.attack];
+    const engulfBlind = u.uswallow && attacks.some(attack =>
+        (attack?.aatyp === AT_ENGL || attack?.aatyp === 'engl')
+        && (attack.adtyp === AD_BLND || attack.adtyp === 'blnd'));
+    if ((u._blindTimeout || 0) > (u.ucreamed || 0) && !engulfBlind) troubles.push('blind');
+    if ((u._halluTimeout || 0) > 0) troubles.push('hallu');
+    if ((u._vomitingTimeout || 0) > 0) troubles.push('vomit');
+    if ((u._confusionTimeout || 0) > 0) troubles.push('conf');
+    if ((u._stunTimeout || 0) > 0) troubles.push('stun');
+    if ((u._deafTimeout || 0) > 0) troubles.push('deaf');
+    if (!troubles.length) return ['Nothing happens.'];
+    // C rnd.c:shuffle_int_array() before rolling the cure limit.
+    for (let i = troubles.length - 1; i > 0; i--) {
+        const swap = rn2(i + 1);
+        [troubles[i], troubles[swap]] = [troubles[swap], troubles[i]];
+    }
+    const count = Math.min(troubles.length, rn2(d(2, horn.blessed ? 4 : 2)));
+    for (const trouble of troubles.slice(0, count)) {
+        switch (trouble) {
+        case 'sick':
+            clearHeroSickness();
+            u.usick_type = 0;
+            delete u._sicknessCause;
+            messages.push('You feel cured.  What a relief!');
+            break;
+        case 'blind': {
+            const wasBlind = heroIsBlind();
+            u._blindTimeout = u.ucreamed || 0;
+            u.blind = !!(u._blindTimeout || u.blindfolded || u.Blindfolded || u._polyself_form_blinded);
+            if (!u.blind) removeHeroStatusSuffix('Blind');
+            if (talk && wasBlind && !u.blind) messages.push(heroIsHallucinating()
+                ? 'Far out!  Everything is all cosmic again!' : 'You can see again.');
+            else if (talk && !u._blindTimeout && (u.blindfolded || u.Blindfolded)) messages.push('Your eyes itch momentarily.');
+            vision_recalc(0);
+            game._redraw_level_after_more = 1;
+            break;
+        }
+        case 'hallu': {
+            const wasHallucinating = heroHasActiveHallucination();
+            u._halluTimeout = 0;
+            u.hallucinating = u.hallu = false;
+            removeHeroStatusSuffix('Hallu');
+            if (talk && wasHallucinating) messages.push(`Everything ${heroIsBlind() ? 'feels' : 'looks'} SO boring now.`);
+            game._redraw_level_after_more = 1;
+            break;
+        }
+        case 'vomit':
+            clearHeroVomiting();
+            if (talk) messages.push('You feel much less nauseated now.');
+            break;
+        case 'conf':
+            clearHeroConfusion();
+            if (talk) messages.push(`You feel less ${heroIsHallucinating() ? 'trippy' : 'confused'} now.`);
+            break;
+        case 'stun':
+            u._stunTimeout = 0;
+            u.stunned = false;
+            removeHeroStatusSuffix('Stun');
+            if (talk) messages.push(`You feel ${heroIsHallucinating() ? 'less wobbly' : 'a bit steadier'} now.`);
+            break;
+        case 'deaf':
+            u._deafTimeout = 0;
+            removeHeroStatusSuffix('Deaf');
+            if (talk) messages.push('You can hear again.');
+            break;
+        }
+    }
+    return count ? messages : ['Nothing seems to happen.'];
 }
 
 function eucalyptusPostEffect(touched) {
@@ -33356,7 +33666,7 @@ function dropMetalObjectAtHero(item) {
     newsym(item.ox, item.oy);
 }
 
-function heroMetalNonFoodNutrition(item) {
+export function heroMetalNonFoodNutrition(item) {
     if (!item) return 0;
     if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$')
         return Math.min(2000, Math.trunc((item.quan || 1) / 100));
@@ -33365,6 +33675,10 @@ function heroMetalNonFoodNutrition(item) {
     const explicit = item.oc_nutrition ?? item.nutrition;
     if (explicit != null) return Math.max(0, Math.trunc(Number(explicit) || 0));
     if (objectIsRingLike(item)) return 15;
+    if (objectKindKey(item) === 'cheap plastic imitation of the amulet of yendor') return 1;
+    // objects.h class macros specify nutrition separately from weight.
+    const classNutrition = { amulet: 20, potion: 10, scroll: 6, spellbook: 20, wand: 30 }[item.cls];
+    if (classNutrition != null) return classNutrition;
     return globObjectWeight({ ...item, quan: 1 });
 }
 
@@ -33392,7 +33706,7 @@ function eatenAccessoryHasEffect(item, messages) {
     messages.push(`Magic spreads through your body as you digest the ${objectIsRingLike(item) ? 'ring' : 'amulet'}.`);
 }
 
-function adjustHeroAttribute(attr, delta) {
+export function adjustHeroAttribute(attr, delta) {
     if (!game.u?.acurr?.a || !delta) return false;
     const before = game.u.acurr.a[attr] ?? 10;
     const after = Math.max(3, Math.min(125, before + delta));
@@ -42284,6 +42598,7 @@ function boulderFillTrapAt(x, y) {
 
 function deleteBoulderFillFloorTrap(trap, x, y) {
     if (!trap || !BOULDER_FILL_FLOOR_TRAPS.has(trap.ttyp) || !game.level?.traps) return false;
+    clearConjoinedPits(trap);
     if (game.u?.ux === x && game.u?.uy === y) {
         if (game.u.utraptype !== TT_BURIEDBALL) {
             game.u.utrap = 0;
@@ -44735,6 +45050,10 @@ function appendToplineAfterMoreMessages(messages) {
 }
 
 function clearLifeSavedDeathState() {
+    if (game._sickness_expired) {
+        clearHeroSickness();
+        game._sickness_expired = 0;
+    }
     game._death_cause = '';
     game._death_bones_body = '';
     game._death_current_move = 0;
@@ -45149,10 +45468,9 @@ function erodeDestroyArmor(armor, messages) {
 }
 
 function destroyArm(messages) {
+    const hits = rn2(4) + 1;
     const armors = wornArmorItemsBySlotOrder(['body', 'cloak', 'helm', 'shield', 'gloves', 'boots', 'shirt']);
     if (!armors.length) return false;
-
-    const hits = rn2(4) + 1;
     let result = false;
     for (let i = 0; i < hits; i++) {
         const armor = armors[rn2(armors.length)];
@@ -45160,6 +45478,12 @@ function destroyArm(messages) {
         const erosion = erodeDestroyArmor(armor, messages);
         if (erosion) result = true;
         if (erosion === 'destroyed') break;
+    }
+    if (result) {
+        if (game._search_pending_count > 0) messages.push('You stop searching.');
+        clearActiveDelayedOccupations({ interruptibleOnly: true, interruptEating: true,
+            addEatingMessage: text => messages.push(text) });
+        interruptPositiveMulti();
     }
     return result;
 }
@@ -50340,7 +50664,7 @@ function tipHatQuestNemesisNoise() {
     return message ? { handled: true, message } : { handled: false, message: '' };
 }
 
-function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOverride = null, offerCommandMode = false } = {}) {
+export function tipHatMonsterNoise(mon, { visible = tipHatMonsterVisible(mon), nameOverride = null, offerCommandMode = false } = {}) {
     const silent = tipHatMonsterSilent(mon);
     if (!mon || heroIsDeaf() || (silent && !mon?.isshk)) return { handled: false, message: '' };
     const name = nameOverride ?? (visible ? fireScrollMonsterName(mon) : 'It');
@@ -53493,33 +53817,6 @@ function saveDeathBonesIfNeeded() {
     vfsWriteFile(bonesPath, encodeBonesLevel());
 }
 
-function monsterExperienceValue(mon) {
-    const data = mon?.data || {};
-    const level = Math.max(0, mon?.m_lev ?? mon?.mlevel ?? data.mlevel ?? 0);
-    const speed = data.mmove ?? NORMAL_SPEED;
-    const attacks = data.xpAttacks || data.attacks || (data.attack ? [data.attack] : []);
-    const hasWeaponAttack = attacks.some(monsterAttack =>
-        (monsterAttack.aatyp || (monsterAttack.weapon ? 'weap' : '')) === 'weap');
-    let experience = 1 + level * level
-        + (speed > NORMAL_SPEED ? speed > (3 * NORMAL_SPEED / 2) ? 5 : 3 : 0)
-        + ((data.armed || data.attack?.weapon) && !hasWeaponAttack ? 5 : 0)
-        + (data.xpAttackBonus || 0);
-    const monsterAc = data.mac ?? 10;
-    if (monsterAc < 3) experience += (7 - monsterAc) * (monsterAc < 0 ? 2 : 1);
-    for (const monsterAttack of attacks) {
-        const attackType = monsterAttack.aatyp || (monsterAttack.weapon ? 'weap' : '');
-        if (attackType === 'weap') experience += 5;
-        else if (attackType === 'magc') experience += 10;
-        else if (XP_SPECIAL_ATTACK_TYPES.has(attackType)) experience += 3;
-        const damageType = monsterAttack.adtyp || 'phys';
-        if (XP_DOUBLE_DAMAGE_TYPES.has(damageType)) experience += 2 * level;
-        else if (XP_FLAT_DAMAGE_TYPES.has(damageType)) experience += 50;
-        else if (damageType !== 'phys') experience += level;
-        if ((monsterAttack.dice ?? 0) * (monsterAttack.sides ?? 0) > 23) experience += level;
-    }
-    return experience;
-}
-
 export function recordVanquished(mon, awardExperience = true) {
     // C ref: mon.c:2762 (m_detach) — the Wizard of Yendor always triggers
     // wizdeadorgone() bookkeeping when he leaves play (wizard.c:806-814).
@@ -53548,7 +53845,8 @@ export function recordVanquished(mon, awardExperience = true) {
                 : `${monName}s`;
             return `${count} ${plural}`;
         });
-    const experience = monsterExperienceValue(mon);
+    // C xkilled computes experience after m_detach has dropped all equipment.
+    const experience = monsterExperienceValue({ ...mon, minvent: [] }, previousCount + 1);
     if (!awardExperience) return;
     game.u.urexp = (game.u.urexp || 0) + 4 * experience;
     if (!game.u?.ualign) return;
@@ -53859,12 +54157,6 @@ const POTION_INDEX_BY_OTYP = new Map([
 const POTION_WISH_PROBS = [
     40, 40, 40, 30, 40, 40, 40, 30, 40, 40, 115, 45, 20, 20, 40, 40,
     40, 40, 10, 10, 40, 40, 40, 10, 30,
-];
-const IDENTIFIED_AMULET_NAMES = [
-    'amulet of esp', 'amulet of life saving', 'amulet of strangulation',
-    'amulet of restful sleep', 'amulet versus poison', 'amulet of change',
-    'amulet of unchanging', 'amulet of reflection', 'amulet of magical breathing',
-    'amulet of guarding', 'amulet of flying',
 ];
 const BAD_AMULET_NAMES = new Set([
     'amulet of strangulation',
@@ -55266,6 +55558,7 @@ async function sitWhileAlreadyTrapped(trap) {
 
 function deleteTrap(trap) {
     if (!game.level) return;
+    clearConjoinedPits(trap);
     const x = Number.isInteger(trap?.tx) ? trap.tx : game.u?.ux || 0;
     const y = Number.isInteger(trap?.ty) ? trap.ty : game.u?.uy || 0;
     game.level.traps = (game.level.traps || []).filter(item => item !== trap);
@@ -57804,11 +58097,6 @@ function heroPitTrapState() {
     game.u.utraptype = 'pit';
 }
 
-function heroPitDamageDie(relevantSpikes) {
-    if (relevantSpikes) return 10;
-    return 6;
-}
-
 function mountedHeroPitSteedResult(trap, messages) {
     const steed = game.u?.usteed;
     if (!steed) return false;
@@ -57882,11 +58170,19 @@ function heroPitClingerResult(trap, prefix, alreadyKnown) {
     return { message: trapMessage(...messages) };
 }
 
-function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false, recursive = false } = {}) {
+function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false, recursive = false, movement = false } = {}) {
     const alreadyKnown = !!trap?.tseen;
     const inSokoban = In_sokoban(game.u?.uz);
     if (!inSokoban && (game.u?.levitating || (game.u?.flying && !plunged && !viaSitting)))
-        return { message: '', more: false };
+        return { message: movement && alreadyKnown ? movementOverFloorTrapMessage(trap) : '', more: false };
+    const origin = heroBullwhipPitTrapped() ? sameLevelTeleportTrapAt(game.u.ux0, game.u.uy0) : null;
+    const conjoined = conjoinedPits(trap, origin);
+    const adjacent = !!(origin && is_pit(origin.ttyp) && is_pit(trap?.ttyp)
+        && xdir.some((x, i) => i < N_DIRS && x === game.u.dx && ydir[i] === game.u.dy));
+    // C dotrap skips the usual escape roll while moving between pits.
+    if (movement && alreadyKnown && !inSokoban && !conjoined && !adjacent
+        && sitTrapEscapeAllowed(trap) && !rn2(5))
+        return { message: movementTrapEscapeMessage(trap), more: false };
     if (trap) trap.tseen = true;
     if (!inSokoban && polyselfForm()?.clinger && !plunged)
         return heroPitClingerResult(trap, prefix, alreadyKnown);
@@ -57894,29 +58190,36 @@ function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false,
     let relevantSpikes = trap?.ttyp === SPIKED_PIT;
     const messages = [prefix];
     const steed = game.u?.usteed;
+    const deliberate = !steed && alreadyKnown && !!game.iflags?.menu_requested;
     if (inSokoban) {
         const pitName = trap?.ttyp === SPIKED_PIT ? 'spiked pit' : 'pit';
         messages.push(`Air currents pull you down into ${pitOwnerArticle(trap)} ${pitName}!`);
     } else {
         if (steed && recursive) messages.push(`You and ${recursiveSteedPitName(steed)} fall into ${pitOwnerArticle(trap)} pit!`);
         else if (steed) messages.push(`You lead ${steedPitName(steed, { poor: true })} into ${pitOwnerArticle(trap)} pit!`);
-        else messages.push('You fall into a pit!');
+        else if (deliberate) messages.push('You carefully lower yourself into the pit.');
+        else if (conjoined) messages.push('You move into an adjacent pit.');
+        else if (adjacent) messages.push(`You stumble over debris${!rn2(5) ? ' between the pits' : ''}.`);
+        else messages.push(`You ${plunged ? game.u?.flying ? 'dive' : 'plunge' : 'fall'} into ${pitOwnerArticle(trap)} pit!`);
     }
     if (relevantSpikes && heroWearingIronShoes()) {
         messages.push('Your iron shoes protect you from the sharp iron spikes.');
         relevantSpikes = false;
     } else if (relevantSpikes) {
         messages.push(steed
-            ? `${steedPitName(steed, { poor: true, capital: true })} lands on a set of sharp iron spikes!`
-            : 'You land on a set of sharp iron spikes!');
+            ? `${steedPitName(steed, { poor: true, capital: true })} ${conjoined ? 'steps' : 'lands'} on a set of sharp iron spikes!`
+            : `You ${conjoined ? 'step' : 'land'} on a set of sharp iron spikes!`);
     }
 
     heroPitTrapState();
     if (mountedHeroPitSteedResult(trap, messages))
         return { message: trapMessage(...messages) };
 
-    const damage = rnd(heroPitDamageDie(relevantSpikes));
-    const deathCause = relevantSpikes ? 'fell into a pit of iron spikes' : 'fell into a pit';
+    const noFall = conjoined || deliberate || (plunged && (game.u?.flying || polyselfForm()?.clinger));
+    const damage = relevantSpikes ? rnd(conjoined ? 4 : adjacent ? 6 : 10) : noFall ? 0 : rnd(adjacent ? 3 : 6);
+    const cause = plunged ? 'deliberately plunged' : relevantSpikes && (conjoined || deliberate)
+        ? 'stepped' : relevantSpikes && adjacent ? 'stumbled' : 'fell';
+    const deathCause = `${cause} into a pit${relevantSpikes ? ' of iron spikes' : ''}`;
     const damageResult = applyHeroPitDamage(damage, messages, deathCause);
     if (damageResult.fatal) return { message: trapMessage(...messages), ...damageResult };
 
@@ -57936,14 +58239,52 @@ function heroPitResult(trap, prefix = '', { viaSitting = false, plunged = false,
     };
 }
 
-function movementPitResult(trap, options = {}) {
-    const alreadySeen = !!trap?.tseen;
-    if (!In_sokoban(game.u?.uz) && (game.u?.levitating || game.u?.flying))
-        return { message: alreadySeen ? movementOverFloorTrapMessage(trap) : '', more: false };
-    if (alreadySeen && !In_sokoban(game.u?.uz)
-        && sitTrapEscapeAllowed(trap) && !rn2(5))
-        return { message: movementTrapEscapeMessage(trap), more: false };
-    return heroPitResult(trap, '', options);
+export function movementPitResult(trap, options = {}) {
+    return heroPitResult(trap, '', { ...options, movement: true });
+}
+
+// C trap.c:climb_pit. Escaping uses an action without changing position.
+async function climbPit() {
+    const pitname = trapName(PIT);
+    const form = heroFormData();
+    const data = permonstRowForMonster({ data: form }) || form;
+    const boulder = (game.level?.objects || []).find(obj => !obj.hidden && !obj.transientProjectile
+        && obj.otyp === BOULDER && obj.ox === game.u.ux && obj.oy === game.u.uy);
+    const inSokoban = In_sokoban(game.u.uz);
+    const messages = [];
+    let escaped = false;
+    if (heroPassesWalls()) {
+        messages.push(`You ascend from the ${pitname}.`);
+        escaped = true;
+    } else if (!rn2(2) && boulder) {
+        const leg = bodyPart(form, 'leg');
+        messages.push(`Your ${leg} gets stuck in a crevice.`, `You free your ${leg}.`);
+    } else if ((game.u.flying || form.clinger || is_clinger(data)) && !inSokoban) {
+        messages.push(`You ${heroLocomotion('climb')} from the ${pitname}.`);
+        escaped = true;
+    } else if (!--game.u.utrap || dismountMonsterEasyEscapePit({ data })) {
+        const verb = inSokoban && game.u.levitating ? 'struggle against the air currents and float'
+            : game.u.usteed ? 'ride' : 'crawl';
+        messages.push(`You ${verb} to the edge of the ${pitname}.`);
+        escaped = true;
+    } else if (game.u.dz || game.flags?.verbose !== false) {
+        messages.push(game.u.usteed ? `${steedTrapProjectileName(game.u.usteed)} is still in a pit.`
+            : heroIsHallucinating() && !rn2(5) ? "You've fallen, and you can't get up." : 'You are still in a pit.');
+    }
+    if (escaped) {
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+        if (boulder) {
+            removeFloorObject(boulder);
+            earthFloorEffects(boulder, game.u.ux, game.u.uy, messages, 'settle');
+        }
+        vision_recalc(0);
+    }
+    const message = trapMessage(...messages);
+    if (message && (escaped || messages.length > 1 || game._last_trapmove_message !== message)) await setMessage(message);
+    else { game._pending_message = ''; game._keep_pending_message = 0; }
+    game._last_trapmove_message = message;
+    game.context.move = 1;
 }
 
 function sitPitResult(trap, prefix) {
@@ -60041,6 +60382,23 @@ async function moveHero(dx, dy) {
     const targetBoulder = game.level?.objects?.find(obj =>
         !obj.transientProjectile && obj.ox === newx && obj.oy === newy && obj.otyp === BOULDER);
 
+    // C domove_core passes NULL to trapmove: even a neighboring seen pit
+    // causes a climb attempt. Attacking an occupant precedes trap escape.
+    if (!swallowedMove && heroBullwhipPitTrapped()
+        && !(game.level?.monsters || []).some(mon => !mon.dead && mon.mx === newx && mon.my === newy)) {
+        if (!game._confirmed_trap_step && heroMustConfirmTrapStep(newx, newy, nopick)) {
+            const trap = heroTrapAt(newx, newy);
+            game._pending_trap_step = { dx, dy, nopick };
+            await setMessage(`Really ${movementTrapLocomotion()} ${intoVsOntoTrapType(trap?.ttyp) ? 'into' : 'onto'} that ${TRAP_NAMES[trap?.ttyp] || 'trap'}? [yn] (n)`);
+            game._command_mode = 'confirmTrapStep';
+            game.context.move = 0;
+        } else {
+            game.u.dz = 0;
+            await climbPit();
+        }
+        return;
+    }
+
     // C ref: src/hack.c:1216-1221 — while running (run >= 2; travel sets
     // run = 8, cmd.c:5366) moving into a boulder is blocked, silently unless
     // mention_walls is on.
@@ -60958,10 +61316,12 @@ async function moveHero(dx, dy) {
         mon.dead = true;
         mon.mhp = 0;
         markHeroKilledTameMonster(mon);
-        const survivedDeath = applyHeroProjectileMonsterLifeSaving(mon, messages)
+        const lifeSaved = applyHeroProjectileMonsterLifeSaving(mon, messages);
+        const survivedDeath = lifeSaved
             || reviveVampshifterFromHeroProjectileKill(mon, messages, targetPhrase, { killMessage: false });
         if (survivedDeath) {
-            restoreDirectMeleeLethalSurvivorState(mon, directMeleePreHitState);
+            if (lifeSaved && killedPet) clearDirectMeleeWaitStrategyMask(mon);
+            else restoreDirectMeleeLethalSurvivorState(mon, directMeleePreHitState);
             wokeByHit = false;
             if (directMeleeHit && angerTownWatchAfterHit)
                 directMeleeAngerTownWatch(messages, { silent: heroIsDeaf() });
@@ -62144,6 +62504,20 @@ export async function rhack(_cmd) {
 
 	    const key = _cmd || await nhgetch();
 	    let ch = commandChar(key);
+    // A binding names a command, not a second binding. Resolve before the
+    // command preamble, while leaving prompt letters and directions alone.
+    const bound = !game._command_mode && !game._message_more && !game._intro_lines
+        && !game._in_doagain && !game._running_continuation && !game._travel_step_active
+        ? game.keyBindings?.[ch] ?? (ch.charCodeAt(0) >= 128
+            ? Object.keys(COMMAND_KEYS).find(name => COMMAND_KEYS[name] === ch) : null)
+        : null;
+    if (bound === 'nothing') {
+        game._repeat_last_key = null;
+        await setMessage(`Unknown command '${visibleKey(ch)}'.`);
+        return;
+    }
+    const boundKey = COMMAND_KEYS[bound];
+    if (boundKey && boundKey.charCodeAt(0) < 128) ch = boundKey;
     game._pending_message_visual_override = '';
     game._pending_message_visual_override_base = '';
 	    if (game.u?.uswallow && game._swallow_overlay_active && game._overlay_lines
@@ -62306,7 +62680,7 @@ export async function rhack(_cmd) {
         }
     }
 
-    if (ch === '\f') {
+    if (ch === '\f' || (ch === '\x12' && !game._command_mode)) {
         if (!game._message_more) {
             game._pending_message = '';
             game._keep_pending_message = 0;
@@ -69945,11 +70319,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return false;
     }
 
-    // C ref: zap.c:resist() helper — hero spell vs monster magic resistance.
-    function spellMonsterResistsMagm(mon) {
-        return monsterMagicResistance(mon) >= 90 || monsterHasMagicResistanceForPolymorph(mon);
-    }
-
     function spellMonsterTheName(mon, capitalized = false) {
         const name = (mon?.isshk && mon?.shknam) || mon?.givenName || null;
         const base = name || `the ${mon?.data?.name || 'monster'}`;
@@ -69967,15 +70336,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     function spellMonsterIsRider(mon) {
         return !!(mon?.rider || mon?.data?.rider
             || ['death', 'pestilence', 'famine'].includes(String(mon?.data?.name || '').toLowerCase()));
-    }
-
-    // C ref: zap.c:cancel_monst() monster branch.
-    function spellCancelMonster(mon, seen, messages) {
-        if (monsterResistsEffect(mon, game.u?.ulevel || 1)) return;
-        const wasInvis = !!mon.minvis;
-        mon.mspec_used = 0;
-        mon.minvis = 0;
-        if (seen && wasInvis) messages.push(`${spellMonsterTheName(mon, true)} is no longer invisible.`);
     }
 
     // C ref: zap.c:cancel_monst() hero branch (subset: form + item buc/spe).
@@ -70042,21 +70402,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         if (mon === game.u?.ustuck && !game.u?.uswallow) {
             game.u.ustuck = null;
         }
-    }
-
-    // C ref: zap.c killed-monster tail for hero rays (mirrors the wand path).
-    function spellKillBeamMonster(mon, messages) {
-        rn2(6); // C make_corpse() desecrate roll inside xkilled()
-        const corpseData = mon.data?.corpse || mon.data;
-        const dropCorpse = monsterCorpseDropSucceeds(mon, mon.data);
-        dropMonsterInventoryRaw(mon, messages);
-        game.level.monsters = (game.level?.monsters || []).filter(candidate => candidate !== mon);
-        mon.dead = true;
-        if (dropCorpse && monsterLeavesCorpseLikeDrop(corpseData))
-            createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
-        recordVanquished(mon, true);
-        newsym(mon.mx, mon.my);
-        messages.push(`You kill the ${mon.data?.name || 'monster'}!`);
     }
 
     // C ref: lock.c:doorlock() — knock/wizard lock/force bolt vs (secret) doors.
@@ -70227,17 +70572,15 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         openHeroFallingTrap: spellOpenHeroFallingTrap,
         openMonsterHoldingTrap: spellOpenMonsterHoldingTrap,
         closeMonsterHoldingTrap: spellCloseMonsterHoldingTrap,
-        monsterResistsMagm: spellMonsterResistsMagm,
+        monsterResistsMagm: monsterResistsMagic,
         monsterTheName: spellMonsterTheName,
         monsterIsUndead: spellMonsterIsUndead,
         monsterIsRider: spellMonsterIsRider,
-        cancelMonster: spellCancelMonster,
         cancelHeroSelf: spellCancelHeroSelf,
         monsterHurtle: spellMonsterHurtle,
         wakeupMonster: spellWakeupMonster,
         abuseDog: spellAbuseDog,
         sleptMonster: spellSleptMonster,
-        killSpellBeamMonster: spellKillBeamMonster,
         spellDoorlock,
         heroWearsHardHelmet: spellHeroWearsHardHelmet,
         heroIsKnightWithQuestArtifact: spellHeroIsKnightWithQuestArtifact,
@@ -70277,6 +70620,30 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         placeRockAtHero,
         visibleMonsterForScroll,
         monsterResistsEffect,
+        monsterResistsCold,
+        monsterResistsFire,
+        monsterColdInventoryDamage,
+        coldDamageInventory,
+        heroHasColdResistance,
+        applyColdRayTerrain: (x, y) => applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }),
+        applyMonsterPolymorphTarget,
+        levelDifficulty: () => level_difficulty(game.u?.uz),
+        heroIsUnaware,
+        heroZapReflectSourceWord,
+        heroPolyselfResistsStoning,
+        maybeTurnPolyselfIntoStoneGolem,
+        consumeLifeSavingAmulet,
+        applyHeroProjectileMonsterLifeSaving,
+        stoneMonster,
+        drainItem,
+        drainItemProtectedByDrainResistance,
+        dragonArmorSpecForItem,
+        BLACK_DRAGON_SCALES,
+        BLACK_DRAGON_SCALE_MAIL,
+        monsterIsVampireShifterForLifeSaving,
+        revealHeroProjectileHitMimicAppearance,
+        directMeleeNonlethalWakeupTail,
+        killMonsterFromHeroProjectileHit,
         monsterResistsSleepEffect,
         monsterReflectionSource,
         recordMonsterReflectionDiscovery,
@@ -70379,7 +70746,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._keep_pending_message = 1;
         }
         if (result?.polyResult) applyLifeSavingOrFatalCommandMode(result.polyResult);
-        else if (result?.fatal) applyLifeSavingOrFatalCommandMode(result);
+        else if (result?.fatal || result?.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
     }
 
     if (game._command_mode === 'castSpell') {
@@ -73288,6 +73655,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         const name = inventoryItemName(item).toLowerCase();
         game._command_mode = null;
+        if (objectKindKey(item) === 'unicorn horn') {
+            const messages = applyUnicornHorn(item);
+            await setMessage(messages.join('  '), messages.length > 1);
+            game.context.move = 1;
+            return;
+        }
         // C ref: apply.c:4301 (use_tool SADDLE case) -> steed.c:36-141
         // use_saddle() — a saddle is applied to an adjacent monster after
         // getdir(); u_handsy() holds for an unpolymorphed humanoid hero.
@@ -77000,6 +77373,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
+    if (!game._command_mode && bound && bound in COMMAND_KEYS
+        && (!boundKey || boundKey.charCodeAt(0) >= 128)) {
+        game._command_mode = 'extendedCommand';
+        game._extended_command = bound;
+        ch = '\r';
+    }
+
     if (game._command_mode === 'extendedCommand') {
         if (ch === '\r' || ch === '\n') {
             let command = game._extended_command || '';
@@ -79071,8 +79451,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         await finishChatMonsterTarget(target, targetSound);
         return;
     }
-
-    if (game.keyBindings?.[ch] === 'inventory') ch = 'i';
 
     if (ch === '#' && game._force_fight && !game._command_mode) {
         game._force_fight = 0;
@@ -82286,9 +82664,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.stairs = saved.stairs;
             game._utrack = [...(saved.utrack || [])];
             catchUpReturnedLevelGlobShrinkTimers();
-            for (const mon of game.level?.monsters || []) {
-                rnd(10);
-            }
+            restoredLevelMonsterCatchup(game.level?.monsters || [], (game.moves || 1) - (saved.moves ?? game.moves ?? 1));
             let arrivalStair = null;
             for (let stair = game.stairs; stair; stair = stair.next) {
                 if (stair.up) arrivalStair = stair;
@@ -82316,6 +82692,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             placeFollowerAfterLevelChange(carriedPet);
             deliverQueuedImpactDroppedObjects(game.u?.uz);
+            arriveMigratingMonsters();
             vision_reset();
             game._redraw_level_after_more = 1;
             // C ref: src/do.c:1797-1800 — the ordinary "You descend the
@@ -82366,6 +82743,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         placeFollowerAfterLevelChange(carriedPet);
         deliverQueuedImpactDroppedObjects(game.u?.uz);
+        arriveMigratingMonsters();
         game._utrack = [];
         vision_reset();
         game._redraw_level_after_more = 1;
@@ -82385,6 +82763,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
 
     if (ch === '<') {
         let upStair = null;
+        if (heroBullwhipPitTrapped()) {
+            game.u.dz = -1;
+            await climbPit();
+            return;
+        }
         for (let stair = game.stairs; stair; stair = stair.next) {
             if (stair.up && stair.sx === game.u?.ux && stair.sy === game.u?.uy) upStair = stair;
         }
@@ -82421,9 +82804,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.stairs = saved.stairs;
             game._utrack = [...(saved.utrack || [])];
             catchUpReturnedLevelGlobShrinkTimers();
-            for (const mon of game.level?.monsters || []) {
-                rnd(10);
-            }
+            restoredLevelMonsterCatchup(game.level?.monsters || [], (game.moves || 1) - (saved.moves ?? game.moves ?? 1));
         } else {
             await mklev();
             u_on_dnstairs();
@@ -82453,6 +82834,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             follower.movement = Math.max(follower.movement || 0, 12);
         }
         deliverQueuedImpactDroppedObjects(game.u?.uz);
+        arriveMigratingMonsters();
         vision_reset();
         game._redraw_level_after_more = 1;
         game._stairs_arrival_after_more = { fromLevel, silent: !ballAndChain.length };

@@ -1,3 +1,5 @@
+import { ARMOR_MAGIC_NEGATION } from './armor.js';
+import { clearHeroSickness, adjustHeroAttribute } from './cmd.js';
 // allmain.js — Main game setup and move loop.
 
 // C refs: src/allmain.c:newgame(), moveloop_core().
@@ -18,6 +20,8 @@ import {
     mmAggression as monsterMonsterAggression,
     mMoveAggress as monsterMoveAggress,
     resistConflict as monsterResistsConflict,
+    resistMon,
+    findMac as monsterFindMac,
     fightm as monsterConflictFightm,
     attackList as monsterPermonstAttacks,
     selectHwep as monsterSelectHwep,
@@ -32,12 +36,15 @@ import {
     MM_AGGR as MONSTER_MM_AGGR_FLAG,
 } from './mhitm.js';
 import { planMonsterSteal } from './steal.js';
+import { foodObjectNutrition, CARRIED_DELAYED_FOOD_VICTUALS, heroMetalNonFoodNutrition, applyHeroProjectileMonsterLifeSaving, tipHatMonsterNoise, dismountSteedThrown } from './cmd.js';
 import { DIGTYP_BOULDER, DIGTYP_DOOR, DIGTYP_ROCK, DIGTYP_STATUE, DIGTYP_TREE, DIGTYP_UNDIGGABLE, digBoulderAt, digCheckFailed, digCheckFailMessage, digCheckHero, digDbon, digEffortIncrement, digFumblingResult, digHardnessBlockMessage, digOccupationAborted, digTargetName, digTypeOf, digVerb, finishDigContext, finishWallDigTerrain, fractureDigBoulder, inShopBaseAt, pickDigDirectionPrompt, wakeNearbyForDig } from './dig.js';
 import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, GRAVE, ICE, IS_OBSTRUCTED, IS_STWALL, IS_TREE, IS_ROOM, IS_WALL, TREE, ROOM, DOOR, CORR, SDOOR, SCORR, IRONBARS, SINK, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, W_NONDIGGABLE, W_NONPASSWALL, APPORT, CADAVER, ACCFOOD, DOGFOOD, MANFOOD, POISON, UNDEF, TABU, NO_MM_FLAGS, NO_MINVENT, MM_NOMSG, IN_SIGHT, ALL_TRAPS, ARROW_TRAP, ROCKTRAP, PIT, SPIKED_PIT, SQKY_BOARD, BEAR_TRAP, LANDMINE, ROLLING_BOULDER_TRAP, SLP_GAS_TRAP, RUST_TRAP, FIRE_TRAP, HOLE, TRAPDOOR, TELEP_TRAP, LEVEL_TELEP, WEB, STATUE_TRAP, MAGIC_TRAP, ANTI_MAGIC, ANTIMAGIC, MAGIC_PORTAL, POLY_TRAP, VIBRATING_SQUARE, ALLOW_M, ALLOW_TM, ALLOW_TRAPS, ALLOW_U, ALLOW_ALL, NOTONL, OPENDOOR, UNLOCKDOOR, BUSTDOOR, ALLOW_ROCK, ALLOW_WALL, ALLOW_DIG, ALLOW_SANCT, ALLOW_SSM, ALLOW_BARS, NOGARLIC, Is_airlevel, Is_oracle_level, Is_waterlevel, ACCESSIBLE, IS_POOL, IS_LAVA, WATER, LAVAWALL, STAIRS, LADDER, BOLT_LIM, ZAP_POS, MON_POLE_DIST, NO_WEAPON_WANTED, NEED_WEAPON, NEED_AXE, NEED_PICK_AXE, NEED_PICK_OR_AXE, VAULT, VAULT_GUARD_TIME, M_SEEN_MAGR, M_AP_FURNITURE, M_AP_OBJECT, M_AP_MONSTER, M_AP_TYPE, MOD_ENCUMBER, HVY_ENCUMBER, EXT_ENCUMBER, OVERLOADED, ROOMOFFSET, SHARED, SHARED_PLUS, SHOPBASE, STRAT_APPEARMSG, STRAT_WAITFORU, MIGR_LADDER_UP, MIGR_RANDOM, MON_MIGRATING, W_ACCESSORY, W_ARMOR, W_WEP, isok } from './const.js';
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
-import { MONS, MZ_SMALL } from './permonst.js';
+import { MONS, MZ_SMALL, MZ_MEDIUM, MZ_GIGANTIC, carnivorous, herbivorous, is_animal, mindless, tunnels, needspick, nohands, verysmall, MS_ANIMAL, MS_HUMANOID, AD_MAGM, AD_RBRE, PM_BABY_GRAY_DRAGON } from './permonst.js';
+import { pmOf as monsterSpecies } from './mhitm.js';
+import { W_ARMS, MSLOW, MFAST } from './const.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { createGasCloud } from './region.js';
 import { MONS as PERMONST_MONS } from './permonst.js';
@@ -388,34 +395,7 @@ const OPTIONAL_INVENTORY = {
     Money: [{ cls: 'coin' }],
 };
 
-const ARMOR_MAGIC_NEGATION = {
-    'plate mail': 2,
-    'crystal plate mail': 2,
-    'bronze plate mail': 1,
-    'splint mail': 1,
-    'banded mail': 1,
-    'dwarvish mithril-coat': 2,
-    'elven mithril-coat': 2,
-    'chain mail': 1,
-    'orcish chain mail': 1,
-    'scale mail': 1,
-    'studded leather armor': 1,
-    'ring mail': 1,
-    'orcish ring mail': 1,
-    'leather armor': 1,
-    'mummy wrapping': 1,
-    'elven cloak': 1,
-    'orcish cloak': 1,
-    'dwarvish cloak': 1,
-    'oilskin cloak': 2,
-    robe: 2,
-    'alchemy smock': 1,
-    'leather cloak': 1,
-    'cloak of protection': 3,
-    'cloak of invisibility': 1,
-    'cloak of magic resistance': 1,
-    'cloak of displacement': 1,
-};
+
 
 const PET_OBJECT_WEIGHTS = {
     'chain mail': 300,
@@ -583,15 +563,6 @@ const TOURIST_FOODS = [
     [925, 'food ration', 'food rations', 'food ration'],
     [1000, 'tin', 'tins', 'tin'],
 ];
-
-const PET_FOOD_DELAY = {
-    'tripe ration': 2,
-    tripe: 2,
-    pancake: 2,
-    'lembas wafer': 2,
-    'cram ration': 3,
-    'food ration': 5,
-};
 
 const RING_NAMES = [
     'adornment', 'gain strength', 'gain constitution', 'increase accuracy',
@@ -1918,12 +1889,14 @@ function monsterDietName(mon) {
 
 function monsterCarnivorous(mon, name = monsterDietName(mon)) {
     const data = mon?.data || {};
-    return !!(data.carnivorous || data.carnivore) || CARNIVOROUS_PET_NAMES.has(name);
+    return !!(data.carnivorous || data.carnivore) || CARNIVOROUS_PET_NAMES.has(name)
+        || carnivorous(monsterSpecies(mon) || {});
 }
 
 function monsterHerbivorous(mon, name = monsterDietName(mon)) {
     const data = mon?.data || {};
-    return !!(data.herbivorous || data.herbivore) || HERBIVOROUS_PET_NAMES.has(name);
+    return !!(data.herbivorous || data.herbivore) || HERBIVOROUS_PET_NAMES.has(name)
+        || herbivorous(monsterSpecies(mon) || {});
 }
 
 function dogFoodCorpseIsOld(obj) {
@@ -2394,9 +2367,7 @@ function maybeKillerBeeEatRoyalJelly(mon) {
     }
 
     if (mon.pet) {
-        const edog = mon.mextra?.edog;
-        if (edog) edog.hungrytime = Math.max(edog.hungrytime || 0, game.moves || 1) + 200;
-        mon.mtame = Math.min(20, (mon.mtame || 10) + 1);
+        if (mon.mextra?.edog) applyPetFoodNutrition(mon, jelly);
         game._pet_skip_post_move_roll = 1;
     }
     const delay = jelly.blessed ? 3 : jelly.cursed ? 7 : 5;
@@ -3354,7 +3325,7 @@ export function interruptEatingOccupation(g = game, options = {}) {
     return true;
 }
 
-function interruptPositiveMulti() {
+export function interruptPositiveMulti() {
     game._run_steps_remaining = 0;
     game._running_continuation = 0;
     game._initial_run_command = 0;
@@ -3369,7 +3340,7 @@ function interruptPositiveMultiForStoning() {
     interruptPositiveMulti();
 }
 
-function clearActiveDelayedOccupations(options = {}) {
+export function clearActiveDelayedOccupations(options = {}) {
     const activeEating = game._eating_turns_remaining > 0;
     if (activeEating || options.clearEatingAlways) {
         if (activeEating && options.interruptEating) {
@@ -3380,9 +3351,11 @@ function clearActiveDelayedOccupations(options = {}) {
             game._pending_rotten_food_eating_message = 0;
         }
     }
-    game._armor_wear_occupation = null;
-    game._armor_takeoff_after_more = null;
-    game._armor_finish_after_more = 0;
+    if (!options.interruptibleOnly) {
+        game._armor_wear_occupation = null;
+        game._armor_takeoff_after_more = null;
+        game._armor_finish_after_more = 0;
+    }
     game._force_lock_occupation = null;
     game._force_lock_continue_time = 0;
     game._force_lock_finish_after_more = null;
@@ -3398,13 +3371,15 @@ function clearActiveDelayedOccupations(options = {}) {
     game._tin_opened_pending = null;
     game._spellbook_study_occupation = null;
     game._spellbook_finish_after_topline_more = null;
-    game._prayer_occupation = 0;
-    game._prayer_pending_done = 0;
-    game._pending_prayer_finish_message = 0;
-    game._prayer_process_time_now = 0;
-    game._prayer_split_finish_message = 0;
-    game._prayer_split_waiting_for_time = 0;
-    game._prayer_split_remaining_time = 0;
+    if (!options.interruptibleOnly) {
+        game._prayer_occupation = 0;
+        game._prayer_pending_done = 0;
+        game._pending_prayer_finish_message = 0;
+        game._prayer_process_time_now = 0;
+        game._prayer_split_finish_message = 0;
+        game._prayer_split_waiting_for_time = 0;
+        game._prayer_split_remaining_time = 0;
+    }
     if (options.clearPrayerDebug) game._prayer_debug_pleased = 0;
     if (options.clearPrayerTrouble) game._prayer_nearby_trouble = 0;
     if (options.clearInvulnerability && game.u) game.u.uinvulnerable = false;
@@ -4384,6 +4359,14 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    if (game._pending_feral_steed_dismount) {
+        const steed = game._pending_feral_steed_dismount;
+        game._pending_feral_steed_dismount = null;
+        if (steed === game.u?.usteed) {
+            await dismountSteedThrown([]);
+            if (game._message_more) return false;
+        }
+    }
     // C ref: the tty pauses inside pline() while the lich frost-touch chain
     // (destroy_items shatters, zap.c:5906) and the follow-on castmu() effect
     // lines (mcastu.c:822-834) are pending — the rest of movemon()'s monster
@@ -4705,11 +4688,18 @@ export async function processMonsterTurns() {
                 }
                 if (mon === game.u?.usteed) {
                     rn2(5);
-                    if ((mon.data?.name === 'kitten' || mon.data?.name === 'pony')
-                        && (mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2 <= 2) {
-                        rn2(4);
+                    if (mon.meating) {
+                        mon.meating--;
+                        rn2(5);
+                        continue;
                     }
-                    rn2(5);
+                    if (conflictActive && !monsterResistsConflict(mon)) {
+                        await dismountSteedThrown([]);
+                        continue;
+                    }
+                    await movePet(mon);
+                    if (!game._pet_skip_post_move_roll) rn2(5);
+                    game._pet_skip_post_move_roll = 0;
                     continue;
                 }
                 if (mon.isgd && mon._vault_escort_active) {
@@ -4945,7 +4935,7 @@ export async function processMonsterTurns() {
                                     // hits_you — magic resistance bounces the strike;
                                     // mwandexp is only set after mbhit() returns
                                     // (muse.c:1890), so a monster's very first zap
-                                    // always hits but still rolls rnd(20).
+                                    // always misses but still rolls rnd(20).
                                     strikingBeamRange -= 3;
                                     if (heroHasAntimagic()) {
                                         const shieldMessage = 'Boing!';
@@ -4980,15 +4970,41 @@ export async function processMonsterTurns() {
                                         if (!addToplineMessage(missMessage) && !zapShown)
                                             game._topline_after_more = `${zapMessage}  ${missMessage}`;
                                     }
-                                } else if ((game.level?.monsters || []).some(other =>
-                                    other !== mon && (other.mhp == null || other.mhp > 0)
-                                    && other.mx === beamX && other.my === beamY)) {
-                                    // C ref: muse.c:1759 — a beam square holding a
-                                    // monster shortens the remaining range by 3; the
-                                    // mbhitm() monster branch (resists_magm()/rnd(20)/
-                                    // d(2, 12), muse.c:1634-1646) is not ported because
-                                    // the recorded probes never zap a second monster.
-                                    strikingBeamRange -= 3;
+                                } else {
+                                    const target = monsterAtFlightSquare(beamX, beamY, mon);
+                                    if (target) {
+                                        // muse.c:1597-1652 mbhitm wakes and reveals
+                                        // targets before accuracy, resistance, and damage.
+                                        target.msleeping = 0;
+                                        revealProjectileHitMimicAppearance(target);
+                                        const visible = monsterVisibleToHero(target);
+                                        let learn = false;
+                                        if (monsterResistsMagic(target)) {
+                                            addToplineMessage('Boing!');
+                                            learn = true;
+                                        } else if (rnd(20) < 10 + monsterFindMac(target)) {
+                                            let damage = d(2, 12);
+                                            addToplineMessage(visible
+                                                ? `The wand hits ${monsterDisplayName(target).replace(/^The\b/, 'the')}${damage > 4 ? '!' : '.'}`
+                                                : `It is hit${damage > 4 ? '!' : '.'}`);
+                                            if (resistMon(target, WAND_CLASS, damage)) damage = Math.trunc((damage + 1) / 2);
+                                            target.mhp -= damage;
+                                            if (target.mhp < 1) killMonsterFromThrownInterveningHit(target, visible);
+                                            learn = true;
+                                        } else addToplineMessage(visible
+                                            ? `The wand misses ${monsterDisplayName(target).replace(/^The\b/, 'the')}.`
+                                            : 'It is missed.');
+                                        if (learn && monsterVisibleToHero(mon) && cansee(beamX, beamY)) {
+                                            recordWandDiscovery('striking', true);
+                                            strikingWand.known = true;
+                                        }
+                                        if (target.mhp > 0 && cansee(beamX, beamY) && !monsterVisibleToHero(target)) {
+                                            const loc = game.level.at(beamX, beamY);
+                                            loc.map_invisible = true;
+                                            newsym(beamX, beamY);
+                                        }
+                                        strikingBeamRange -= 3;
+                                    }
                                 }
                                 // C ref: muse.c:1773 fhito_loc() -> zap.c:2275 bhito()
                                 // case WAN_STRIKING: boulders crumble and statues
@@ -5218,9 +5234,9 @@ export async function processMonsterTurns() {
                 if (mon.pet) {
                     if (resumingPetInventory) {
                         game._pet_inventory_resume = null;
-                        movePet(mon, true, conflictActive);
+                        await movePet(mon, true, conflictActive);
                     } else {
-                        movePet(mon, false, conflictActive);
+                        await movePet(mon, false, conflictActive);
                     }
                     const stopPetRepeat = game._pet_kill_no_repeat;
                     if (stopPetRepeat) game._pet_kill_no_repeat = 0;
@@ -10516,7 +10532,14 @@ if (attack.adtyp === 'steal') {
         if (mon.mblinded && !--mon.mblinded) mon.mcansee = true;
         if (mon.mspec_used) mon.mspec_used--;
         let mmove = mon.data?.mmove ?? NORMAL_SPEED;
-        if (mon.mspeed === 'fast') mmove = Math.trunc((4 * mmove + 2) / 3);
+        // C mon.c:mcalcmove slows naturally fast species more strongly.
+        if (mon.mspeed === 'slow' || mon.mspeed === MSLOW || mon.mspeed === -1)
+            mmove = mmove < NORMAL_SPEED ? Math.trunc((2 * mmove + 1) / 3)
+                : 4 + Math.trunc(mmove / 3);
+        else if (mon.mspeed === 'fast' || mon.mspeed === MFAST)
+            mmove = Math.trunc((4 * mmove + 2) / 3);
+        if (mon === game.u?.usteed && game.u.ugallop && game.context?.mv)
+            mmove = Math.trunc(((rn2(2) ? 4 : 5) * mmove) / 3);
         const base = mmove - (mmove % NORMAL_SPEED);
         const movementRoll = rn2(NORMAL_SPEED);
         const extra = movementRoll < (mmove % NORMAL_SPEED) ? NORMAL_SPEED : 0;
@@ -10536,27 +10559,27 @@ if (attack.adtyp === 'steal') {
     }
     let heroMoveAmount = NORMAL_SPEED;
     if (game.u?.usteed && game.u.umoved) {
-        const mmove = game.u.usteed.data?.mmove ?? NORMAL_SPEED;
+        const steed = game.u.usteed;
+        let mmove = steed.data?.mmove ?? NORMAL_SPEED;
+        // C allmain.c:u_calc_moveamt uses mcalcmove for a ridden move,
+        // including the steed's speed and gallop before random rounding.
+        if (steed.mspeed === 'slow' || steed.mspeed === MSLOW || steed.mspeed === -1)
+            mmove = mmove < NORMAL_SPEED ? Math.trunc((2 * mmove + 1) / 3)
+                : 4 + Math.trunc(mmove / 3);
+        else if (steed.mspeed === 'fast' || steed.mspeed === MFAST)
+            mmove = Math.trunc((4 * mmove + 2) / 3);
+        if (game.u.ugallop && game.context?.mv)
+            mmove = Math.trunc(((rn2(2) ? 4 : 5) * mmove) / 3);
         heroMoveAmount = mmove - (mmove % NORMAL_SPEED);
         if (rn2(NORMAL_SPEED) < (mmove % NORMAL_SPEED)) heroMoveAmount += NORMAL_SPEED;
     } else {
         heroMoveAmount = game.u?._monsterMove ?? NORMAL_SPEED;
-        // The recorded C turn cadence for a xorn-form hero (u_calc_moveamt,
-        // allmain.c:114-157 with youmonst.data->mmove) advances 8 movement
-        // points per new turn here, not the xorn's nominal mmove of 9; that
-        // cadence is what makes the two monster cycles land on the recorded
-        // turn boundaries (moves 5->7 across the staircase move).
-        if (game.u?._polyself_form?.name === 'xorn') heroMoveAmount = 8;
+        // C: allmain.c:u_calc_moveamt augments the current form's speed
+        // using the live PRNG, including forms with zero base movement.
         if (game.u?.veryfast) {
-            const speedRoll = game.u._monsterMoveRollQueue?.length
-                ? (rn2(3), game.u._monsterMoveRollQueue.shift())
-                : rn2(3);
-            if (speedRoll) heroMoveAmount += NORMAL_SPEED;
+            if (rn2(3)) heroMoveAmount += NORMAL_SPEED;
         } else if (game.u?.fast) {
-            const speedRoll = game.u._monsterMoveRollQueue?.length
-                ? (rn2(3), game.u._monsterMoveRollQueue.shift())
-                : rn2(3);
-            if (!speedRoll) heroMoveAmount += NORMAL_SPEED;
+            if (!rn2(3)) heroMoveAmount += NORMAL_SPEED;
         }
     }
     if ((game.u?._statusSuffix || '').includes('Burdened'))
@@ -10747,6 +10770,54 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 game._resume_turn_tail_after_stoning_death = 1;
                 armHeroDeathMore('');
                 return false;
+            }
+        }
+        // C timeout.c:sickness_dialogue()/nh_timeout(): warnings and
+        // constitution exercise precede expiry, which precedes HP regen.
+        const sickTime = game.u?._sickTimeout || game.u?._sicknessTimeout || 0;
+        if (!resumeAfterStoningDeath && !game.u?.uinvulnerable && sickTime > 0) {
+            const u = game.u;
+            let warning = { 7: 'Your illness feels worse.', 5: 'Your illness is severe.', 3: "You are at Death's door." }[sickTime];
+            if (warning) {
+                if (!(u.usick_type & 2)) warning = warning.replace('illness', 'sickness');
+                if (sickTime === 3 && (u.hallucinating || u.hallu || (u._statusSuffix || '').includes('Hallu'))) {
+                    const pronoun = ['He', 'She', 'It', 'They'][rn2(4)];
+                    warning += `  ${pronoun} ${pronoun === 'They' ? 'are' : 'is'} inviting you in.`;
+                }
+                addToplineMessage(warning);
+            }
+            exerciseAttribute(A_CON, false);
+            u._sickTimeout = sickTime - 1;
+            u._sicknessTimeout = 0;
+            if (!u._sickTimeout) {
+                const foodPoisoning = !(u.usick_type & 2);
+                if (foodPoisoning && rn2(100) < (u.acurr?.a?.[A_CON] ?? 10)) {
+                    addToplineMessage('You have recovered from your illness.');
+                    clearHeroSickness();
+                    u.usick_type = 0;
+                    delete u._sicknessCause;
+                    exerciseAttribute(A_CON, false);
+                    adjustHeroAttribute(A_CON, -1);
+                } else {
+                    addToplineMessage('You die from your illness.');
+                    game._death_cause = `killed by ${u._sicknessCause || 'an illness'}`;
+                    game._death_current_move = 1;
+                    const lifeSaved = consumeLifeSavingAmulet();
+                    // Timed deaths do not lower HP; the common death/life
+                    // saving prompt restores or finalizes it after --More--.
+                    if (lifeSaved) {
+                        clearHeroSickness();
+                        u.usick_type = 0;
+                        delete u._sicknessCause;
+                        armHeroLifeSavingMore();
+                    } else {
+                        game._sickness_expired = 1;
+                        game._resume_turn_tail_after_stoning_death = 1;
+                        game.moves = (game.moves || 1) + 1;
+                        armHeroDeathMore('');
+                    }
+                    return false;
+                }
             }
         }
 	        let reachedFullHp = false;
@@ -12633,6 +12704,18 @@ function killMonsterFromThrownInterveningHit(target, visible, { afterMore = fals
     const message = `${subject} is ${destroyed ? 'destroyed' : 'killed'}!`;
     if (afterMore) appendAfterMoreMessage(message);
     else addToplineMessage(message);
+    const lifeSavingMessages = [];
+    if (applyHeroProjectileMonsterLifeSaving(target, lifeSavingMessages, { unseenMaybeNot: false })) {
+        for (const line of lifeSavingMessages) {
+            if (afterMore) appendAfterMoreMessage(line);
+            else addToplineMessage(line);
+        }
+        return;
+    }
+    for (const line of lifeSavingMessages) {
+        if (afterMore) appendAfterMoreMessage(line);
+        else addToplineMessage(line);
+    }
     if (reviveVampshifterFromProjectileKill(target, visible, afterMore)) return;
 
     const data = target.data || {};
@@ -13223,7 +13306,7 @@ function monsterTrapHarmless(mon, trap) {
     }
     if (ttyp === RUST_TRAP) return data.name !== 'iron golem';
     if (ttyp === WEB) return monsterWebPassesThrough(data);
-    if (ttyp === ANTI_MAGIC) return monsterResistsAntiMagicTrap(mon);
+    if (ttyp === ANTI_MAGIC) return monsterResistsMagic(mon);
     return ttyp === STATUE_TRAP || ttyp === MAGIC_TRAP || ttyp === VIBRATING_SQUARE;
 }
 
@@ -13313,11 +13396,14 @@ function monsterCarriesAntiMagicDefendingArtifact(mon) {
         MONSTER_CARRIED_ANTIMAGIC_DEFENSE_ARTIFACTS.has(monsterArtifactKey(item)));
 }
 
-function monsterResistsAntiMagicTrap(mon) {
+export function monsterResistsMagic(mon) {
     const data = mon?.data || {};
+    const species = monsterSpecies(mon);
     return !!(mon?.magicResistance || mon?.resistsMagic || mon?.resists_magm
         || data.magicResistance || data.resistsMagic || data.resists_magm
         || data.defendsMagic || data.defends_magm
+        || species?.pm === PM_BABY_GRAY_DRAGON
+        || monsterPermonstAttacks(mon).some(attack => attack.adtyp === AD_MAGM || attack.adtyp === AD_RBRE)
         || monsterWearsAntiMagicItem(mon)
         || monsterWieldsAntiMagicDefendingArtifact(mon)
         || monsterCarriesAntiMagicDefendingArtifact(mon));
@@ -13591,7 +13677,7 @@ function monsterAntiMagicTrapEffect(mon, trap, { skipPetPostMoveRoll = false } =
 
     const inSight = monsterVisibleToHero(mon) || mon === game.u?.usteed;
     const seeIt = couldSeeCoord(mon.mx, mon.my);
-    if (!monsterResistsAntiMagicTrap(mon)) {
+    if (!monsterResistsMagic(mon)) {
         if (!mon.mcan && monsterHasAntiMagicDrainAttack(mon)) {
             mon.mspec_used = (mon.mspec_used || 0) + d(2, 6);
             if (inSight) {
@@ -16182,7 +16268,158 @@ function petAttacksMonsterPorted(mon, target) {
     }
 }
 
-function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
+// dogmove.c:28-132. Keep one useful digging tool, horn, and unlocking
+// tool; retain equipped objects even when they precede a droppable one.
+function petDroppable(mon) {
+    const data = monsterSpecies(mon) || mon.data || {};
+    const unused = { artifact: true };
+    const weapon = mon.mw;
+    let pick = null, horn = null, key = null;
+    if (is_animal(data) || mindless(data) || mon.data?.animal || mon.data?.mindless) {
+        pick = horn = key = unused;
+    } else {
+        if (!(tunnels(data) || mon.data?.tunnels) || !(needspick(data) || mon.data?.needspick)) pick = unused;
+        if (nohands(data) || verysmall(data) || mon.data?.nohands || mon.data?.verysmall) key = unused;
+    }
+    const weaponKind = String(weapon?.actualKind || weapon?.kind || '').toLowerCase();
+    if (weaponKind === 'pick-axe' || weaponKind === 'dwarvish mattock') pick = weapon;
+    if (weaponKind === 'unicorn horn') horn = weapon;
+    for (const obj of mon.minvent || []) {
+        const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
+        const artifact = !!(obj.artifact || obj.oartifact);
+        if (kind === 'dwarvish mattock' || kind === 'pick-axe') {
+            const shield = !!((mon.misc_worn_check || 0) & W_ARMS);
+            if (!(kind === 'dwarvish mattock' && shield)) {
+                if (kind === 'dwarvish mattock' && (pick?.actualKind || pick?.kind) === 'pick-axe'
+                    && pick !== weapon && (!(pick.artifact || pick.oartifact) || artifact)) return pick;
+                if (!pick || (artifact && !(pick.artifact || pick.oartifact))) {
+                    if (pick) return pick;
+                    pick = obj;
+                    continue;
+                }
+            }
+        } else if (kind === 'unicorn horn') {
+            if (!obj.cursed && (!horn || (artifact && !(horn.artifact || horn.oartifact)))) {
+                if (horn) return horn;
+                horn = obj;
+                continue;
+            }
+        } else if (['skeleton key', 'lock pick', 'credit card'].includes(kind)) {
+            const keyKind = key?.actualKind || key?.kind;
+            if (key && (!(key.artifact || key.oartifact) || artifact)) {
+                if (kind === 'skeleton key' && keyKind === 'lock pick') return key;
+                if (kind !== 'credit card' && keyKind === 'credit card') return key;
+            }
+            if (!key || (artifact && !(key.artifact || key.oartifact))) {
+                if (key) return key;
+                key = obj;
+                continue;
+            }
+        }
+        if (!(obj.owornmask || obj.worn || obj.wielded) && obj !== weapon) return obj;
+    }
+    return null;
+}
+
+// dogmove.c:156-251: pet size changes nutrition, while partial food
+// scales both nutrition and eating time against the untouched food.
+function applyPetFoodNutrition(mon, obj) {
+    const edog = mon.mextra.edog;
+    const kind = String(obj.actualKind || obj.kind || '').toLowerCase().replace(/^partly eaten /, '');
+    const corpse = obj.otyp === 'corpse' || obj.otyp === CORPSE;
+    let nutrition;
+    if (corpse || obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.foodRoll || obj.globby) {
+        const species = corpse ? monsterSpecies({ data: obj.corpsenm }) : null;
+        const full = corpse ? (species?.nutrition ?? obj.corpsenm?.cnutrit ?? 0) : foodObjectNutrition(obj);
+        const delay = CARRIED_DELAYED_FOOD_VICTUALS.get(kind)?.delay
+            ?? [...CARRIED_DELAYED_FOOD_VICTUALS.values()].find(food => food.otyp != null && food.otyp === obj.otyp)?.delay;
+        mon.meating = corpse ? 3 + ((species?.weight ?? obj.corpsenm?.cwt ?? objectWeight(obj)) >> 6)
+            : obj.globby ? 2 : kind.startsWith('tin') ? 0 : delay ?? 1;
+        const size = monsterSpecies(mon)?.size ?? mon.data?.msize ?? mon.data?.size ?? MZ_MEDIUM;
+        const multiplier = size === 0 ? 8 : size === MZ_GIGANTIC ? 2 : 7 - size;
+        nutrition = (obj.globby ? 20 : full) * multiplier;
+        if (obj.oeaten) {
+            const remaining = Math.min(obj.oeaten, full);
+            mon.meating = Math.max(1, full ? Math.trunc(mon.meating * remaining / full) : 0);
+            nutrition = Math.max(1, full ? Math.trunc(nutrition * remaining / full) : 0);
+        }
+    } else if (obj.cls === 'coin' || obj.glyph === '$') {
+        mon.meating = Math.trunc((obj.quan || 1) / 2000) + 1;
+        nutrition = Math.trunc((obj.quan || 1) / 20);
+    } else {
+        mon.meating = Math.trunc(objectWeight(obj) / 20) + 1;
+        nutrition = 5 * heroMetalNonFoodNutrition(obj);
+    }
+    edog.hungrytime = Math.max(edog.hungrytime || 0, game.moves || 1) + nutrition;
+    mon.mconf = 0;
+    mon.mhpmax += edog.mhpmax_penalty || 0;
+    edog.mhpmax_penalty = 0;
+    if (mon.mflee && mon.mfleetim > 1) mon.mfleetim = Math.trunc(mon.mfleetim / 2);
+    if (mon.mtame < 20) mon.mtame++;
+}
+
+// dogmove.c:348-393,1011: weakness precedes the pet's inventory and
+// movement decisions; starvation is a monster death without hero credit.
+async function applyPetHunger(mon) {
+    const edog = mon.mtame && !mon.isminion ? mon.mextra?.edog : null;
+    if (!edog || (game.moves || 1) <= edog.hungrytime + 500) return false;
+    const data = monsterSpecies(mon) || mon.data || {};
+    if (!(carnivorous(data) || herbivorous(data) || monsterCarnivorous(mon) || monsterHerbivorous(mon))) {
+        edog.hungrytime = (game.moves || 1) + 500;
+        return false;
+    }
+    if (!edog.mhpmax_penalty) {
+        const hpmax = Math.trunc(mon.mhpmax / 3);
+        mon.mconf = 1;
+        edog.mhpmax_penalty = mon.mhpmax - hpmax;
+        mon.mhpmax = hpmax;
+        mon.mhp = Math.min(mon.mhp, hpmax);
+        if (mon.mhp > 0) {
+            if (cansee(mon.mx, mon.my)) addToplineMessage(`${monsterDisplayName(mon)} is confused from hunger.`);
+            else if (couldsee(mon.mx, mon.my)) {
+                if (data.sound && data.sound <= MS_ANIMAL) {
+                    const noise = tipHatMonsterNoise(mon);
+                    if (noise.message) addToplineMessage(noise.message);
+                } else if (data.sound >= MS_HUMANOID) {
+                    if (!heroIsDeafForMonsterNoise()) addToplineMessage('"I\'m hungry."');
+                } else if (monsterVisibleToHero(mon)) addToplineMessage(`${monsterDisplayName(mon)} seems famished.`);
+            } else addToplineMessage(`You feel worried about ${mon.givenName || `your ${mon.data?.name || 'pet'}`}.`);
+            stopCountedSearchOccupationOnHeroHit();
+            clearActiveDelayedOccupations({ interruptEating: true, interruptibleOnly: true });
+            return false;
+        }
+    } else if ((game.moves || 1) <= edog.hungrytime + 750 && mon.mhp > 0) return false;
+
+    if (mon.mleashed && mon !== game.u?.usteed) addToplineMessage('Your leash goes slack.');
+    else if (cansee(mon.mx, mon.my)) addToplineMessage(`${monsterDisplayName(mon)} starves.`);
+    else addToplineMessage(`You feel ${heroIsHallucinatingForMonsterFeedback() ? 'bummed' : 'sad'} for a moment.`);
+    game._pet_skip_post_move_roll = 1;
+    const messages = [];
+    if (applyHeroProjectileMonsterLifeSaving(mon, messages, { unseenMaybeNot: false })) {
+        if (game._pending_feral_steed_dismount === mon && mon === game.u?.usteed) {
+            game._pending_feral_steed_dismount = null;
+            await dismountSteedThrown([game._pending_message, ...messages].filter(Boolean));
+        } else addMonsterConsumeMessages(messages);
+    } else {
+        addMonsterConsumeMessages(messages);
+        mon.mhp = 0;
+        mon.dead = true;
+        if (mon.mleashed) {
+            const leash = (game.inventory || []).find(obj => obj.leashmon === (mon.m_id ?? mon.id ?? mon.mid));
+            if (leash) leash.leashmon = 0;
+        }
+        mon.mleashed = false;
+        if (mon === game.u?.usteed) {
+            game.u.usteed = null;
+            game.u.ugallop = 0;
+        }
+        finishTrapKilledMonster(mon, { skipPetPostMoveRoll: true });
+    }
+    return true;
+}
+
+async function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
+    if (!resumeAfterInventory && await applyPetHunger(mon)) return;
     game._pet_map_redraw_pending = 1;
     const realUx = game.u?.ux ?? mon.mx;
     const realUy = game.u?.uy ?? mon.my;
@@ -16192,7 +16429,7 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 	    const edog = mon.mextra?.edog || { apport: 3, whistletime: 0 };
 	    edog.ogoal ??= { x: 0, y: 0 };
 		    const whappr = (game.moves || 1) - (edog.whistletime || 0) < 5;
-    const udist = (mon.mx - ux) ** 2 + (mon.my - uy) ** 2;
+    const udist = mon === game.u?.usteed ? 1 : (mon.mx - ux) ** 2 + (mon.my - uy) ** 2;
     const objects = game.level?.objects || [];
     let inMastersSight = couldSeeCoord(mon.mx, mon.my);
     const skipClosePetRoll = mon.mflee;
@@ -16223,18 +16460,19 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
 
     let droppedThisTurn = false;
     let pickedUpThisTurn = false;
-    // C ref: dogmove.c:28-132 droppables() — worn gear (saddle) doesn't
-    // count as something the pet might drop.
-    const petCarriesDroppables = (mon.minvent || []).some(o => !(o.owornmask || o.worn));
-    if (!resumeAfterInventory && petCarriesDroppables) {
-        if (!rn2(udist + 1) || !rn2(edog.apport || 3)) {
-            if (rn2(10) < (edog.apport || 3)) {
-                const dropped = mon.minvent.shift();
-                Object.assign(dropped, { ox: mon.mx, oy: mon.my });
+    const petCarriesDroppables = !!petDroppable(mon);
+    if ((!resumeAfterInventory && petCarriesDroppables) || mon._pet_dropping) {
+        const dropNow = mon._pet_dropping
+            || ((!rn2(udist + 1) || !rn2(edog.apport || 3)) && rn2(10) < (edog.apport || 3));
+        if (dropNow) {
+            mon._pet_dropping = true;
+            let dropped;
+            while ((dropped = petDroppable(mon))) {
                 if (dropped.kind === 'magic lamp' && (dropped.color == null || dropped.color === NO_COLOR))
                     dropped.color = CLR_YELLOW;
-                objects.push(dropped);
-                if ((edog.apport || 3) > 1) edog.apport = (edog.apport || 3) - 1;
+                const dropMessages = [];
+                dropMonsterObject(mon, dropped, dropMessages);
+                addMonsterConsumeMessages(dropMessages);
                 const dropVisible = !game.u?.blind && !!(game.viz_array?.[mon.my]?.[mon.mx] & IN_SIGHT);
                 const eatingMessagePending = game._eating_finish_message
                     && game._pending_rotten_food_eating_message;
@@ -16261,9 +16499,13 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                         return;
                     }
                 }
-                droppedThisTurn = true;
                 if (mon.minvis && dropVisible) newsym(mon.mx, mon.my);
             }
+            mon._pet_dropping = false;
+            if (edog.apport > 1) edog.apport--;
+            edog.dropdist = udist;
+            edog.droptime = game.moves || 1;
+            droppedThisTurn = true;
         }
     }
 
@@ -16293,14 +16535,11 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                     : `${hereObj.blessed ? 'blessed ' : hereObj.cursed ? 'cursed ' : 'uncursed '}${hereObj.kind || 'food'}`;
             const article = /^[aeiou]/i.test(foodName) ? 'an' : 'a';
             if (couldSeeCoord(mon.mx, mon.my)) addToplineMessage(`${petName} eats ${article} ${foodName}.`);
-            edog.hungrytime = Math.max(edog.hungrytime || 0, game.moves || 1) + 1200;
-            mon.mtame = Math.min(20, (mon.mtame || 10) + 1);
-            mon.meating = (hereObj.otyp === 'corpse' || hereObj.otyp === CORPSE)
-                ? 3 + (objectWeight(hereObj) >> 6)
-                : PET_FOOD_DELAY[hereObj.kind] || 1;
+            applyPetFoodNutrition(mon, hereObj);
             const splitStackAccounted = (hereObj.quan || 1) > 1 && hereObj.cls === 'food';
             if (splitStackAccounted) next_ident();
-            rn2(100);
+            if (dogFood(mon, hereObj) === DOGFOOD && (hereObj.invlet || hereObj.letter))
+                edog.apport += Math.trunc(200 / (edog.dropdist + (game.moves || 1) - (edog.droptime || 0)));
             rn2(100);
             const consumeMessages = [];
             consumeMonsterEatenObject(mon, hereObj, objects, consumeMessages, { splitStackAccounted });
@@ -16380,6 +16619,8 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 }
             }
     }
+
+    if (mon === game.u?.usteed) return;
 
     let goal = { x: ux, y: uy };
     let gtyp = UNDEF;
@@ -17121,14 +17362,11 @@ function movePet(mon, resumeAfterInventory = false, conflictActive = false) {
                 const subject = couldSeeCoord(oldx, oldy) ? petName : 'It';
                 addToplineMessage(`${subject} eats ${article} ${foodName}.`);
             }
-            edog.hungrytime = Math.max(edog.hungrytime || 0, game.moves || 1) + 1200;
-            mon.mtame = Math.min(20, (mon.mtame || 10) + 1);
-            mon.meating = (eatenObj.otyp === 'corpse' || eatenObj.otyp === CORPSE)
-                ? 3 + (objectWeight(eatenObj) >> 6)
-                : PET_FOOD_DELAY[eatenObj.kind] || 1;
+            applyPetFoodNutrition(mon, eatenObj);
             const splitStackAccounted = (eatenObj.quan || 1) > 1 && eatenObj.cls === 'food';
             if (splitStackAccounted) next_ident();
-            rn2(100);
+            if (dogFood(mon, eatenObj) === DOGFOOD && (eatenObj.invlet || eatenObj.letter))
+                edog.apport += Math.trunc(200 / (edog.dropdist + (game.moves || 1) - (edog.droptime || 0)));
             rn2(100);
             const consumeMessages = [];
             consumeMonsterEatenObject(mon, eatenObj, objects, consumeMessages, { splitStackAccounted });

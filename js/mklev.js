@@ -26,6 +26,9 @@ import { datFileText } from './dat_files.js';
 import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
+import { QUEST_FILLERS } from './quest_filler_data.js';
+import { MONS as QUEST_MONSTERS, is_swimmer, amphibious, is_flyer, is_floater,
+    passes_walls, noncorporeal, is_male, is_female } from './permonst.js';
 import {
     COLNO, ROWNO, MAX_TYPE, INVALID_TYPE, STONE, ROOM, CORR, DOOR, STAIRS, LADDER, AIR,
     HWALL, VWALL, TLCORNER, TRCORNER, BLCORNER, BRCORNER,
@@ -54,7 +57,7 @@ import {
     WM_T_LONG, WM_T_BL, WM_T_BR,
     WM_C_OUTER, WM_C_INNER,
     WM_X_TL, WM_X_TR, WM_X_BL, WM_X_BR, WM_X_TLBR, WM_X_BLTR,
-    TAINT_AGE,
+    TAINT_AGE, DRY, WET, HOT, SOLID,
     In_endgame, In_mines, In_quest, Is_airlevel, Is_firelevel, Is_rogue_level,
 } from './const.js';
 
@@ -8525,6 +8528,14 @@ export async function getbones() {
     if (flags.bones === false) return false;
     if (rn2(3) && !game.flags?.debug) return false;
     const uz = game.u?.uz || { dnum: 0, dlevel: 1 };
+    // bones.c:no_bones_level runs after the discovery roll, before opening
+    // any file. A branch's first level is an entrance, not a multiway level.
+    const dungeon = game.dungeons?.[uz.dnum];
+    const special = game.specialLevels?.find(level => level.dnum === uz.dnum && level.dlevel === uz.dlevel);
+    if ((special && !special.boneid) || (dungeon && !dungeon.boneid)
+        || uz.dlevel === dungeon?.num_dunlevs
+        || (uz.dlevel > 1 && is_branchlev())
+        || (dungeon?.flags?.hellish && uz.dlevel === dungeon.num_dunlevs - 1)) return false;
     const bonesPath = `/bones/${uz.dnum}:${uz.dlevel}`;
     const bonesContent = vfsReadFile(bonesPath);
     if (bonesContent === null) return false;
@@ -8728,6 +8739,13 @@ export async function mklev() {
     }
     if (!special && g.dungeons?.[g.u?.uz?.dnum]?.name === 'The Quest' && questBuilder?.fill) {
         await questBuilder.fill(g.u?.uz?.dlevel ?? 1);
+        return;
+    }
+    const fillers = QUEST_FILLERS[g.urole?.name?.m || g._startup_role || ''];
+    if (!special && g.dungeons?.[g.u?.uz?.dnum]?.name === 'The Quest' && fillers) {
+        const locate = g.specialLevels?.find(level => level.name === 'x-loca'
+            && level.dnum === g.u.uz.dnum)?.dlevel ?? 3;
+        await make_quest_filler_level(fillers[g.u.uz.dlevel < locate ? 'a' : 'b']);
         return;
     }
     if (await getbones()) return;
@@ -9038,17 +9056,17 @@ function barFillObject() {
     mkobj_at(RANDOM_CLASS, pos.x, pos.y, true);
 }
 
-async function barFillTrap() {
+async function barFillTrap(kind = null, locate = barFillDryLocation) {
     let pos, trycnt = 0;
     do {
-        pos = barFillDryLocation();
+        pos = locate();
+        if (!pos) return;
         const typ = game.level.at(pos.x, pos.y)?.typ;
         if (typ !== STAIRS && typ !== LADDER) break;
     } while (++trycnt <= 100);
     if (trycnt > 100) return;
 
-    let kind;
-    do { kind = traptype_rnd(); } while (kind === NO_TRAP);
+    if (kind == null) do { kind = traptype_rnd(); } while (kind === NO_TRAP);
     const dungeon = game.dungeons?.[game.u?.uz?.dnum ?? 0];
     const canFallThru = (game.u?.uz?.dlevel ?? 1) < (dungeon?.num_dunlevs ?? 1);
     if (is_hole(kind) && !canFallThru) kind = ROCKTRAP;
@@ -9239,6 +9257,155 @@ async function make_bar_loca_level() {
     flipSpecialLevelRnd(1, 0, COLNO - 2, BAR_YSTART + BAR_HEIGHT - 1, true);
     recount_level_features();
     level_finalize_topology({ mineralizeLevel: false, mineralizeKelp: true });
+}
+
+// sp_lev.c:get_location and is_ok_location, shared by the declarative fillers.
+function questFillerLocation(area, croom = null, humidity = DRY, stairs = false) {
+    const bounds = croom || area;
+    const good = (x, y) => {
+        const typ = game.level.at(x, y)?.typ;
+        if (stairs) return typ === ROOM || typ === CORR || typ === ICE;
+        return ((humidity & SOLID) && IS_OBSTRUCTED(typ))
+            || ((humidity & DRY) && SPACE_POS(typ) && ((humidity & SOLID) || !sobj_at(BOULDER, x, y)))
+            || ((humidity & WET) && IS_POOL(typ)) || ((humidity & HOT) && IS_LAVA(typ));
+    };
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const pos = { x: 0, y: 0 };
+        if (croom) somexy(croom, pos);
+        else {
+            pos.x = bounds.lx + rn2(bounds.hx - bounds.lx + 1);
+            pos.y = bounds.ly + rn2(bounds.hy - bounds.ly + 1);
+        }
+        if (good(pos.x, pos.y)) return pos;
+    }
+    for (let x = bounds.lx; x <= bounds.hx; x++)
+        for (let y = bounds.ly; y <= bounds.hy; y++)
+            if (good(x, y)) return { x, y };
+    return null;
+}
+
+async function questFillerMonster(spec, area, croom) {
+    const name = typeof spec === 'string' ? spec : spec.id || spec.class;
+    const named = name.length > 1;
+    let ptr = named ? monsterByRndName(name) : null;
+    let pm = named ? QUEST_MONSTERS.find(mon => mon.name === name) : null;
+    const gender = !named ? 0 : is_female(pm) ? 1 : is_male(pm) ? 0 : rn2(2);
+    // sp_lev.c:find_montype precedes create_monster's alignment and class rolls.
+    inducedAlign80();
+    if (!named) {
+        ptr = mkclassAligned(name, false, null, true);
+        pm = QUEST_MONSTERS.find(mon => mon.name === ptr?.name);
+    }
+    let humidity = DRY;
+    if (pm && (is_swimmer(pm) || amphibious(pm))) humidity = WET;
+    if (pm && (is_flyer(pm) || is_floater(pm))) humidity |= HOT | WET;
+    if (pm && (passes_walls(pm) || noncorporeal(pm))) humidity |= SOLID;
+    if (['fire elemental', 'salamander', 'fire vortex', 'flaming sphere'].includes(pm?.name)) humidity |= HOT;
+    let pos = questFillerLocation(area, croom, humidity);
+    // get_location_coord retries the same humidity before create_monster
+    // permits dry land for water-loving species with no water available.
+    if (!pos) pos = questFillerLocation(area, croom, humidity);
+    if (!pos) pos = questFillerLocation(area, croom, humidity | DRY);
+    if (!pos) return;
+    if (game.level.monsters.some(mon => mon.mx === pos.x && mon.my === pos.y))
+        pos = enextoMonsterSpot(pos.x, pos.y, ptr || {});
+    if (!pos || (croom && !splevInsideRoom(croom, pos.x, pos.y))) return;
+    const mon = await makemon(ptr, pos.x, pos.y, 0);
+    if (mon) {
+        mon.female = !!gender;
+        setMonsterPeaceful(mon, typeof spec === 'string' ? null : spec.peaceful);
+    }
+}
+
+// Ordered des operations extracted from the upstream Lua source. Existing
+// room, cavern, object, trap and monster builders own the generated entities.
+async function make_quest_filler_level(program) {
+    if (await getbones()) return;
+    game.in_mklev = true;
+    oinit();
+    clear_level_structures();
+    l_nhcore_init();
+    const state = { area: { lx: 1, ly: 0, hx: COLNO - 1, hy: ROWNO - 1 }, noflip: false, icedpools: false };
+    await questFillerOperations(program.operations, state);
+    wallification(1, 0, COLNO - 1, ROWNO - 1);
+    if (!state.noflip) flipSpecialLevelRnd();
+    recount_level_features();
+    level_finalize_topology();
+}
+
+async function questFillerOperations(operations, state, croom = null) {
+    for (const [operation, arg, ...rest] of operations) {
+        switch (operation) {
+        case 'level_init': {
+            const fg = SPECIAL_TERRAIN[arg.fg];
+            if (arg.style === 'mines') {
+                splevMinesLevelInit(fg, SPECIAL_TERRAIN[arg.bg], { ...arg, icedpools: state.icedpools });
+            } else {
+                const lit = arg.lit ?? rn2(2);
+                for (let x = 1; x < COLNO; x++)
+                    for (let y = 0; y < ROWNO; y++) Object.assign(game.level.at(x, y), { typ: fg, lit: !!lit });
+            }
+            break;
+        }
+        case 'level_flags':
+            for (const flag of [arg, ...rest]) {
+                if (flag === 'mazelevel') game.level.flags.is_maze_lev = true;
+                else state[flag] = true;
+            }
+            break;
+        case 'room':
+            await splevBuildRoom({ rtype: OROOM }, null, room => questFillerOperations(arg, state, room));
+            break;
+        case 'random_corridors':
+            await makecorridors();
+            break;
+        case 'map': {
+            const width = Math.max(...arg.map(row => row.length)), height = arg.length;
+            const lx = (2 + Math.trunc((COLNO - 4 - width) / 2)) | 1;
+            const ly = (2 + Math.trunc((ROWNO - 3 - height) / 2)) | 1;
+            state.area = { lx, ly, hx: lx + width - 1, hy: ly + height - 1 };
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const ch = arg[y][x] || ' ';
+                    Object.assign(game.level.at(lx + x, ly + y), {
+                        typ: ch === '+' ? DOOR : ch === 'S' ? SDOOR : SPECIAL_TERRAIN[ch],
+                        doormask: '+S'.includes(ch) ? D_CLOSED : D_NODOOR, lit: false, horizontal: ch === '-',
+                    });
+                }
+            }
+            break;
+        }
+        case 'region':
+            for (let x = arg[0]; x <= arg[2]; x++)
+                for (let y = arg[1]; y <= arg[3]; y++) game.level.at(state.area.lx + x, state.area.ly + y).lit = rest[0] === 'lit';
+            break;
+        case 'door':
+            game.level.at(state.area.lx + rest[0], state.area.ly + rest[1]).doormask = D_CLOSED;
+            break;
+        case 'stair': {
+            const pos = questFillerLocation(state.area, croom, DRY, true);
+            if (pos) {
+                game.level.traps = game.level.traps.filter(trap => trap.tx !== pos.x || trap.ty !== pos.y);
+                mkstairs(pos.x, pos.y, arg === 'up', croom);
+            }
+            break;
+        }
+        case 'object': {
+            const pos = questFillerLocation(state.area, croom);
+            if (pos) mkobj_at(RANDOM_CLASS, pos.x, pos.y, true);
+            break;
+        }
+        case 'trap':
+            if (croom) await oracleRoomTrap(croom);
+            else await barFillTrap(arg === 'fire' ? FIRE_TRAP : null, () => questFillerLocation(state.area));
+            break;
+        case 'monster':
+            await questFillerMonster(arg, state.area, croom);
+            break;
+        default:
+            throw new Error(`Unsupported quest filler operation: ${operation}`);
+        }
+    }
 }
 
 async function make_bar_fill_level(spec) {
