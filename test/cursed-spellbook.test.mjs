@@ -5,18 +5,19 @@ import { GameMap } from '../js/game.js';
 import { ROOM, A_STR, STRAT_WAITFORU, STRAT_APPEARMSG } from '../js/const.js';
 import { initRng, rn2, rnd, rn1, enableRngLog, getRngLog } from '../js/rng.js';
 import { rhack, processSpellbookStudyOccupation } from '../js/cmd.js';
-import { resetInputState } from '../js/input.js';
+import { resetInputState, pushKey } from '../js/input.js';
 import { vision_reset } from '../js/vision.js';
 import { encodeSaveState, restoreSaveState } from '../js/save.js';
 import { monsterByRndName } from '../js/mklev.js';
 import { hasAggravatables } from '../js/wizard.js';
+import { moveloop_core } from '../js/allmain.js';
 
 function setup(effect, state = {}) {
     resetGame(); resetInputState();
     let seed = 1;
     for (;; seed++) { initRng(seed); if (rn2(7) === effect) break; }
     initRng(seed); enableRngLog({ reset: true });
-    game.moves = 10; game.context = {}; game.flags = { verbose: true };
+    game.moves = 10; game.context = {}; game.flags = { verbose: true, tips: false };
     game._startup_role = 'Knight';
     game.u = { ux: 10, uy: 10, uz: { dnum: 0, dlevel: 1 }, uhp: 100, uhpmax: 100,
         ulevel: 10, umovement: 12, uhunger: 900, acurr: { a: [18, 18, 18, 18, 18, 18] }, ...state };
@@ -190,4 +191,145 @@ test('book aggravation respects the Wizard tower boundary, dead monsters and wai
     assert.equal(inside.msleeping, 0); assert.equal(inside.mstrategy, 0);
     assert.equal(outside.msleeping, 1); assert.equal(dead.msleeping, 1);
     assert.equal(hasAggravatables(inside), false);
+});
+
+for (const restriction of ['noteleport', 'demon_court_noteleport', 'stasis_until'])
+test(`book teleport respects ${restriction} before any destination rolls`, async () => {
+    setup(0); game.level.flags[restriction] = restriction === 'stasis_until' ? 10 : true;
+    await rhack('a');
+    assert.deepEqual([game.u.ux, game.u.uy], [10, 10]);
+    assert.match(game._pending_message, /mysterious force prevents/);
+    assert.deepEqual(getRngLog().map(row => row.split('=')[0]), ['rn2(7)', 'rn2(3)']);
+});
+
+for (const source of ['amulet', 'tower'])
+test(`book teleport can be blocked by ${source} disorientation`, async () => {
+    setup(0);
+    if (source === 'amulet') game.u.uhave = { amulet: true };
+    else game.level.flags.wizard_tower_level = true;
+    for (let seed = 1; ; seed++) {
+        initRng(seed); if (rn2(7) === 0 && rn2(3) === 0) { initRng(seed); break; }
+    }
+    await rhack('a');
+    assert.deepEqual([game.u.ux, game.u.uy], [10, 10]);
+    assert.match(game._pending_message, /disoriented for a moment/);
+});
+
+for (const wizard of [false, true])
+test(`book teleport ${wizard ? 'wizard' : 'control'} selection suspends destruction and delay`, async () => {
+    const { book } = setup(0, { teleportControl: !wizard }); game.flags.debug = wizard;
+    await rhack('a');
+    assert.equal(game._command_mode, 'bookTeleportIntroMore');
+    assert.ok(game.inventory.includes(book));
+    assert.equal(game._helpless_time || 0, 0);
+    assert.deepEqual(getRngLog().map(row => row.split('=')[0]), ['rn2(7)']);
+    await rhack(' '); assert.equal(game._command_mode, 'bookTeleportCursor');
+    const saved = encodeSaveState(); resetGame(); restoreSaveState(saved); initRng(1);
+    await rhack('l'); await rhack('.');
+    assert.deepEqual([game.u.ux, game.u.uy], [11, 10]);
+    assert.equal(game._spellbook_backfire, null);
+    assert.ok(game._helpless_time > 0);
+    assert.equal(game.u.uhunger, 900, 'involuntary teleport has no dotele hunger cost');
+});
+
+test('cancelling controlled book teleport returns into its remaining failed-study delay', async () => {
+    setup(0, { teleportControl: true });
+    await rhack('a'); await rhack(' '); await rhack('\x1b');
+    assert.deepEqual([game.u.ux, game.u.uy], [10, 10]);
+    assert.equal(game._spellbook_backfire, null);
+    assert.ok(game._helpless_time > 0);
+});
+
+test('stunned book teleport control becomes random while wizard control still works', async () => {
+    setup(0, { teleportControl: true, stunned: true });
+    await rhack('a');
+    assert.equal(game._spellbook_backfire, null);
+    assert.notEqual(game._command_mode, 'bookTeleportIntroMore');
+});
+
+test('wizard book teleport override retains its C prompt until a valid answer', async () => {
+    setup(0, { uhave: { amulet: true } }); game.flags.debug = true;
+    for (let seed = 1; ; seed++) {
+        initRng(seed); if (rn2(7) === 0 && rn2(3) === 0) { initRng(seed); break; }
+    }
+    await rhack('a');
+    assert.equal(game._command_mode, 'bookTeleportOverride');
+    await rhack('x'); assert.equal(game._command_mode, 'bookTeleportOverride');
+    await rhack('n');
+    assert.equal(game._spellbook_backfire, null);
+    assert.deepEqual([game.u.ux, game.u.uy], [10, 10]);
+});
+
+for (const speed of [6, 12, 24]) test(`failed study recovers after two full turns at monster speed ${speed}`, async () => {
+    const { book } = setup(0, { _monsterMove: speed });
+    Object.assign(book, { kind: 'spellbook of healing', spellName: 'healing' });
+    game.level.flags.noteleport = true;
+    await rhack('a');
+    game._pending_time_passed = game.context.move; game.context.move = 0;
+    const messages = [];
+    game._preNhgetchHook = () => messages.push(game._pending_message || '');
+    for (let i = 0; i < 10; i++) {
+        pushKey(game._message_more ? ' ' : '\x1b'); await moveloop_core();
+        if (!game._pending_time_passed && !game._message_more) break;
+    }
+    assert.equal(game.moves, 12);
+    assert.equal(game._helpless_time, 0);
+    assert.match(messages.join(' '), /You can move again/);
+});
+
+test('book teleport displays the shared getpos tip once and retains the suggested travel destination', async () => {
+    setup(0, { teleportControl: true }); game.flags.tips = true;
+    game._travel_previous_target = { x: 20, y: 10 };
+    await rhack('a'); await rhack(' ');
+    assert.equal(game._command_mode, 'teleportTip');
+    await rhack(' ');
+    assert.equal(game._command_mode, 'bookTeleportCursor');
+    assert.equal(game._farlook_x, 20);
+    await rhack('.');
+    assert.equal(game.u.ux, 20);
+    assert.equal(game._travel_previous_target, null);
+});
+
+test('book teleport picks up the live landing object before applying study recovery', async () => {
+    setup(0, { teleportControl: true }); game.flags.pickup = true;
+    const obj = { id: 50, otyp: 10023, cls: 'weapon', kind: 'dagger', glyph: ')', quan: 1, ox: 11, oy: 10 };
+    game.level.objects.push(obj);
+    await rhack('a'); await rhack(' '); await rhack('l'); await rhack('.');
+    assert.ok(game.inventory.includes(obj));
+    assert.ok(!game.level.objects.includes(obj));
+    assert.equal(game._spellbook_backfire, null);
+    assert.equal(game._helpless_time, 80);
+});
+
+for (const rescue of ['amulet', 'wizard'])
+test(`book teleport resumes after saved ${rescue} recovery from a landing corpse`, async () => {
+    setup(0, { teleportControl: true }); game.flags.pickup = true;
+    game.level.objects.push({ id: 50, otyp: 'corpse', cls: 'food', glyph: '%', kind: 'cockatrice corpse',
+        corpsenm: { name: 'cockatrice' }, quan: 1, ox: 11, oy: 10 });
+    if (rescue === 'wizard') game.flags.debug = true;
+    else game.inventory.push({ id: 51, letter: 'b', cls: 'amulet', kind: 'amulet of life saving', worn: true, quan: 1 });
+    await rhack('a'); await rhack(' '); await rhack('l'); await rhack('.');
+    assert.equal(game._command_mode, rescue === 'amulet' ? 'lifeSavingMore' : 'deathDieMore');
+    assert.equal(game._spellbook_backfire.phase, 'landingTrap');
+    assert.equal(game._helpless_time || 0, 0);
+    const saved = encodeSaveState(); resetGame(); restoreSaveState(saved); initRng(1);
+    await rhack(' ');
+    if (rescue === 'wizard') await rhack('n');
+    assert.equal(game._spellbook_backfire, null);
+    assert.equal(game._helpless_time, 80);
+    assert.equal(game.u.uhp, game.u.uhpmax);
+});
+
+test('book teleport retains its unfinished caller through a landing pile menu', async () => {
+    setup(0, { teleportControl: true }); game.flags.pickup = false;
+    for (let i = 0; i < 2; i++) game.level.objects.push({ id: 60 + i, otyp: 10023,
+        cls: 'weapon', kind: 'dagger', glyph: ')', quan: 1, ox: 11, oy: 10 });
+    await rhack('a'); await rhack(' '); await rhack('l'); await rhack('.');
+    assert.equal(game._command_mode, 'pickupLookAfterMore');
+    assert.equal(game._helpless_time || 0, 0);
+    await rhack(' '); assert.equal(game._command_mode, 'pickupLookMore');
+    const saved = encodeSaveState(); resetGame(); restoreSaveState(saved); initRng(1);
+    await rhack(' ');
+    assert.equal(game._spellbook_backfire, null);
+    assert.equal(game._helpless_time, 80);
 });

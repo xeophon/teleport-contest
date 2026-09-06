@@ -92,3 +92,21 @@ for (const [deaf, asleep] of [[false, false], [true, false], [false, true]]) {
         assert.equal(getRngLog().some(call => call.startsWith('d(10,20)=')), false, 'sanctum omits ordinary temple feelings');
     });
 }
+
+test('failed casting preserves an overflowing existing message until More is dismissed', async () => {
+    const { g, mon } = setup('master lich'); mon.m_lev = 1; mon.mcan = true;
+    const pending = "OK, so you don't die.  You stop searching.";
+    g._pending_message = pending; g._message_more = 1;
+    await cmd.monsterCastSpell(mon);
+    assert.equal(g._pending_message, pending);
+    assert.match(g._queued_messages_after_more[0].text, /points at you, then curses/);
+    assert.equal(g.moves, 72);
+});
+
+test('a cancelled caster in darkness is heard rather than visually described', async () => {
+    const { g, mon } = setup(); mon.m_lev = 1; mon.mcan = true;
+    g.viz_array[mon.my][mon.mx] = COULD_SEE;
+    await cmd.monsterCastSpell(mon);
+    assert.equal(g._pending_message, 'You hear a mumbled curse.');
+    assert.deepEqual(getRngLog(), ['rn2(1)=0']);
+});

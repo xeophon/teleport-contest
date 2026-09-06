@@ -380,9 +380,28 @@ the 20 return, 90 ownership, 3,134 shop, and 21 cursed-book checks pass together
 Initial valid failures established the missing half damage, invulnerability,
 post-recoil placement, death suspension, and low-HP warning behavior.
 
-This is not a complete transfer audit: remaining returning-weapon impact
-details include failed-catch artifact damage (Mjollnir's per-item shock damage
-can itself suspend before the arm damage), swallowed returns, shipping before
+Mjollnir's failed-catch `artifact_hit` now follows `artifact.c:1091-1108,1513-1526`:
+shock resistance suppresses the bonus and nearby wakeup, the bonus precedes
+inventory destruction, and half physical damage applies to the combined arm
+damage after item effects. The shared `applyHeroElectricInventoryDamage`
+retains the selected identities and index across each item's death recovery
+(`zap.c:maybe_destroy_item:5800-5953`, `destroy_items:5962-6102`). It rechecks
+ownership before processing the next item and completes deferred strength
+exercise after recovery. Ordinary charged-ring recharge/explosion now feeds
+its damage into that same continuation; exploding-ring damage is halved while
+exploding-wand damage is not. Actual destruction uses inventory consumption
+and object timer cleanup. Glove protection occurs after inventory selection
+and equipment protection, and canonical resistance bits and polymorph shock
+resistance are recognized. Fifteen new tests cover these changes, including
+saved life-saving and wizard refusal, ring effects, mutation of selected
+inventory, wakeup radius, and a live turn. The 35 return, 90 ownership, and
+3,134 shop checks pass together. Thrown/fired objects also acquire `LOST_THROWN`
+at flight entry (`dothrow.c:1563`), cleared when a caught weapon is reinserted.
+
+This is not a complete transfer audit: electrical destruction still needs
+full worn-ring property removal and its deferred float-down continuation;
+the older aggregate electrical callers do not yet suspend between items.
+Remaining returning-weapon details include swallowed returns, shipping before
 drop effects, and ordinary recoil death ordering. The curved boomerang's
 pre-flight wizard death refusal and generic return merging still need review.
 Other outstanding areas include

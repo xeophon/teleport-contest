@@ -11424,6 +11424,27 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
         game._ball_drag_subtract_after_forced_tail = 0;
         if (game.u) game.u.umovement = Math.max(0, (game.u.umovement || 0) - NORMAL_SPEED);
     }
+    // C allmain.c counts immobility once per full turn, including slow-hero
+    // turns reached recursively before the hero earns another action.
+    if (game._helpless_time > 0) {
+        game._helpless_time--;
+        if (game._sleeping_time > 0) game._sleeping_time--;
+        if (!game._helpless_time && game._wake_message) {
+            game._sleeping_time = 0;
+            if (game._hear_again_after_wake) {
+                game._hear_again_after_wake = 0;
+                if (!rn2(2) && game.u) {
+                    game.u._deafTimeout = 0;
+                    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Deaf', '');
+                }
+            }
+            const wakeMessage = game._wake_message;
+            const shown = addToplineMessage(wakeMessage);
+            if (!shown && game._message_more && game._topline_after_more === wakeMessage)
+                game._turn_tail_topline_more = 1;
+            game._wake_message = '';
+        }
+    }
     const armBallDragForceTail = !!game._ball_drag_force_tail_after_first_turn;
     if (armBallDragForceTail) game._ball_drag_force_tail_after_first_turn = 0;
 	    const collapsedDoubleMiss = /^The .+ misses the .+\.  The .+ misses the .+\.$/.test(game._pending_message || '');
@@ -17699,6 +17720,8 @@ function finishPrayerDeclineOutcome(g, angryResult) {
 
 export async function moveloop_core() {
     const g = game;
+    if (g._helpless_time > 0 && !g._pending_time_passed && !g._message_more && !g._command_mode)
+        g._pending_time_passed = 1;
     if (g._turn_tail_phase === 'timers' && g._water_operation_resumed) {
         // savelife may clear command time; this is the retained current turn.
         g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
@@ -17932,6 +17955,7 @@ export async function moveloop_core() {
             g._force_monster_turn_tail_once = 1;
         }
         if (process.env.WEREDBG) console.error(`WEREDBG pre-monsters moves=${g.moves} skip=${skipMonsterTurnsThisPass} rng=${getRngLog().length}`);
+        const wasHelpless = g._helpless_time > 0;
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
         // C ref: allmain.c:203-216 + 495-507 — movemon() runs at the top of
         // the moveloop iteration and the occupation/stop step after it, so
@@ -18128,30 +18152,12 @@ export async function moveloop_core() {
                 g._stop_search_extra_pass = 1;
             }
         }
-	        if (turnAdvanced && g._helpless_time > 0) {
-	            g._helpless_time--;
-	            if (g._sleeping_time > 0) g._sleeping_time--;
-	            if (!g._helpless_time && g._wake_message) {
-	                g._sleeping_time = 0;
-	                if (g._hear_again_after_wake) {
-	                    g._hear_again_after_wake = 0;
-	                    if (!rn2(2) && g.u) {
-	                        g.u._deafTimeout = 0;
-	                        g.u._statusSuffix = (g.u._statusSuffix || '').replace(' Deaf', '');
-	                    }
-	                }
-	                const wakeMessage = g._wake_message;
-	                const shown = addToplineMessage(wakeMessage);
-	                if (!shown && g._message_more && g._topline_after_more === wakeMessage)
-	                    g._turn_tail_topline_more = 1;
-	                g._wake_message = '';
-	            }
-	        }
         if (g._force_lock_continue_time) {
             g._force_lock_continue_time = 0;
             g._pending_time_passed++;
             g._continue_monsters_after_more = 1;
         }
+        if (wasHelpless && !(g._helpless_time > 0)) g._pending_time_passed = 1;
         const collapsedDoubleMiss = /^The .+ misses the .+\.  The .+ misses the .+\.$/.test(g._pending_message || '');
         if (prayerPartialTurn) g._skip_pending_time_decrement = 1;
 	        if (g._skip_pending_time_decrement) g._skip_pending_time_decrement = 0;
@@ -18160,6 +18166,7 @@ export async function moveloop_core() {
 	            g._pet_resume_keep_time_count = 0;
 	            g._pending_time_passed--;
 	        }
+        if (g._helpless_time > 0) g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
 	        if (g._stop_search_extra_pass) {
 	            g._stop_search_extra_pass = 0;
 	            g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);

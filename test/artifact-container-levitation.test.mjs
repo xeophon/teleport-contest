@@ -49,7 +49,8 @@ for(const ice of [false,true]) {
         assert.equal(game.u.uprops[LEVITATION].extrinsic&W_ARTI,0);
         assert.equal(game.u.levitating,false);
         assert.equal(box.contents[0],item);
-        assert.match(game._pending_message,/float gently.*You put/s);
+        assert.match(game._pending_message,/float gently.*You see here/s);
+        assert.match(game._queued_message_after_more,/You put/);
         assert.equal(getRngLog().filter(line=>line.startsWith('rnz(100)')).length,1);
         if(ice) {assert.ok(item.age<0); const stored=item.age; game.moves+=10; removedFromIcebox(item); assert.equal(item.age,110-stored);}
         else assert.ok(item.age>100);

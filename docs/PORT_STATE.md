@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 69 JavaScript modules and approximately 172,000 lines;
+The port now has 70 JavaScript modules and approximately 172,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,429 passing tests**, with no
+The latest source-driven checkpoint has **5,526 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -78,7 +78,7 @@ the separate exercise for discovering a book type. Dull books can cause sleep;
 interrupted study retains its object and remaining delay. Adjacent threats use
 C's attack, disguise, awareness and visibility gates. General hunger and
 distant-monster study interruption still require their source passes;
-cursed-book teleport callbacks need their own completion audit.
+cursed-book teleport callbacks now have saved landing continuations below.
 Prayer completion preserves earned movement, as C's `unmul` does; resetting
 it to normal speed delayed the next spellbook study. The installed C recorder
 was checked with an isolated wizard-enabled configuration, and live movement
@@ -100,12 +100,31 @@ gold ownership and aggravation across the Wizard tower boundary. Failed weapon
 returns now suspend landing through death recovery and use source low-HP
 warnings (20 tests). Levitation landings now cover hole eligibility, Sokoban
 wind damage and self-touch, mounted falls and saved nested landings (30 tests).
-Autopickup after landing and the remaining Mjollnir shock chain are still open.
+Forty new automatic-pickup tests cover full-pile selection, source filters,
+object identity, burden prompts, remaining-pile menus, blind corpse contact
+and saved death continuations. Float-down and spellbook teleport use this
+shared owner; movement and arrival still have older pickup paths to migrate.
+Fifteen more returning-weapon tests now cover Mjollnir shock, resistance and
+sequential electrical inventory damage with saved per-item death recovery.
+Worn-ring property removal and old aggregate electrical callers remain open.
+
+The cursed-book suite now has 48 tests. Controlled teleport respects level
+restrictions, Amulet/tower disorientation, wizard override, shared getpos tips,
+saved targeting and landing pickup/death/menu continuations. Non-pit pickup
+precedes trap activation; pit pickup follows it. Shared immobility now counts
+full turns, correcting recovery for slow and fast heroes. A newly generated
+C trace confirms the 80-turn recovery and default unmul message; all 43 screens
+match, but its RNG trace exposed missing unseen monster arrow-trap handling.
+That source gap is queued for the next implementation.
 
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
 resident monsters and temple entry drive combat and hostility (11 new tests).
-The full monster attack sequence still requires continued source comparison.
+Five cleric spell effects and the real Sanctum Amulet now follow C (24 further
+tests including spell feedback/visibility). C's paralysis duration also reaches
+its damage caller; that executable behavior is intentionally preserved.
+The full monster attack sequence, remaining spells and magic attack slots still
+require continued source comparison.
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
 Knight, Ranger and Rogue starts now execute their source operations, including
@@ -120,13 +139,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit 515a0da, passed 52/53
-public sessions (12,711/12,712 screens, 832,102/832,102 RNG calls) and 12/19
-supplemental sessions (3,067/3,346 screens, 136,131/141,728 RNG calls), with
-zero worker errors. The Knight's remaining retention difference came from the
-hardcoded Sanctum sequence. Current full corpora will be rerun from the
-committed checkpoint after its source replacement. These recording results do
-not establish full C behavior.
+The last complete recording run, at preceding commit 42444fa, passed 49/53
+public sessions (12,597/12,712 screens, 830,380/832,102 RNG calls) and 12/19
+supplemental sessions (3,067/3,346 screens, 136,078/141,728 RNG calls), with
+zero worker errors. That snapshot removes the Sanctum script. Current spell
+feedback corrections restore full screens/RNG in the arch-lich and world-tour
+recordings; full corpora will be rerun from the committed checkpoint. These
+recording results do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

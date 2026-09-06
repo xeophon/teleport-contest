@@ -240,6 +240,7 @@ const LOADSTONE = 10165;
 const LENSES = 10128;
 const CREDIT_CARD = 10129;
 const AMULET_OF_ESP = 10130;
+export const AMULET_OF_YENDOR = 11015;
 const GRAY_DRAGON_SCALE_MAIL = 10085;
 const SILVER_DRAGON_SCALE_MAIL = 10086;
 const SPEED_BOOTS = 10087;
@@ -4168,6 +4169,11 @@ export function mksobj(otyp, init, artif) {
     if (init) {
         mksobj_init(otmp, otyp, artif);
     }
+    if (otyp === AMULET_OF_YENDOR) Object.assign(otmp, {
+        cls: 'amulet', glyph: '"', kind: 'Amulet of Yendor', actualKind: 'Amulet of Yendor',
+        appearance: 'Amulet of Yendor', realAmuletOfYendor: true, unique: true,
+        material: 'mithril', owt: 20, known: false,
+    });
     const specificFood = SPECIFIC_FOOD_INFO.get(otyp);
     if (specificFood) {
         const [singular, plural, color, mass] = specificFood;
@@ -4555,8 +4561,9 @@ function mksobj_init(otmp, otyp, artif) {
         else if (otyp === WAN_CREATE_MONSTER || otyp === WAN_LIGHT) otmp.spe = rn1(5, 11);
         else otmp.spe = rn1(5, otyp === WAND_CLASS && wandIndex <= 3 ? 11 : 4);
         blessorcurse(otmp, 17);
-    } else if (otyp === AMULET_CLASS) {
-        const badAmulet = !!game._mkobj_bad_amulet;
+    } else if (otyp === AMULET_CLASS || otyp === AMULET_OF_YENDOR) {
+        if (otyp === AMULET_OF_YENDOR) (game.context ??= {}).made_amulet = true;
+        const badAmulet = otyp === AMULET_CLASS && !!game._mkobj_bad_amulet;
         game._mkobj_bad_amulet = false;
         if (rn2(10) && badAmulet) curse(otmp);
         else blessorcurse(otmp, 10);
@@ -4744,7 +4751,7 @@ export function object_display(otmp) {
         return { glyph: '[', color: displayColor ?? otmp._armor_color ?? SPECIFIC_ARMOR_COLORS.get(otyp) ?? NO_COLOR };
     if (otyp === RING_CLASS || otyp === RIN_LEVITATION)
         return { glyph: '=', color: RING_APPEARANCE_COLORS.get(game._object_descriptions?.rings?.[(otmp.ringRoll || 1) - 1]) ?? CLR_WHITE };
-    if (otyp === AMULET_CLASS || otyp === AMULET_OF_ESP) return { glyph: '"', color: CLR_CYAN };
+    if (otyp === AMULET_CLASS || otyp === AMULET_OF_ESP || otyp === AMULET_OF_YENDOR) return { glyph: '"', color: CLR_CYAN };
     if (otyp === CORPSE) {
         const corpseColors = {
             orc: CLR_RED, dwarf: CLR_RED, gnome: CLR_BROWN, human: CLR_WHITE, elf: CLR_WHITE,
@@ -16523,7 +16530,7 @@ async function make_sanctum_level() {
         });
         const previousMongetsTarget = game._mongets_target;
         game._mongets_target = priest;
-        mongets(AMULET_CLASS);
+        mongets(AMULET_OF_YENDOR);
         game._mongets_target = previousMongetsTarget;
         givePriestSpellbooks(priest);
         if (rn2(2)) {

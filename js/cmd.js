@@ -1,19 +1,23 @@
 import { chooseMonsterSpell, monsterSpellWouldBeUseless, MCAST_INDIRECT } from './mcastu.js';
 import { ROLE_RANKS } from './roles.js';
+import { autopickTestObject } from './pickup.js';
+import { LOST_DROPPED } from './const.js';
+import { notake } from './permonst.js';
 import { processGameTimers, monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
 import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind } from './burn.js';
-import { objectMergeableByCMetadata, mergeStackableObject, putSaddleOnMonster, arriveMigratingMonsters } from './mklev.js';
+import { AMULET_OF_YENDOR, objectMergeableByCMetadata, mergeStackableObject, putSaddleOnMonster, arriveMigratingMonsters } from './mklev.js';
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
 import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP, W_SWAPWEP, W_QUIVER } from './const.js';
 import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, SHOCK_RES,
-    FIRE_RES, SLEEP_RES, DISINT_RES, TELEPORT_CONTROL, STEALTH, FAST, INVIS } from './const.js';
+    FIRE_RES, SLEEP_RES, DISINT_RES, TELEPORT_CONTROL, STEALTH, FAST, INVIS,
+    W_ARMOR, W_ACCESSORY, LOST_NONE, LOST_THROWN } from './const.js';
 import { S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
-import { pmOf, resistsFire, resistsAcid } from './mhitm.js';
+import { pmOf, resistsFire, resistsAcid, resistsElec } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
@@ -43,8 +47,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
     let dmg = found ? d(Math.trunc(ml / 2) + (attack?.damd ? attack.damn : 1), attack?.damd || 6) : 0; // mcastu.c:234-245
     if (halfSpell) dmg = Math.ceil(dmg / 2);
     const messages = [];
-    const visible = cansee(mon.mx, mon.my) && !heroIsBlind() && !mon.mundetected
-        && (!mon.minvis || game.u?.seeInvisible);
+    const visible = heroCanSeeMonster(mon);
     const subject = mon.givenName || `The ${mon.data?.name || 'monster'}`;
     switch (spell) {
     case 'CURSE_ITEMS': {                                 // mcastu.c:831-834
@@ -141,24 +144,66 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
             : dmg <= 20 ? `Your ${head} suddenly aches painfully!` : `Your ${head} suddenly aches very painfully!`);
         break;
     }
+    case 'OPEN_WOUNDS': {
+        const antimagic = heroHasAntimagic();
+        monstersObserveHeroAntimagic(antimagic);
+        if (antimagic) dmg = Math.ceil(dmg / 2);
+        messages.push(dmg <= 5 ? 'Your skin itches badly for a moment.'
+            : dmg <= 10 ? 'Wounds appear on your body!'
+                : dmg <= 20 ? 'Severe wounds appear on your body!'
+                    : 'Your body is covered with painful wounds!');
+        break;
+    }
+    case 'CONFUSE_YOU': {
+        const antimagic = heroHasAntimagic();
+        monstersObserveHeroAntimagic(antimagic);
+        if (antimagic) messages.push('You feel momentarily dizzy.');
+        else {
+            const oldConfusion = heroIsConfused();
+            addHeroConfusion(halfSpell ? Math.ceil(ml / 2) : ml);
+            messages.push(heroIsHallucinating() ? `You feel ${oldConfusion ? 'trippier' : 'trippy'}!`
+                : `You feel ${oldConfusion ? 'more ' : ''}confused!`);
+        }
+        dmg = 0;
+        break;
+    }
+    case 'PARALYZE': {
+        const resisted = heroHasAntimagic() || heroHasFreeAction();
+        monstersObserveHeroAntimagic(resisted);
+        if (!(game._helpless_time > 0) && !(game.multi < 0))
+            messages.push(resisted ? 'You stiffen briefly.' : 'You are frozen in place!');
+        dmg = resisted ? 1 : halfSpell ? Math.ceil((4 + ml) / 2) : 4 + ml;
+        // C nomul preserves a longer incapacitation. mcast_spell also
+        // passes the returned duration to mdamageu, including resisted casts.
+        game._helpless_time = Math.max(game._helpless_time || 0, -(game.multi || 0), dmg);
+        game._multi_reason = 'paralyzed by a monster';
+        game._wake_message = 'You can move again.';
+        break;
+    }
+    case 'BLIND_YOU': {
+        const eye = bodyPart(polyselfForm(), 'eye');
+        const singleEye = ['floating eye', 'Cyclops'].includes(polyselfForm()?.name);
+        messages.push(`Scales cover your ${singleEye ? eye : pluralizeMonsterName(eye)}!`);
+        game.u._blindTimeout = halfSpell ? 100 : 200;
+        const eyes = (game.inventory || []).some(obj => isWornInventoryItem(obj)
+            && artifactDefinitionForName(obj.artifact || obj.oartifact)?.name === 'The Eyes of the Overworld');
+        game.u.blind = !eyes;
+        if (game.u.blind) addHeroStatusSuffix('Blind');
+        else { removeHeroStatusSuffix('Blind'); messages.push('Your vision quickly clears.'); }
+        game.vision_full_recalc = 1;
+        dmg = 0;
+        break;
+    }
+    case 'GEYSER':
+        messages.push('A sudden geyser slams into you from nowhere!');
+        dmg = maybeHalfPhysicalDamage(d(8, 6));
+        break;
     default: // Strength drain and touch of death require their own lifecycles.
         dmg = 0;
         break;
     }
-    if (dmg) {
-        if (game.u?._polyself_form) {
-            game.u.mh = (game.u.mh || 0) - dmg;
-            if (game.u.mh < 1) {
-                if (heroHasUnchanging())
-                    Object.assign(messages, heroDartTrapFatalResult(messages, 'killed while stuck in creature form'));
-                else appendRehumanizeDeathResultMessages(messages, rehumanizeAfterPolyselfDeath(), { allowLifeSaving: true });
-            }
-        } else {
-            game.u.uhp = Math.max(0, (game.u.uhp || 0) - dmg);
-            if (game.u.uhp < 1)
-                Object.assign(messages, heroDartTrapFatalResult(messages, `killed by ${an(mon.data?.name || 'monster')}`));
-        }
-    }
+    if (dmg) Object.assign(messages,
+        applyHeroHitPointDamage(messages, dmg, `killed by ${an(mon.data?.name || 'monster')}`));
     const entries = messages.map(text => ({ text, more: true, lichChain: 1 }));
     if (entries.length && (messages.fatal || messages.lifeSaving || messages.genocideDeathArmed))
         Object.assign(entries[entries.length - 1], { fatal: messages.fatal, lifeSaving: messages.lifeSaving,
@@ -4985,15 +5030,17 @@ function startControlledTeleportPrompt() {
     game._command_mode = 'teleportCursor';
 }
 
-async function showControlledTeleportCursorPrompt() {
+async function showControlledTeleportCursorPrompt({ preservePosition = false, mode = 'teleportCursor' } = {}) {
     // C ref: src/getpos.c:843-849 — the "(For instructions...)" line is
     // gated on flags.verbose; the tip path then prints "Move cursor to %s:".
     await setMessage(game.flags?.verbose === false
         ? 'Move cursor to the desired position:'
         : "(For instructions type a '?')  Move cursor to the desired position:");
-    game._farlook_x = game.u?.ux || 0;
-    game._farlook_y = game.u?.uy || 0;
-    game._command_mode = 'teleportCursor';
+    if (!preservePosition) {
+        game._farlook_x = game.u?.ux || 0;
+        game._farlook_y = game.u?.uy || 0;
+    }
+    game._command_mode = mode;
 }
 
 function getposTipSeen() {
@@ -12362,6 +12409,18 @@ function monsterCastRndcurseItems() {
     }
 }
 
+function monsterSpellFeedback(text) {
+    const pending = game._pending_message || '';
+    const width = game.nhDisplay?.cols || 80;
+    if (pending && pending.length + text.length + 3 >= width - 8) {
+        (game._queued_messages_after_more ??= []).push({ text, more: true, lichChain: 1 });
+        game._message_more = 1;
+    } else {
+        game._pending_message = pending ? `${pending}  ${text}` : text;
+        game._keep_pending_message = 1;
+    }
+}
+
 // C castmu(): both attack-list spells and the idle-caster call use this
 // selection and cooldown path. Effect state follows the displayed cast line.
 export async function monsterCastSpell(mon, { thinksFound = true, found = true, attack = null } = {}) {
@@ -12379,8 +12438,10 @@ export async function monsterCastSpell(mon, { thinksFound = true, found = true, 
         }
     } while (--count > 0 && monsterSpellWouldBeUseless(mon, spell, hero));
     if (!count) return false;
-    const seen = heroHorizontalThrowRecoilCanSpotMonster(mon);
-    const subject = seen ? mon.givenName || `The ${mon.data?.name || 'monster'}` : 'Something';
+    const seen = heroCanSeeMonster(mon);
+    const spotted = heroCanSpotMonster(mon);
+    const name = mon.givenName || `The ${mon.data?.name || 'monster'}`;
+    const subject = seen ? name : 'Something';
     const indirect = MCAST_INDIRECT.has(spell);
     if (mon.mcan || mon.mspec_used || !ml) {
         if (seen && couldsee(mon.mx, mon.my)) {
@@ -12389,24 +12450,24 @@ export async function monsterCastSpell(mon, { thinksFound = true, found = true, 
             const point = indirect ? 'all around, then curses' : misdirected ? 'and curses in your general direction'
                 : game._has_displacement && (mon.mux !== game.u.ux || mon.muy !== game.u.uy)
                     ? 'and curses at your displaced image' : 'at you, then curses';
-            await setMessage(`${subject} points ${point}.`);
+            monsterSpellFeedback(`${subject} points ${point}.`);
         } else if (!(game.moves % 4) || !rn2(4)) {
-            if (!game.u?.deaf) await setMessage('You hear a mumbled curse.');
+            if (!game.u?.deaf) monsterSpellFeedback('You hear a mumbled curse.');
         }
         return false;
     }
     mon.mspec_used = ml < 8 ? 10 - ml : 2;
     if (!found && thinksFound && !indirect) {
         const target = game.level?.at(mon.mux, mon.muy)?.typ === WATER ? 'empty water' : 'thin air';
-        await setMessage(`${subject} casts a spell at ${target}!`);
+        monsterSpellFeedback(`${subject} casts a spell at ${target}!`);
         return false;
     }
     interruptPositiveMulti();
     if (rn2(ml * 10) < (mon.mconf ? 100 : 20)) {
-        if (seen && !game.u?.deaf) await setMessage(`The air crackles around ${subject.replace(/^The /, 'the ')}.`);
+        if (seen && !game.u?.deaf) monsterSpellFeedback(`The air crackles around ${subject.replace(/^The /, 'the ')}.`);
         return false;
     }
-    const castMsg = seen || !indirect ? `${subject} casts a spell${indirect ? '' : ' at you'}!` : '';
+    const castMsg = spotted || !indirect ? `${spotted ? name : 'Something'} casts a spell${indirect ? '' : ' at you'}!` : '';
     const pending = game._pending_message || '';
     const width = game.nhDisplay?.cols || 80;
     if (!castMsg || !pending || pending.length + castMsg.length + 3 < width - 8) {
@@ -12451,8 +12512,7 @@ function electricInventoryItemImmune(item, cls) {
     if (item?.artifact || item?.oartifact) return true;
     if (item?.in_use && (item?.quan || 1) === 1) return true;
     if (cls === 'ring')
-        return kind === 'ring of shock resistance' || item?.ringRoll === 19
-            || electricWornRingProtectedByGloves(item);
+        return kind === 'ring of shock resistance' || item?.ringRoll === 19;
     if (cls === 'wand') {
         const wand = wandTypeName(item);
         return wand === 'lightning' || item?.wandIndex === 24;
@@ -12461,6 +12521,7 @@ function electricInventoryItemImmune(item, cls) {
 }
 
 function electricInventoryProtectionChance() {
+    if (game.u?.uprops?.[SHOCK_RES]?.extrinsic & (W_ARMOR | W_ACCESSORY | W_WEP | W_ART)) return 99;
     return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'shock') ? 99 : 0;
 }
 
@@ -12487,42 +12548,73 @@ function electricDestroyInventorySelection(items, origDamage) {
     return selected.filter(Boolean);
 }
 
+function electricInventoryItemImpact(item, { deferRingDamage = false } = {}) {
+    const messages = [];
+    if (electricInventoryItemProtected()) return { messages, damage: 0 };
+    const cls = electricDestroyableInventoryClass(item);
+    if (cls === 'ring' && electricWornRingProtectedByGloves(item)) return { messages, damage: 0 };
+    if (cls === 'ring' && isChargeableRing(item) && rn2(3))
+        return rechargeRing(item, 0, { deferDamage: deferRingDamage });
+    const resisted = cls !== 'ring' && heroHasShockResistance();
+    const itemDamage = cls === 'wand' ? rnd(10) : 0;
+    const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+    let destroyed = 0;
+    for (let i = 0; i < quan; i++)
+        if (!rn2(3)) destroyed++;
+    if (!destroyed) return { messages, damage: 0 };
+
+    const prefix = destroyed === 1 ? (quan === 1 ? 'Your ' : 'One of your ')
+        : destroyed < quan ? 'Some of your ' : quan === 2 ? 'Both of your ' : 'All of your ';
+    const name = quan === 1 ? electricInventoryDisplayName(item)
+        : pluralizeMonsterName(electricInventoryDisplayName(item));
+    const verb = cls === 'ring' ? (destroyed > 1 ? 'turn to dust and vanish' : 'turns to dust and vanishes')
+        : destroyed > 1 ? 'break apart and explode' : 'breaks apart and explodes';
+    messages.push(`${prefix}${name} ${verb}!`);
+    useUpInventoryItem(item, destroyed);
+    if (itemDamage && resisted) messages.push("You aren't hurt!");
+    return { messages, damage: resisted ? 0 : itemDamage, exerciseStrength: !!itemDamage && !resisted,
+        deathCause: destroyed === 1 ? 'killed by an exploding wand' : 'killed by exploding wands' };
+}
+
 function electricDamageInventory(origDamage) {
     const messages = [];
     let damage = 0;
     let deathCause = '';
-    let resistedDamage = false;
     for (const item of electricDestroyInventorySelection(game.inventory || [], origDamage)) {
-        if (electricInventoryItemProtected()) continue;
-        const cls = electricDestroyableInventoryClass(item);
-        if (cls === 'ring' && isChargeableRing(item) && rn2(3)) {
-            messages.push(...rechargeRing(item, 0).messages);
-            continue;
-        }
-        const itemDamage = cls === 'wand' ? rnd(10) : 0;
-        const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
-        let destroyed = 0;
-        for (let i = 0; i < quan; i++)
-            if (!rn2(3)) destroyed++;
-        if (!destroyed) continue;
-
-        const name = electricInventoryDisplayName(item);
-        if (cls === 'ring') {
-            messages.push(`Your ${name} turns to dust and vanishes!`);
-            removeInventoryItem(item, destroyed);
-            continue;
-        }
-
-        messages.push(`Your ${name} breaks apart and explodes!`);
-        removeInventoryItem(item, destroyed);
-        if (heroHasShockResistance()) resistedDamage = true;
-        else {
-            damage += itemDamage;
-            deathCause = 'killed by an exploding wand';
-        }
+        if (!(game.inventory || []).includes(item)) continue;
+        const result = electricInventoryItemImpact(item);
+        messages.push(...result.messages);
+        damage += result.damage || 0;
+        if (result.damage) deathCause = result.deathCause;
     }
-    if (resistedDamage) messages.push("You aren't hurt!");
     return { messages, damage, deathCause };
+}
+
+// Each item's losehp can suspend destroy_items; its caller owns rendering and
+// saves this state before returning to the command's death or landing prompt.
+export async function applyHeroElectricInventoryDamage(state, messages) {
+    if (!state.items) {
+        const selected = electricDestroyInventorySelection(game.inventory || [], state.damage);
+        const deferred = item => wornRingItem(item) && objectKindKey(item) === 'ring of levitation';
+        state.items = [...selected.filter(item => !deferred(item)), ...selected.filter(deferred)];
+        state.index = 0;
+    }
+    while (state.index < state.items.length || state.exerciseStrength) {
+        if (state.exerciseStrength) {
+            state.exerciseStrength = false;
+            exerciseAttribute(A_STR, false);
+        }
+        if (state.index >= state.items.length) break;
+        const item = state.items[state.index++];
+        if (!(game.inventory || []).includes(item)) continue;
+        const impact = electricInventoryItemImpact(item, { deferRingDamage: true });
+        messages.push(...impact.messages);
+        state.exerciseStrength = impact.exerciseStrength;
+        if (!impact.damage) continue;
+        const result = applyHeroHitPointDamage(messages, impact.damage, impact.deathCause);
+        if (result.fatal || result.lifeSaving || result.genocideDeathArmed) return result;
+    }
+    return {};
 }
 
 function fireItemCanCatchLight(item) {
@@ -24923,8 +25015,7 @@ function heroDropBallPoolRelocationEffect(x, y, messages) {
     return { more: true, trapResult: null };
 }
 
-async function heroLandingTrapEffectAt(x, y, messages) {
-    const trap = heroTrapAt(x, y);
+async function heroLandingTrapEffectAt(x, y, messages, trap = heroTrapAt(x, y)) {
     if (!trap) return { more: false, trapResult: null };
 
     let result = null;
@@ -25584,6 +25675,10 @@ async function resumeWaterAfterPrompt(messages = []) {
     if (!result.pending) {
         game._water_operation_resumed = 1;
         game.context.move = 0;
+        if (game._spellbook_backfire) {
+            if (result.relocated) game._spellbook_backfire.phase = 'afterEffect';
+            await processSpellbookBackfire(messages);
+        }
     }
     return result;
 }
@@ -29259,12 +29354,14 @@ function heroUpwardThrowEffect(item) {
 // The continuation holds the actual detached object across float-down prompts.
 async function resumeHeroProjectileCommand(after) {
     if (after.phase === 'returnLanding') return finishHeroReturnedWeaponLanding(after);
+    if (after.phase === 'returnArtifact' || after.phase === 'returnInventory')
+        return resumeHeroReturnedWeaponDamage(after);
     if (after.operation === 'fire') return resumeHeroFireVolley(after);
     if (after.operation === 'horizontal') return resumeHeroHorizontalThrow(after);
     const obj = after.object;
     Object.assign(obj, {
         letter: undefined, line: undefined, worn: false, wielded: false,
-        alternate: false, quivered: false, owornmask: 0,
+        alternate: false, quivered: false, owornmask: 0, how_lost: LOST_THROWN,
         ox: game.u?.ux || 0, oy: game.u?.uy || 0,
     });
     const messages = await HERO_UPWARD_THROW_EFFECTS[after.effect](obj,
@@ -29380,7 +29477,7 @@ async function resumeHeroFireVolley(after) {
         stopCarriedFigurineTimerOnLeave(obj);
         Object.assign(obj, {
             letter: undefined, line: undefined, wielded: false, worn: false,
-            alternate: false, quivered: false, owornmask: 0,
+            alternate: false, quivered: false, owornmask: 0, how_lost: LOST_THROWN,
             glyph: obj.glyph || (obj.cls === 'gem' ? '*' : ')'),
             color: obj.color || (obj.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
         });
@@ -29513,6 +29610,7 @@ async function beginHeroHorizontalThrow(source, dir) {
 // its original slot without merging into an unrelated compatible stack.
 function restoreHeroReturnedProjectile(after, wield = false) {
     let obj = after.object;
+    obj.how_lost = LOST_NONE;
     if (!wield && after.source !== obj && game.inventory.includes(after.source)
         && sameMonsterThrownStackObject(after.source, { ...obj, ox: after.source.ox, oy: after.source.oy })) {
         mergeStackedShopBillEntries(after.source, obj);
@@ -29554,12 +29652,46 @@ async function finishHeroReturnedWeaponLanding(after) {
         applyLifeSavingOrFatalCommandMode(after.recoilResult);
 }
 
+async function resumeHeroReturnedWeaponDamage(after) {
+    if (after.phase === 'returnArtifact') {
+        after.phase = 'returnInventory';
+        if (artifactDefinitionForName(after.object.artifact || after.object.oartifact)?.name === 'Mjollnir') {
+            const applies = !heroHasShockResistance();
+            if (applies) after.returnDamage += rnd(24);
+            after.messages.push(applies ? 'The massive hammer hits!  Lightning strikes you!'
+                : 'The massive hammer hits you.');
+            if (applies) wakeNearbyMonstersAt(game.u.ux, game.u.uy, 16);
+            if (!rn2(5)) after.electricState = { damage: after.returnDamage };
+        }
+    }
+    if (after.electricState) {
+        const result = await applyHeroElectricInventoryDamage(after.electricState, after.messages);
+        if (result.fatal || result.lifeSaving || result.genocideDeathArmed) {
+            game._hero_projectile_return_landing = after;
+            await setMessage(after.messages.join('  '), true);
+            applyLifeSavingOrFatalCommandMode(result);
+            return;
+        }
+    }
+    after.phase = 'returnLanding';
+    const name = after.object.artifact || articleFor(pickupObjectName(after.object));
+    const result = applyHeroHitPointDamage(after.messages, maybeHalfPhysicalDamage(after.returnDamage), `killed by ${name}`);
+    if (result.fatal || result.lifeSaving || result.genocideDeathArmed) {
+        game._hero_projectile_return_landing = after;
+        await setMessage(after.messages.join('  '), true);
+        applyLifeSavingOrFatalCommandMode(result);
+        return;
+    }
+    await finishHeroReturnedWeaponLanding(after);
+}
+
 async function resumeHeroHorizontalThrow(after) {
     const { object: item, dir, throwLauncher, directLauncherAmmo, directShotLimit,
         mjollnirThrow, returningAklysThrow, returningObjectThrow } = after;
     stopCarriedFigurineTimerOnLeave(item);
     curseLoadstoneLeavingInventory(item);
     item.letter = item.line = undefined;
+    item.how_lost = LOST_THROWN;
     let ux = game.u?.ux || 0;
     let uy = game.u?.uy || 0;
     const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'
@@ -29911,15 +30043,10 @@ async function resumeHeroHorizontalThrow(after) {
             after.more = ordinaryAirRecoilMore || projectileImpactMore;
             after.recoilResult = ordinaryAirRecoilTrapResult;
             if (armHit) {
-                const damage = maybeHalfPhysicalDamage(1 + rnd(3));
-                const name = thrownObject.artifact || articleFor(pickupObjectName(thrownObject));
-                const result = applyHeroHitPointDamage(after.messages, damage, `killed by ${name}`);
-                if (result.fatal || result.lifeSaving || result.genocideDeathArmed) {
-                    game._hero_projectile_return_landing = after;
-                    await setMessage(after.messages.join('  '), true);
-                    applyLifeSavingOrFatalCommandMode(result);
-                    return;
-                }
+                after.returnDamage = 1 + rnd(3);
+                after.phase = 'returnArtifact';
+                await resumeHeroReturnedWeaponDamage(after);
+                return;
             }
             await finishHeroReturnedWeaponLanding(after);
             return;
@@ -32382,7 +32509,7 @@ function makeFakeAmuletOfYendorWishObject() {
 }
 
 function makeRealAmuletOfYendorWishObject() {
-    const otmp = mksobj(AMULET_CLASS, true, false);
+    const otmp = mksobj(AMULET_OF_YENDOR, true, false);
     return Object.assign(otmp, {
         cls: 'amulet',
         glyph: '"',
@@ -35669,7 +35796,9 @@ export function heroHasColdResistance() {
 }
 
 export function heroHasShockResistance() {
-    if (game.u?.shockResistance) return true;
+    if (game.u?.shockResistance || game.u?.uprops?.[SHOCK_RES]?.intrinsic
+        || game.u?.uprops?.[SHOCK_RES]?.extrinsic) return true;
+    if (resistsElec({ data: polyselfForm() })) return true;
     return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'shock');
 }
 
@@ -35801,10 +35930,7 @@ async function processSpellbookBackfire(messages = []) {
         switch (rn2(level)) {
     case 0: {
         messages.push('You feel a wrenching sensation.');
-        if (game.level?.at && game.u) {
-            const teleportMessage = safeTeleportHeroSameLevel();
-            if (teleportMessage) messages.push(teleportMessage);
-        }
+        state.phase = 'teleportCheck';
         break;
     }
     case 1:
@@ -35855,6 +35981,107 @@ async function processSpellbookBackfire(messages = []) {
         break;
         }
     }
+    if (state.phase === 'teleportCheck') {
+        state.phase = 'teleportControl';
+        if (heroNoTeleportLevel() && !game.flags?.debug) {
+            messages.push('A mysterious force prevents you from teleporting!');
+            state.phase = 'afterEffect';
+        } else if ((heroHasAmuletOfYendor() || heroOnWizardTowerLevel()) && !rn2(3)) {
+            messages.push('You feel disoriented for a moment.');
+            if (game.flags?.debug) {
+                await setMessage(`${messages.join('  ')}  Override? [yn] (n)`);
+                game._command_mode = 'bookTeleportOverride';
+                game.context.move = 0;
+                return;
+            }
+            state.phase = 'afterEffect';
+        }
+    }
+    if (state.phase === 'teleportControl') {
+        state.phase = 'teleportMove';
+        if ((heroHasTeleportControl() && !heroIsStunned()) || game.flags?.debug) {
+            if (game.u.usleep || game.u.unconscious || game._sleeping_time > 0) {
+                messages.push('Being unconscious, you cannot control your teleport.');
+            } else {
+                const previous = game._travel_previous_target;
+                game._farlook_x = previous && isok(previous.x, previous.y) ? previous.x : game.u.ux;
+                game._farlook_y = previous && isok(previous.x, previous.y) ? previous.y : game.u.uy;
+                const who = game.u.usteed ? `you and ${steedMonNam(game.u.usteed)}` : 'you';
+                messages.push(`Where do ${who} want to be teleported?`);
+                await setMessage(messages.join('  '), true);
+                game._command_mode = 'bookTeleportIntroMore';
+                game.context.move = 0;
+                return;
+            }
+        }
+    }
+    if (state.phase === 'teleportMove') {
+        state.phase = 'afterEffect';
+        if (state.teleportTarget !== null) {
+            state.teleportOrigin = { oldX: game.u.ux, oldY: game.u.uy };
+            let teleport;
+            if (state.teleportTarget && sameLevelTeleportOk(state.teleportTarget.x, state.teleportTarget.y, false)) {
+                teleport = { ok: true, message: teleportHeroSameLevel(state.teleportTarget.x, state.teleportTarget.y) };
+                const previous = game._travel_previous_target;
+                if (previous?.x === game.u.ux && previous?.y === game.u.uy) game._travel_previous_target = null;
+            } else {
+                if (state.teleportTarget) messages.push('Sorry...');
+                teleport = safeTeleportHeroSameLevel({ returnResult: true });
+            }
+            if (teleport.ok) {
+                if (game.flags?.verbose !== false) messages.push(teleport.message);
+                state.teleportTrap = heroTrapAt(game.u.ux, game.u.uy);
+                state.phase = 'landingWater';
+            }
+        }
+    }
+    // C spoteffects picks up before non-pit traps, and after pits. Each
+    // operation retains its caller while a landing or pickup prompt is open.
+    while (state.phase.startsWith('landing')) {
+        let result = null;
+        const x = game.u.ux, y = game.u.uy;
+        switch (state.phase) {
+        case 'landingWater':
+            state.phase = 'landingRooms';
+            result = await heroWaterLandingEffects();
+            messages.push(...result.messages);
+            if (result.relocated) state.phase = 'afterEffect';
+            if (result.pending) {
+                await setMessage(messages.join('  '), true);
+                if (result.fatal || result.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
+                game.context.move = 0;
+                return;
+            }
+            break;
+        case 'landingRooms':
+            state.phase = 'landingPrePickup';
+            await heroLandingSpecialRoomEffectsNoPickup(x, y, messages, state.teleportOrigin);
+            result = heroLandingSinkFallEffectAt(x, y, messages).trapResult;
+            break;
+        case 'landingPrePickup':
+            state.phase = 'landingTrap';
+            if (!is_pit(state.teleportTrap?.ttyp))
+                result = await automaticPickup(messages, { type: 'spellbookBackfire' });
+            break;
+        case 'landingTrap':
+            state.phase = 'landingPostPickup';
+            result = (await heroLandingTrapEffectAt(x, y, messages, state.teleportTrap)).trapResult;
+            break;
+        case 'landingPostPickup':
+            state.phase = 'landingDone';
+            if (is_pit(state.teleportTrap?.ttyp))
+                result = await automaticPickup(messages, { type: 'spellbookBackfire' });
+            break;
+        case 'landingDone': {
+            state.phase = 'afterEffect';
+            const warning = heroLandingIceWarningMessage(x, y);
+            if (warning) messages.push(warning);
+            break;
+        }
+        }
+        if (result?.pending) return;
+        if (result?.fatal || result?.lifeSaving) { damageResult = result; break; }
+    }
     if (!damageResult?.fatal && !damageResult?.lifeSaving && state.phase === 'afterStrengthDamage') {
         if (state.extraDamage) {
             if (game.u._polyself_form) {
@@ -35881,14 +36108,14 @@ async function processSpellbookBackfire(messages = []) {
     if (state.action === 'failed') {
         if (state.gone || !rn2(3)) {
             shouldCall = shouldTryCallSpellbook(item, state.name);
-            if (shouldCall) prepareSpellbookTryCall(item, state.studyDelay);
+            if (shouldCall) prepareSpellbookTryCall(item, 1);
             if (!state.gone) messages.push('The spellbook crumbles to dust!');
             useUpInventoryItem(item);
         }
         game._helpless_time = Math.max(game._helpless_time || 0, state.studyDelay);
-        game._wake_message = '';
+        game._wake_message = 'You can move again.';
         game._command_mode = shouldCall ? 'callSpellbookAfterMore' : null;
-        game.context.move = shouldCall ? 0 : state.studyDelay;
+        game.context.move = shouldCall ? 0 : 1;
     } else {
         if (state.gone) useUpInventoryItem(item);
         else checkUnpaidUsage(item, messages);
@@ -37907,15 +38134,16 @@ function isChargeableRing(item) {
     return ['adornment', 'gain strength', 'gain constitution', 'increase accuracy', 'increase damage', 'protection'].includes(name);
 }
 
-function rechargeRing(item, curseBless) {
+function rechargeRing(item, curseBless, { deferDamage = false } = {}) {
     if (!isChargeableRing(item)) return { messages: ['You have a feeling of loss.'], more: false };
     const oldSpe = item.spe ?? 0;
     const adjustment = curseBless > 0 ? rnd(3) : curseBless < 0 ? -rnd(2) : 1;
     if (oldSpe > rn2(7) || oldSpe <= -5) {
         const name = pickupObjectName(item);
-        const damage = rnd(Math.max(1, 3 * Math.abs(oldSpe)));
-        removeInventoryItem(item);
+        const damage = maybeHalfPhysicalDamage(rnd(Math.max(1, 3 * Math.abs(oldSpe))));
+        useUpInventoryItem(item);
         const messages = [`Your ${name} pulsates momentarily, then explodes!`];
+        if (deferDamage) return { messages, damage, deathCause: 'killed by an exploding ring' };
         if (game.u) {
             game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
             if ((game.u.uhp || 0) <= 0) {
@@ -44607,6 +44835,8 @@ async function finishPendingScrollTryCall(defaultMoveCost = 1) {
     let followupMessage = '';
     if (pending.kind === 'scareDust') followupMessage = finalizeScareMonsterDust(pending.preflight);
     if (pending.pickupListState) {
+        if (pending.pickupListState.owner) pending.pickupListState.messages = [];
+        pending.pickupListState.picked = true;
         if (followupMessage) pending.pickupListState.messages.push(followupMessage);
         pending.pickupListState.index = (pending.pickupListState.index || 0) + 1;
         await continuePickupListProcessing(pending.pickupListState);
@@ -44819,6 +45049,7 @@ async function floatArtifact(on, messages, { resume = false, state: landingState
     }
     if (state.phase === 'beforeTrap') {
         state.phase = 'afterTrap';
+        state.currentLevel = { ...u.uz };
         const encumbrance = encumberMsg();
         if (encumbrance) messages.push(encumbrance);
         const trap = state.trap;
@@ -44830,6 +45061,16 @@ async function floatArtifact(on, messages, { resume = false, state: landingState
                 game._artifact_float_continuation = state;
                 return { ...landing.trapResult, messages, pending: true };
             }
+        }
+    }
+    if (state.phase === 'afterTrap') {
+        state.phase = 'afterPickup';
+        if (!Is_airlevel(u.uz) && !Is_waterlevel(u.uz) && !u.uswallow
+            && !game._deferred_level_goto && u.uz.dnum === state.currentLevel.dnum
+            && u.uz.dlevel === state.currentLevel.dlevel) {
+            game._artifact_float_continuation = state;
+            const pickup = await automaticPickup(messages, { type: 'artifactFloat' });
+            if (pickup.pending) return { ...pickup, messages };
         }
     }
     if (state.phase === 'done') {
@@ -54706,12 +54947,82 @@ function pickupListPickedClass(obj) {
                         : undefined);
 }
 
-function finishPickupListProcessing(state) {
+async function finishPickupListProcessing(state) {
     game._pet_food_scan_inventory = game.inventory;
     clearPickupListOverlay();
     game._floor_pickup_menu_pending = null;
     game._command_mode = null;
     newsym(game.u?.ux || 0, game.u?.uy || 0);
+    if (state.owner) {
+        if (!state.looked) {
+            state.looked = true;
+            const form = pmOf({ data: heroFormData() }) || heroFormData();
+            if (!state.noPickup && hides_under(form)) hideUnder(game.u);
+            const remaining = (game.level?.objects || []).filter(obj => !obj.buried && !obj.transientProjectile
+                && obj.ox === game.u.ux && obj.oy === game.u.uy && obj !== game.u.uchain).reverse();
+            const count = remaining.length;
+            const limit = game.flags?.pile_limit ?? 5;
+            const skip = limit > 0 && count >= limit;
+            const blind = heroIsBlind();
+            if (count && !skip) {
+                const trap = heroTrapAt();
+                if (trap?.tseen) state.messages.push(`There is ${articleForName(TRAP_NAMES[trap.ttyp] || 'trap')} here.`);
+            }
+            if (count && blind) state.messages.push(`You try to feel what is lying here on the ${polyselfFalloffSurfaceName(game.u.ux, game.u.uy)}.`);
+            state.feelObject = blind && !wornGlovesItem() && !game.u.stoneResistance && !heroPolyselfResistsStoning()
+                ? remaining.find(isPetrifyingCorpseObject) : null;
+            if (skip) {
+                state.messages.push(count === 1 && remaining[0].quan === 1
+                    ? `There is ${state.picked ? 'another' : 'an'} object here.`
+                    : `There are ${count === 2 ? 'two' : count < 5 ? 'a few' : count < 10 ? 'several' : 'many'}${state.picked ? ' more' : ''} objects here.`);
+                if (state.feelObject) state.messages.push(`${count > 1 ? 'Including' : remaining[0].quan > 1 ? "They're" : "It's"} ${pickupObjectPhrase(state.feelObject)}${heroPolyselfCanBecomeStoneGolem() ? '' : ', unfortunately'}.`);
+            } else if (count === 1) {
+                state.messages.push(`You ${blind ? 'feel' : 'see'} here ${pickupObjectPhrase(remaining[0])}${shopItemPriceSuffix(remaining[0])}.`);
+            } else if (count > 1) {
+                const rows = [[0, 41, `${state.picked ? 'Other things' : 'Things'} that ${blind ? 'you feel' : 'are'} here:`]];
+                for (const obj of remaining) {
+                    rows.push([rows.length, 41, `${pickupObjectPhrase(obj)}${obj === state.feelObject ? '...' : shopItemPriceSuffix(obj)}`]);
+                    if (obj === state.feelObject) break;
+                }
+                rows.push([rows.length, 41, '--More--']);
+                state.lookRows = rows;
+                state.pending = true;
+                game._floor_pickup_menu_pending = state;
+                game._command_mode = state.messages.length ? 'pickupLookAfterMore' : 'pickupLookMore';
+                if (state.messages.length) await setMessage(state.messages.join('  '), true);
+                else setOverlay(rows, rows.length, false, 40);
+                game.context.move = 0;
+                return { pending: true, more: !!state.messages.length };
+            }
+        }
+        if (state.feelObject) {
+            const corpse = state.feelObject;
+            state.feelObject = null;
+            state.messages.push(heroPolyselfCanBecomeStoneGolem()
+                ? `You touched the ${corpseMonsterName(corpse)} corpse with your bare hands.`
+                : `Touching the ${corpseMonsterName(corpse)} corpse is a fatal mistake...`);
+            const golem = maybeTurnPolyselfIntoStoneGolem();
+            if (golem) state.messages.push(golem);
+            else {
+                state.messages.push('You turn to stone...');
+                game._death_bones_body = 'statue';
+                const death = heroDartTrapFatalResult(state.messages, `touching ${corpseMonsterName(corpse)} corpse bare-handed`);
+                state.pending = state.deathPending = true;
+                game._floor_pickup_menu_pending = state;
+                await setMessage(state.messages.join('  '), true);
+                applyLifeSavingOrFatalCommandMode(death);
+                game.context.move = 0;
+                return { ...death, pending: true };
+            }
+        }
+        if (state.notake) state.messages.push('You are physically incapable of picking anything up.');
+        state.finished = true;
+        if (state.pending) {
+            if (state.owner.type === 'artifactFloat') return resumeArtifactFloatCommand(state.messages);
+            if (state.owner.type === 'spellbookBackfire') return processSpellbookBackfire(state.messages);
+        }
+        return { pending: false };
+    }
     return setMessage((state?.messages || []).join('  ')).then(() => {
         game.context.move = 1;
     });
@@ -54727,6 +55038,12 @@ function pickupListPendingPrompt(state, obj, preflight) {
     state.scareResetSpeObj = preflight.scareResetSpeOnDecline ? obj : null;
     game._floor_pickup_menu_pending = state;
     game._command_mode = 'pickupListBurdenConfirm';
+    if (state.owner) {
+        state.pending = true;
+        state.messages.push(floorPickupBurdenPromptMessage(preflight));
+        game.context.move = 0;
+        return setMessage(state.messages.join('  ')).then(() => ({ pending: true }));
+    }
     return setMessage(pickupListPromptMessage(state, preflight)).then(() => {
         game.context.move = 0;
     });
@@ -54736,11 +55053,15 @@ function pickupListHandleGold(obj, preflight, state) {
     if (preflight?.messages?.length) state.messages.push(...preflight.messages);
     const pickup = pickUpFloorGoldObject(obj, preflight?.takeCount || obj.quan || 1);
     state.messages.push(...(pickup.messages || []));
+    state.picked = true;
 }
 
 function pickupListHandleObject(obj, preflight, state) {
     if (preflight?.messages?.length) state.messages.push(...preflight.messages);
     const pickupObj = splitFloorPickupObjectForLift(obj, preflight?.takeCount || obj.quan || 1);
+    pickupObj.how_lost = 0;
+    pickupObj.pickup_prev = 1;
+    state.picked = true;
     if (preflight.scareRemainderState && pickupObj !== obj)
         Object.assign(obj, preflight.scareRemainderState);
     const letter = pickupObj.wasStolen && pickupObj.letter
@@ -54794,14 +55115,29 @@ async function continuePickupListProcessing(state, acceptedPreflight = null) {
             return pickupListPendingPrompt(state, obj, preflight);
         if (!preflight.ok) {
             state.messages.push(floorPickupPreflightMessage(preflight));
+            if (preflight.fatal && state.owner) {
+                state.pending = state.deathPending = true;
+                game._floor_pickup_menu_pending = state;
+                if (isPetrifyingCorpseObject(obj)) {
+                    game._death_bones_body = 'statue';
+                    state.messages.push('You turn to stone...');
+                }
+                const death = heroDartTrapFatalResult(state.messages, game._death_cause);
+                await setMessage(state.messages.join('  '), true);
+                applyLifeSavingOrFatalCommandMode(death);
+                game.context.move = 0;
+                return { ...death, pending: true };
+            }
             if (preflight.scareDust && scheduleScareMonsterDustTryCall(preflight, { moveCost: 1, pickupListState: state })) {
+                if (state.owner) state.pending = true;
                 await setMessage((state.messages || []).join('  '), true);
                 game.context.move = 0;
-                return;
+                return { pending: true };
             }
             if (preflight.scareDust) {
                 const billMessage = finalizeScareMonsterDust(preflight);
                 if (billMessage) state.messages.push(billMessage);
+                state.picked = true;
             }
             state.index++;
             if (preflight.scareDust) continue;
@@ -54817,6 +55153,43 @@ async function continuePickupListProcessing(state, acceptedPreflight = null) {
         state.index++;
     }
     return finishPickupListProcessing(state);
+}
+
+// C pickup(1): select the whole pile before pickup_object can split or move it.
+// A serial owner resumes only after every selected object or pickup prompt.
+async function automaticPickup(messages, owner) {
+    const u = game.u, flags = game.flags || {};
+    if (game.multi < 0 && (u.usleep || u.unconscious || u.unaware)) return {};
+    const here = (game.level?.objects || []).filter(obj => !obj.buried && !obj.transientProjectile
+        && obj.ox === u.ux && obj.oy === u.uy).reverse();
+    if (game.context.nopick || !here.length || (movementIsPoolAt(u.ux, u.uy) && !u.uinwater)
+        || movementIsLavaAt(u.ux, u.uy)) return {};
+    const trap = heroTrapAt(u.ux, u.uy);
+    if (!heroCanReachFloorForUntrap(false)
+        || (!heroWaterProperties().flying && !heroIsHuge() && is_pit(trap?.ttyp)
+            && trap.tseen && !(u.utrap && (u.utraptype === TT_PIT || u.utraptype === 'pit')))) return {};
+    const form = pmOf({ data: heroFormData() }) || heroFormData();
+    const canTake = !notake(form);
+    const enabled = flags.pickup ?? !!game._autopickup;
+    const options = {
+        costly: shopkeeperInHisShop(shopkeeperForCostlySpot(u.ux, u.uy)),
+        types: game._autopickup_types ?? flags.pickup_types ?? '',
+        thrown: flags.pickup_thrown !== false, stolen: flags.pickup_stolen !== false,
+        dropped: (flags.nopick_dropped ?? flags.dropped_nopick) !== false,
+        exceptions: game._autopickup_exceptions || [],
+    };
+    const selected = enabled && canTake && !(game.multi && !game.context.run)
+        ? here.filter(obj => obj !== u.uchain && autopickTestObject(obj, {
+            ...options, glyph: obj.glyph || OBJECT_CLASS_GLYPHS[obj.cls],
+            name: pickupObjectName({ ...obj, quan: 1 }),
+        })) : [];
+    if (selected.length) {
+        for (const obj of game.inventory) obj.pickup_prev = 0;
+        game._just_picked_gold = false;
+    }
+    const state = { selected, index: 0, messages, owner, notake: !canTake,
+        noPickup: !enabled || !canTake || !!(game.multi && !game.context.run) };
+    return continuePickupListProcessing(state);
 }
 
 // deathSummary() moved to js/end.js (C ref: src/end.c really_done()).
@@ -59948,7 +60321,12 @@ export function heroCanSpotMonster(mon) {
     if (heroDetectsMonsterForRollingBoulder(mon)) return true;
     if (heroSensemonRestrictionsAllowRollingBoulder(mon) && sensesTelepathically(mon)) return true;
     if (heroWarnsOfMonsterTypeForRollingBoulder(mon)) return true;
-    if (game.u?.blind || mon.mundetected || (mon.minvis && !game.u?.seeInvisible)) return false;
+    return heroCanSeeMonster(mon);
+}
+
+function heroCanSeeMonster(mon) {
+    if (!mon || heroIsBlind() || mon.mundetected
+        || ((mon.minvis || mon.invis || mon.invisible) && !game.u?.seeInvisible)) return false;
     if (mon.wormno)
         return cansee(mon.mx, mon.my) || (mon.wormSegments || []).some(seg => cansee(seg.x, seg.y));
     const hasInfravision = game.u?.infravision
@@ -64299,7 +64677,14 @@ async function rhackInternal(_cmd) {
             applyLifeSavingConLoss();
             if (postContinuationHp == null) restoreLifeSavedBody();
             else if (game.u) game.u.uhp = postContinuationHp;
-            if (game._spellbook_backfire) {
+            if (game._floor_pickup_menu_pending?.deathPending) {
+                const pickup = game._floor_pickup_menu_pending;
+                pickup.deathPending = false;
+                pickup.messages = [lifeSavingMessage];
+                await finishPickupListProcessing(pickup);
+                return;
+            }
+            if (game._spellbook_backfire && !game._water_continuation) {
                 await processSpellbookBackfire([lifeSavingMessage]);
                 return;
             }
@@ -64941,6 +65326,21 @@ function tutorialEnterStash() {
         return;
     }
 
+    if (game._command_mode === 'pickupLookAfterMore' || game._command_mode === 'pickupLookMore') {
+        if (![' ', '\r', '\n', '\x1b'].includes(ch)) { game._keep_pending_message = 1; return; }
+        const pending = game._floor_pickup_menu_pending;
+        pending.messages = [];
+        game._pending_message = '';
+        game._message_more = 0;
+        if (game._command_mode === 'pickupLookAfterMore') {
+            setOverlay(pending.lookRows, pending.lookRows.length, false, 40);
+            game._command_mode = 'pickupLookMore';
+            return;
+        }
+        await finishPickupListProcessing(pending);
+        return;
+    }
+
     if (game._command_mode === 'pickupListBurdenConfirm') {
         const pending = game._floor_pickup_menu_pending;
         const answer = ch.toLowerCase();
@@ -64951,6 +65351,7 @@ function tutorialEnterStash() {
         game._pending_message = '';
         game._message_more = 0;
         game._keep_pending_message = 0;
+        if (pending.owner) pending.messages = [];
         if (answer === 'y') {
             const preflight = floorPickupAcceptedPreflight(pending.pendingPreflight);
             pending.pendingObject = null;
@@ -65269,6 +65670,29 @@ function tutorialEnterStash() {
             for (let i = 0; i < game._pending_message.length; i++)
                 disp?.setCell?.(i, 0, game._pending_message[i], NO_COLOR, 0);
         }
+        return;
+    }
+
+    if (game._command_mode === 'bookTeleportOverride') {
+        if (!['y', 'n', ' ', '\x1b', '\r', '\n'].includes(ch)) return;
+        if (ch !== 'y') game._spellbook_backfire.phase = 'afterEffect';
+        game._command_mode = null;
+        await processSpellbookBackfire();
+        return;
+    }
+
+    if (game._command_mode === 'bookTeleportIntroMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) return;
+        game._pending_message = '';
+        game._message_more = 0;
+        if (!getposTipSeen() && game.flags?.tips !== false) {
+            setOverlay(TRAVEL_TIP_LINES, 9, false, 9);
+            game._getpos_tip_seen = 1;
+            game._command_mode = 'teleportTip';
+            return;
+        }
+        await showControlledTeleportCursorPrompt({ preservePosition: true, mode: 'bookTeleportCursor' });
+        game._cursor_override = [game._farlook_x - 1, game._farlook_y + 1];
         return;
     }
 
@@ -68731,7 +69155,14 @@ function tutorialEnterStash() {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
-            if (game._spellbook_backfire) {
+            if (game._floor_pickup_menu_pending?.deathPending) {
+                const pickup = game._floor_pickup_menu_pending;
+                pickup.deathPending = false;
+                pickup.messages = survivalMessages;
+                await finishPickupListProcessing(pickup);
+                return;
+            }
+            if (game._spellbook_backfire && !game._water_continuation) {
                 await processSpellbookBackfire(survivalMessages);
                 return;
             }
@@ -76909,6 +77340,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             propertyMessages.push(...removeInventoryItem(item, item.quan || 1));
             const dropped = Object.assign(item, {
                 invlet: item.invlet ?? item.letter,
+                how_lost: LOST_DROPPED,
                 letter: undefined,
                 line: undefined,
                 known: item.known || /(?:^| )[-+]\d+ /.test(String(item.line || '')),
@@ -79686,7 +80118,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
-            await showControlledTeleportCursorPrompt();
+            await showControlledTeleportCursorPrompt(game._spellbook_backfire
+                ? { preservePosition: true, mode: 'bookTeleportCursor' } : {});
         }
         return;
     }
@@ -79922,7 +80355,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
-    if (game._command_mode === 'waterTeleportCursor') {
+    if (game._command_mode === 'waterTeleportCursor' || game._command_mode === 'bookTeleportCursor') {
         const key = ch.toLowerCase();
         if (Object.hasOwn(DIR_DX, key)) {
             const distance = key === ch ? 1 : 8;
@@ -79933,6 +80366,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (!['.', ',', ';', ':', '\x1b'].includes(ch)) return;
+        if (game._command_mode === 'bookTeleportCursor') {
+            game._spellbook_backfire.teleportTarget = ch === '\x1b' ? null
+                : { x: game._farlook_x, y: game._farlook_y };
+            game._command_mode = null;
+            game._cursor_override = null;
+            await processSpellbookBackfire();
+            return;
+        }
         const messages = [];
         game._command_mode = null;
         game._cursor_override = null;
