@@ -25,8 +25,8 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,142 passing tests**, with no
-failures, skips or TODOs. All eight generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **7,164 passing tests**, with no
+failures, skips or TODOs. All nine generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
 Full inventory naming now shares the C base-name owner for wizard override and
@@ -62,8 +62,13 @@ and appear through C's inventory, billing, floor-price, prompted-sale and
 discovery gates. Canonical metadata supplies base prices; observing a reflection
 shield no longer identifies it or fabricates a price. Twenty-six new tests
 include 704 quote histories and buffer boundaries from compiled C functions.
-Full corpse/tin price adjustments, unknown-gem valuation and remaining shop
-prompt continuations still need source passes.
+The shared intrinsic-price calculation now includes corpse/tin/egg monster
+value, conveyed properties, unique species, hunger, enchantment, empty wands,
+water and candle age. It matches 20,796 cases compiled with C's original tables
+and functions. Twenty-two additional tests cover canonical and legacy species,
+live buy/sell prices and quoted but nonbillable partly eaten food. Boulders and
+statues with zero intrinsic cost now incur C's minimum shop charge. Unknown-gem
+valuation and remaining shop prompt continuations still need source passes.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
 bonuses, movement/load gates, sleeping regeneration, separate active monster HP

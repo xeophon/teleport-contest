@@ -107,6 +107,16 @@ test('a container quote totals unpaid contents and records the container type', 
     assert.equal(appendPriceQuote('chest', chest._c_otyp), 'chest {buy 120}');
 });
 
+for (const contained of [false, true]) test(`C quotes partly eaten shop food but excludes it from billing, contained=${contained}`, () => {
+    setup();
+    const ration = { _c_otyp: OBJECT_DATA.find(type => type.symbol === 'FOOD_RATION').id,
+        cls: 'food', kind: 'food ration', id: 1, quan: 1, oeaten: 400, known: true, dknown: true };
+    const chest = { _c_otyp: OBJECT_DATA.find(type => type.symbol === 'CHEST').id,
+        cls: 'tool', kind: 'chest', quan: 1, no_charge: true, contents: [ration] };
+    assert.equal(shop.shopItemPrice(ration), 0);
+    assert.equal(shop.shopItemPriceSuffix(contained ? chest : ration), ` (${contained ? 'contents' : 'for sale'}, 7 zorkmids)`);
+});
+
 test('discovery listings include known-type quotes even with price_quotes disabled', async () => {
     setup(); const item = potion();
     game._discoveries = [{ section: 'Potions', name: 'potion of healing', text: 'potion of healing (ruby)', known: true }];

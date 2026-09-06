@@ -18311,7 +18311,7 @@ test('downward stone to flesh animates shop-floor ordinary statue and charges ex
     assert.doesNotMatch(message, /used-up|odor of meat|delicious smell/);
 });
 
-test('downward stone to flesh animates unbilled zero-price shop-floor ordinary statue without debt', async () => {
+test('downward stone to flesh charges the minimum for a shop statue with zero intrinsic cost', async () => {
     const { shkp } = installCommandShopState();
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
     initRng(1);
@@ -18325,14 +18325,15 @@ test('downward stone to flesh animates unbilled zero-price shop-floor ordinary s
 
     assert.equal(game.level.objects.includes(statue), false);
     assert.ok((game.level.monsters || []).find(mon => mon.data?.name === 'goblin'));
-    assert.equal(shkp.debit || 0, 0);
+    assert.equal(shkp.debit, 7);
     assert.equal(shkp.robbed || 0, 0);
     assert.equal(shkp.billct, 0);
     assert.deepEqual(shkp.bill || [], []);
     assert.equal(shop.shopBillEntryForObject(shkp, statue), null);
     assert.equal((game._usedUpShopBills || []).some(bill => String(bill.bo_id) === String(statue.id)), false);
     assert.match(game._pending_message || '', /The statue of a goblin comes to life!/);
-    assert.doesNotMatch(game._pending_message || '', /owe|goods lost|used-up|odor of meat|delicious smell/);
+    assert.match(game._pending_message || '', /You owe Izchak 7 zorkmids/);
+    assert.doesNotMatch(game._pending_message || '', /goods lost|used-up|odor of meat|delicious smell/);
 });
 
 test('downward stone to flesh animates no-charge shop-floor ordinary statue without debt', async () => {
@@ -57115,7 +57116,7 @@ test('menu pickup ordinary boulder failure aborts later selected items', async (
     assert.equal(game.context.move, 1);
 });
 
-test('shop menu pickup by throws-rocks hero bills normal item and carries boulder without billing', async () => {
+test('shop menu pickup by throws-rocks hero bills both merchandise and boulders', async () => {
     const { shkp } = installCommandShopState();
     installThrowsRocksForm();
     const scroll = blankScroll(6066);
@@ -57135,12 +57136,12 @@ test('shop menu pickup by throws-rocks hero bills normal item and carries boulde
     const scrollEntry = shop.shopBillEntryForObject(shkp, carriedScroll);
 
     assert.ok(carriedBoulder);
-    assert.equal(carriedBoulder.unpaid == null, true);
-    assert.equal(shop.shopBillEntryForObject(shkp, carriedBoulder) == null, true);
+    assert.equal(carriedBoulder.unpaid, true);
+    assert.ok(shop.shopBillEntryForObject(shkp, carriedBoulder));
     assert.ok(carriedScroll);
     assert.ok(scrollEntry);
     assert.equal(scrollEntry.useup, false);
-    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.billct, 2);
     assert.equal(game.level.objects.includes(rock), false);
     assert.equal(game.level.objects.includes(scroll), false);
     assert.match(game._pending_message, /a - a scroll of blank paper \(unpaid, \d+ zorkmids?\)/);
@@ -57549,7 +57550,7 @@ test('container take-out menu groups contained boulders with statues', async () 
     assert.equal(game._loot_takeout_entries[0].label, 'Boulders/Statues');
 });
 
-test('shop-floor container take-out bills normal merchandise but not boulder', async () => {
+test('shop-floor container take-out bills both merchandise and boulders', async () => {
     const { shkp } = installCommandShopState();
     installThrowsRocksForm();
     const container = shopFloorContainer(6154);
@@ -57573,11 +57574,11 @@ test('shop-floor container take-out bills normal merchandise but not boulder', a
     assert.ok(carriedRation);
     assert.equal(container.contents.includes(rock), false);
     assert.equal(container.contents.includes(ration), false);
-    assert.equal(carriedBoulder.unpaid == null, true);
-    assert.equal(shop.shopBillEntryForObject(shkp, carriedBoulder), null);
+    assert.equal(carriedBoulder.unpaid, true);
+    assert.ok(shop.shopBillEntryForObject(shkp, carriedBoulder));
     assert.equal(carriedRation.unpaid, true);
     assert.ok(shop.shopBillEntryForObject(shkp, carriedRation));
-    assert.equal(shkp.billct, 1);
+    assert.equal(shkp.billct, 2);
     assert.match(game._pending_message, /a - a food ration \(unpaid, \d+ zorkmids?\)/);
     assert.match(game._pending_message, /b - a boulder/);
     assert.equal(game.context.move, 1);

@@ -2,7 +2,7 @@ import { tinVariety, TIN_VARIETY_TEXTS } from './eat.js';
 import { makePlural as pluralizeMonsterName, xname, doname } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject, learnWandType } from './object_knowledge.js';
-import { recordPriceQuote, appendPriceQuote } from './shk.js';
+import { recordPriceQuote, appendPriceQuote, shopObjectPrice } from './shk.js';
 import { OBJECT_DATA } from './object_data.js';
 import { W_ARM, W_ARMC, W_ARMH, W_ARMS, W_ARMG, W_ARMU, W_BALL, W_CHAIN, FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
@@ -43755,20 +43755,6 @@ function shopSaleableObject(shkp, obj) {
     return false;
 }
 
-function shopSaleBasePrice(obj) {
-    let price = shopBaseCost(obj);
-    // C getprice(TRUE) discounts intrinsic artifact value before enchantment.
-    if (obj.artifact || obj.oartifact) price = Math.trunc(price / 4);
-    if (!price) return 0;
-    if ((obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.otyp === CORPSE || obj.otyp === 'corpse') && obj.oeaten)
-        return 0;
-    if ((obj.cls === 'wand' || obj.otyp === WAND_CLASS) && obj.spe === -1) return 0;
-    if ((obj.cls === 'armor' || obj.cls === 'weapon' || obj.glyph === '[' || obj.glyph === ')')
-        && (obj.spe || 0) > 0) price += 10 * obj.spe;
-    if (isCandleObject(obj) && obj.age < 20 * price) price = Math.trunc(price / 2);
-    return price;
-}
-
 function shopSaleDunceOrTouristDivisor() {
     const wearingDunceCap = (game.inventory || []).some(item =>
         isWornInventoryItem(item) && objectKindKey(item) === 'dunce cap');
@@ -43786,7 +43772,7 @@ function shopSaleDunceOrTouristDivisor() {
 }
 
 function shopSaleOffer(obj, shkp = null) {
-    const unitPrice = shopSaleBasePrice(obj);
+    const unitPrice = shopObjectPrice(obj, true, shopBaseCost(obj));
     if (!(unitPrice > 0)) return 0;
     let price = unitPrice * shopPricingUnits(obj);
     let multiplier = 1;
@@ -52698,17 +52684,7 @@ function shopPriceWearingSurcharge() {
 }
 
 function shopObjectUnitCost(obj, shkp) {
-    let price = shopBaseCost(obj);
-    if ((obj?.cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.otyp === CORPSE || obj?.otyp === 'corpse')
-        && (game.u?.uhs || 0) >= 2)
-        price *= game.u.uhs;
-    if ((obj?.cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.otyp === CORPSE || obj?.otyp === 'corpse')
-        && obj?.oeaten)
-        price = 0;
-    if ((obj?.cls === 'armor' || obj?.cls === 'weapon' || obj?.glyph === '[' || obj?.glyph === ')')
-        && (obj?.spe || 0) > 0)
-        price += 10 * obj.spe;
-    if (isCandleObject(obj) && obj?.age < 20 * price) price = Math.trunc(price / 2);
+    let price = shopObjectPrice(obj, false, shopBaseCost(obj));
     if (!price) price = 5;
 
     let multiplier = 1;
@@ -56033,10 +56009,11 @@ async function queueUntendedTempleEntryAfterTeleport(oldX, oldY, newX, newY) {
     if (ghostText) queueMessageAfterMore(ghostText);
 }
 
-function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
+function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy, { billableOnly = true } = {}) {
     if (!obj || obj.otyp === GOLD_PIECE || obj.cls === 'coin' || obj.glyph === '$') return null;
-    if ((obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.otyp === CORPSE || obj.otyp === 'corpse') && obj.oeaten)
-        return 0;
+    // billable excludes partly eaten food. get_cost_of_shop_item still quotes
+    // it through get_cost's minimum price, even though pickup won't bill it.
+    if (billableOnly && obj.oeaten && (objectTypeData(obj)?.class === 7 || obj.cls === 'food')) return 0;
     const loc = game.level?.at(x, y);
     const roomno = loc?.roomno || 0;
     const room = levelRoomByRoomno(roomno);
@@ -56047,7 +56024,6 @@ function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
     if (shkp.shk && x === shkp.shk.x && y === shkp.shk.y) return 0;
     if (obj.no_charge) return 0;
 
-    if (!shopBaseCost(obj)) return null;
     return shopObjectUnitCost(obj, shkp) * shopPricingUnits(obj);
 }
 
@@ -56058,7 +56034,7 @@ function containedShopNonGoldPrice(obj, x = game.u?.ux, y = game.u?.uy, seen = n
     for (const child of globContents(obj)) {
         if (!child || seen.has(child)) continue;
         if (!shopBillableGold(child) && !child.no_charge) {
-            const childPrice = shopItemPrice(child, x, y);
+            const childPrice = shopItemPrice(child, x, y, { billableOnly: false });
             if (childPrice > 0) price += childPrice;
         }
         price += containedShopNonGoldPrice(child, x, y, seen);
@@ -56067,7 +56043,7 @@ function containedShopNonGoldPrice(obj, x = game.u?.ux, y = game.u?.uy, seen = n
 }
 
 function shopFloorItemPriceInfo(obj, x = game.u?.ux, y = game.u?.uy) {
-    const top = shopItemPrice(obj, x, y);
+    const top = shopItemPrice(obj, x, y, { billableOnly: false });
     if (top == null) return null;
     const topPrice = top > 0 ? top : 0;
     const contentsPrice = globContents(obj).length

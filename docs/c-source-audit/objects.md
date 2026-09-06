@@ -8,8 +8,14 @@ Billing, inventory, floor quotes, prompted sales and discoveries use it with
 option, type-knowledge and suppressed-price gates. The independent generator
 compiles the original C quote functions unchanged for 704 range/buffer cases;
 26 added tests cover those answers, actual commands and save restoration.
-Canonical object costs replace missing base prices. Full monster-food price
-adjustments, unknown-gem valuation and serial sale prompt timing remain open.
+Canonical object costs replace missing base prices. `shk.c:4275-4360` now shares
+the complete intrinsic-price calculation across buying/selling, including the
+`eat.c:intrinsic_possible` predicate and correct human/animal werecreature
+identity. The C compiler oracle covers 20,796 cases using original C tables.
+Twenty-two additional tests cover these answers and live price/billing gates.
+Zero intrinsic cost still receives `get_cost`'s minimum charge; partly eaten
+food can be quoted while `billable` excludes new pickup/loss charges.
+Unknown-gem valuation and serial sale prompt timing remain open.
 Reflection shield sightings preserve unknown type state; actual reflection
 learning preserves instance enchantment knowledge. Remaining duplicated wand
 reflection branches still need consolidation.
