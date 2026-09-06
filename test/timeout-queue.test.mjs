@@ -189,3 +189,73 @@ test('global timers do not mutate an object timer count', async () => {
     await runTimers({ [HATCH_EGG]: { run() {} } });
     assert.equal(arg.timed, undefined);
 });
+
+test('C obj_stop_timers preserves the original count until every cleanup has finished', () => {
+    resetGame();
+    const obj = {};
+    startTimer(3, TIMER_OBJECT, BURN_OBJECT, obj);
+    startTimer(4, TIMER_OBJECT, HATCH_EGG, obj);
+    const calls = [];
+    const cleanup = (arg, deadline) => calls.push([arg.timed, deadline,
+        game.timers.filter(timer => timer.arg === arg).length]);
+    stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup }, [HATCH_EGG]: { cleanup } });
+    assert.deepEqual(calls, [[2, 3, 1], [2, 4, 0]]);
+    assert.equal(obj.timed, 0);
+});
+
+test('C obj_stop_timers unlinks object nodes even when another kind has the same callback and argument', () => {
+    resetGame();
+    const obj = {};
+    startTimer(1, TIMER_GLOBAL, BURN_OBJECT, obj);
+    startTimer(2, TIMER_OBJECT, BURN_OBJECT, obj);
+    const calls = [];
+    stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup: (arg, deadline) => calls.push(deadline) } });
+    assert.deepEqual(calls, [2]);
+    assert.deepEqual(game.timers.map(timer => [timer.kind, timer.timeout]), [[TIMER_GLOBAL, 1]]);
+    assert.equal(obj.timed, 0);
+});
+
+test('C spot_stop_timers unlinks only the local level node with matching coordinates', () => {
+    resetGame();
+    const previous = {}, current = {};
+    const spot = (8 << 16) | 3;
+    game.level = previous;
+    startTimer(1, TIMER_LEVEL, MELT_ICE_AWAY, spot);
+    game.level = current;
+    startTimer(2, TIMER_GLOBAL, MELT_ICE_AWAY, spot);
+    startTimer(3, TIMER_LEVEL, MELT_ICE_AWAY, spot);
+    const calls = [];
+    stopSpotTimers(8, 3, MELT_ICE_AWAY,
+        { [MELT_ICE_AWAY]: { cleanup: (arg, deadline) => calls.push(deadline) } });
+    assert.deepEqual(calls, [3]);
+    assert.deepEqual(game.timers.map(timer => [timer.kind, timer.timeout]),
+        [[TIMER_LEVEL, 1], [TIMER_GLOBAL, 2]]);
+    game.level = previous;
+    assert.equal(spotTimerExpires(8, 3, MELT_ICE_AWAY), 1);
+});
+
+for (const filtered of [false, true]) {
+    test(`inactive level timers wait for arrival with ${filtered ? 'an explicit' : 'the default'} execution filter`, async () => {
+        resetGame();
+        const first = {}, second = {};
+        const spot = (8 << 16) | 3;
+        game.level = first;
+        startTimer(1, TIMER_LEVEL, MELT_ICE_AWAY, spot);
+        game.level = second;
+        startTimer(2, TIMER_LEVEL, MELT_ICE_AWAY, spot);
+        startTimer(3, TIMER_GLOBAL, HATCH_EGG, 0);
+        game.moves = 10;
+        const calls = [];
+        const handlers = {
+            [MELT_ICE_AWAY]: { run: (arg, time) => { calls.push([game.level, time]); } },
+            [HATCH_EGG]: { run: (arg, time) => { calls.push(['global', time]); } },
+        };
+        await runTimers(handlers, game, filtered ? timer => timer.func in handlers : undefined);
+        assert.deepEqual(calls, [[second, 2], ['global', 3]]);
+        assert.equal(game.timers.length, 1);
+        game.level = first;
+        await runTimers(handlers);
+        assert.deepEqual(calls, [[second, 2], ['global', 3], [first, 1]]);
+        assert.deepEqual(game.timers, []);
+    });
+}

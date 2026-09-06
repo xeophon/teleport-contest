@@ -41,7 +41,9 @@ export function peekTimer(func, arg, g = game) {
 export async function runTimers(handlers, g = game, active = () => true) {
     const results = [];
     for (;;) {
-        const index = (g.timers || []).findIndex(timer => timer.timeout <= (g.moves || 0) && active(timer));
+        // C unloads local timers with their level; this queue retains them.
+        const index = (g.timers || []).findIndex(timer => timer.timeout <= (g.moves || 0)
+            && (timer.kind !== TIMER_LEVEL || timer.level === g.level) && active(timer));
         if (index < 0) break;
         const [timer] = g.timers.splice(index, 1);
         if (timer.kind === TIMER_OBJECT) timer.arg.timed--;
@@ -73,8 +75,12 @@ export function splitObjectTimers(src, dest, g = game) {
 
 export function stopObjectTimers(obj, handlers = {}, g = game) {
     for (const timer of [...(g.timers || [])]) {
-        if (timer.kind === TIMER_OBJECT && timer.arg === obj)
-            stopTimer(timer.func, obj, handlers, g);
+        if (timer.kind !== TIMER_OBJECT || timer.arg !== obj) continue;
+        const index = g.timers.indexOf(timer);
+        if (index < 0) continue;
+        g.timers.splice(index, 1);
+        // C obj_stop_timers leaves the count intact throughout cleanup.
+        handlers[timer.func]?.cleanup?.(obj, timer.timeout, g);
     }
     obj.timed = 0;
 }
@@ -82,8 +88,12 @@ export function stopObjectTimers(obj, handlers = {}, g = game) {
 export function stopSpotTimers(x, y, func, handlers = {}, g = game) {
     const where = (x << 16) | y;
     for (const timer of [...(g.timers || [])]) {
-        if (timer.kind === TIMER_LEVEL && timer.func === func && timer.arg === where && timer.level === g.level)
-            stopTimer(func, where, handlers, g);
+        if (timer.kind !== TIMER_LEVEL || timer.func !== func || timer.arg !== where || timer.level !== g.level)
+            continue;
+        const index = g.timers.indexOf(timer);
+        if (index < 0) continue;
+        g.timers.splice(index, 1);
+        handlers[func]?.cleanup?.(where, timer.timeout, g);
     }
 }
 
