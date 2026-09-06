@@ -753,7 +753,7 @@ async function spellImmediateBeam(spell, dir, D) {
 async function spellRayHitMonster(spell, mon, nd, D, messages, swallowed = false) {
     const name = spellName(spell);
     const data = SPELL_MONSTERS_BY_NAME.get(monsterName(mon).toLowerCase()) || mon.data;
-    const rayName = name === 'sleep' ? 'sleep ray' : name === 'finger of death' ? 'death ray' : name;
+    const rayName = name === 'sleep' ? 'sleep ray' : name;
     let damage = 0;
     let absorbed = false;
     if (name === 'sleep') {
@@ -805,173 +805,225 @@ async function spellRayHitMonster(spell, mon, nd, D, messages, swallowed = false
 }
 
 async function spellRay(spell, dir, D) {
-    const name = spellName(spell);
-    const u = game.u || {};
-    const messages = [];
-    const ulevel = u.ulevel || 1;
-    const nd = Math.trunc(ulevel / 2) + 1; // C ubuzz(BZ_U_SPELL(...), u.ulevel / 2 + 1)
+    const name = spellName(spell), u = game.u;
+    const nd = Math.trunc((u.ulevel || 1) / 2) + 1;
     const hitBon = spellHitBonus(spell, D);
-    const rayColor = name === 'sleep' ? 'bright blue' : 'white';
-    const rayName = name === 'sleep' ? 'sleep ray' : name === 'cone of cold' ? 'cone of cold'
-        : name === 'finger of death' ? 'death ray' : 'magic missile';
-    if (D.heroIsHallucinating()) rn2(6); // C dobuzz(): Hallucination ? rn2(6) : damgtype
+    const displayed = D.heroIsHallucinating() ? rn2(6)
+        : name === 'sleep' ? 3 : name === 'cone of cold' ? 2 : name === 'fireball' ? 1 : name === 'finger of death' ? 4 : 0;
     if (u.uswallow && u.ustuck) {
+        const messages = [];
         await spellRayHitMonster(spell, u.ustuck, nd, D, messages, true);
         return { messages, fatal: !!messages.fatal, lifeSaving: !!messages.lifeSaving };
     }
-    let range = rn1(7, 7); // C dobuzz() range
-    if (!dir.dx && !dir.dy) range = 1;
-    let sx = u.ux || 0;
-    let sy = u.uy || 0;
-    let dx = dir.dx;
-    let dy = dir.dy;
-    const beamCells = [];
-    let hitHero = null;
+    const range = rn1(7, 7);
+    return resumeSpellRay({ spell, name, nd, hitBon,
+        rayName: name === 'sleep' ? 'sleep ray' : name,
+        color: [12, 9, 15, 12, 8, 15][displayed],
+        range: dir.dx || dir.dy ? range : 1, sx: u.ux, sy: u.uy, dx: dir.dx, dy: dir.dy,
+        beamCells: [], phase: 'step', output: [], messages: [], savedBhitpos: game.bhitpos ? { ...game.bhitpos } : null }, D);
+}
 
-    while (range-- > 0) {
-        const lsx = sx;
-        const lsy = sy;
-        sx += dx;
-        sy += dy;
-        const inBounds = sx >= 1 && sx < COLNO && sy >= 0 && sy < ROWNO;
-        const loc = inBounds ? game.level?.at(sx, sy) : null;
-        const typ = loc?.typ ?? STONE;
-        let bounceNow = !inBounds || typ === STONE;
-
-        if (!bounceNow) {
-            beamCells.push({ x: sx, y: sy, ch: beamGlyph(dx, dy), color: rayColor });
+// zap.c:dobuzz/zhitu. Each phase resumes after the source operation that
+// displayed a message; no range, hit or damage roll is repeated after input.
+export async function resumeSpellRay(state, D) {
+    const { spell, name, nd, rayName } = state;
+    const pending = { published: true, pending: true, messages: state.messages,
+        afterHeroDamage: { kind: 'spellRay', state } };
+    while (!game.program_state?.gameover) {
+        while (state.output.length) {
+            const text = state.output.shift(); state.messages.push(text);
+            if (!D.say(text)) return pending;
+        }
+        if (D.waiting()) return pending;
+        if (state.observation) {
+            D.observeHeroRayResistance(state.observation.kind, state.observation.resisted);
+            state.observation = null;
+        }
+        const u = game.u;
+        if (state.phase === 'step') {
+            if (state.range-- <= 0) { state.phase = 'end'; continue; }
+            state.lsx = state.sx; state.lsy = state.sy;
+            state.sx += state.dx; state.sy += state.dy;
+            const { sx, sy } = state;
+            const loc = sx >= 1 && sx < COLNO && sy >= 0 && sy < ROWNO ? game.level.at(sx, sy) : null;
+            state.typ = loc?.typ ?? STONE;
+            if (!loc || loc.typ === STONE) { state.phase = 'bounce'; continue; }
+            game.bhitpos = { x: sx, y: sy };
+            state.beamCells.push({ x: sx, y: sy, ch: !state.dx && !state.dy ? '\\' : beamGlyph(state.dx, state.dy), color: state.color });
+            if (!D.heroIsBlind()) game._transient_beam_cells = state.beamCells;
+            state.phase = 'target';
             if (name === 'cone of cold') {
                 const terrain = D.applyColdRayTerrain(sx, sy);
-                messages.push(...terrain.messages);
-                range += terrain.rangeMod;
-                if (terrain.stopped || range < 0) break;
+                state.output.push(...terrain.messages); state.range += terrain.rangeMod;
+                if (terrain.stopped || state.range < 0) state.phase = 'end';
             }
-            const mon = (game.level?.monsters || []).find(candidate =>
-                candidate && !candidate.dead && (candidate.mhp ?? 1) > 0
-                && candidate.mx === sx && candidate.my === sy);
-            if (mon) {
-                if (name === 'fireball') break;
-                if (spellZapHit(findMac(mon), hitBon)) {
-                    range -= 2;
-                    const reflection = D.monsterReflectionSource(mon);
-                    if (reflection) {
-                        if (D.visibleMonsterForScroll(mon)) {
-                            messages.push(`The ${rayName} hits ${D.monsterTheName(mon)}.`);
-                            D.recordMonsterReflectionDiscovery(reflection);
-                            messages.push(`But it reflects from ${D.monsterPossessiveName(mon)} ${reflection.source}!`);
-                        }
-                        dx = -dx;
-                        dy = -dy;
-                    } else {
-                        if (await spellRayHitMonster(spell, mon, nd, D, messages)) break;
-                    }
-                } else if (D.visibleMonsterForScroll(mon)) {
-                    messages.push(`The ${rayName} misses ${D.monsterTheName(mon)}.`);
-                }
-            } else if (name !== 'fireball' && sx === (u.ux || 0) && sy === (u.uy || 0) && range >= 0) {
-                // C dobuzz(): beam returns to hero square.
-                if (spellZapHit(u.uac ?? 10, 0)) {
-                    range -= 2;
-                    messages.push(`The ${rayName} hits you!`);
-                    if (u.reflecting) {
-                        messages.push('But it reflects from your shield!');
-                        dx = -dx;
-                        dy = -dy;
-                    } else if (name === 'sleep') {
-                        if (D.heroHasSleepResistance()) messages.push('You don\'t feel sleepy!');
-                        else hitHero = { sleepTime: rnd(50) };
-                    } else if (name === 'cone of cold') {
-                        const originalDamage = d(nd, 6);
-                        let dmg = D.heroHasColdResistance() ? 0 : originalDamage;
-                        if (!dmg) messages.push("You don't feel cold.");
-                        if (!rn2(3)) {
-                            const inventory = D.coldDamageInventory(originalDamage);
-                            messages.push(...inventory.messages);
-                            dmg += inventory.damage;
-                        }
-                        if (D.loseHeroHp(dmg, 'killed by a cone of cold')) hitHero = { dead: true };
-                    } else if (name === 'finger of death') {
-                        const form = SPELL_MONSTERS_BY_NAME.get(String(u._polyself_form?.name || '').toLowerCase());
-                        if (D.heroHasAntimagic() || (form && (nonliving(form) || is_demon(form))))
-                            messages.push("You aren't affected.");
-                        else {
-                            D.loseHeroHp(u.uhp, 'killed by a death ray');
-                            hitHero = { dead: true };
-                        }
-                    } else {
-                        const dmg = D.maybeHalfPhysicalDamage(d(nd, 6));
-                        const dead = D.loseHeroHp(dmg, 'killed by a magic missile');
-                        if (dead) hitHero = { dead: true };
-                    }
-                } else {
-                    messages.push(`The ${rayName} whizzes by you!`);
-                }
-            }
-            bounceNow = !ZAP_POS(typ)
-                || ((loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED))) && range >= 0);
-        }
-
-        if (!bounceNow) continue;
-        if (name === 'fireball') {
-            if (Is_airlevel(u.uz)) messages.push('The fireball vanishes into the aether!');
-            else { sx = lsx; sy = lsy; }
-            break;
-        }
-        // C zap.c:make_bounce + bounce_dir()
-        const bchance = (!inBounds || typ === STONE) ? 10
-            : (IS_WALL(typ) && game.u?.uz?.dnum === game.mines_dnum) ? 20 : 75;
-        if (--range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && couldsee(lsx, lsy))
-            messages.push(`The ${rayName} bounces!`);
-        if (!dx || !dy || (bchance > 0 && !rn2(bchance))) {
-            dx = -dx;
-            dy = -dy;
             continue;
         }
-        let bounce = 0;
-        const bounceLsx = sx - dx;
-        const bounceLsy = sy - dy;
-        const sideYLoc = sx >= 1 && sx < COLNO && bounceLsy >= 0 && bounceLsy < ROWNO
-            ? game.level?.at(sx, bounceLsy) : null;
-        const sideYTyp = sideYLoc?.typ ?? STONE;
-        const sideYClosed = sideYLoc?.typ === DOOR && (sideYLoc.doormask & (D_CLOSED | D_LOCKED));
-        if (ZAP_POS(sideYTyp) && !sideYClosed
-            && (IS_ROOM(sideYTyp)
-                || (sx + dx >= 1 && sx + dx < COLNO
-                    && ZAP_POS(game.level?.at(sx + dx, bounceLsy)?.typ ?? STONE))))
-            bounce = 1;
-        const sideXLoc = bounceLsx >= 1 && bounceLsx < COLNO && sy >= 0 && sy < ROWNO
-            ? game.level?.at(bounceLsx, sy) : null;
-        const sideXTyp = sideXLoc?.typ ?? STONE;
-        const sideXClosed = sideXLoc?.typ === DOOR && (sideXLoc.doormask & (D_CLOSED | D_LOCKED));
-        if (ZAP_POS(sideXTyp) && !sideXClosed
-            && (IS_ROOM(sideXTyp)
-                || (sy + dy >= 0 && sy + dy < ROWNO
-                    && ZAP_POS(game.level?.at(bounceLsx, sy + dy)?.typ ?? STONE)))
-            && (!bounce || rn2(2)))
-            bounce = 2;
-        if (!bounce) {
-            dx = -dx;
-            dy = -dy;
-        } else if (bounce === 1) {
-            dy = -dy;
-        } else {
-            dx = -dx;
+        if (state.phase === 'target') {
+            state.phase = 'obstacle';
+            const mon = (game.level.monsters || []).find(m => !m.dead && m.mhp > 0 && m.mx === state.sx && m.my === state.sy);
+            if (mon) {
+                state.mon = mon;
+                if (name === 'fireball') { state.phase = 'end'; continue; }
+                if (spellZapHit(findMac(mon), state.hitBon)) {
+                    state.range -= 2;
+                    state.reflection = D.monsterReflectionSource(mon);
+                    if (state.reflection) {
+                        state.phase = 'monsterReflection';
+                        if (D.visibleMonsterForScroll(mon)) state.output.push(`The ${rayName} hits ${D.monsterTheName(mon)}.`);
+                    } else {
+                        const messages = [];
+                        if (await spellRayHitMonster(spell, mon, nd, D, messages)) state.phase = 'end';
+                        state.output.push(...messages);
+                    }
+                } else if (D.visibleMonsterForScroll(mon)) state.output.push(`The ${rayName} misses ${D.monsterTheName(mon)}.`);
+            } else if (name !== 'fireball' && state.sx === u.ux && state.sy === u.uy && state.range >= 0) {
+                state.phase = 'afterHero';
+                if (spellZapHit(u.uac ?? 10, 0)) {
+                    state.range -= 2; state.phase = 'heroEffect';
+                    state.output.push(`The ${rayName} hits you!`);
+                } else if (!D.heroIsBlind()) state.output.push(`The ${rayName} whizzes by you!`);
+            }
+            continue;
+        }
+        if (state.phase === 'monsterReflection') {
+            state.dx = -state.dx; state.dy = -state.dy; state.phase = 'obstacle';
+            if (D.visibleMonsterForScroll(state.mon)) {
+                D.recordMonsterReflectionDiscovery(state.reflection);
+                state.output.push(`But it reflects from ${D.monsterPossessiveName(state.mon)} ${state.reflection.source}!`);
+            }
+            continue;
+        }
+        if (state.phase === 'heroEffect') {
+            state.phase = 'heroInventory'; state.damage = 0; state.inventory = null;
+            const reflection = D.heroRayReflection();
+            if (reflection) {
+                state.reflection = reflection; state.phase = 'heroReflection';
+                state.output.push(D.heroIsBlind() ? 'For some reason you are not affected.'
+                    : `But it reflects from your ${reflection}!`);
+                continue;
+            }
+            if (name === 'sleep') {
+                const resisted = D.heroHasSleepResistance();
+                if (resisted) {
+                    state.output.push("You don't feel sleepy.");
+                    state.observation = { kind: 'sleep', resisted: true };
+                } else {
+                    D.observeHeroRayResistance('sleep', false);
+                    fallAsleep(-d(nd, 25), true, D.stopHeroOccupation);
+                }
+            } else if (name === 'cone of cold') {
+                state.original = d(nd, 6);
+                const resisted = D.heroHasColdResistance();
+                if (resisted) {
+                    state.output.push("You don't feel cold.");
+                    state.observation = { kind: 'cold', resisted: true };
+                } else {
+                    state.damage = state.original;
+                    D.observeHeroRayResistance('cold', false);
+                }
+                state.phase = 'coldSelection';
+            } else if (name === 'finger of death') {
+                const form = SPELL_MONSTERS_BY_NAME.get(String(u._polyself_form?.name || '').toLowerCase());
+                if (form && (nonliving(form) || is_demon(form))) state.output.push('You seem unaffected.');
+                else if (D.heroHasAntimagic()) {
+                    D.observeHeroRayResistance('magic', true); state.output.push("You aren't affected.");
+                } else {
+                    D.observeHeroRayResistance('magic', false); state.phase = 'afterZhitu';
+                    const messages = [], result = D.killHero(messages, 'killed by a finger of death');
+                    if (!D.publishDamageResult(messages, result)) return pending;
+                }
+            } else {
+                const resisted = D.heroHasAntimagic();
+                if (resisted) {
+                    state.output.push('The missiles bounce off!');
+                    state.observation = { kind: 'magic', resisted: true };
+                } else {
+                    state.damage = d(nd, 6); D.exerciseAttribute(A_STR, false);
+                    D.observeHeroRayResistance('magic', false);
+                }
+            }
+            continue;
+        }
+        if (state.phase === 'heroReflection') {
+            if (!D.heroIsBlind()) D.discoverHeroRayReflection(state.reflection);
+            D.observeHeroRayResistance('reflection', true);
+            state.dx = -state.dx; state.dy = -state.dy; state.phase = 'afterHero';
+        }
+        if (state.phase === 'coldSelection') {
+            state.inventory = !rn2(3) ? { original: state.original } : null;
+            state.phase = 'heroInventory';
+        }
+        if (state.phase === 'heroInventory') {
+            if (state.inventory && !D.heroColdInventoryDamage(state.inventory)) return pending;
+            state.phase = 'afterZhitu';
+            const messages = [], result = D.damageHero(messages, D.halfSpellDamage(state.damage),
+                `killed by a ${rayName} cast by ${game.flags?.female ? 'herself' : 'himself'}`);
+            if (!D.publishDamageResult(messages, result)) return pending;
+        }
+        if (state.phase === 'afterZhitu') {
+            D.observeHeroRayResistance('reflection', false);
+            state.phase = 'afterHero';
+        }
+        if (state.phase === 'afterHero') {
+            D.stopHeroOccupation();
+            if (game.multi > 0) game.multi = 0;
+            state.phase = 'obstacle';
+        }
+        if (state.phase === 'obstacle') {
+            const loc = game.level.at(state.sx, state.sy);
+            state.phase = !ZAP_POS(loc?.typ ?? STONE)
+                || (loc?.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)) && state.range >= 0) ? 'bounce' : 'step';
+            continue;
+        }
+        if (state.phase === 'bounce') {
+            const { sx, sy, lsx, lsy, typ } = state;
+            const inBounds = sx >= 1 && sx < COLNO && sy >= 0 && sy < ROWNO;
+            state.bchance = !inBounds || typ === STONE ? 10 : IS_WALL(typ) && u.uz.dnum === game.mines_dnum ? 20 : 75;
+            state.phase = 'bounceDirection';
+            if ((--state.range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && cansee(lsx, lsy)) || name === 'fireball') {
+                if (Is_airlevel(u.uz)) {
+                    state.output.push(`The ${rayName} vanishes into the aether!`);
+                    state.phase = 'end'; state.vanished = true;
+                } else if (name === 'fireball') {
+                    state.sx = lsx; state.sy = lsy; state.phase = 'end';
+                } else state.output.push(`The ${rayName} bounces!`);
+            }
+            continue;
+        }
+        if (state.phase === 'bounceDirection') {
+            const { sx, sy, dx, dy, bchance } = state;
+            state.phase = 'step';
+            if (!dx || !dy || (bchance > 0 && !rn2(bchance))) {
+                state.dx = -dx; state.dy = -dy; continue;
+            }
+            let bounce = 0;
+            const lsx = sx - dx, lsy = sy - dy;
+            const yloc = sx >= 1 && sx < COLNO && lsy >= 0 && lsy < ROWNO ? game.level.at(sx, lsy) : null;
+            const ytyp = yloc?.typ ?? STONE;
+            if (ZAP_POS(ytyp) && !(yloc?.typ === DOOR && (yloc.doormask & (D_CLOSED | D_LOCKED)))
+                && (IS_ROOM(ytyp) || (sx + dx >= 1 && sx + dx < COLNO && ZAP_POS(game.level.at(sx + dx, lsy)?.typ ?? STONE)))) bounce = 1;
+            const xloc = lsx >= 1 && lsx < COLNO && sy >= 0 && sy < ROWNO ? game.level.at(lsx, sy) : null;
+            const xtyp = xloc?.typ ?? STONE;
+            if (ZAP_POS(xtyp) && !(xloc?.typ === DOOR && (xloc.doormask & (D_CLOSED | D_LOCKED)))
+                && (IS_ROOM(xtyp) || (sy + dy >= 0 && sy + dy < ROWNO && ZAP_POS(game.level.at(lsx, sy + dy)?.typ ?? STONE)))
+                && (!bounce || rn2(2))) bounce = 2;
+            if (!bounce) { state.dx = -dx; state.dy = -dy; }
+            else if (bounce === 1) state.dy = -dy;
+            else state.dx = -dx;
+            continue;
+        }
+        if (state.phase === 'end') {
+            game._transient_beam_cells = null;
+            game.bhitpos = state.savedBhitpos;
+            if (name === 'fireball' && !state.vanished) {
+                const blast = await explodeSpell(state.sx, state.sy, 'fire', d(12, 6), D);
+                return { ...blast, messages: [game._pending_message, ...blast.messages].filter(Boolean) };
+            }
+            return { published: true, messages: state.messages };
         }
     }
-    if (beamCells.length && !D.heroIsBlind()) game._transient_beam_cells = beamCells;
-    if (name === 'fireball') {
-        const blast = await explodeSpell(sx, sy, 'fire', d(12, 6), D);
-        return { ...blast, messages: [...messages, ...blast.messages] };
-    }
-    const result = { messages };
-    if (hitHero?.sleepTime) {
-        game._helpless_time = Math.max(game._helpless_time || 0, hitHero.sleepTime);
-        game._sleeping_time = Math.max(game._sleeping_time || 0, hitHero.sleepTime + 1);
-        game._wake_message = 'You wake up.';
-        result.sleepTurns = hitHero.sleepTime;
-    }
-    if (hitHero?.dead) result.fatal = true;
-    return result;
+    return { published: true, messages: state.messages };
 }
 
 // ---------------------------------------------------------------------------

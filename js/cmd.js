@@ -1,19 +1,21 @@
-import { M_SEEN_ELEC, M_SEEN_REFL } from './const.js';
+import { M_SEEN_ELEC, M_SEEN_REFL, M_SEEN_SLEEP, HALF_SPDAM } from './const.js';
 import { advanceMonsterAttackSlots } from './mhitu.js';
 import { resumeChainLightning } from './chain_lightning.js';
-import { AD_COLD, AD_PHYS, AT_WEAP, is_undead } from './permonst.js';
+import { AD_COLD, AD_MAGM, AD_STUN, AD_CONF, AD_PLYS, AD_PHYS, AT_WEAP, is_undead, type_is_pname } from './permonst.js';
 import { monWieldItem, mhitmKnockback, monsterMagicNegation } from './mhitm.js';
 import { addToplineMessage, monsterSwingMessage, stopHeroOccupation } from './allmain.js';
 import { chooseMonsterSpell, monsterSpellWouldBeUseless, MCAST_INDIRECT } from './mcastu.js';
 import { ROLE_RANKS } from './roles.js';
 import { autopickTestObject } from './pickup.js';
 import { RING_DEFINITIONS, ringDefinition } from './ring.js';
-import { LOST_DROPPED, W_RINGL, W_RINGR, W_AMUL, FROMOUTSIDE, BLINDED, DEAF } from './const.js';
+import { LOST_DROPPED, W_RINGL, W_RINGR, W_AMUL, FROMOUTSIDE, BLINDED, DEAF, FREE_ACTION, FAINTED } from './const.js';
 import { notake } from './permonst.js';
 import { has_head, is_silent, MS_BUZZ, MS_BURBLE } from './permonst.js';
 import { processGameTimers, monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION, armorBonus, armorSlot } from './armor.js';
 import { findAc, setArmorWorn } from './do_wear.js';
+import { useSkill, loseWeaponSkill, initializeSkills, skillMenuEntries, advanceSkill, spellSkillType, skillAdvanceTip } from './skills.js';
+import { recordWizardSpellbookDiscoveries, appendAfterMoreMessage } from './allmain.js';
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
 import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind } from './burn.js';
@@ -21,12 +23,12 @@ import { AMULET_OF_YENDOR, objectMergeableByCMetadata, mergeStackableObject, put
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers, fallAsleep } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
-import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP, W_SWAPWEP, W_QUIVER } from './const.js';
-import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, SHOCK_RES,
+import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, P_FIRST_SPELL, P_LAST_SPELL, W_WEP, W_SWAPWEP, W_QUIVER } from './const.js';
+import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, ANTIMAGIC, SHOCK_RES,
     FIRE_RES, SLEEP_RES, DISINT_RES, TELEPORT_CONTROL, STEALTH, FAST, INVIS,
     W_ARMOR, W_ACCESSORY, LOST_NONE, LOST_THROWN } from './const.js';
 import { S_MIMIC, S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
-import { pmOf, resistsFire, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
+import { pmOf, resistsFire, resistsCold, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
@@ -34,13 +36,13 @@ import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlas
 
 // mondata.c:1558-1583 and vision.h:m_canseeu: this observation is shared by
 // every monster in line of sight, including one other than the caster.
-function monstersObserveHeroAntimagic(resisted) {
+function monstersObserveHeroResistance(mask, resisted) {
     if (game.u?.uswallow || game.u?.underwater || game.u?.uinwater) return;
     for (const mon of game.level?.monsters || []) {
         if (mon.dead || mon.mhp <= 0 || !couldsee(mon.mx, mon.my)) continue;
         if (game.u?.invisible && !perceives(pmOf(mon) || mon.data || {})) continue;
-        mon.m_seenres = resisted ? (mon.m_seenres || 0) | M_SEEN_MAGR
-            : (mon.m_seenres || 0) & ~M_SEEN_MAGR;
+        mon.m_seenres = resisted ? (mon.m_seenres || 0) | mask
+            : (mon.m_seenres || 0) & ~mask;
     }
 }
 
@@ -49,12 +51,19 @@ function monstersObserveHeroAntimagic(resisted) {
 async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = null } = {}) {
     const ml = Math.max(0, mon.m_lev ?? mon.data?.mlevel ?? 0);
     const halfSpell = !!(game.u?.halfSpellDamage || game.u?.Half_spell_damage
+        || game.u?.uprops?.[HALF_SPDAM]?.intrinsic || game.u?.uprops?.[HALF_SPDAM]?.extrinsic
         || game.u?.extrinsics?.halfSpellDamage || (game.inventory || []).some(item =>
             ['the orb of detection', 'the platinum yendorian express card',
                 'the orb of fate', 'the eye of the aethiopica'].includes(
                 String(item.artifact || item.oartifact || '').toLowerCase())));
     let dmg = found ? d(Math.trunc(ml / 2) + (attack?.damd ? attack.damn : 1), attack?.damd || 6) : 0; // mcastu.c:234-245
     if (halfSpell) dmg = Math.ceil(dmg / 2);
+    if (attack?.adtyp === AD_MAGM || attack?.adtyp === AD_COLD) {
+        if (!found) return;
+        game._monster_spell_continuation = { mon, attack, damage: dmg, phase: 'elementalMessage' };
+        await resumeMonsterSpellCommand();
+        return;
+    }
     const messages = [];
     const visible = heroCanSeeMonster(mon);
     const subject = mon.givenName || `The ${mon.data?.name || 'monster'}`;
@@ -79,10 +88,10 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
     }
     case 'DESTRY_ARMR': {                                 // mcastu.c:450-468
         if (heroHasAntimagic()) {
-            monstersObserveHeroAntimagic(true);
+            monstersObserveHeroResistance(M_SEEN_MAGR, true);
             messages.push('A field of force surrounds you!');
         } else if (!destroyArm(messages)) messages.push('Your skin itches.');
-        else monstersObserveHeroAntimagic(false);
+        else monstersObserveHeroResistance(M_SEEN_MAGR, false);
         dmg = 0;
         break;
     }
@@ -95,7 +104,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
     case 'STUN_YOU': {
         const wasStunned = heroIsStunned();
         if (heroHasAntimagic() || heroHasFreeAction()) {
-            monstersObserveHeroAntimagic(true);
+            monstersObserveHeroResistance(M_SEEN_MAGR, true);
             if (!wasStunned) messages.push('You feel momentarily disoriented.');
             game.u._stunTimeout = 0;
             addHeroStun(1);
@@ -103,7 +112,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
             messages.push(wasStunned ? 'You struggle to keep your balance.' : 'You reel...');
             const duration = d((game.u?.acurr?.a?.[A_DEX] ?? 10) < 12 ? 6 : 4, 4);
             addHeroStun(halfSpell ? Math.ceil(duration / 2) : duration);
-            monstersObserveHeroAntimagic(false);
+            monstersObserveHeroResistance(M_SEEN_MAGR, false);
         }
         dmg = 0;
         break;
@@ -146,7 +155,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
         break;
     case 'PSI_BOLT': {                                    // mcastu.c:606-622 mcast_psi_bolt
         const antimagic = heroHasAntimagic();
-        monstersObserveHeroAntimagic(antimagic);
+        monstersObserveHeroResistance(M_SEEN_MAGR, antimagic);
         if (antimagic) dmg = Math.ceil(dmg / 2);
         const head = bodyPart(polyselfForm(), 'head');
         messages.push(dmg <= 5 ? `You get a slight ${head}ache.` : dmg <= 10 ? 'Your brain is on fire!'
@@ -155,7 +164,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
     }
     case 'OPEN_WOUNDS': {
         const antimagic = heroHasAntimagic();
-        monstersObserveHeroAntimagic(antimagic);
+        monstersObserveHeroResistance(M_SEEN_MAGR, antimagic);
         if (antimagic) dmg = Math.ceil(dmg / 2);
         messages.push(dmg <= 5 ? 'Your skin itches badly for a moment.'
             : dmg <= 10 ? 'Wounds appear on your body!'
@@ -165,7 +174,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
     }
     case 'CONFUSE_YOU': {
         const antimagic = heroHasAntimagic();
-        monstersObserveHeroAntimagic(antimagic);
+        monstersObserveHeroResistance(M_SEEN_MAGR, antimagic);
         if (antimagic) messages.push('You feel momentarily dizzy.');
         else {
             const oldConfusion = heroIsConfused();
@@ -178,7 +187,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
     }
     case 'PARALYZE': {
         const resisted = heroHasAntimagic() || heroHasFreeAction();
-        monstersObserveHeroAntimagic(resisted);
+        monstersObserveHeroResistance(M_SEEN_MAGR, resisted);
         if (!(game._helpless_time > 0) && !(game.multi < 0))
             messages.push(resisted ? 'You stiffen briefly.' : 'You are frozen in place!');
         dmg = resisted ? 1 : halfSpell ? Math.ceil((4 + ml) / 2) : 4 + ml;
@@ -232,7 +241,9 @@ import { waterLandingEffects, waterDamageChain } from './water.js';
 import { breathless, can_teleport, is_flyer, is_floater, is_hider, slithy, tunnels, needspick } from './permonst.js';
 import { COMMAND_KEYS } from './command_keys.js';
 import { IDENTIFIED_AMULET_NAMES } from './o_init.js';
-import { monsterExperienceValue } from './exper.js';
+import { monsterExperienceValue, monsterHpPerLevel } from './exper.js';
+import { addWeaponSkill } from './skills.js';
+import { HALLUC, HALLUC_RES, WOUNDED_LEGS, BOTH_SIDES, SICK, VOMITING } from './const.js';
 export { monsterExperienceValue } from './exper.js';
 import { bodyPart, heroLocomotion, canSaddle } from './mondata.js';
 import { wizardCussMessage, wizdeadorgone, nasty as summonNasties, aggravate as wizardAggravate, clonewiz, noOfWizards } from './wizard.js';
@@ -273,7 +284,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay } from './spell.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
@@ -1059,6 +1070,7 @@ const CHEST_TRAP_HALLUCINATED_COLORS = [
 ];
 
 function heroHasHallucinationResistance() {
+    if (game.u?.uprops?.[HALLUC_RES]?.extrinsic) return true;
     if (game.u?.hallucinationResistance || game.u?.hallucination_resistance) return true;
     if ((game.inventory || []).some(item => item.wielded && item.artifact === 'Grayswandir')) return true;
     return (game.inventory || []).some(item =>
@@ -9350,31 +9362,6 @@ function wizIntrinsicMenuLines() {
     rows.push([23, 0, ' (1 of 4)']);
     return rows;
 }
-const ENHANCE_ADVANCE_LINES = [
-    [0, 0, ' '], [0, 1, 'Pick a skill to advance:', 1],
-    [2, 0, ' '], [2, 1, 'Fighting Skills', 1],
-    [3, 0, ' a -  bare handed combat Unskilled        0(  20)'],
-    [4, 0, ' b -  two weapon combat  Unskilled        0(  20)'],
-    [5, 0, ' c -  riding             Basic           20(  80)'],
-    [6, 0, ' '], [6, 1, 'Weapon Skills', 1],
-    [7, 0, ' d -  dagger             Unskilled        0(  20)'],
-    [8, 0, ' e -  knife              Unskilled        0(  20)'],
-    [9, 0, ' f -  axe                Unskilled        0(  20)'],
-    [10, 0, ' g -  pick-axe           Unskilled        0(  20)'],
-    [11, 0, ' h -  short sword        Unskilled        0(  20)'],
-    [12, 0, ' i -  broadsword         Unskilled        0(  20)'],
-    [13, 0, ' j -  long sword         Basic           25(  80)'],
-    [14, 0, ' k -  two-handed sword   Unskilled        0(  20)'],
-    [15, 0, ' l -  saber              Unskilled        0(  20)'],
-    [16, 0, ' m -  club               Unskilled        0(  20)'],
-    [17, 0, ' n -  mace               Unskilled        0(  20)'],
-    [18, 0, ' o -  morning star       Unskilled        0(  20)'],
-    [19, 0, ' p -  flail              Unskilled        0(  20)'],
-    [20, 0, ' q -  hammer             Unskilled        0(  20)'],
-    [21, 0, ' r -  polearms           Unskilled        0(  20)'],
-    [22, 0, ' s -  spear              Unskilled        0(  20)'],
-    [23, 0, ' (1 of 2)'],
-];
 const HERECMD_MENU_LINES = [
     [0, 41, 'What do you want to do?', 1],
     [2, 41, 'a - Pick up a broken chest'],
@@ -9714,6 +9701,7 @@ export async function castKnownSpellByName(name) {
     game._spell_menu_page = Math.floor(spell.menuRow / 23);
     game._command_mode = 'castSpell';
     await rhackInternal(spell.letter);
+    finishPlayerSpellPractice();
     return true;
 }
 
@@ -9897,14 +9885,6 @@ function playerSpellEffectDependencies() {
     // --- Player spell effect plumbing -------------------------------------
     // C ref: src/spell.c:spelleffects()/spelleffects_check(); effect bodies
     // live in js/spell.js and receive these cmd.js internals via deps.
-    function spellLoseHeroHp(damage, cause) {
-        if (!game.u || !damage) return false;
-        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-        if ((game.u.uhp || 0) > 0) return false;
-        game._death_cause = cause;
-        return true;
-    }
-
     // C ref: lock.c:boxlock() over the hero's inventory (boxlock_invent()).
     function spellBoxlockInventory(lock) {
         const messages = [];
@@ -10286,9 +10266,42 @@ function playerSpellEffectDependencies() {
     return {
         spellRoleSkillLevel,
         stopHeroOccupation,
-        loseHeroHp: spellLoseHeroHp,
         healHero,
         damageHero: applyHeroHitPointDamage,
+        killHero: (messages, cause) => {
+            // zhitu calls done directly; the usual losehp "You die" line
+            // is absent, and done's bot snapshot precedes zeroing both HP pools.
+            game._death_status_hp_before_zero = game.u.uhp;
+            game._death_cause = cause;
+            game.u.uhp = 0;
+            if (game.u._polyself_form) game.u.mh = 0;
+            if (consumeLifeSavingAmulet()) {
+                messages.push(`But wait...  Your medallion ${heroIsBlind() ? 'feels warm' : 'begins to glow'}!`);
+                return { lifeSaving: true, more: true };
+            }
+            return { fatal: true, more: true };
+        },
+        publishDamageResult: publishMonsterDamageResult,
+        heroColdInventoryDamage: resumeHeroColdInventoryDamage,
+        halfSpellDamage: amount => {
+            const prop = game.u.uprops?.[HALF_SPDAM];
+            return game.u.halfSpellDamage || game.u.Half_spell_damage || game.u.extrinsics?.halfSpellDamage
+                || prop?.intrinsic || prop?.extrinsic || (game.inventory || []).some(item =>
+                    ['the orb of detection', 'the platinum yendorian express card', 'the orb of fate', 'the eye of the aethiopica']
+                        .includes(String(item.artifact || item.oartifact || '').toLowerCase())) ? Math.ceil(amount / 2) : amount;
+        },
+        observeHeroRayResistance: (kind, resisted) => {
+            const bit = { magic: M_SEEN_MAGR, cold: M_SEEN_COLD, sleep: M_SEEN_SLEEP, reflection: M_SEEN_REFL }[kind];
+            monstersObserveHeroResistance(bit, resisted);
+        },
+        heroRayReflection: () => heroZapReflectSourceWord()
+            || (game.u._polyself_form?.name === 'silver dragon' ? 'scales' : game.u.reflecting ? 'shield' : null),
+        discoverHeroRayReflection: source => {
+            if (source === 'shield') identifyReflectedShieldOfReflection((game.inventory || []).find(item =>
+                isWornInventoryItem(item) && objectKindKey(item) === 'shield of reflection'));
+            else if (source === 'medallion') identifyReflectedAmuletOfReflection((game.inventory || []).find(item =>
+                isWornInventoryItem(item) && (item.amuletIndex === 7 || objectKindKey(item) === 'amulet of reflection')));
+        },
         boxlockInventory: spellBoxlockInventory,
         releaseHeroHold: spellReleaseHeroHold,
         heroIsPunished: spellHeroIsPunished,
@@ -10540,6 +10553,9 @@ async function finishSpellEffectResult(spell, result) {
 
 async function beginSpellEffect(spell, prefix = '') {
     game._casting_spell = spell;
+    if (!spell.force) game._player_spell_practice = {
+        skill: spellSkillType(spell.category), degree: spell.level,
+    };
     game._command_mode = null;
     if (['fireball', 'cone of cold'].includes(spell.name) && spellRoleSkillLevel(spell) >= P_SKILLED) {
         if (game.u?.uinwater || Is_waterlevel(game.u?.uz)) {
@@ -10562,9 +10578,37 @@ async function beginSpellEffect(spell, prefix = '') {
     }
 }
 
+// C spelleffects calls use_skill after the effect returns, including nested
+// getpos, inventory windows and done(). Keep that tail across saved prompts.
+function finishPlayerSpellPractice() {
+    const practice = game._player_spell_practice;
+    if (!practice || game._command_mode || game._player_spell_continuation) return;
+    if (practice.ready) {
+        scheduleLifeSavingRecovery();
+        delete practice.ready;
+    }
+    if (monsterAttackWaiting() || game._water_continuation || game._artifact_float_continuation
+        || game._level_arrival_continuation || (game.u.uhp || 0) <= 0) return;
+    game._player_spell_practice = null;
+    game.context.move ||= 1;
+    const message = useSkill(practice.skill, practice.degree);
+    if (message) {
+        addToplineMessage(message);
+        const tip = skillAdvanceTip();
+        if (tip) {
+            if (game._message_more) appendAfterMoreMessage(tip);
+            else addToplineMessage(tip);
+        }
+    }
+}
+
 async function resumePlayerSpellEffect() {
     const state = game._player_spell_continuation;
     game._player_spell_continuation = null;
+    if (state.ready) {
+        scheduleLifeSavingRecovery();
+        if (game._player_spell_practice) delete game._player_spell_practice.ready;
+    }
     game._pending_time_passed = 0;
     game._process_command_time_now = 0;
     if (state.kind === 'fallingRock') {
@@ -10573,102 +10617,32 @@ async function resumePlayerSpellEffect() {
     } else if (state.kind === 'chainLightning') {
         const result = await resumeChainLightning(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
+    } else if (state.kind === 'spellRay') {
+        const result = await resumeSpellRay(state.state, playerSpellEffectDependencies());
+        await finishSpellEffectResult(state.spell, result);
     }
 }
 
-function currentSkillLines() {
-    const rows = [[0, 0, ' '], [0, 1, 'Current skills:', 1], [2, 0, ' '], [2, 1, 'Fighting Skills', 1]];
-    const role = game.urole?.name?.m || game._startup_role || '';
-    if (role === 'Samurai') {
-        return [
-            ...rows,
-            [3, 0, `   ${'martial arts'.padEnd(18, ' ')}[Basic]`],
-            [4, 0, `   ${'two weapon combat'.padEnd(18, ' ')}[Unskilled]`],
-            [5, 0, `   ${'riding'.padEnd(18, ' ')}[Unskilled]`],
-            [6, 0, ' '], [6, 1, 'Weapon Skills', 1],
-            [7, 0, `   ${'dagger'.padEnd(18, ' ')}[Unskilled]`],
-            [8, 0, `   ${'knife'.padEnd(18, ' ')}[Unskilled]`],
-            [9, 0, `   ${'short sword'.padEnd(18, ' ')}[Basic]`],
-            [10, 0, `   ${'broadsword'.padEnd(18, ' ')}[Unskilled]`],
-            [11, 0, `   ${'long sword'.padEnd(18, ' ')}[Basic]`],
-            [12, 0, `   ${'two-handed sword'.padEnd(18, ' ')}[Unskilled]`],
-            [13, 0, `   ${'saber'.padEnd(18, ' ')}[Unskilled]`],
-            [14, 0, `   ${'flail'.padEnd(18, ' ')}[Unskilled]`],
-            [15, 0, `   ${'quarterstaff'.padEnd(18, ' ')}[Unskilled]`],
-            [16, 0, `   ${'polearms'.padEnd(18, ' ')}[Unskilled]`],
-            [17, 0, `   ${'spear'.padEnd(18, ' ')}[Unskilled]`],
-            [18, 0, `   ${'lance'.padEnd(18, ' ')}[Unskilled]`],
-            [19, 0, `   ${'bow'.padEnd(18, ' ')}[Basic]`],
-            [20, 0, `   ${'shuriken'.padEnd(18, ' ')}[Unskilled]`],
-            [21, 0, ' '], [21, 1, 'Spellcasting Skills', 1],
-            [22, 0, `   ${'attack spells'.padEnd(18, ' ')}[Unskilled]`],
-            [23, 0, ' (1 of 2)'],
-        ];
+function showSkillMenu(speedy = false, page = 0) {
+    if (!game.u.weapon_skills) initializeSkills(game.urole?.name?.m || game._startup_role || 'Tourist', []);
+    const menu = skillMenuEntries(speedy);
+    const pages = Math.max(1, Math.ceil(menu.entries.length / 23));
+    page = Math.max(0, Math.min(page, pages - 1));
+    const choices = {}, rows = [];
+    let letter = 0;
+    for (const [row, entry] of menu.entries.slice(page * 23, page * 23 + 23).entries()) {
+        if (entry.skill != null) {
+            const key = String.fromCharCode(97 + letter++);
+            choices[key] = entry.skill;
+            rows.push([row, 0, ` ${key} - ${entry.text}`]);
+        } else rows.push([row, 1, entry.text, entry.heading ? 1 : 0]);
     }
-    if (role === 'Priest') {
-        return [
-            ...rows,
-            [3, 0, `   ${'bare handed combat'.padEnd(19, ' ')}[Unskilled]`],
-            [4, 1, 'Weapon Skills', 1],
-            [5, 0, `   ${'club'.padEnd(19, ' ')}[Unskilled]`],
-            [6, 0, `   ${'mace'.padEnd(19, ' ')}[Basic]`],
-            [7, 0, `   ${'morning star'.padEnd(19, ' ')}[Unskilled]`],
-            [8, 0, `   ${'flail'.padEnd(19, ' ')}[Unskilled]`],
-            [9, 0, `   ${'hammer'.padEnd(19, ' ')}[Unskilled]`],
-            [10, 0, `   ${'quarterstaff'.padEnd(19, ' ')}[Unskilled]`],
-            [11, 0, `   ${'polearms'.padEnd(19, ' ')}[Unskilled]`],
-            [12, 0, `   ${'spear'.padEnd(19, ' ')}[Unskilled]`],
-            [13, 0, `   ${'trident'.padEnd(19, ' ')}[Unskilled]`],
-            [14, 0, `   ${'lance'.padEnd(19, ' ')}[Unskilled]`],
-            [15, 0, `   ${'bow'.padEnd(19, ' ')}[Unskilled]`],
-            [16, 0, `   ${'sling'.padEnd(19, ' ')}[Unskilled]`],
-            [17, 0, `   ${'crossbow'.padEnd(19, ' ')}[Unskilled]`],
-            [18, 0, `   ${'dart'.padEnd(19, ' ')}[Unskilled]`],
-            [19, 0, `   ${'shuriken'.padEnd(19, ' ')}[Unskilled]`],
-            [20, 0, `   ${'boomerang'.padEnd(19, ' ')}[Unskilled]`],
-            [21, 0, `   ${'unicorn horn'.padEnd(19, ' ')}[Unskilled]`],
-            [22, 1, 'Spellcasting Skills', 1],
-            [23, 0, ' (1 of 2)'],
-        ];
-    }
-    rows.push([3, 0, `   bare handed combat [${role === 'Monk' ? 'Basic' : 'Unskilled'}]`]);
-    rows.push([4, 0, `   two weapon combat  [${game._twoweapon ? 'Basic' : 'Unskilled'}]`]);
-    rows.push([5, 0, `   riding             [${game.u?.usteed ? 'Basic' : 'Unskilled'}]`]);
-    rows.push([6, 0, ' '], [6, 1, 'Weapon Skills', 1]);
-    const weaponSkills = new Set();
-    for (const item of game.inventory || []) {
-        const name = inventoryItemName(item).toLowerCase();
-        if (item.cls !== 'weapon' && !/staff|sword|dagger|bow|sling|dart|spear|mace|axe|lance|shuriken|club/.test(name)) continue;
-        const skill = name.includes('staff') ? 'quarterstaff'
-            : name.includes('short sword') || name.includes('wakizashi') ? 'short sword'
-            : name.includes('long sword') || name.includes('katana') ? 'long sword'
-            : name.includes('bow') || name.includes('yumi') ? 'bow'
-            : name.includes('sling') ? 'sling'
-            : name.includes('dart') ? 'dart'
-            : name.includes('spear') ? 'spear'
-            : name.includes('mace') ? 'mace'
-            : name.includes('axe') ? 'axe'
-            : name.includes('lance') ? 'lance'
-            : name.includes('shuriken') ? 'shuriken'
-            : name.includes('club') ? 'club'
-            : name.includes('dagger') ? 'dagger'
-            : 'weapon';
-        weaponSkills.add(skill);
-    }
-    let row = 7;
-    for (const skill of [...weaponSkills].sort()) rows.push([row++, 0, `   ${skill.padEnd(19, ' ')}[Basic]`]);
-    if (row === 7) rows.push([row++, 0, '   weapon             [Unskilled]']);
-    rows.push([row++, 0, ' '], [row++, 1, 'Spellcasting Skills', 1]);
-    const spellbooks = game._known_spells || [];
-    const spellSkills = new Set(spellbooks.map(item => item.skill || item.spell?.skill || item.section || 'cleric'));
-    if (!spellSkills.size) spellSkills.add('spellcasting');
-    for (const skill of [...spellSkills].sort()) {
-        const skillName = String(skill);
-        const label = skillName.endsWith('spells') ? skillName : `${skillName} spells`;
-        rows.push([row++, 0, `   ${label.padEnd(19, ' ')}[Unskilled]`]);
-    }
-    rows.push([23, 0, '(end)']);
-    return rows.slice(0, 24);
+    rows.push([23, 0, pages > 1 ? ` (${page + 1} of ${pages})` : ' (end)']);
+    game._skill_menu = { speedy, page, pages, choices, available: menu.available };
+    game._command_mode = 'enhance';
+    game.context.move = 0;
+    game._pending_message = ''; game._message_more = 0;
+    setOverlay(rows, 24, true);
 }
 
 function attributesDungeonLocation(uz) {
@@ -12647,16 +12621,14 @@ function dragonArmorKindHasProperty(kind, property) {
 }
 
 function polyselfFormHasAntimagic(form = game.u?._polyself_form) {
-    const name = String(form?.name || '').toLowerCase();
+    // set_uasmon uses the same species rules as resists_magm, with no gear.
     return !!(form?.magicResistance || form?.antimagic || form?.resistsMagic || form?.resists_magm
-        || name === 'gray dragon' || name === 'grey dragon'
-        || name === 'baby gray dragon' || name === 'baby grey dragon');
+        || monsterResistsMagic({ data: form }));
 }
 
 function polyselfFormHasColdResistance(form = game.u?._polyself_form) {
-    const name = String(form?.name || '').toLowerCase();
     return !!(form?.coldResistance || form?.resistsCold || form?.resists_cold
-        || name === 'white dragon' || name === 'baby white dragon');
+        || resistsCold({ data: form }));
 }
 
 function activeAntimagicSource() {
@@ -13167,6 +13139,42 @@ function coldPotionDisplayName(item, plural) {
     return name;
 }
 
+// zap.c:destroy_items loses HP for each shattered stack before returning
+// to the ray's direct damage. Saved phases retain the selected live objects.
+function resumeHeroColdInventoryDamage(state) {
+    if (!state.phase) {
+        state.items = coldDestroyInventorySelection(game.inventory || [], state.original);
+        state.index = 0; state.phase = 'item';
+    }
+    while (state.phase !== 'done') {
+        if (state.phase === 'item') {
+            if (state.index >= state.items.length) { state.phase = 'done'; break; }
+            const item = state.item = state.items[state.index++];
+            if (!(game.inventory || []).includes(item) || coldInventoryItemProtected()) continue;
+            state.damage = rnd(4);
+            const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+            state.destroyed = 0;
+            for (let i = 0; i < quan; i++) if (!rn2(3)) state.destroyed++;
+            if (!state.destroyed) continue;
+            const plural = state.destroyed > 1;
+            const prefix = state.destroyed === 1 ? quan === 1 ? 'Your ' : 'One of your '
+                : state.destroyed < quan ? 'Some of your ' : quan === 2 ? 'Both of your ' : 'All of your ';
+            state.phase = 'damage';
+            if (!addToplineMessage(`${prefix}${coldPotionDisplayName(item, plural)} ${coldInventoryDestroyVerb(plural)}!`)) return false;
+        }
+        if (state.phase === 'damage') {
+            removeInventoryItem(state.item, state.destroyed); state.phase = 'exercise';
+            const messages = [], result = applyHeroHitPointDamage(messages, state.damage,
+                coldInventoryDeathCause(state.destroyed > 1));
+            if (!publishMonsterDamageResult(messages, result)) return false;
+        }
+        if (state.phase === 'exercise') {
+            exerciseAttribute(A_STR, false); state.phase = 'item';
+        }
+    }
+    return true;
+}
+
 function coldDamageInventory(origDamage) {
     const messages = [];
     let damage = 0;
@@ -13264,6 +13272,40 @@ export async function resumeMonsterSpellCommand(messages = []) {
         game._message_more = 0;
     }
     const mon = state.mon;
+    if (state.phase === 'elementalMessage') {
+        state.phase = 'elementalResistance';
+        if (!addToplineMessage(state.attack.adtyp === AD_MAGM
+            ? 'You are hit by a shower of missiles!' : "You're covered in frost.")) return { pending: true };
+    }
+    if (state.phase === 'elementalResistance') {
+        const missiles = state.attack.adtyp === AD_MAGM;
+        state.resisted = missiles ? heroHasAntimagic() : heroHasColdResistance();
+        state.phase = 'elementalObservation';
+        if (state.resisted && !addToplineMessage(missiles ? 'The missiles bounce off!'
+            : 'But you resist the effects.')) return { pending: true };
+    }
+    if (state.phase === 'elementalObservation') {
+        const missiles = state.attack.adtyp === AD_MAGM;
+        if (state.resisted) state.damage = 0;
+        // castmu replaces magic-missile damage after its common half-spell
+        // reduction; this second roll is not halved (mcastu.c:293).
+        else if (missiles) state.damage = d(Math.trunc(mon.m_lev / 2) + 1, 6);
+        monstersObserveHeroResistance(missiles ? M_SEEN_MAGR : M_SEEN_COLD, state.resisted);
+        state.phase = 'elementalTerrain';
+    }
+    if (state.phase === 'elementalTerrain') {
+        state.phase = 'damage';
+        const { ux: x, uy: y } = game.u;
+        if (state.attack.adtyp === AD_MAGM) {
+            const engr = game.level?.engravings?.find(engr => engr.x === x && engr.y === y);
+            if (engr?.text) wipe_engr_at(x, y, engr.text.length + d(6, 6), true);
+        } else {
+            // mon_spell_hits_spot freezes terrain without shattering floor
+            // or carried potions, and attributes shop damage to the monster.
+            const result = applyColdRayTerrain(x, y);
+            if (result.messages.length && !addToplineMessage(result.messages.join('  '))) return { pending: true };
+        }
+    }
     if (state.phase === 'reflection') {
         const source = heroZapReflectSourceWord();
         state.reflection = source || (game.u.reflecting ? 'body' : null)
@@ -13332,8 +13374,7 @@ export async function resumeMonsterSpellCommand(messages = []) {
         state.phase = 'done';
         const lines = [];
         const result = applyHeroHitPointDamage(lines, state.damage, `killed by ${an(mon.data?.name || 'monster')}`, { wail: false });
-        if (lines.length) addToplineMessage(lines.join('  '));
-        if (applyLifeSavingOrFatalCommandMode(result)) return { ...result, pending: true };
+        if (!publishMonsterDamageResult(lines, result)) return { ...result, pending: true };
     }
     game._monster_spell_continuation = null;
     return {};
@@ -13414,7 +13455,10 @@ function publishMonsterDamageResult(messages, result) {
         return false;
     }
     if (text) addToplineMessage(text);
-    if (applyLifeSavingOrFatalCommandMode(result)) return false;
+    if (applyLifeSavingOrFatalCommandMode(result)) {
+        if (result.more) game._message_more = 1;
+        return false;
+    }
     return !monsterAttackWaiting();
 }
 
@@ -13424,6 +13468,70 @@ async function applyMonsterContactEffect(state) {
         // hitmu independently rolls its later AC reduction.
         if (!state.effect && game.u.uac < 0) rnd(-game.u.uac);
         state.effect = { phase: 'done' };
+        return true;
+    }
+    if (state.attack.adtyp === AD_CONF) {
+        const effect = state.effect ??= { phase: 'chance', duration: state.damage };
+        if (effect.phase === 'chance') {
+            effect.phase = 'done';
+            if (!state.mon.mcan && !rn2(4) && !state.mon.mspec_used) {
+                state.mon.mspec_used = effect.duration + rn2(6);
+                effect.phase = 'confuse';
+                if (!addToplineMessage(heroIsConfused() ? 'You are getting even more confused.'
+                    : 'You are getting confused.')) return false;
+            }
+        }
+        if (effect.phase === 'confuse') {
+            addHeroConfusion(effect.duration); effect.phase = 'done';
+        }
+        state.damage = 0;
+        return true;
+    }
+    if (state.attack.adtyp === AD_STUN) {
+        const effect = state.effect ??= { phase: 'chance' };
+        if (effect.phase === 'chance') {
+            effect.phase = 'done';
+            if (!state.mon.mcan && !rn2(4)) {
+                effect.phase = 'stun';
+                const unaware = (game.multi < 0 || game._helpless_time > 0)
+                    && (game.u.usleep || /^(You awake|You regain con|You are consci)/.test(game._wake_message || '')
+                        || game.u.uhs === FAINTED);
+                if (!heroIsStunned() && !unaware
+                    && !addToplineMessage(game.u.usteed ? 'You wobble in the saddle.' : 'You stagger...')) return false;
+            }
+        }
+        if (effect.phase === 'stun') {
+            addHeroStun(state.damage); state.damage = Math.trunc(state.damage / 2); effect.phase = 'done';
+        }
+        return true;
+    }
+    if (state.attack.adtyp === AD_PLYS) {
+        const effect = state.effect ??= { phase: 'chance' };
+        if (effect.phase === 'chance') {
+            effect.phase = 'done';
+            if (!(game.multi < 0 || game._helpless_time > 0) && !rn2(3) && !state.mon.mcan) {
+                const armor = monsterMagicNegation({ isHero: true }, obj =>
+                    String(IDENTIFIED_AMULET_NAMES[obj.amuletIndex] || obj.actualKind || obj.kind
+                        || WISH_ARMOR_KIND_BY_OTYP.get(obj.otyp) || '').toLowerCase());
+                if (rn2(10) < 3 * armor) return addToplineMessage('You avoid harm.');
+                if (heroHasFreeAction()) return addToplineMessage('You momentarily stiffen.');
+                effect.phase = 'paralyze';
+                const name = heroCanSpotMonster(state.mon)
+                    ? state.mon.givenName || `${type_is_pname(pmOf(state.mon)) ? '' : 'the '}${state.mon.data?.name || 'monster'}` : 'it';
+                if (!addToplineMessage(heroIsBlind() ? 'You are frozen!' : `You are frozen by ${name}!`)) return false;
+            }
+        }
+        if (effect.phase === 'paralyze') {
+            const duration = rnd(10);
+            interruptPositiveMulti();
+            game.multi = -duration; game._helpless_time = duration;
+            game.u.uinvulnerable = false;
+            game._wake_message = 'You can move again.';
+            const name = state.mon.data?.name || 'monster';
+            game._multi_reason = `paralyzed by ${type_is_pname(pmOf(state.mon)) ? name : an(name)}`;
+            exerciseAttribute(A_DEX, false);
+            effect.phase = 'done';
+        }
         return true;
     }
     if (state.attack.adtyp !== AD_COLD) return true;
@@ -13508,8 +13616,9 @@ export async function monsterCastSpell(mon, { thinksFound = true, found = true, 
     const ml = Math.max(0, mon.m_lev ?? mon.data?.mlevel ?? 0);
     const hero = { antimagic: heroHasAntimagic(), hallucination: heroIsHallucinating(),
         seeInvisible: !!game.u?.seeInvisible, blinded: !!game.u?._blindTimeout };
-    let spell = 'PSI_BOLT', count = 40;
-    if (ml) do {
+    const selectedSpell = attackType === AD_SPEL || attackType === AD_CLRC;
+    let spell = selectedSpell ? 'PSI_BOLT' : null, count = 40;
+    if (ml && selectedSpell) do {
         spell = chooseMonsterSpell(mon, attackType, hero);
         if (!thinksFound) {
             if (!MCAST_INDIRECT.has(spell) || monsterSpellWouldBeUseless(mon, spell, hero)) return false;
@@ -13522,7 +13631,8 @@ export async function monsterCastSpell(mon, { thinksFound = true, found = true, 
     const name = mon.givenName || `The ${mon.data?.name || 'monster'}`;
     const subject = seen ? name : 'Something';
     const indirect = MCAST_INDIRECT.has(spell);
-    if (mon.mcan || mon.mspec_used || !ml) {
+    const resistanceMask = attackType === AD_MAGM ? M_SEEN_MAGR : attackType === AD_COLD ? M_SEEN_COLD : 0;
+    if (mon.mcan || mon.mspec_used || !ml || ((mon.m_seenres || 0) & resistanceMask)) {
         if (seen && couldsee(mon.mx, mon.my)) {
             const misdirected = (game.u?.invisible && !perceives(pmOf(mon) || mon.data)
                 && (mon.mux !== game.u.ux || mon.muy !== game.u.uy)) || game.u?.uundetected;
@@ -13535,7 +13645,7 @@ export async function monsterCastSpell(mon, { thinksFound = true, found = true, 
         }
         return false;
     }
-    mon.mspec_used = ml < 8 ? 10 - ml : 2;
+    if (selectedSpell) mon.mspec_used = ml < 8 ? 10 - ml : 2;
     if (!found && thinksFound && !indirect) {
         const target = game.level?.at(mon.mux, mon.muy)?.typ === WATER ? 'empty water' : 'thin air';
         monsterSpellFeedback(`${subject} casts a spell at ${target}!`);
@@ -13565,7 +13675,7 @@ export async function monsterCastSpell(mon, { thinksFound = true, found = true, 
             lichCastEffect: { spell, monId: mon.m_id, found, attack } });
         game._message_more = 1;
     }
-    return true;
+    return selectedSpell || found;
 }
 
 function electricInventoryDisplayName(item) {
@@ -16396,7 +16506,9 @@ function zapBeamGlyph(dx, dy) {
 export function loseExperienceLevel() {
     const u = game.u;
     if (!u) return;
-    if (u.ulevel > 1) u.ulevel--;
+    u.ulevelmax ??= u.ulevel || 1;
+    u.ulevelpeak ??= u.ulevel || 1;
+    if (u.ulevel > 1) { u.ulevel--; loseWeaponSkill(1); }
     else u.uexp = 0;
 
     const hpLoss = u.uhpinc?.[u.ulevel] || 0;
@@ -16423,6 +16535,97 @@ export function loseExperienceLevel() {
     }
 }
 
+// exper.c:pluslvl changes both bodies, energy and level history before callers
+// present the welcome message. Debug commands own their separate More scheduler.
+function gainExperienceLevel(incremental = false) {
+    const role = game.urole?.name?.m || game._startup_role;
+    const level = Math.min(30, (game.u?.ulevel || 1) + 1);
+    const oldLevel = game.u?.ulevel || 1;
+    const u = game.u;
+    u.ulevelmax ??= oldLevel;
+    u.ulevelpeak ??= oldLevel;
+    const regained = level <= u.ulevelmax;
+    const poly = heroPolyselfFireHpState();
+    if (poly) {
+        const amount = monsterHpPerLevel({ data: polyselfForm(), m_lev: oldLevel });
+        u[poly.hpKey] = Math.min(u[poly.maxKey], u[poly.hpKey] + amount);
+    }
+    const human = poly && poly.hpKey === 'uhp' ? u._polyself_base : u;
+    const roleEnergy = ROLE_EN_ADVANCE[role] || ROLE_EN_ADVANCE.Tourist;
+    const raceName = game._startup_race || game.urace?.noun || 'human';
+    const raceEnergy = RACE_EN_ADVANCE[raceName] || RACE_EN_ADVANCE.human;
+    const lowLevel = oldLevel < roleEnergy.xlev;
+    const roleHp = ROLE_HP_ADVANCE[role] || ROLE_HP_ADVANCE.Tourist;
+    const raceHp = RACE_HP_ADVANCE[raceName] || RACE_HP_ADVANCE.human;
+    let hpGain = lowLevel ? roleHp.lowFix + raceHp.lowFix : roleHp.highFix + raceHp.highFix;
+    const roleHpRnd = lowLevel ? roleHp.lowRnd : roleHp.highRnd;
+    const raceHpRnd = lowLevel ? raceHp.lowRnd : raceHp.highRnd;
+    if (roleHpRnd > 0) hpGain += rnd(roleHpRnd);
+    if (raceHpRnd > 0) hpGain += rnd(raceHpRnd);
+    const con = currentHeroAttribute(A_CON);
+    hpGain += con <= 3 ? -2 : con <= 6 ? -1 : con <= 14 ? 0 : con <= 16 ? 1 : con === 17 ? 2 : con === 18 ? 3 : 4;
+    if (hpGain <= 0) hpGain = 1;
+    const wis = Math.trunc(currentHeroAttribute(A_WIS) / 2);
+    const enrnd = wis
+        + (lowLevel ? roleEnergy.lowRnd + raceEnergy.lowRnd : roleEnergy.highRnd + raceEnergy.highRnd);
+    const enfix = lowLevel
+        ? roleEnergy.lowFix + raceEnergy.lowFix
+        : roleEnergy.highFix + raceEnergy.highFix;
+    let powerGain = rn2(enrnd) + enfix;
+    if (role === 'Priest' || role === 'Wizard') powerGain *= 2;
+    else if (role === 'Healer' || role === 'Knight') powerGain = Math.trunc((3 * powerGain) / 2);
+    else if (role === 'Barbarian' || role === 'Valkyrie') powerGain = Math.trunc((3 * powerGain) / 4);
+    if (powerGain <= 0) powerGain = 1;
+    game.u.uhpinc ??= [];
+    game.u.ueninc ??= [];
+    if (oldLevel < 30) {
+        u.uhpinc[oldLevel] = hpGain;
+        u.ueninc[oldLevel] = powerGain;
+    } else {
+        hpGain = Math.min(hpGain, Math.max(1, 5 - Math.trunc(human.uhpmax / 300)));
+        powerGain = Math.min(powerGain, Math.max(1, 4 - Math.trunc(u.uenmax / 200)));
+    }
+    game.u.ulevel = level;
+    if (oldLevel < 30 && incremental) {
+        const nextLevelExp = level < 10 ? 10 * (2 ** level)
+            : level < 20 ? 10000 * (2 ** (level - 10))
+                : 10000000 * (level - 19);
+        if ((game.u.uexp || 0) >= nextLevelExp) game.u.uexp = nextLevelExp - 1;
+    } else if (oldLevel < 30) {
+        game.u.uexp = oldLevel < 10 ? 10 * (2 ** oldLevel)
+            : oldLevel < 20 ? 10000 * (2 ** (oldLevel - 10))
+                : 10000000 * (oldLevel - 19);
+    }
+    human.uhp += hpGain;
+    human.uhpmax += hpGain;
+    u.uhppeak = Math.max(u.uhppeak || 0, human.uhpmax);
+    game.u.uenmax += powerGain;
+    game.u.uenpeak = Math.max(game.u.uenpeak || 0, game.u.uenmax);
+    game.u.uen += powerGain;
+    if (role === 'Wizard' && level >= 15) game.u.warning = true;
+    if (role === 'Wizard' && level >= 17) game.u.teleportControl = true;
+
+    const rankIndex = level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
+    const rank = ROLE_RANKS[role]?.[rankIndex];
+    if (rank) game.urole.rank = { m: rank[0], f: rank[1] || rank[0] };
+
+    const ability = oldLevel < 30 ? ROLE_LEVEL_ABILITIES[role]?.[level] : null;
+    if (ability?.[1]) {
+        u[ability[1]] = true;
+        if (ability[1] === 'fast') u._intrinsicFast = true;
+    }
+    const skillMessage = oldLevel < 30 ? addWeaponSkill(1) : '';
+    u.ulevelmax = Math.max(u.ulevelmax, level);
+    u.ulevelpeak = Math.max(u.ulevelpeak, level);
+    if (u._polyself_base) {
+        Object.assign(u._polyself_base, { ulevel:level, uen:u.uen, uenmax:u.uenmax,
+            uhpinc:[...u.uhpinc], ueninc:[...u.ueninc], rank:game.urole?.rank });
+        if (human === u) Object.assign(u._polyself_base, { uhp:u.uhp, uhpmax:u.uhpmax });
+    }
+    (game.disp ??= {}).botl = true;
+    return { level, regained, abilityMessage:[ability?.[0], skillMessage, skillMessage ? skillAdvanceTip() : ''].filter(Boolean).join('  ') };
+}
+
 async function advanceExperienceLevel(incremental = false) {
     const role = game.urole?.name?.m || game._startup_role;
     if (game._level_change_pending_message) {
@@ -16447,69 +16650,11 @@ async function advanceExperienceLevel(incremental = false) {
         return;
     }
 
-    const level = (game.u?.ulevel || 1) + 1;
-    const oldLevel = game.u?.ulevel || 1;
-    const roleEnergy = ROLE_EN_ADVANCE[role] || ROLE_EN_ADVANCE.Tourist;
-    const raceName = game._startup_race || game.urace?.noun || 'human';
-    const raceEnergy = RACE_EN_ADVANCE[raceName] || RACE_EN_ADVANCE.human;
-    const lowLevel = oldLevel < roleEnergy.xlev;
-    const roleHp = ROLE_HP_ADVANCE[role] || ROLE_HP_ADVANCE.Tourist;
-    const raceHp = RACE_HP_ADVANCE[raceName] || RACE_HP_ADVANCE.human;
-    let hpGain = lowLevel ? roleHp.lowFix + raceHp.lowFix : roleHp.highFix + raceHp.highFix;
-    const roleHpRnd = lowLevel ? roleHp.lowRnd : roleHp.highRnd;
-    const raceHpRnd = lowLevel ? raceHp.lowRnd : raceHp.highRnd;
-    if (roleHpRnd > 0) hpGain += rnd(roleHpRnd);
-    if (raceHpRnd > 0) hpGain += rnd(raceHpRnd);
-    const con = game.u?.acurr?.a?.[4] || 10;
-    hpGain += con <= 3 ? -2 : con <= 6 ? -1 : con <= 14 ? 0 : con <= 16 ? 1 : con === 17 ? 2 : con === 18 ? 3 : 4;
-    if (hpGain <= 0) hpGain = 1;
-    const wis = Math.trunc((game.u?.acurr?.a?.[2] || 10) / 2);
-    const enrnd = wis
-        + (lowLevel ? roleEnergy.lowRnd + raceEnergy.lowRnd : roleEnergy.highRnd + raceEnergy.highRnd);
-    const enfix = lowLevel
-        ? roleEnergy.lowFix + raceEnergy.lowFix
-        : roleEnergy.highFix + raceEnergy.highFix;
-    let powerGain = rn2(enrnd) + enfix;
-    if (role === 'Priest' || role === 'Wizard') powerGain *= 2;
-    else if (role === 'Healer' || role === 'Knight') powerGain = Math.trunc((3 * powerGain) / 2);
-    else if (role === 'Barbarian' || role === 'Valkyrie') powerGain = Math.trunc((3 * powerGain) / 4);
-    if (powerGain <= 0) powerGain = 1;
-    game.u.uhpinc ??= [];
-    game.u.ueninc ??= [];
-    game.u.uhpinc[oldLevel] = hpGain;
-    game.u.ueninc[oldLevel] = powerGain;
-    game.u.ulevel = level;
-    if (incremental) {
-        const nextLevelExp = level < 10 ? 10 * (2 ** level)
-            : level < 20 ? 10000 * (2 ** (level - 10))
-                : 10000000 * (level - 19);
-        if ((game.u.uexp || 0) >= nextLevelExp) game.u.uexp = nextLevelExp - 1;
-    } else {
-        game.u.uexp = oldLevel < 10 ? 10 * (2 ** oldLevel)
-            : oldLevel < 20 ? 10000 * (2 ** (oldLevel - 10))
-                : 10000000 * (oldLevel - 19);
-    }
-    game.u.uhp += hpGain;
-    game.u.uhpmax += hpGain;
-    game.u.uenmax += powerGain;
-    game.u.uenpeak = Math.max(game.u.uenpeak || 0, game.u.uenmax);
-    game.u.uen += powerGain;
-    if (role === 'Wizard' && level >= 15) game.u.warning = true;
-    if (role === 'Wizard' && level >= 17) game.u.teleportControl = true;
-
-    const rankIndex = level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
-    const rank = ROLE_RANKS[role]?.[rankIndex];
-    if (rank) game.urole.rank = { m: rank[0], f: rank[1] || rank[0] };
-
+    const { level, abilityMessage } = gainExperienceLevel(incremental);
+    if (!incremental && level >= (game._level_change_target || level)) game.u.ulevelmax = level;
     const delayed = game._level_change_delayed_welcome;
     const abilityPrefix = game._level_change_ability_prefix || '';
     game._level_change_ability_prefix = '';
-    const ability = ROLE_LEVEL_ABILITIES[role]?.[level];
-    const abilityMessage = ability?.[0] || '';
-    if (ability?.[1] && game.u) {
-        game.u[ability[1]] = true;
-        if (ability[1] === 'fast') game.u._intrinsicFast = true;
-    }
     let pendingMessage = '';
     let nextDelayed = delayed || abilityPrefix ? level : 0;
     if (abilityMessage && delayed) {
@@ -17977,6 +18122,7 @@ function becomeMonster(name) {
         game.u.uen = Math.max(0, Math.min(enmax, rounddiv(baseEn * enmax, Math.max(1, baseEnMax))));
         game.u.uhpinc = hpIncsOut;
         game.u.ueninc = enIncsOut;
+        game.u.ulevelmax = Math.max(newLevel, (game.u.ulevelmax ?? baseLevel) - Math.max(0, baseLevel - newLevel));
         game.u.ulevel = newLevel;
         game.u.uexp = newExp;
         game.u.uhunger = hunger;
@@ -22514,7 +22660,8 @@ function heroHasWetWornTowel() {
 }
 
 function heroHasFreeAction() {
-    return !!(game.u?.freeAction || game.u?.Free_action || (game.inventory || []).some(item =>
+    const prop = game.u?.uprops?.[FREE_ACTION];
+    return !!(game.u?.freeAction || game.u?.Free_action || prop?.intrinsic || prop?.extrinsic || (game.inventory || []).some(item =>
         isWornInventoryItem(item) && (item.actualKind === 'ring of free action'
             || item.kind === 'ring of free action' || item.ringRoll === 20)));
 }
@@ -22598,6 +22745,87 @@ function healHero(amount, nxtra = 0, { cureBlind = false, cureSick = false } = {
         clearHeroSickness();
     }
     return messages.join('  ');
+}
+
+// potion.c:make_hallucinated(0,TRUE,0), including the resistance-only
+// feedback when clearing a timeout does not change effective perception.
+function clearHeroHallucination(messages) {
+    const u = game.u, prop = u.uprops?.[HALLUC];
+    const old = prop?.intrinsic || u._halluTimeout || (heroIsHallucinating() ? 1 : 0);
+    const resisted = heroHasHallucinationResistance();
+    if (prop) prop.intrinsic &= ~TIMEOUT;
+    u._halluTimeout = 0;
+    u.hallu = u.hallucinating = !!prop?.intrinsic;
+    if (!u.hallu) removeHeroStatusSuffix('Hallu');
+    if (!old) return;
+    if (!resisted) {
+        (game.disp ??= {}).botl = true;
+        game._redraw_level_after_more = 1;
+    }
+    if (heroIsUnaware() || game._sleeping_time > 0) return;
+    if (!resisted) messages.push(`Everything ${heroIsBlind() ? 'feels' : 'looks'} SO boring now.`);
+    else if (!haseyes(pmOf({ data: heroFormData() }) || heroFormData()))
+        messages.push('You have a peculiar feeling for a moment, then it passes.');
+    else if (heroIsBlind()) {
+        const form = heroFormData(), one = ['Cyclops', 'floating eye'].includes(form.name);
+        const eye = bodyPart(form, 'eye');
+        messages.push(`Your ${one ? eye : pluralizeMonsterName(eye)} momentarily ${one ? 'itches' : 'itch'}.`);
+    } else messages.push('Your vision seems to flatten for a moment but is normal now.');
+}
+
+// do.c:heal_legs restores one point of temporary Dexterity and clears both
+// wounded sides. Riding redirects the wounds to the steed and suppresses text.
+function healHeroWoundedLegs(messages) {
+    const u = game.u, prop = u.uprops?.[WOUNDED_LEGS];
+    if (!(prop?.intrinsic || u._woundedLegTurns)) return;
+    const both = prop ? ((prop.extrinsic || 0) & BOTH_SIDES) === BOTH_SIDES
+        : !['left', 'right'].includes(u._woundedLegSide);
+    if (u.atemp?.a?.[A_DEX] < 0) ++u.atemp.a[A_DEX];
+    else if (u._woundedDexPenalty && u.acurr?.a) ++u.acurr.a[A_DEX];
+    if (!u.usteed) {
+        const leg = bodyPart(heroFormData(), 'leg');
+        messages.push(`Your ${both ? pluralizeMonsterName(leg) : leg} ${both ? 'feel' : 'feels'} better.`);
+    }
+    if (prop) prop.intrinsic = prop.extrinsic = 0;
+    u._woundedDexPenalty = u._woundedLegTurns = 0;
+    u._woundedLegSide = '';
+    (game.disp ??= {}).botl = true;
+    const encumbered = encumberMsg();
+    if (encumbered) messages.push(encumbered);
+}
+
+// potion.c:1119-1169. Quaffing uses the active body; inhaled healing vapor
+// deliberately has its own helper because it heals both human and monster HP.
+async function quaffHealingPotion(item, kind) {
+    const sign = item.blessed ? 1 : item.cursed ? -1 : 0;
+    const full = kind === 'full healing', extra = kind === 'extra healing';
+    const messages = [`You feel ${full ? 'completely healed' : extra ? 'much better' : 'better'}.`];
+    const amount = full ? 400 : (extra ? 16 : 8) + d(4 + 2 * sign, extra ? 8 : 4);
+    const bonus = full ? 4 + 4 * sign : extra ? (item.blessed ? 5 : item.cursed ? 0 : 2) : item.cursed ? 0 : 1;
+    const healed = healHero(amount, bonus, { cureBlind: extra || full || !item.cursed,
+        cureSick: extra || full ? !item.cursed : !!item.blessed });
+    if (healed) messages.push(healed);
+    if (full && item.blessed && game.u.ulevel < game.u.ulevelmax) {
+        --game.u.ulevelmax;
+        messages.push('You feel more experienced.');
+        const gain = gainExperienceLevel();
+        messages.push(`Welcome ${gain.regained ? 'back ' : ''}to experience level ${gain.level}.`);
+        if (gain.abilityMessage) messages.push(gain.abilityMessage);
+    }
+    if (extra || full) clearHeroHallucination(messages);
+    if (full) exerciseAttribute(A_STR, true);
+    exerciseAttribute(A_CON, true);
+    if (extra) exerciseAttribute(A_STR, true);
+    if ((extra && item.blessed && !game.u.usteed)
+        || (full && (item.blessed || !item.cursed && !game.u.usteed))) healHeroWoundedLegs(messages);
+    if (item.dknown !== false && !potionDiscoveryKnown(kind)) {
+        exerciseAttribute(A_WIS, true);
+        learnObjectScore('Potions', `potion of ${kind}`);
+        recordKnownPotionDiscovery(item, kind);
+    }
+    useUpInventoryItem(item);
+    await setMessage(messages.join('  '));
+    game.context.move = 1;
 }
 
 function potionDiscoveryKnown(potionName) {
@@ -28972,14 +29200,8 @@ async function applyHeroKillLiveExperience(mon, messages, killedCount = game._va
         : oldLevel < 20 ? 10000 * (2 ** (oldLevel - 10))
             : 10000000 * (oldLevel - 19);
     if (oldLevel >= 30 || (game.u?.uexp || 0) < nextLevelExp) return false;
-    game._level_change_target = oldLevel + 1;
-    await advanceExperienceLevel(true);
-    const abilityMessage = game._level_change_ability_prefix || '';
-    game._level_change_ability_prefix = '';
-    game._level_change_delayed_welcome = 0;
-    game._level_change_pending_message = '';
-    messages.push(`Welcome to experience level ${game.u?.ulevel || oldLevel + 1}.${abilityMessage ? `  ${abilityMessage}` : ''}`);
-    game._command_mode = null;
+    const { level, regained, abilityMessage } = gainExperienceLevel(true);
+    messages.push(`Welcome ${regained ? 'back ' : ''}to experience level ${level}.${abilityMessage ? `  ${abilityMessage}` : ''}`);
     return true;
 }
 
@@ -33055,12 +33277,13 @@ function wolfsbanePostEffect() {
 }
 
 function heroIsVomiting() {
-    return !!(game.u?.vomiting || (game.u?._vomitingTimeout || 0) > 0
+    return !!(game.u?.uprops?.[VOMITING]?.intrinsic || game.u?.vomiting || (game.u?._vomitingTimeout || 0) > 0
         || (game.u?._statusSuffix || '').includes('Vom'));
 }
 
 function clearHeroVomiting() {
     if (!game.u) return;
+    if (game.u.uprops?.[VOMITING]) game.u.uprops[VOMITING].intrinsic &= ~TIMEOUT;
     game.u.vomiting = false;
     game.u._vomitingTimeout = 0;
     removeHeroStatusSuffix('Vom');
@@ -33069,13 +33292,14 @@ function clearHeroVomiting() {
 function heroIsSick() {
     const u = game.u;
     if (!u) return false;
-    return !!(u.sick || u.Sick || u.sickness || u.terminallySick || u.ill
+    return !!(u.uprops?.[SICK]?.intrinsic || u.sick || u.Sick || u.sickness || u.terminallySick || u.ill
         || (u._sickTimeout || 0) > 0 || (u._sicknessTimeout || 0) > 0
         || (u._statusSuffix || '').includes('Sick') || (u._statusSuffix || '').includes('Ill'));
 }
 
 export function clearHeroSickness() {
     if (!game.u) return;
+    if (game.u.uprops?.[SICK]) game.u.uprops[SICK].intrinsic = 0;
     game.u.sick = false;
     game.u.Sick = false;
     game.u.sickness = false;
@@ -37070,13 +37294,15 @@ function readBlindBlockMessage(item, isScroll) {
 }
 
 export function heroHasAntimagic() {
-    if (game.u?.magicResistance || game.u?.antimagic) return true;
+    const prop = game.u?.uprops?.[ANTIMAGIC];
+    if (game.u?.magicResistance || game.u?.antimagic || prop?.intrinsic || prop?.extrinsic) return true;
     if (polyselfFormHasAntimagic()) return true;
     return !!activeAntimagicSource();
 }
 
 export function heroHasColdResistance() {
-    if (game.u?.coldResistance) return true;
+    const prop = game.u?.uprops?.[COLD_RES];
+    if (game.u?.coldResistance || prop?.intrinsic || prop?.extrinsic) return true;
     if (polyselfFormHasColdResistance()) return true;
     return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'cold');
 }
@@ -57180,7 +57406,7 @@ function normalInventoryLine(item) {
         const rustproof = (game._startup_role || game.urole?.name?.m) === 'Samurai' && kind === 'splint mail' ? 'rustproof ' : '';
         const erosion = erosionPrefix(item);
         const lineShowsSpe = /(?:^| )[-+]\d+ /.test(String(item.line || ''));
-        const showSpe = item.worn || item.line?.includes('being worn') || item.known === true || lineShowsSpe;
+        const showSpe = item.worn || item.line?.includes('being worn') || item.chargeKnown || item.known === true || lineShowsSpe;
         const spe = showSpe && item.spe != null ? `${item.spe >= 0 ? '+' : ''}${item.spe} ` : '';
         phrase = `${knownState}${rustproof}${erosion}${spe}${name}`;
         if (item.worn || item.line?.includes('being worn')) suffix = ' (being worn)';
@@ -58246,13 +58472,15 @@ function forceWebSkillMinusTwo(skillSpec) {
 }
 
 function practiceForceWebSkill(skillSpec) {
-    if (skillSpec.skill === P_NONE) return;
-    const explicit = heroExplicitWeaponSkillLevel(skillSpec.skill, skillSpec.name);
-    if (explicit === 0) return;
-    const current = game.u?.weapon_skills?.[skillSpec.skill];
-    if (!current || typeof current !== 'object') return;
-    if (normalizeHeroWeaponSkillLevel(current) === 0) return;
-    current.advance = Math.trunc(Number(current.advance || 0)) + 1;
+    const message = useSkill(skillSpec.skill, 1);
+    if (message) {
+        addToplineMessage(message);
+        const tip = skillAdvanceTip();
+        if (tip) {
+            if (game._message_more) appendAfterMoreMessage(tip);
+            else addToplineMessage(tip);
+        }
+    }
 }
 
 async function forceFightWebTrap(trap) {
@@ -65519,7 +65747,7 @@ export async function rhack(_cmd) {
     }
     if (game._armor_don_knowledge_after_more
         && (game._pending_message || '').includes('You finish your dressing maneuver.')) {
-        game._armor_don_knowledge_after_more.known = true;
+        game._armor_don_knowledge_after_more.chargeKnown = true;
         game._armor_don_knowledge_after_more = null;
     }
     if (game._player_spell_continuation && !game._command_mode
@@ -65537,6 +65765,7 @@ export async function rhack(_cmd) {
         game._water_operation_resumed = 0;
         await resumeArtifactFloatCommand();
     }
+    finishPlayerSpellPractice();
     const invocation = game._artifact_untrap;
     if (!invocation) return;
     invocation.spent ||= !!game.context?.move;
@@ -66083,6 +66312,7 @@ async function rhackInternal(_cmd) {
             if (postContinuationHp == null) restoreLifeSavedBody();
             else if (game.u) game.u.uhp = postContinuationHp;
             if (game._player_spell_continuation) game._player_spell_continuation.ready = true;
+            if (game._player_spell_practice) game._player_spell_practice.ready = true;
             if (game._monster_spell_continuation && !game._artifact_float_continuation) {
                 scheduleLifeSavingRecovery();
                 await resumeMonsterSpellCommand([lifeSavingMessage]);
@@ -70527,6 +70757,7 @@ function tutorialEnterStash() {
             // again here would erase the chain's post-refusal damage.
             if (!healedAtChainCrossing) restoreLifeSavedBody();
             if (game._player_spell_continuation) game._player_spell_continuation.ready = true;
+            if (game._player_spell_practice) game._player_spell_practice.ready = true;
             clearLifeSavedDeathState();
             // C ref: timeout.c:684-685 done_timeout() -> done() -> die() ->
             // savelife() (end.c:2040-2068) all run synchronously inside
@@ -71846,11 +72077,16 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             await setMessage('Never mind.');
             return;
         }
-        removeInventoryItem(item);
         const potionName = String(item.actualKind
             || (item.potionIndex != null ? `potion of ${IDENTIFIED_POTION_NAMES[item.potionIndex]}` : '')
             || item.kind
             || pickupObjectName(item));
+        const healingKind = potionName.replace(/^potion of /, '');
+        if (['healing', 'extra healing', 'full healing'].includes(healingKind)) {
+            await quaffHealingPotion(item, healingKind);
+            return;
+        }
+        removeInventoryItem(item);
         if (potionName.includes('fruit juice') || potionName.includes('slime mold')) {
             if (!item.actualKind && item.kind?.endsWith?.(' potion')) {
                 game._call_potion_appearance = item.kind.replace(/ potion$/, '');
@@ -71932,85 +72168,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             await setMessage('Ooph!  This tastes like liquid fire!', true);
             if (!callPotion) game.context.move = 1;
-            return;
-        }
-        if (potionName.includes('extra healing')) {
-            const bcsign = item.blessed ? 1 : item.cursed ? -1 : 0;
-            const wasBlind = !!game.u?.blind;
-            const rolledAmount = 16 + d(4 + 2 * bcsign, 8);
-            const amount = rolledAmount;
-            if (game.u) {
-                const oldMax = game.u.uhpmax || game.u.uhp || 1;
-                const healedHp = (game.u.uhp || 1) + amount;
-                if (healedHp > oldMax) {
-                    game.u.uhpmax = oldMax + (item.blessed ? 5 : item.cursed ? 0 : 2);
-                    game.u.uhp = game.u.uhpmax;
-                } else {
-                    game.u.uhp = healedHp;
-                }
-                game.u.blind = false;
-                game.u._blindTimeout = 0;
-                game.u.ucreamed = 0;
-                if (wasBlind) {
-                    vision_recalc(0);
-                    const objects = game.level?.objects;
-                    if (objects?.includes(game.u.uchain)) {
-                        objects.splice(objects.indexOf(game.u.uchain), 1);
-                        objects.push(game.u.uchain);
-                    }
-                    if (objects?.includes(game.u.uball)) {
-                        objects.splice(objects.indexOf(game.u.uball), 1);
-                        objects.push(game.u.uball);
-                    }
-                }
-            }
-            recordKnownPotionDiscovery(item, 'extra healing');
-            learnObjectScore('Potions', 'potion of extra healing');
-            rn2(19);
-            rn2(19);
-            rn2(19);
-            if (wasBlind) await docrt();
-            await setMessage(`You feel much better.${wasBlind ? '  You can see again.' : ''}`);
-            game._resume_time_after_more = 0;
-            game.context.move = 1;
-            return;
-        }
-        if (potionName.includes('healing')) {
-            const bcsign = item.blessed ? 1 : item.cursed ? -1 : 0;
-            const amount = 8 + d(4 + 2 * bcsign, 4);
-            const wasBlind = !!game.u?.blind && !item.cursed;
-            if (game.u) {
-                const oldMax = game.u.uhpmax || game.u.uhp || 1;
-                const healedHp = (game.u.uhp || 1) + amount;
-                if (healedHp > oldMax) {
-                    game.u.uhpmax = oldMax + (item.cursed ? 0 : 1);
-                    game.u.uhp = game.u.uhpmax;
-                } else {
-                    game.u.uhp = healedHp;
-                }
-                if (!item.cursed) {
-                    game.u.blind = false;
-                    game.u._blindTimeout = 0;
-                    game.u.ucreamed = 0;
-                    if (wasBlind) {
-                        vision_recalc(0);
-                        const objects = game.level?.objects;
-                        if (objects?.includes(game.u.uchain)) {
-                            objects.splice(objects.indexOf(game.u.uchain), 1);
-                            objects.push(game.u.uchain);
-                        }
-                        if (objects?.includes(game.u.uball)) {
-                            objects.splice(objects.indexOf(game.u.uball), 1);
-                            objects.push(game.u.uball);
-                        }
-                    }
-                }
-            }
-            learnObjectScore('Potions', 'potion of healing');
-            rn2(19);
-            if (wasBlind) await docrt();
-            await setMessage(`You feel better.${wasBlind ? '  You can see again.' : ''}`);
-            game.context.move = 1;
             return;
         }
         await setMessage(item.roll >= 900 ? 'That was smooth!' : 'You feel somewhat dizzy.');
@@ -73333,7 +73490,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     async function beginArtifactStormSpell(name) {
         exerciseAttribute(A_WIS, true);
         mksobj(SPE_HEALING, false, false);
-        await beginSpellEffect({ name, category: 'attack', skillLevel: P_EXPERT });
+        await beginSpellEffect({ name, category: 'attack', skillLevel: P_EXPERT, force: true });
     }
 
     if (['castSpell', 'knownSpells', 'swapSpells', 'wizCast'].includes(game._command_mode)) {
@@ -73651,6 +73808,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     if (game._command_mode === 'spellDirection') {
         const spell = game._casting_spell;
         game._casting_spell = null;
+        game._pending_message = '';
+        game._command_mode = null;
         const result = await castSpellDirectionalEffect(spell, ch, SPELL_EFFECT_DEPS);
         await finishSpellEffectResult(spell, result);
         return;
@@ -75329,63 +75488,38 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
-    if (game._command_mode === 'enhance') {
-        if (ch === '\x1b') {
-            game._command_mode = null;
-            game._overlay_lines = null;
-            game._overlay_hide_status = 0;
-        }
-        return;
-    }
-
     if (game._command_mode === 'enhancePracticeConfirm') {
-        if (ch === 'y') {
-            setOverlay(ENHANCE_ADVANCE_LINES.map(line => [...line]), 24, true);
-            game._pending_message = '';
-            game._message_more = 0;
-            game._command_mode = 'enhanceAdvance';
-            return;
-        }
-        if (ch === 'n' || ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
-            setOverlay(currentSkillLines(), 24, true);
-            game._pending_message = '';
-            game._message_more = 0;
-            game._command_mode = 'enhance';
-        }
+        if ('yn\x1b \r\n'.includes(ch)) showSkillMenu(ch === 'y');
         return;
     }
 
-    if (game._command_mode === 'enhanceAdvance') {
-        if (ch === '\r' || ch === '\n' || ch === '\x1b') {
-            game._command_mode = null;
-            game._overlay_lines = null;
-            game._overlay_hide_status = 0;
+    if (game._command_mode === 'enhance') {
+        const menu = game._skill_menu;
+        if ('><^|'.includes(ch) || (ch === ' ' && menu.page < menu.pages - 1)) {
+            const page = ch === '<' ? menu.page - 1 : ch === '^' ? 0 : ch === '|' ? menu.pages - 1 : menu.page + 1;
+            showSkillMenu(menu.speedy, page);
             return;
         }
-        const skill = ch === 'j' ? 'long sword' : ch === 'r' ? 'polearms' : '';
-        if (skill) {
-            if (skill === 'long sword') game._enhanced_long_sword = true;
-            if (skill === 'polearms') game._enhanced_polearms = true;
-            const lines = ENHANCE_ADVANCE_LINES.map(line => [...line]);
-            if (game._enhanced_long_sword) {
-                const row = lines.find(line => line[0] === 13);
-                if (row) row[2] = ' j -  long sword         Skilled         25( 180)';
-            }
-            if (game._enhanced_polearms) {
-                const row = lines.find(line => line[0] === 21);
-                if (row) row[2] = ' r -  polearms           Basic            0(  80)';
-            }
-            game._overlay_lines = null;
-            game._overlay_hide_status = 0;
-            game._queued_overlay_after_more = {
-                lines,
-                clearRows: 24,
-                hideStatus: true,
-                mode: 'enhanceAdvance',
-                message: '',
-                messageMore: false,
-            };
-            await setMessage(`You are now more skilled in ${skill}.`, true);
+        const skill = menu.choices[ch];
+        if (skill == null && !'\x1b \r\n'.includes(ch)) return;
+        game._command_mode = null; game._overlay_lines = null; game._overlay_hide_status = 0;
+        game.context.move = 0;
+        if (skill == null) { game._skill_menu = null; return; }
+        const message = advanceSkill(skill);
+        if (skill >= P_FIRST_SPELL && skill <= P_LAST_SPELL) recordWizardSpellbookDiscoveries();
+        const remaining = skillMenuEntries(menu.speedy).available;
+        if (menu.speedy && remaining) {
+            showSkillMenu(true);
+            const lines = game._overlay_lines;
+            game._overlay_lines = null; game._overlay_hide_status = 0;
+            game._queued_overlay_after_more = { lines, clearRows: 24, hideStatus: true,
+                mode: 'enhance', message: '', messageMore: false };
+            game._command_mode = null;
+            await setMessage(message, true);
+        } else {
+            game._skill_menu = null;
+            await setMessage(message);
+            if (remaining) addToplineMessage('You feel you could be more dangerous!');
         }
         return;
     }
@@ -80492,12 +80626,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (command === 'enhance') {
+                game.context.tips = (game.context.tips || 0) | 1;
                 if (game.flags?.debug) {
                     await setMessage('Advance skills without practice? [yn] (n)');
                     game._command_mode = 'enhancePracticeConfirm';
                 } else {
-                    setOverlay(currentSkillLines(), 24, true);
-                    game._command_mode = 'enhance';
+                    showSkillMenu();
                 }
                 return;
             }

@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 75 JavaScript modules and approximately 172,000 lines;
+The port now has 76 JavaScript modules and approximately 172,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,887 passing tests**, with no
+The latest source-driven checkpoint has **6,073 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -150,6 +150,15 @@ polymorph AC waits for weapon/tool fallout (26 further tests and two fresh C
 recordings). Sink/shapechanger/mimic callbacks and older aggregate electrical
 consumers remain separate work.
 
+Skill state now initializes all 38 records from C's role maxima, starting
+inventory, racial adjustments and initial spells. Training, advancement,
+slot gain/loss and drain retain source history and limits; enhancement lists
+the actual records and preserves saved selection and wizard advancement.
+Normal spells train once after their effects and saved prompts finish, while
+forced wizard/artifact casts skip training. Forty-nine tests cover this work.
+The remaining weapon, riding, thrown attack and exercise call sites still
+need their source integration.
+
 The role `#turn` ability now follows C's conduct, chanting/divine rejection,
 confusion, monster ordering, resistance, thresholds, fleeing, pacification,
 killing and paralysis. Fifty new tests include known-spell fallback for other
@@ -162,17 +171,37 @@ destruction, resistance, killing and wakeups. Fifty independent tests
 include saved message, item-destruction and life-saving continuations. The
 upstream swallowed-casting TODO is deliberately retained.
 
+Reflected rays retain their position, direction, remaining range and current
+effect across message prompts and saved death recovery. Hero damage uses the
+current body, half spell damage, equipment reflection and resistance memory.
+Cold inventory damage is applied separately per shattered stack. Direct
+finger-of-death calls preserve C's different death prompt and status snapshot.
+A fresh C recording matches all 57 screens and 2,327 RNG calls. Complete
+monster-hit, terrain, hallucinated naming and multiple-blast continuations
+remain open.
+
+Normal, extra and full healing potions now use source BCU amounts, overflow,
+current-body healing, cures, exercise and wounded-leg rules. Blessed full
+healing restores lost levels with C's decreasing restoration ceiling. Level
+gains share the human/monster HP and energy operation; startup records level
+history. Fifty-five potion tests and a fresh C recording of 101 screens and
+2,792 RNG calls cover this work. Full per-message quaff and ability-change
+continuations remain open.
+
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
 resident monsters and temple entry drive combat and hostility (11 new tests).
 Five cleric spell effects and the real Sanctum Amulet now follow C (24 further
 tests including spell feedback/visibility). C's paralysis duration also reaches
 its damage caller; that executable behavior is intentionally preserved.
-Canonical serial attack slots now drive 26 of the 42 magic-casting species,
+Canonical serial attack slots now drive 30 of the 42 magic-casting species,
 including physical/cold contact and cleric lightning, with saved inventory,
 landing and death continuations (33 new tests). The driver preserves attack
 armor rolls, protection, sleeping wakeups, occupation interruption and queued
-death-message order. The remaining 16 caster arrays, polymorph passives,
+death-message order. Elemental casting preflight and contact stun, confusion
+and paralysis now use source rules for Angel, Asmodeus, Yeenoghu and abbot,
+with 41 additional tests. Existing Asmodeus bribery tests now use its C 4d4
+claw damage. The remaining 12 caster arrays, polymorph passives,
 special weapons and unfinished spell effects require continued source work.
 Twenty more tests cover live attack/death turn resumption and shared sleep
 state. The main loop parks a suspended attack pass and resumes its remaining
@@ -195,12 +224,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit 84060cb, passed 49/53
-public sessions (12,598/12,712 screens, 830,372/832,102 RNG calls) and 12/19
+The last complete recording run, at preceding commit ec028bc, passed 50/53
+public sessions (12,654/12,712 screens, 830,380/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,078/141,728 RNG calls), with
-zero worker errors. That snapshot removes the Sanctum script. Current AC and
-combat corrections restore the wizard wishlist and arch-lich recordings;
-full corpora will be rerun from the committed checkpoint. These
+zero worker errors. That snapshot removes the Sanctum script and restores
+the wizard wishlist and arch-lich recordings. The current dressing-discovery
+correction also restores all 714 screens in seed0014; full corpora will be
+rerun from the committed checkpoint. These
 recording results do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and

@@ -40,9 +40,19 @@ used to mark a subsystem complete.
   feedback before spell feedback, and light shares the existing gremlin
   damage owner. Self-sleep uses C's shared sleep/occupation state, including
   the timestamp used by combat wakeups. Twenty-four new tests cover these branches, with 13 initial
-  failures demonstrating missing behavior. Reflected-ray and multiple-blast
-  HP/inventory continuation, skill practice, and broader healing-potion
-  consumers still need their source passes.
+  failures demonstrating missing behavior. Reflected rays now retain source
+  position, direction and range through message, sleep and saved death
+  continuations. Hero hits use current-form HP, half spell damage, canonical
+  reflection equipment and observed resistance; cold inventory loses HP per
+  stack before the ray's direct damage. Direct finger-of-death calls preserve
+  the absent losehp death line and the earlier status snapshot. Thirty-eight live
+  tests (14 of the initial 15 failed before fixes) and a fresh C recording
+  cover these boundaries; all 57 screens/cursors and 2,327 RNG calls match.
+  A second source review added canonical property/form resistance and delayed
+  observation until the C message/zhitu return boundary. Hallucinated beam
+  selection uses the core RNG even before the swallowed guard.
+  Complete monster-hit, terrain, hallucinated naming and multiple-blast
+  continuations still require their source passes.
 - `cfgfiles.c:cnf_line_BINDINGS`, `options.c:parsebindings/txt2key/escapes`,
   and `cmd.c:bind_key/rhack`: parse binding lists and byte/control/Meta
   syntax, preserve right-to-left precedence, ignore invalid bindings, and

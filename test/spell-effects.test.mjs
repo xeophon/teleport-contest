@@ -25,7 +25,8 @@ function makeDeps(overrides = {}) {
             else rn2(2);
         },
         healHero: (...args) => { calls.healHero.push(args); return ''; },
-        loseHeroHp: () => false,
+        say: () => true,
+        waiting: () => false,
         damageHero: () => ({}),
         stopHeroOccupation: () => {},
         maybeHalfPhysicalDamage: x => x,

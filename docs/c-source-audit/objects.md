@@ -30,7 +30,7 @@ All C paths below are relative to `nethack-c/upstream/src/`. “No new gap estab
 | `objnam.c:2836` `makeplural` prefix/pronoun/compound portion | `cmd.js` object display, `pluralizeMonsterName`, wish parsing; `mklev.js` object display | Multiple JS formatters and wish singularization paths exist. No full pronoun/compound comparison established. `wishing.test.mjs` asserts plural money, plural ration foods, pair-of-lenses and quantity gates; those assertions cover those inputs only. |
 | `pickup.c:2488` `mbag_explodes` | `cmd.js` `magicBagExplodesWithObject` → insertion | JS preserves empty cancellation/trick exemptions, depth-dependent chance and recursive contents. No new gap established in this slice. Scatter, loss billing, pickup burden and quantum containers remain outside the inspected body. |
 | `polyself.c:1421` `dobreathe` | `cmd.js` extended-command dispatch, polymorph helpers; `fire_breath.js` | C charges 15 energy and routes self/directional breath using the form's attack. JS `#monster` dispatch still uses generic form messages for some abilities; complete breath-energy/direction routing was not established. Polymorph equipment AC now uses the shared calculation described under `do_wear.c`; other transformation behavior remains separately scoped. |
-| `potion.c:2122` `mixtype` | `cmd.js` `mixtypePotionResultName`, dip neutralization helpers and potion commands | Potion-potion recipe helper matches the inspected healing/gain/fruit/enlightenment cases and RNG. Horn/amethyst dip neutralization lives elsewhere. No complete quaff/throw/breathe/alchemy equivalence claim. |
+| `potion.c:2122` `mixtype` | `cmd.js` `mixtypePotionResultName`, dip neutralization helpers and potion commands | Healing quaff effects and lost-level restoration are now ported through shared HP/property/level operations, with 55 source-derived tests and a fresh C oracle; details and limits are below. Potion-potion recipe helper matches the inspected healing/gain/fruit/enlightenment cases and RNG. Horn/amethyst dip neutralization lives elsewhere. No complete quaff/throw/breathe/alchemy equivalence claim. |
 | `pray.c:2414` `doturn` | `pray.js` and `cmd.js` saved `#turn` command; `offer.js` sacrifice; `spell.js` separate spell | Priest/Knight checks, monster iteration, resistance, destruction/pacification/fleeing, spell fallback, recovery and engulfing-vampire release now have 50 source-derived tests. See [the monster audit](monsters.md#priest-and-knight-undead-turning) for implemented scope and remaining branches; this does not establish all prayer or sacrifice behavior. |
 | `read.c:1020` `forget` | `cmd.js` `amnesiaScrollEffect`, `loseAmnesiaSpells` | **State omission:** JS consumes the skill-drain `rnd(3/5)` but does not apply `drain_weapon_skill`; it resets `meverseen` only for current-level monsters, not C's migrating chain. Spell forgetting is separate and present. No direct skill-loss/migrating-memory assertion identified. |
 | `sit.c:358` `lay_an_egg` | `cmd.js` `sitLayEgg`/`createHeroLaidEgg`; `egg_timers.js` | Sex, hunger, aquatic spawning and eel refusal branches exist. No new gap established in these guards. Existing egg timer tests verify lifecycle cases, not all player laying branches. Throne effects were not comprehensively compared. |
@@ -40,7 +40,7 @@ All C paths below are relative to `nethack-c/upstream/src/`. “No new gap estab
 | `zap.c:160` `bhitm`, 3150 `cancel_monst`, 3431 `weffects`, 4238 `zhitm`, 4780 beam loop, 6100 `resist` | `spell.js`; `cmd.js` wand/item helpers; `ice.js`; shared deaths in `cmd.js`/`monster_death.js` | Largest inspected slice. Fixed lethal immediate spells bypassing death, incorrect cancellation, message-only cold/death rays and missing shared harmful-spell monster response. Remaining: monster-inventory `unturn_dead`, swallowed ray handling, full hero ray damage/life saving and object/pile cancellation equivalence. |
 | `fountain.c:558` `wash_hands`, 582 sink conversion | `fountain.js`, `cmd.js` fountain/sink dip dispatch | C clears slippery hands and applies water damage to gloves, counting either as successful use. Fountain module and dip dispatch were located; an equivalent empty-hand command route was not established. No absence inferred solely from helper names. Remaining fountain cases unverified in this pass. |
 | `attrib.c:317` `poisoned` through damage branches | `cmd.js` `applyChestTrapPoison` and projectile poison; `allmain.js` attacks | Chest trap helper models resistance, deadly-poison dice, CON loss and gas-cloud wet-towel reduction. C uses HP maximum/scaled-loss helpers; JS direct HP writes require further polymorph/minimum-max-HP comparison. Other attribute functions remain unverified. |
-| `exper.c:85–169` `experience` | `exper.js` `monsterExperienceValue`, re-exported by `cmd.js` → `recordVanquished` / live kill XP; `mhitm.js` `findMac` | **Inspected arithmetic now ported:** equipment AC, speed, attack/damage bonuses, extra-nasty and level>8 bonuses, eel drowning, mail daemon override and repeated revived/cloned kill discounts. Source-derived XP tests cover numerical boundaries and actual force-bolt kills; details and the separate true-form death gap are below. Other `exper.c` functions remain outside this audit. |
+| `exper.c:85–169` `experience` | `exper.js` `monsterExperienceValue`, re-exported by `cmd.js` → `recordVanquished` / live kill XP; `mhitm.js` `findMac` | **Inspected arithmetic now ported:** equipment AC, speed, attack/damage bonuses, extra-nasty and level>8 bonuses, eel drowning, mail daemon override and repeated revived/cloned kill discounts. Source-derived XP tests cover numerical boundaries and actual force-bolt kills; details and the separate true-form death gap are below. The later healing continuation also inspects and reuses the HP/energy/history part of `pluslvl`; complete `adjabil`, debug level-down and remaining experience functions are not claimed complete. |
 
 ## Ring equipment and electrical destruction
 
@@ -236,3 +236,54 @@ and sickness life saving now resume the remaining once-per-turn tail instead
 of starting a new monster turn; two new phase tests verify clock, queued burn,
 region and spell-memory state. General intrinsic ordering and other fatal
 timeouts still need a full source pass.
+
+## Healing quaff and experience restoration
+
+The three healing potion effects now follow `potion.c:1119–1169`: ordinary
+healing uses 8 plus BCU-dependent d4s, extra healing uses 16 plus d8s, and full
+healing restores a fixed 400 HP. Overflow alone increases maximum HP. They use
+the shared `healHero` active-body operation, preserving the separate C rule that
+inhaled healing vapor can heal both bodies. Blindness, deafness, vomiting,
+sickness, hallucination resistance, physical exercise order, and the distinct
+mounted/wounded-leg cure gates now follow those source branches. Consumption
+uses the ordinary used-up billing/timer path after the effect and discovery;
+discovery grants the actual potion type and exercises Wisdom once when seen.
+Canonical sickness and vomiting properties now participate in the shared cure
+owner as well as the runtime aliases.
+
+Blessed full healing uses a shared state operation extracted from level gain,
+without entering the debug command's message scheduler. It decrements the
+restoration ceiling before `pluslvl`, so successive potions recover the C
+ceil-half share of multiple drained levels. Startup and actual level gains
+produce `ulevelmax` and `ulevelpeak`; drain preserves them, and `newman` adjusts
+the ceiling by the source level difference (`polyself.c:337–360`). Gains retain
+HP/energy increments, update the inactive human body while polymorphed, and add
+a skill slot through the shared skill owner. The source monster-HP increment
+consumes its default d8 before species overrides; `pluslvl` then calls
+`setuhpmax(mhmax,FALSE)`, which preserves the monster maximum while clamping its
+healed HP (`exper.c:309–373`, `makemon.c:986–1008`).
+
+`test/healing-potions.test.mjs` passes 55 cases. The first 45 source-state cases
+had 32 failures before implementation; the ten follow-up boundaries and oracle
+were added afterward and are not claimed as observed pre-fix failures. Coverage
+includes all nine tier/BCU combinations, exact-fill versus overflow, blindness
+and deafness sources, illness/vomiting/hallucination cure gates, mounted legs,
+both polymorph HP representations, repeated saved quaffs after level drain,
+and discovery. A fresh unmodified C recording covers all three blessed tiers,
+with 101/101 screens and 2,792/2,792 RNG calls matching. This is a regression
+measurement, not a completeness percentage for `potion.c` or `exper.c`.
+
+Remaining: full potion command preflight (including bottle occupants), every
+quaff effect's intermediate message suspension, complete `adjabil` racial and
+intrinsic transitions, debug level-down scheduling, and the remaining potion
+families/throw/vapor branches still need source completion. The existing death
+pipeline's restoration of a monster's true species before XP remains a separate
+gap. This increment does not claim those functions or files are complete.
+
+The armor timing suite now passes 28 cases. Ordinary dressing records
+`chargeKnown` separately from type discovery: C reveals an item's enchantment
+without automatically identifying shuffled fumbling boots or telepathy helms.
+The source-derived regression tests retain their appearances in inventory, and
+the unchanged public seed0014 recording again matches all 714 screens. Armor
+property callback ordering beyond the previously bounded timing changes remains
+unfinished.

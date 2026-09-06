@@ -155,6 +155,7 @@ export class GameDisplay {
         // until the prompt resolves (_death_pending_confirm cleared there).
         const deathMoreHp = (game._death_status_hp_before_zero != null
                 && (game._command_mode === 'deathDieMore'
+                    || game._queued_messages_after_more?.some(message => message.fatal || message.lifeSaving)
                     || game._queued_message_after_more === 'You die...'
                     || game._pending_message === 'You die...'))
             || game._death_pending_confirm;

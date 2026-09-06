@@ -48,7 +48,7 @@ individual behavior, not the entire owning C file.
 | `were.c` | `were_change:9-44`, `new_were:96` transformation boundary, `were_summon:142-190`, hero transform callers | `were.js` (explicit moon/time/shape metadata), calls from `allmain.js`/`cmd.js`; `were.test` | Selection and common transformations have tests. Full armor breakage/steed aftermath and hostile summoned helper initialization still depend on shared incomplete owners. |
 | `wizard.c` | `strategy:270`/`tactics:369` ownership, `aggravate:494`, `nasty:591` summoning boundary, `resurrect:715-777`, `intervene:785`, `wizdeadorgone:815` | `wizard.js`, covetous movement in `allmain.js`, creation in `mklev.js`; `wizard-machinery` and `monster-catchup` tests | Revival now shares elapsed recovery and honors sleeping/frozen gates with the C waking bound. Full `mon_arrive` metadata/placement-failure handling remains incomplete. Generic monster nasties do not consistently use `wizard.js:nasty`. |
 | `worm.c` | `worm_move:196-287` growth/HP scheduler, `cutworm:373-439` split setup, tail placement/geometry ownership | `wormSegments` arrays in `mklev.js`, polearm cuts in `cmd.js`, occupancy/trap handling in `allmain.js`; shop polearm/worm tests | Tail placement/cutting exist. No growth-time/HP scheduler corresponding to inspected `worm_move` was found; cutting manually spreads the monster record rather than using shared clone semantics. |
-| `weapon.c` | `select_hwep:705`, `mon_wield_item:801-955`, hit/damage value helpers, dig-tool caller | `mhitm.js:selectHwep`, `monWieldItem`, weapon damage; dig selection in `allmain.js`, hero weapon logic in `cmd.js`; equipment/mhitm/shop tests | Cursed retention, old/new worn slot and future recheck semantics fixed for the melee route. Corpse pseudo-weapons, full artifact preferences, ranged/dig selection and tether/light side effects remain incomplete. |
+| `weapon.c` | `select_hwep:705`, `mon_wield_item:801-955`, hit/damage value helpers, dig-tool caller; skill state, practice, enhancement and drain/init bodies at `1070-1811` | `mhitm.js:selectHwep`, `monWieldItem`, weapon damage; dig selection in `allmain.js`, hero weapon logic in `cmd.js`; new `skills.js` state/menu model and `skill-state.test.mjs` | Cursed retention, old/new worn slot and future recheck semantics fixed for the melee route. Skill model and live spell practice are ported; ordinary melee/projectile training, riding exercise and several gift/amnesia/drain callers remain to integrate. Corpse pseudo-weapons, full artifact preferences, ranged/dig selection and tether/light side effects remain incomplete. |
 | `worn.c` | `mon_adjust_speed:488`, `find_mac:717`, `m_dowear:757-814`, `mon_break_armor:1177-1240` | `mhitm.js:findMac`/speed status, `allmain.js` gear tick, `mklev.js` initial equipment, `cmd.js` polymorph/equipment | Gear tick currently selects a wearable item and defaults its mask rather than implementing complete slot/preference/extrinsic `m_dowear_type` logic; shape/armor lifecycle remains distributed. |
 | `wield.c` | `will_weld` macro:61-69, hero wield/quiver ownership, `mwelded:1078` | Hero wield/quiver in `cmd.js`; monster retention and W_WEP updates in `mhitm.js`; equipment and shop wield/quiver tests | Monster melee weld behavior ported. Wielding nonstandard objects, special body-part messages, all hero two-weapon transitions and artifact light behavior remain unverified. |
 
@@ -511,3 +511,43 @@ do not yet populate that global; full hallucinated `x_monnam`, shield
 animation and exact transient-display timing are not claimed complete.
 The existing death helper's broader explosion behavior remains a separate
 source-audit area. No recording fixtures were changed for this slice.
+
+### Skill state, enhancement and completed spell practice (2026-09-06)
+
+`js/skills.js` ports the inspected `weapon.c:1070-1811` state rules:
+separate accumulated unsigned-short practice, advancement slots, maximum
+levels and the ordered 60-entry upgrade history. Advancing preserves
+practice; level loss spends spare slots before reversing the latest upgrade.
+Random skill draining removes chosen history entries and rerolls practice
+only above the newly lowered threshold. Role limits come from all thirteen
+`u_init.c:257-572` tables. Actual new-game inventory establishes initial
+weapon training with the C ammunition exclusion, initial spell disciplines,
+Knight riding and pauper reset rules. Wizard spellbook discoveries now read
+the resulting skill state (`spell.c:864-906`).
+
+The live `#enhance` menu uses current practice and slots, grouped source
+skill names, waiting/maxed markers, wizard practice totals and repeated
+speedy selection. Advances spend their actual slot cost, update history and
+identify newly accessible Wizard spellbooks only for spell disciplines.
+Known-spell failure calculations and existing weapon skill consumers read
+the same canonical records. Level gain/loss and force-web practice now
+call the shared model; confidence feedback follows `weapon.c:give_may_advance_msg`
+and the once-only `hack.c:handle_tip` enhancement tip.
+
+Normal spell practice follows `spell.c:1598-1599`: it is initialized only
+after a successful cast and awards that spell's level when the whole effect
+returns. A serialized command marker survives direction/position prompts,
+message pauses, chain/ray continuations, life saving and wizard death refusal.
+Forced wizard spells and artifact storms do not train. Independent tests
+cover real new-game roles, source table values, thresholds, slot history,
+drain RNG order, menus, discoveries and saves, plus actual movement-loop
+casting and saved teleport/ray recovery. All 49 new tests pass; the combined
+skill, ray, chain, wizard and healing suite passes 208/208.
+
+This checkpoint does not claim all skill callers are ported. The inspected
+`uhitm.c:1475-1500` melee/projectile training gates, `steed.c:390-397` riding
+practice, gift slots in `pray.c:994`, and skill drain callers in
+`read.c:1031`/`uhitm.c:3269` still need live integration. Enhanced-menu
+terminal wrapping/tab-separated presentation and every alternate role
+reinitialization path have not been independently compared to C. No frozen
+recording fixtures were edited.

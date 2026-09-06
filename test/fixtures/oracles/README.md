@@ -19,3 +19,13 @@ The armor fixtures cover the Monk legacy story’s retained initial status and
 post-intro equipment AC, plus a Wizard wishing for ordinary plate mail, removing
 a cloak, and completing five-turn dressing/removal. They preserve full screen,
 cursor and RNG comparison; they are not branch-coverage measurements.
+# Reflected spell rays
+
+`spell-rays` was recorded from the unchanged C reference with the local wizard
+configuration. It casts vertical magic missile, sleep, cold and finger of death,
+then refuses wizard death. The 57 screens include the live beam and the direct
+death prompt; all 2,327 RNG calls are compared by the test runner.
+
+`healing-quaff` wishes for and drinks each of the three blessed healing tiers
+at full HP. It checks their distinct maximum-HP bonuses, messages, discovery,
+and RNG: 101 screens and 2,792 RNG calls from the unchanged C reference.

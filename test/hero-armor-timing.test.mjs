@@ -61,7 +61,7 @@ for (const command of ['W','P']) test(`${command} sets worn armor before delay b
     assert.equal(armor.owornmask,W_ARM); assert.equal(game.u.uarm,armor);
     assert.equal(game.u.uac,10); assert.equal(armor.known,false);
     game._pending_message=''; game._pending_time_passed=1; await inputBoundary();
-    assert.equal(game.u.uac,3); assert.equal(game.moves,105); assert.equal(armor.known,true);
+    assert.equal(game.u.uac,3); assert.equal(game.moves,105); assert.equal(armor.chargeKnown,true);
 });
 
 test('zero-delay armor removal postpones recalculation while its off message is still inside rhack',async()=>{
@@ -94,7 +94,7 @@ for (const saved of [false,true]) test(`dressing knowledge waits for the finishi
     assert.match([game._queued_message_after_more,game._topline_after_more].join(' '),/finish your dressing maneuver/);
     if(saved) restoreSaveState(encodeSaveState());
     await rhack(' ');
-    assert.equal(game.inventory[0].known,true);
+    assert.equal(game.inventory[0].chargeKnown,true);
     assert.match(game._pending_message,/finish your dressing maneuver/);
 });
 
@@ -110,4 +110,14 @@ for (const spe of [-3,2]) for (const saved of [false,true]) test(`polymorph AC w
     if(saved) restoreSaveState(encodeSaveState());
     await rhack(' ');
     assert.equal(game.u.uac,-1-spe); assert.equal(game.inventory.some(obj=>obj.id===1),false);
+});
+
+for(const kind of ['fumble boots','helm of telepathy']) test(`dressing learns ${kind} enchantment without discovering its shuffled type`,async()=>{
+    setup(); const armor={id:1,letter:'a',cls:'armor',kind,actualKind:kind,appearance:kind==='fumble boots'?'combat boots':'visored helmet',spe:-4,quan:1,known:false};
+    game.inventory.push(armor);await rhack('W');await rhack('a');
+    game._pending_message='';game._pending_time_passed=1;await inputBoundary();
+    assert.equal(armor.chargeKnown,true);assert.equal(armor.known,false);
+    game._pending_message='';game._message_more=0;game._command_mode=null;await rhack('i');
+    const screen=JSON.stringify(game._overlay_lines);
+    assert.match(screen,/-4/);assert.ok(screen.includes(armor.appearance));assert.ok(!screen.includes(kind));
 });

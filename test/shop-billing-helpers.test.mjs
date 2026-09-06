@@ -9544,7 +9544,6 @@ test('automatic monster turn true briber with Excalibur angers before demand and
             demonPrince: true,
             unique: true,
             maligntyp: -20,
-            attack: { dice: 1, sides: 1, verb: 'hits' },
         },
     });
     game.level.monsters = [briber];
@@ -9558,13 +9557,14 @@ test('automatic monster turn true briber with Excalibur angers before demand and
     assert.equal(briber.mtame, 0);
     assert.equal(briber.hostile, true);
     assert.equal(briber._last_demon_bribe_demand, undefined);
-    assert.equal(game.u.uhp, 19);
+    // C monsters.h:3120: Asmodeus claws for 4d4 before the next magic slot.
+    assert.equal(game.u.uhp, 7);
     assert.equal(game._command_mode || null, null);
     assert.doesNotMatch(game._pending_message || '', /demands|safe passage|How much/);
     const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
     assert.ok(!calls.includes('rnd(80)'));
     assert.ok(calls.includes('rnd(20)'));
-    assert.ok(calls.includes('d(1,1)'));
+    assert.ok(calls.includes('d(4,4)'));
 });
 
 test('automatic monster turn invisible prince with Excalibur reports tension before reveal or demand', async () => {
@@ -9803,7 +9803,6 @@ test('automatic monster turn true briber with no gold keeps acting after angerin
             demonPrince: true,
             unique: true,
             maligntyp: -20,
-            attack: { dice: 1, sides: 1, verb: 'hits' },
         },
     });
     game.level.monsters = [briber];
@@ -9815,13 +9814,14 @@ test('automatic monster turn true briber with no gold keeps acting after angerin
     assert.equal(briber.mpeaceful, 0);
     assert.equal(briber.hostile, true);
     assert.equal(briber._last_demon_bribe_demand, 0);
-    assert.equal(game.u.uhp, 19);
+    // C monsters.h:3120: Asmodeus claws for 4d4 before the next magic slot.
+    assert.equal(game.u.uhp, 7);
     assert.equal(game._command_mode || null, null);
     assert.doesNotMatch(game._pending_message || '', /demands|safe passage|How much/);
     const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
     assert.equal(calls.filter(call => call === 'rnd(80)').length, 1);
     assert.ok(calls.includes('rnd(20)'));
-    assert.ok(calls.includes('d(1,1)'));
+    assert.ok(calls.includes('d(4,4)'));
 });
 
 test('automatic monster turn true briber with gold opens C demand prompt', async () => {
@@ -9953,7 +9953,6 @@ test('automatic monster turn Amulet carrier demands unpayable bribe and attacks 
     const amulet = realAmuletOfYendor(3063572, 'A');
     const briber = automaticAsmodeusBriber({
         minvent: [amulet],
-        data: { attack: { dice: 1, sides: 1, verb: 'hits' } },
     });
     game.level.monsters = [briber];
 
@@ -9988,11 +9987,12 @@ test('automatic monster turn Amulet carrier demands unpayable bribe and attacks 
     await processMonsterTurns();
 
     assert.match(game._pending_message, /The Asmodeus hits!/);
-    assert.equal(game.u.uhp, 19);
+    // C monsters.h:3120: Asmodeus claws for 4d4 before the next magic slot.
+    assert.equal(game.u.uhp, 9);
     assert.equal(game._command_mode || null, null);
     calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
     assert.ok(calls.includes('rnd(20)'));
-    assert.ok(calls.includes('d(1,1)'));
+    assert.ok(calls.includes('d(4,4)'));
 });
 
 test('automatic monster turn partial bribe failure transfers gold and resumes same demon attack', async () => {
@@ -10006,9 +10006,7 @@ test('automatic monster turn partial bribe failure transfers gold and resumes sa
     game.u.acurr ??= { a: [] };
     game.u.acurr.a[A_CHA] = 3;
     markHeroNeighborhoodVisible();
-    const briber = automaticAsmodeusBriber({
-        data: { attack: { dice: 1, sides: 1, verb: 'hits' } },
-    });
+    const briber = automaticAsmodeusBriber();
     game.level.monsters = [briber];
 
     queueEscapeForMonsterTurn();
@@ -10033,7 +10031,8 @@ test('automatic monster turn partial bribe failure transfers gold and resumes sa
     await processMonsterTurns();
 
     assert.match(game._pending_message, /The Asmodeus hits!/);
-    assert.equal(game.u.uhp, 19);
+    // C monsters.h:3120: Asmodeus claws for 4d4 before the next magic slot.
+    assert.equal(game.u.uhp, 9);
     assert.equal(game._monster_resume_same_index || 0, 0);
     assert.equal(game._command_mode || null, null);
 });

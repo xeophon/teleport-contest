@@ -1,5 +1,6 @@
 // C exper.c:experience. Species attacks and flags come from the same table
 // used for combat; recording-specific XP overrides are not game rules.
+import { rnd, rn2 } from './rng.js';
 import { game } from './gstate.js';
 import { W_AMUL } from './const.js';
 import { findMac, mLevel, pmOf } from './mhitm.js';
@@ -42,4 +43,20 @@ export function monsterExperienceValue(mon, killedCount = 1) {
         }
     }
     return experience;
+}
+
+// makemon.c:monhp_per_lvl consumes the default d8 even for species whose
+// level-drain increment is subsequently replaced by a fixed or special value.
+export function monsterHpPerLevel(mon) {
+    const data = pmOf(mon) || mon.data || {};
+    let hp = rnd(8);
+    if (pm.is_golem(data)) {
+        const fixed = { 'straw golem':20, 'paper golem':20, 'rope golem':30,
+            'leather golem':40, 'gold golem':60, 'wood golem':50, 'flesh golem':40,
+            'clay golem':70, 'stone golem':100, 'glass golem':80, 'iron golem':120 };
+        hp = Math.trunc((fixed[data.name] || 0) / data.mlevel);
+    } else if (data.mlevel > 49) hp = 4 + rnd(4);
+    else if (data.mlet === pm.S_DRAGON && pm.MONS.indexOf(data) >= pm.PM_GRAY_DRAGON) hp = 4 + rn2(5);
+    else if (!mLevel(mon)) hp = rnd(4);
+    return hp;
 }

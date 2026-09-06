@@ -1,5 +1,6 @@
 import { findAc, setArmorWorn } from './do_wear.js';
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
+import { initializeSkills, ROLE_SKILL_LIMITS, spellSkillType } from './skills.js';
 import { setArtifactEquipmentLight } from './artifact.js';
 import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn } from './cmd.js';
 import { supportsMonsterAttackSlots } from './mhitu.js';
@@ -749,14 +750,6 @@ const SPELLBOOKS = [
     { max: 1000, novel: true },
 ];
 
-const ROLE_SPELL_SKILLS = {
-    Healer: new Set(['healing']),
-    Knight: new Set(['attack', 'healing', 'cleric']),
-    Monk: new Set(['attack', 'healing', 'divination', 'enchantment', 'cleric', 'escape', 'matter']),
-    Priest: new Set(['healing', 'divination', 'cleric']),
-    Wizard: new Set(['attack', 'healing', 'divination', 'enchantment', 'cleric', 'escape', 'matter']),
-};
-
 function helloForRole(role) {
     if (role === 'Knight') return 'Salutations';
     if (role === 'Samurai') return 'Konnichi wa';
@@ -950,11 +943,12 @@ function recordRoleDiscoveries(roleName) {
     }
 }
 
-function recordWizardSpellbookDiscoveries(roleName) {
+export function recordWizardSpellbookDiscoveries(roleName = game.urole?.name?.m || game._startup_role) {
     if (roleName !== 'Wizard') return;
-    const knownLevel = { attack: 3, enchantment: 3, healing: 1, divination: 1, cleric: 1, escape: 1, matter: 1 };
     for (const spell of SPELLBOOKS) {
-        if (spell.blank || spell.novel || spell.level > (knownLevel[spell.skill] || 0)) continue;
+        const level = game.u.weapon_skills?.[spellSkillType(spell.skill)]?.skill || 0;
+        const knownLevel = level >= 4 ? 7 : level === 3 ? 5 : level === 2 ? 3 : game.u.uroleplay?.pauper ? 0 : 1;
+        if (spell.blank || spell.novel || spell.level > knownLevel) continue;
         const name = `spellbook of ${spell.name}`;
         if ((game._discoveries || []).some(entry => entry.section === 'Spellbooks' && entry.name === name)) continue;
         const index = SPELLBOOKS.findIndex(candidate => candidate.name === spell.name);
@@ -1131,8 +1125,7 @@ function spellbookAllowed(spell, state) {
     if (spell.forceBolt && state.roleName === 'Wizard') return false;
     if (state.noCreateSpell === spell) return false;
     if (spell.level > (state.gotSpell1 ? 3 : 1)) return false;
-    const skills = ROLE_SPELL_SKILLS[state.roleName];
-    return !skills || skills.has(spell.skill);
+    return ROLE_SKILL_LIMITS[state.roleName].some(([skill]) => skill === spellSkillType(spell.skill));
 }
 
 function randomObjectAllowed(cls, obj, state) {
@@ -1422,7 +1415,8 @@ function initializeRoleInventory(roleName, raceName) {
     recordRoleDiscoveries(roleName);
     recordRaceDiscoveries(raceName);
     for (const item of state.inventory) recordStartupInventoryDiscovery(item);
-    recordWizardSpellbookDiscoveries(roleName);
+    initializeSkills(roleName, state.inventory);
+    if (!game.u.uroleplay?.pauper) recordWizardSpellbookDiscoveries(roleName);
     let wielded = false;
     let alternate = false;
     let quivered = false;
@@ -1536,6 +1530,8 @@ function initializeHero() {
     }
 
     game.u.ulevel = 1;
+    game.u.ulevelmax = 1;
+    game.u.ulevelpeak = 1;
     game.u.uhp = game._initialHp;
     game.u.uhpmax = game._initialHp;
     game.u.uen = game._initialEnergy;
@@ -2667,7 +2663,7 @@ function applyHeroLavaSinkingAfterTurn() {
     return result;
 }
 
-function appendAfterMoreMessage(msg) {
+export function appendAfterMoreMessage(msg) {
     if (!msg) return;
     if (!game._topline_after_more) {
         game._topline_after_more = msg;
@@ -11411,9 +11407,9 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             if (occupation.action !== 'takeoff' && item) {
                 // unmul prints its completion message before Armor_on learns
                 // enchantment; a full preceding topline suspends that callback.
-                if (game._armor_finish_after_more && !item.known)
+                if (game._armor_finish_after_more && !item.chargeKnown)
                     game._armor_don_knowledge_after_more = item;
-                else item.known = true;
+                else item.chargeKnown = true;
             }
             if (armorFinishNeedsMore) {
                 game._message_more = 1;
@@ -18087,7 +18083,7 @@ export async function moveloop_core() {
                         g._gauntlets_power_exercise_after_turn_tail = 1;
                     }
                 }
-                if (occupation.action !== 'takeoff' && item) item.known = true;
+                if (occupation.action !== 'takeoff' && item) item.chargeKnown = true;
                 if (occupation.action !== 'takeoff' && occupation.kind === 'gauntlets of power') {
                     if (item) {
                         item.known = true;

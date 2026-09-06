@@ -1,0 +1,12 @@
+{
+  "version": 5,
+  "segments": [
+    {
+      "seed": 9420,
+      "datetime": "20260720120000",
+      "nethackrc": "OPTIONS=name:Healpotion,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,time,showexp,playmode:debug\n",
+      "moves": "\u0017blessed potion of healing\nqo\u0017blessed potion of extra healing\nqp\u0017blessed potion of full healing\nqqi\u001b",
+      "steps": []
+    }
+  ]
+}

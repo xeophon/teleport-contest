@@ -1,0 +1,1 @@
+{"version":5,"segments":[{"seed":9401,"datetime":"20260720120000","nethackrc":"OPTIONS=name:Raytest,role:Barbarian,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,time,showexp,playmode:debug\n","moves":"#wizcast\nb<#wizcast\ne<  #wizcast\nd<   #wizcast\nf<   n   ","steps":[]}]}
