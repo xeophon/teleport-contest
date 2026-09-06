@@ -303,7 +303,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitNameForId, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, heroRay, resumeHeroRay, resumeReleasedSpell, resumeSelfElementalSpell, resumeSpellBursts } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, heroRay, resumeHeroRay, resumeReleasedSpell, resumeSelfZap, resumeSpellBursts } from './spell.js';
 import { resumeSpellExplosion } from './explode.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
@@ -10656,8 +10656,8 @@ async function resumePlayerSpellEffect() {
     } else if (state.kind === 'releasedSpell') {
         const result = await resumeReleasedSpell(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
-    } else if (state.kind === 'selfElementalSpell') {
-        const result = await resumeSelfElementalSpell(state.state, playerSpellEffectDependencies());
+    } else if (state.kind === 'selfZap') {
+        const result = await resumeSelfZap(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
     } else if (state.kind === 'spellExplosion') {
         const result = await resumeSpellExplosion(state.state, playerSpellEffectDependencies());
@@ -73551,22 +73551,17 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._command_mode = null;
             return;
         }
-        if (selfZap && item?.kind === 'sleep') {
-            if (heroHasSleepResistance()) {
-                await setMessage("You don't feel sleepy!");
-                game._command_mode = null;
-                game.context.move = 1;
-                return;
-            }
-            const sleepTime = rnd(50);
-            fallAsleep(-sleepTime, true, stopHeroOccupation);
-            await setMessage('The sleep ray hits you!');
-            game._command_mode = null;
-            game.context.move = sleepTime;
-            return;
-        }
         const fireWand = item?.wand === 'fire' || item?.kind === 'fire' || item?.wandIndex === 20 || hornElement === 'fire';
         const coldWand = item?.wand === 'cold' || item?.kind === 'cold' || item?.wandIndex === 21 || hornElement === 'cold';
+        const sleepWand = item?.wand === 'sleep' || item?.kind === 'sleep'
+            || item?.kind === 'wand of sleep' || item?.wandIndex === 22;
+        if (selfZap && !hornElement && (sleepWand || coldWand)) {
+            game._pending_message = preludeMessages.join('  ');
+            game._command_mode = null;
+            const result = await resumeSelfZap({ item, name: sleepWand ? 'sleep' : 'cold', phase: 'init' }, playerSpellEffectDependencies());
+            await finishSpellEffectResult(null, result);
+            return;
+        }
         if (selfZap && fireWand) {
             const origDamage = d(12, 6);
             const resistsFire = !!game.u?.fireResistance;
@@ -73643,8 +73638,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.context.move = 1;
             return;
         }
-        const sleepWand = item?.wand === 'sleep' || item?.kind === 'sleep'
-            || item?.kind === 'wand of sleep' || item?.wandIndex === 22;
         if ((dir || verticalDir) && sleepWand) {
             exerciseAttribute(A_WIS, true);
             game._pending_message = '';

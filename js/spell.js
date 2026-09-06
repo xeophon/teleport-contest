@@ -303,7 +303,7 @@ async function spellZapYourself(spell, D) {
     switch (name) {
     case 'fireball':
     case 'cone of cold':
-        return resumeSelfElementalSpell({ name, phase: 'init' }, D);
+        return resumeSelfZap({ name, phase: 'init' }, D);
     case 'force bolt': {
         // C zap.c:zapyourself() case SPE_FORCE_BOLT (ordinary=TRUE)
         if (D.heroHasAntimagic()) {
@@ -329,16 +329,8 @@ async function spellZapYourself(spell, D) {
         }
         return { messages };
     }
-    case 'sleep': {
-        if (D.heroHasSleepResistance()) push('You don\'t feel sleepy!');
-        else {
-            push('The sleep ray hits you!');
-            const sleepTime = rnd(50); // C fall_asleep(-rnd(50), TRUE)
-            fallAsleep(-sleepTime, true, D.stopHeroOccupation);
-            return { messages, sleepTurns: sleepTime };
-        }
-        return { messages };
-    }
+    case 'sleep':
+        return resumeSelfZap({ name, phase: 'init' }, D);
     case 'slow monster': {
         // C zap.c:zapyourself() case SPE_SLOW_MONSTER: only acts when Fast.
         if (u.fast || u.veryfast || (u._veryfastTimeout || 0) > 0) {
@@ -1242,13 +1234,16 @@ export async function resumeReleasedSpell(state, D) {
     return { ...result, released: !result.published };
 }
 
-export async function resumeSelfElementalSpell(state, D) {
+export async function resumeSelfZap(state, D) {
     const pending = () => ({ published: true, pending: true, messages: [],
-        afterHeroDamage: { kind: 'selfElementalSpell', state } });
+        afterHeroDamage: { kind: 'selfZap', state } });
     if (state.phase === 'init') {
         state.phase = 'effect';
         if (state.name === 'fireball') {
             if (!D.say('You explode a fireball on top of yourself!')) return pending();
+        } else if (state.name === 'sleep') {
+            state.resistant = D.heroHasSleepResistance();
+            if (!D.say(state.resistant ? "You don't feel sleepy!" : 'The sleep ray hits you!')) return pending();
         } else {
             state.original = d(12, 6);
             state.resistant = D.heroHasColdResistance();
@@ -1257,18 +1252,29 @@ export async function resumeSelfElementalSpell(state, D) {
     }
     if (state.phase === 'effect') {
         if (state.name === 'fireball') return explodeSpell(game.u.ux, game.u.uy, 'fire', d(6, 6), D, { wand: true });
-        D.observeHeroElementResistance('cold', state.resistant);
-        state.phase = 'inventory';
+        if (state.name === 'sleep') {
+            D.observeHeroRayResistance('sleep', state.resistant);
+            if (!state.resistant) fallAsleep(-rnd(50), true, D.stopHeroOccupation);
+            state.phase = 'learn';
+        } else {
+            D.observeHeroElementResistance('cold', state.resistant);
+            state.phase = 'inventory';
+        }
     }
     if (state.phase === 'inventory') {
         if (!D.heroColdInventoryDamage(state.inventory ??= { original: state.original })) return pending();
-        state.phase = 'damage';
+        state.phase = 'learn';
+    }
+    if (state.phase === 'learn') {
+        if (state.item) D.learnRayItem(state.item, state.name);
+        state.phase = state.name === 'sleep' ? 'done' : 'damage';
     }
     if (state.phase === 'damage') {
         state.phase = 'done';
         if (!state.resistant) {
-            const messages = [], result = D.damageHero(messages, state.original,
-                `zapped ${game.flags?.female ? 'herself' : 'himself'} with a spell`);
+            const amount = state.item ? D.maybeHalfPhysicalDamage(state.original) : state.original;
+            const messages = [], result = D.damageHero(messages, amount,
+                `zapped ${game.flags?.female ? 'herself' : 'himself'} with a ${state.item ? `wand of ${state.name}` : 'spell'}`);
             if (!D.publishDamageResult(messages, result)) return pending();
         }
     }
@@ -1343,9 +1349,9 @@ export async function resumeSpellBursts(state, D) {
             if (state.phase === 'child') {
                 result = state.child.kind === 'spellExplosion'
                     ? await resumeSpellExplosion(state.child.state, D)
-                    : await resumeSelfElementalSpell(state.child.state, D);
+                    : await resumeSelfZap(state.child.state, D);
             } else if (!state.x && !state.y && !state.dz) {
-                result = await resumeSelfElementalSpell({ name: spellName(state.spell), phase: 'init' }, D);
+                result = await resumeSelfZap({ name: spellName(state.spell), phase: 'init' }, D);
             } else {
                 result = await explodeSpell(state.x, state.y, spellName(state.spell) === 'fireball' ? 'fire' : 'cold',
                     spellDamageBonus(Math.trunc((game.u.ulevel || 1) / 2) + 1), D);

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM, STONE, COULD_SEE, IN_SIGHT, W_ARM, STRAT_WAITMASK } from '../js/const.js';
+import { ROOM, STONE, COULD_SEE, IN_SIGHT, W_ARM, STRAT_WAITMASK, M_SEEN_SLEEP } from '../js/const.js';
 import { MONS, S_MIMIC, MR_SLEEP } from '../js/permonst.js';
 import { sleepMonst, setMhitmHooks } from '../js/mhitm.js';
 import { OBJECT_DATA } from '../js/object_data.js';
@@ -13,7 +13,7 @@ import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { vision_reset } from '../js/vision.js';
 import { encodeSaveState, restoreSaveState } from '../js/save.js';
 
-function setup() {
+function setup(kind = 'sleep') {
     resetGame(); initRng(41); game.moves = 100; game.flags = {}; game.context = {};
     game.u = { ux: 10, uy: 10, uz: { dnum: 0, dlevel: 1 }, uhp: 100, uhpmax: 100,
         uhunger: 900, ulevel: 12, acurr: { a: [10, 10, 10, 10, 10, 10] } };
@@ -23,8 +23,8 @@ function setup() {
     vision_reset(); game.viz_array = Array.from({ length: 21 }, () => Array(80).fill(IN_SIGHT | COULD_SEE));
     const values = Array(4096).fill(19n);
     game.coreCtx = { n: values.length, r: values, m: [], a: 0n, b: 0n, c: 0n }; game.rng.core = game.coreCtx;
-    const type = OBJECT_DATA.find(t => t.symbol === 'WAN_SLEEP');
-    const item = { _c_otyp: type.id, kind: 'sleep', cls: 'wand', glyph: '/',
+    const type = OBJECT_DATA.find(t => t.symbol === `WAN_${kind.toUpperCase()}`);
+    const item = { _c_otyp: type.id, kind, cls: 'wand', glyph: '/',
         letter: 'a', known: false, bknown: false, dknown: true, spe: 4 };
     game.inventory = [item]; game._zap_item = item; game._command_mode = 'zapDirection';
     enableRngLog({ reset: true });
@@ -164,4 +164,63 @@ test('saved reflection pauses before learning the shield or wand and resumes eac
     assert.ok(game.inventory.every(item => item.known === false));
     assert.equal(getRngLog().filter(r => r.startsWith('rn2(7)')).length, 1);
     assert.equal(getRngLog().filter(r => r.startsWith('rn2(19)')).length, 3);
+});
+
+for (const known of [false, true]) for (const seen of [false, true])
+    for (const blind of [false, true]) for (const hallucinating of [false, true])
+        for (const resistant of [false, true]) test(`self sleep: known=${known} seen=${seen} blind=${blind} hallucinating=${hallucinating} resistant=${resistant}`, async () => {
+            const wand = setup(); wand.dknown = seen;
+            if (known) game._known_object_types = [wand._c_otyp];
+            Object.assign(game.u, { blind, hallucinating, sleepResistance: resistant });
+            const observer = { data: MONS.find(mon => mon.name === 'wolf'), mx: 10, my: 11, mhp: 100 };
+            game.level.monsters = [observer];
+            await rhack('.'); await finishRay();
+            const learned = !known && (seen || !blind && !hallucinating);
+            assert.equal(objectTypeIsKnown(wand), known || learned);
+            assert.equal(wand.known, false); assert.equal(wand.bknown, false); assert.equal(wand.spe, 4);
+            assert.equal(game.u.urexp || 0, 0, 'zapyourself gives no weffects discovery score');
+            assert.equal(!!(observer.m_seenres & M_SEEN_SLEEP), resistant);
+            assert.equal(game._helpless_time || 0, resistant ? 0 : 20);
+            assert.equal(game.context.move, 1);
+            assert.deepEqual(getRngLog(), [...(resistant ? [] : ['rnd(50)=20']), ...(learned ? ['rn2(19)=0'] : [])]);
+        });
+
+for (const resistant of [false, true]) test(`self sleep waits for its message before resistance and sleep effects: ${resistant}`, async () => {
+    const wand = setup(); game.nhDisplay = { cols: 50 }; game.u.sleepResistance = resistant;
+    game._zap_prelude_messages = ['You wrest one last charge from the worn-out wand.'];
+    await rhack('.');
+    assert.equal(game._player_spell_continuation.kind, 'selfZap');
+    assert.equal(objectTypeIsKnown(wand), false);
+    assert.deepEqual(getRngLog(), []); assert.equal(game.u.usleep || 0, 0);
+    await rhack('x'); assert.deepEqual(getRngLog(), []);
+    await finishRay({ save: true });
+    assert.equal(objectTypeIsKnown(game.inventory[0]), true);
+    assert.equal(game._helpless_time || 0, resistant ? 0 : 20);
+});
+
+for (const protection of ['none', 'physical', 'spell', 'resistance'])
+    test(`self cold wand uses C direct damage and ${protection} protection`, async () => {
+        const wand = setup('cold'); Object.assign(game.u, { uhp: 1000, uhpmax: 1000,
+            halfPhysicalDamage: protection === 'physical', halfSpellDamage: protection === 'spell', coldResistance: protection === 'resistance' });
+        await rhack('.'); await finishRay();
+        assert.equal(1000 - game.u.uhp, protection === 'resistance' ? 0 : protection === 'physical' ? 12 : 24);
+        assert.equal(objectTypeIsKnown(wand), true); assert.equal(wand.known, false);
+        assert.equal(game.u.urexp || 0, 0);
+        assert.deepEqual(getRngLog(), ['d(12,6)=24', 'rn2(5)=4', 'rn2(19)=0']);
+    });
+
+test('cold self-zap learns the wand before saved fatal direct damage returns', async () => {
+    const wand = setup('cold'); game.u.uhp = 1; game.flags.debug = true;
+    await rhack('.');
+    assert.equal(objectTypeIsKnown(wand), true);
+    assert.equal(game.u.urexp || 0, 0); assert.equal(wand.known, false);
+    assert.match(game._death_cause, /zapped himself with a wand of cold/);
+    assert.equal(game._player_spell_continuation.kind, 'selfZap');
+    const encoded = encodeSaveState(), { coreCtx, displayCtx, rng } = game;
+    resetGame(); restoreSaveState(encoded); Object.assign(game, { coreCtx, displayCtx, rng });
+    for (let n = 0; n < 20 && (game._player_spell_continuation || game._message_more || game._command_mode); n++)
+        await rhack(game._command_mode === 'wizardDieConfirm' ? 'n' : ' ');
+    assert.ok(game.u.uhp > 0);
+    assert.equal(getRngLog().filter(r => r.startsWith('d(12,6)')).length, 1);
+    assert.equal(getRngLog().filter(r => r.startsWith('rn2(19)')).length, 1);
 });

@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,268 passing tests**, with no
+The latest source-driven checkpoint has **7,309 passing tests**, with no
 failures, skips or TODOs. All eleven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -53,8 +53,18 @@ sleep owner now handles mimic revelation, interrupted meals and orange dragon
 armor; 2,880 compiled C cases check its state transitions. Worn/embedded orange
 dragon armor supplies hero sleep resistance too. Thirty-nine added tests and
 a fresh recording pass (82 screens/cursors, 2,272 random calls); seed 0002
-matches all 595 screens/cursors and 27,158 random calls. Self-zaps, mounted-ray
+matches all 595 screens/cursors and 27,158 random calls. Mounted-ray
 target selection, full mimic vision effects and remaining ray kinds are open.
+
+Sleep and cold wand self-zaps now share saved effect phases with spells.
+Sleep feedback precedes resistance observation and its `rnd(50)` duration;
+cold inventory effects finish before type learning and separate direct damage.
+Self-zaps preserve charge knowledge and give no `weffects` discovery score.
+Cold wand direct self-damage follows C's half-physical protection rule, and
+saved fatal damage resumes without repeating learning or damage rolls.
+Forty-one new tests include two fresh C recordings matching all 162 screens/
+cursors and 4,325 random calls. Other self-zap kinds, full golem reactions and
+the shared exhausted-wand cleanup still need source work.
 
 Full inventory naming now shares the C base-name owner for wizard override and
 permanent identification feedback. Qualifiers cover container knowledge, traps,

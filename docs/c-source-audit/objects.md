@@ -1,5 +1,18 @@
 # Objects, player magic, and attributes
 
+## Sleep/cold self-zap follow-up (2026-09-06)
+
+`zap.c:zapyourself/dozap` now runs sleep/cold wand self-effects through saved
+phases shared with spells. Sleep resistance observation and duration follow
+the message; cold inventory effects precede type learning and direct damage.
+The first learned type receives Wisdom credit but no effect-discovery score,
+and the wand's charge knowledge stays unchanged. Wand direct self-damage
+uses `Maybe_Half_Phys`; spell cold damage retains its separate rule. Saved
+fatal damage resumes once after wizard/life-saving recovery. Forty-one added
+tests include two C recordings (162 screens/cursors, 4,325 random calls).
+Other self-zap kinds, full golem reactions, killer-name qualifiers and
+exhausted-wand cleanup remain open.
+
 ## Shared sleep rays and monster sleep (2026-09-06)
 
 `zap.c:dobuzz/zhitm/zhitu` now routes sleep wands through the resumable ray
@@ -14,7 +27,7 @@ oracle runs 2,880 C state transitions with external operations stubbed;
 separate command tests cover live geometry, equipment and save integration.
 Worn/embedded orange armor now supplies hero sleep resistance. Thirty-nine
 new tests include an 82-screen C recording; seed 0002 fully matches again.
-Remaining: self-zaps, steed selection, complete mimic visibility/unblocking,
+Remaining: other ray/self-zap kinds, steed selection, complete mimic visibility/unblocking,
 shield animation and other ray kinds. The compiler oracle does not test
 the external operations replaced by stubs or establish whole-ray parity.
 
