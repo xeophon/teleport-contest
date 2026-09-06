@@ -1,5 +1,14 @@
 # Objects, player magic, and attributes
 
+## Digging-wand knowledge follow-up (2026-09-06)
+
+`zap.c:weffects/learnwand` now applies Wisdom exercise before digging and type
+learning after its effects, preserving instance charge knowledge and the
+observable-effect score. Sixteen direct command tests cover repeated use and
+sight/hallucination combinations; a fresh C recording covers two actual zaps,
+inventory and discovery (45 screens/cursors, 2,104 random calls). This does not
+establish full `dig.c:zap_dig` terrain, engulfing or message-continuation parity.
+
 ## Shop quote follow-up (2026-09-06)
 
 `shk.c:439-491/3362/4057/4153`, `objnam.c:1645-1685` and

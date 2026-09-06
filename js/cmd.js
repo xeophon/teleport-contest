@@ -483,7 +483,8 @@ function refreshWandLine(item) {
     item.line = normalInventoryLine({ ...item, line: '' });
 }
 
-function setKnownWandLine(item, wand) {
+function setKnownWandLine(item, wand, { experience = false } = {}) {
+    const wasUnknown = !objectTypeIsKnown(item);
     item.cls = 'wand';
     item.glyph = '/';
     item.wand = wand;
@@ -492,6 +493,7 @@ function setKnownWandLine(item, wand) {
     learnWandType(item, { blind: heroIsBlind(), hallucinating: heroIsHallucinating(),
         observe: recordObservedObjectDiscovery, discover: recordIdentifiedObjectType,
         exercise: exerciseAttribute, update: refreshWandLine });
+    if (experience && wasUnknown) game.u.urexp = (game.u.urexp || 0) + 10;
 }
 
 function zappableWand(item, { fallbackCharges = 0 } = {}) {
@@ -73648,12 +73650,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (verticalDir && (item?.wand === 'digging' || item?.kind === 'digging' || item?.wandIndex === 18)) {
-            item.known = true;
-            item.kind = 'digging';
-            item.line = `${item.letter} - a wand of digging${wandChargeSuffix(item)}`;
+            exerciseAttribute(A_WIS, true);
             const result = verticalDir.dz < 0
                 ? { message: zapDigFallingRockMessage(), more: false }
                 : await zapDigDownwardResult();
+            setKnownWandLine(item, 'digging', { experience: true });
             await setMessage(result.message, !!result.more);
             game._keep_pending_message = 0;
             game._command_mode = null;
@@ -74373,12 +74374,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (item?.wand === 'digging' || item?.kind === 'digging' || item?.wandIndex === 18) {
-                rn2(19);
+                exerciseAttribute(A_WIS, true);
                 let digdepth = rn2(18) + 8;
-                rn2(19);
-                item.known = true;
-                item.kind = 'digging';
-                item.line = `${item.letter} - a wand of digging${wandChargeSuffix(item)}`;
                 const mazeDig = !!game.level?.flags?.is_maze_lev && !Is_earthlevel(game.u?.uz);
                 const digMessages = [];
                 let digShopDoor = false;
@@ -74459,6 +74456,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 // C ref: dig.c:zap_dig() — shop damage is settled after the ray.
                 if (digShopDoor || digShopWall)
                     payForCurrentShopTerrainDamage(digShopDoor ? 'destroy' : 'dig into', digMessages);
+                setKnownWandLine(item, 'digging', { experience: true });
                 await setMessage(digMessages.join('  '), digMessages.length > 1);
                 game._keep_pending_message = 0;
                 game._command_mode = null;

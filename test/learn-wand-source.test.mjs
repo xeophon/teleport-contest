@@ -4,6 +4,11 @@ import { game, resetGame } from '../js/gstate.js';
 import { OBJECT_DATA } from '../js/object_data.js';
 import { learnWandType, objectTypeIsKnown } from '../js/object_knowledge.js';
 import { A_WIS } from '../js/const.js';
+import { ROOM } from '../js/const.js';
+import { GameMap } from '../js/game.js';
+import { rhack } from '../js/cmd.js';
+import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
+import { vision_reset } from '../js/vision.js';
 
 for (const known of [false, true]) for (const seen of [false, true])
     for (const blind of [false, true]) for (const hallucinating of [false, true])
@@ -38,3 +43,34 @@ for (const symbol of ['FROST_HORN', 'SPE_POLYMORPH', 'GENERIC_WAND']) test(`lear
         : symbol === 'GENERIC_WAND' ? ['update'] : []);
     assert.equal(item.known, false);
 });
+
+for (const known of [false, true]) for (const seen of [false, true])
+    for (const blind of [false, true]) for (const hallucinating of [false, true])
+        test(`live digging learning: known=${known} seen=${seen} blind=${blind} hallucinating=${hallucinating}`, async () => {
+            resetGame(); initRng(17); game.flags = {}; game.context = {};
+            game.u = { ux: 10, uy: 10, uz: { dnum: 0, dlevel: 1 }, ulevel: 1,
+                uhp: 20, uhpmax: 20, uhunger: 900, blind, hallucinating,
+                acurr: { a: [10, 10, 10, 10, 10, 10] } };
+            game.level = new GameMap();
+            for (let x = 1; x < 79; x++) for (let y = 0; y < 21; y++)
+                Object.assign(game.level.at(x, y), { typ: ROOM, lit: true });
+            vision_reset(); enableRngLog({ reset: true });
+            const type = OBJECT_DATA.find(type => type.symbol === 'WAN_DIGGING');
+            const item = { _c_otyp: type.id, kind: 'digging', cls: 'wand', glyph: '/',
+                letter: 'a', spe: 4, known: false, bknown: false, dknown: seen };
+            game.inventory = [item];
+            if (known) game._known_object_types = [type.id];
+            const learned = !known && (seen || !blind && !hallucinating);
+            for (let zap = 0; zap < 2; zap++) {
+                game._zap_item = item; game._command_mode = 'zapDirection';
+                await rhack('l');
+                assert.equal(item.known, false);
+                assert.equal(item.bknown, false);
+                assert.equal(item.spe, 4, 'direction processing does not spend another charge');
+                assert.equal(objectTypeIsKnown(item), known || learned);
+                assert.equal(game.u.urexp || 0, known ? 0 : learned ? 10 : (zap + 1) * 10);
+                assert.equal(game.context.move, 1);
+            }
+            assert.equal(getRngLog().filter(line => line.startsWith('rn2(19)')).length, 2 + Number(learned));
+            assert.equal(getRngLog().filter(line => line.startsWith('rn2(18)')).length, 2);
+        });

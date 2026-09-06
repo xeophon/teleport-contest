@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,164 passing tests**, with no
+The latest source-driven checkpoint has **7,181 passing tests**, with no
 failures, skips or TODOs. All nine generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -56,6 +56,13 @@ no longer append duplicate unknown discoveries. Thirty-nine new state tests and
 two fresh C recordings pass (17 screens and 5,357 random calls).
 The fresh Samurai swap probe also exposed incomplete swap turn timing; it is
 retained as a follow-up alongside wand learning, discovery and armor callbacks.
+
+Digging-wand effects now use real Wisdom exercise and type discovery after the
+effect instead of placeholder draws and instance charge identification. Sixteen
+command tests cover sight/hallucination gates, discovery score and repeated use;
+a fresh two-zap C recording matches 45 screens/cursors and 2,104 random calls.
+Other wand rays, full digging terrain/engulfing behavior and serial message
+completion remain separate source work.
 
 Shop price quotes now accumulate buy/sell ranges by object type, survive saves,
 and appear through C's inventory, billing, floor-price, prompted-sale and
