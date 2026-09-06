@@ -67,6 +67,19 @@ test('leg healing recomputes actual load instead of clearing a burden unconditio
     assert.equal(game._encumbrance_level,1);assert.match(game.u._statusSuffix,/Burdened/);
 });
 
+test('an unchanged empty load status stays empty after healing',()=>{
+    setup();setWoundedLegs(C.RIGHT_SIDE,30);beginHeroLegHealing();finishHeroLegHealing();
+    assert.equal(game.u._statusSuffix,'');
+});
+
+test('a refused kick flushes its message and discards the queued direction without spending time',async()=>{
+    setup();setWoundedLegs(C.BOTH_SIDES,30);
+    await rhack('\x04');assert.equal(game._pending_message,'Your legs are in no shape for kicking.');
+    assert.equal(game._message_more,1);assert.equal(game.context.move,0);
+    await rhack('l');assert.equal(game._message_more,1);assert.equal(game.u.ux,10);
+    assert.deepEqual(getRngLog(),[]);
+});
+
 test('fumbling with a welded pick wounds the right leg with the source temporary penalty',()=>{
     setup();game.u.fumbling=true;game.coreCtx.r=[0n,0n,0n];game.coreCtx.n=3;
     const result=digFumblingResult({kind:'pick-axe',cursed:true,wielded:true});

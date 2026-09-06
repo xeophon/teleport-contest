@@ -25,9 +25,18 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,363 passing tests**, with no
+The latest source-driven checkpoint has **6,423 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
+
+HP/power regeneration now uses canonical property sources, temporary attribute
+bonuses, movement/load gates, sleeping regeneration, separate active monster HP
+and eel dehydration with source draw order. Power distinguishes extrinsic
+magical breathing from an intrinsic source. Fifty-eight new tests cover these
+branches and live turn integration. Two wound follow-ups preserve empty status
+tokens and the C forced More on refused kicks; both affected recordings again
+match all 1,547 screens and 179,817 random calls. Zero-HP rehumanization,
+overexertion and full turn interruption scheduling remain source work.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
@@ -276,11 +285,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at commit d8f0e9c, passed 51/53 public
-sessions (12,545/12,712 screens, 830,380/832,102 RNG calls) and 12/19
+The last complete recording run, at commit 2b18b84, passed 49/53 public
+sessions (11,628/12,712 screens, 798,872/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
-zero worker errors. These denominators precede the current checkpoint and do
-not establish full C behavior.
+zero worker errors. Its two newly failing public recordings were traced to
+empty status-token spacing and a refused-kick More prompt; both now match
+all screens and RNG calls in focused reruns. A fresh full-corpus checkpoint
+is still needed. These measurements do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched
@@ -356,9 +367,9 @@ for each finding. Major unfinished areas include:
 1. **Spells and combat:** remaining ray
    callbacks, directed cleric spells, wizard death-touch/weakening effects,
    and broader attack/damage dispatch.
-2. **Timers and arrival:** source ordering between timers, intrinsic expiry, regions and regeneration,
-   prompt continuation, automatic light activation, and the complete terrain/region/spot-effects arrival
-   pipeline.
+2. **Timers and arrival:** remaining intrinsic expiry ordering and continuations,
+   equipment-light transfer callers, and the complete terrain/region/spot-effects arrival
+   pipeline. The shared turn boundary and tested timer continuations are implemented.
 3. **Quest and artifacts:** remaining level-script branches and artifact invocation/transfer behavior.
    Existing builder dispatch does not itself prove map parity.
 4. **Regions and movement:** region callbacks, broader level scripting and
@@ -368,9 +379,9 @@ for each finding. Major unfinished areas include:
    death bookkeeping and XP.
 6. **Bones:** unique-monster cleanup and special item handling, fresh ID
    allocation/relinking, invocation-item substitutions and artifact state.
-7. **Hero and item state:** full polymorph armor-class recomputation,
-   stack knowledge, amnesia/detection details and extended command effects
-   such as turning undead.
+7. **Hero and item state:** attribute mutation, polymorph transitions,
+   overexertion, stack knowledge, amnesia/detection details and remaining
+   extended command effects. Effective attributes, AC and role turning have source-backed slices.
 8. **World and interfaces:** Water-plane occupant behavior, remaining vision
    details, configuration symbols and other command/window behavior.
 

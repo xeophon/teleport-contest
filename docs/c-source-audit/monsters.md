@@ -603,3 +603,17 @@ match through the earlier mismatch at input 631; its first screen difference
 is later at input 985. This is not a complete melee port: full dmgval,
 artifact/poison/backstab/jousting, polymorph attacks, source hit-role gates,
 and feedback/death/passive continuations still need their own source passes.
+
+## Hero regeneration source pass
+
+`allmain.js:regenerateHeroHealth` ports positive-HP branches of
+`allmain.c:625–687 regen_hp`: current Constitution, movement/load gates,
+Regeneration and Sleepy/usleep bonuses, canonical monster HP, and eel
+dehydration. Dehydration retains both ordered draws before the half-physical
+turn gate, ignores sleeping regeneration, and recognizes raised-bridge moats
+through the shared terrain predicate. `regenerateHeroPower` follows the role
+interval, canonical energy sources and extrinsic-only magical breathing bonus
+(`allmain.c:600–620`). The turn retains pre-timeout encumbrance and prayer
+uses the C unencumbered power gate. Fifty-eight new tests include a live
+canonical-form turn. Zero-HP rehumanization, overexertion and the complete
+interrupt_multi message continuation still need source work.

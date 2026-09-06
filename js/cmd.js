@@ -6923,7 +6923,7 @@ function movementSurfaceTerrain(loc) {
     }
 }
 
-function movementIsPoolAt(x, y, loc = game.level?.at(x, y)) {
+export function movementIsPoolAt(x, y, loc = game.level?.at(x, y)) {
     if (!loc) return false;
     if (loc.typ === POOL || loc.typ === MOAT || loc.typ === WATER) return true;
     return loc.typ === DRAWBRIDGE_UP
@@ -16702,7 +16702,7 @@ function addHeroStatusSuffix(status) {
 
 function removeHeroStatusSuffix(status) {
     if (!game.u) return;
-    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part !== status);
+    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part && part !== status);
     game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
 }
 
@@ -46479,7 +46479,7 @@ function wishedObjectFinalWeight(obj) {
     return globObjectWeight(obj);
 }
 
-function heroCarriedWeight() {
+export function heroCarriedWeight() {
     let weight = Math.max(0, Math.trunc(((game._goldCount || 0) + 50) / 100));
     for (const item of game.inventory || []) {
         if (isGoldObject(item)) continue;
@@ -46587,7 +46587,7 @@ const PICKUP_BURDEN_LEVELS = {
     overloaded: 5,
 };
 
-function heroEncumbranceForWeight(weight) {
+export function heroEncumbranceForWeight(weight) {
     const capacity = heroCarryCapacity();
     const burden = Math.trunc(Number(weight || 0)) - capacity;
     if (burden <= 0) return 0;
@@ -83150,7 +83150,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (hasWoundedLegs()) {
-            await setMessage(heroLegsInNoShapeMessage('kicking'));
+            // dokick.c flushes refused kicks with display_nhwindow(TRUE).
+            await setMessage(heroLegsInNoShapeMessage('kicking'), true);
             return;
         }
         await setMessage('In what direction?');

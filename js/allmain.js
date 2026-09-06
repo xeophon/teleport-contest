@@ -1,3 +1,6 @@
+import { heroCarriedWeight, heroEncumbranceForWeight, movementIsPoolAt } from './cmd.js';
+import { REGENERATION, SLEEPY, ENERGY_REGENERATION, MAGICAL_BREATHING, HALF_PHDAM } from './const.js';
+import { S_EEL, breathless } from './permonst.js';
 import { hasWoundedLegs } from './do.js';
 import { beginHeroLegHealing, finishHeroLegHealing, encumberMsg } from './cmd.js';
 import { WOUNDED_LEGS } from './const.js';
@@ -2882,7 +2885,7 @@ function addHeroStatusSuffix(status) {
 
 function removeHeroStatusSuffix(status) {
     if (!game.u) return;
-    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part !== status);
+    const parts = String(game.u._statusSuffix || '').trim().split(/\s+/).filter(part => part && part !== status);
     game.u._statusSuffix = parts.length ? ` ${parts.join(' ')}` : '';
 }
 
@@ -10594,9 +10597,71 @@ if (attack.adtyp === 'steal') {
 	    return result;
 	}
 
+// allmain.c:regen_hp. Monster HP is distinct from the inactive human body;
+// older runtime forms keep their active HP in uhp until canonical mh exists.
+export function regenerateHeroHealth(wtcap) {
+    const u = game.u, form = u._polyself_form || ((u.Upolyd || u.polymorphed) && MONS[u.umonnum]);
+    const hpKey = form && u.mh != null ? 'mh' : 'uhp';
+    const maxKey = hpKey === 'mh' ? 'mhmax' : 'uhpmax';
+    if (u.uinvulnerable || !(u[hpKey] > 0)) return false;
+    const regen = u.uprops?.[REGENERATION], sleepy = u.uprops?.[SLEEPY];
+    const regenerating = regen ? !!(regen.intrinsic || regen.extrinsic)
+        : !!(u.regeneration || u.regenerating || heroWearsRingNamed('regeneration'));
+    const sleepingRegen = !!(u.usleep && (sleepy ? sleepy.intrinsic || sleepy.extrinsic
+        : u.sleepy || u.sleepyTimeout || (game.inventory || []).some(item => item.worn
+            && (item.amuletIndex === 3 || (item.actualKind || item.kind) === 'amulet of restful sleep'))));
+    const canRegen = regenerating || sleepingRegen;
+    const encumbranceOk = wtcap < MOD_ENCUMBER || !u.umoved;
+    let heal = 0;
+    if (form) {
+        const species = monsterSpecies({ data: form }) || form;
+        const breathing = u.uprops?.[MAGICAL_BREATHING];
+        const magicBreathing = breathing ? !!(breathing.intrinsic || breathing.extrinsic)
+            : u.magicalBreathing || (game.inventory || []).some(item => item.worn
+                && (item.actualKind || item.kind) === 'amulet of magical breathing');
+        if ((species.mlet === S_EEL || form.mlet === 'eel')
+            && !movementIsPoolAt(u.ux,u.uy) && !Is_waterlevel(u.uz)
+            && !(magicBreathing || u.breathless || u.Breathless || form.breathless || breathless(species))) {
+            const half = u.uprops?.[HALF_PHDAM];
+            const halfPhysical = half ? !!(half.intrinsic || half.extrinsic)
+                : u.halfPhysicalDamage || u.half_physical_damage || u.halfPhysical;
+            if (u[hpKey] > 1 && !regenerating && rn2(u[hpKey]) > rn2(8)
+                && (!halfPhysical || game.moves % 2 === 0)) heal = -1;
+        } else if (u[hpKey] < u[maxKey] && (canRegen || encumbranceOk && game.moves % 20 === 0)) heal = 1;
+    } else if (u.uhp < u.uhpmax && (encumbranceOk || canRegen)) {
+        heal = Number((u.ulevel + currentHeroAttribute(A_CON)) > rn2(100));
+        if (canRegen) heal++;
+        if (sleepingRegen) heal++;
+    }
+    if (!heal) return false;
+    u[hpKey] = Math.min(u[maxKey], u[hpKey] + heal);
+    (game.disp ??= {}).botl = true;
+    return u[hpKey] === u[maxKey];
+}
+
+// allmain.c:regen_pw grants the breathing bonus only for an extrinsic source.
+export function regenerateHeroPower(wtcap) {
+    const u = game.u;
+    if (u.uen >= u.uenmax) return false;
+    const role = game.urole?.name?.m || game._startup_role;
+    const interval = Math.trunc((38 - u.ulevel) * (role === 'Wizard' ? 3 : 4) / 6);
+    const energy = u.uprops?.[ENERGY_REGENERATION];
+    const regenerating = energy ? !!(energy.intrinsic || energy.extrinsic) : u.energy_regeneration;
+    if (!(wtcap < MOD_ENCUMBER && game.moves % interval === 0 || regenerating)) return false;
+    const breathing = u.uprops?.[MAGICAL_BREATHING];
+    const extrinsicBreathing = breathing ? !!breathing.extrinsic : (game.inventory || []).some(item =>
+        item.worn && (item.actualKind || item.kind) === 'amulet of magical breathing');
+    const upper = Math.trunc((currentHeroAttribute(A_WIS) + currentHeroAttribute(A_INT)) / 15)
+        + 1 + (extrinsicBreathing ? 2 : 0);
+    u.uen = Math.min(u.uenmax, u.uen + rn1(upper, 1));
+    (game.disp ??= {}).botl = true;
+    return u.uen === u.uenmax;
+}
+
 async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     // A More prompt inside movemon must return before C starts a new turn.
     if (game._turn_setup_pending) {
+        game._turn_wtcap = heroEncumbranceForWeight(heroCarriedWeight());
         game._turn_setup_pending = 0;
         // C allmain.c:244: all once-per-turn effects observe the new turn.
         game.moves = (game.moves || 1) + 1;
@@ -10960,71 +11025,9 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
         }
         advanceRegions(game);
         if (game.u?.ublesscnt) game.u.ublesscnt--;
-	        let reachedFullHp = false;
-        let reachedFullPower = false;
-        if (process.env.WEREDBG) console.error(`WEREDBG regen-eval moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length} dp=${!!game._death_pending_confirm} poly=${!!game.u?._polyself_form}`);
-        if (game.u?._polyself_form) {
-            // C ref: allmain.c regen_hp() — the Upolyd branch (allmain.c:630-644)
-            // heals every 20 turns (or via Regeneration) with NO rn2(100)
-            // roll; that roll exists only in the !Upolyd branch
-            // (allmain.c:659).
-            if (!game.u?.uinvulnerable && (game.u?.uhp || 0) > 0 && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
-                const polyRegenerating = (game.inventory || []).some(item =>
-                    item.worn && (item.actualKind === 'ring of regeneration'
-                        || item.kind === 'ring of regeneration'
-                        || item.ringRoll === 7));
-                if (polyRegenerating || (game.moves || 1) % 20 === 0) {
-                    game.u.uhp = Math.min(game.u.uhp + 1, game.u.uhpmax);
-                    reachedFullHp = (game.u?.uhp || 0) === (game.u?.uhpmax || 0);
-                }
-            }
-        } else if (!game.u?.uinvulnerable && (game.u?.uhp || 0) > 0
-                   // C ref: allmain.c:655-659 / end.c:2137-2173 — when the
-                   // hero just died and wizard/explore mode would offer the
-                   // "Die?" cheat, C's done()->die() runs synchronously and
-                   // savelife() (end.c:2040-2068) restores HP before any later
-                   // regen_hp() call.  restoreHeroHpForUnresolvedWizardDeath()
-                   // reproduces that at the point the fatal blow is queued, so
-                   // only a truly-zero u.uhp (not yet healed) suppresses the roll.
-                   && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
-            const con = currentHeroAttribute(4);
-            if (process.env.WEREDBG) console.error(`WEREDBG regen moves=${game.moves} uhp=${game.u.uhp}/${game.u.uhpmax} rngidx=${getRngLog().length}`);
-            const regenRoll = rn2(100);
-            const suppressHpRegen = !!game._suppress_next_hp_regen;
-            game._suppress_next_hp_regen = 0;
-            const regenerating = (game.inventory || []).some(item =>
-                item.worn && (item.actualKind === 'ring of regeneration'
-                    || item.kind === 'ring of regeneration'
-                    || item.ringRoll === 7));
-            if ((game.u?.uhp || 0) < (game.u?.uhpmax || 0)
-                && !suppressHpRegen
-                && (game.u?.ulevel || 1) + con > regenRoll)
-                game.u.uhp = Math.min(game.u.uhp + 1, game.u.uhpmax);
-            if (regenerating && !suppressHpRegen && (game.u?.uhp || 0) < (game.u?.uhpmax || 0))
-                game.u.uhp = Math.min(game.u.uhp + 1, game.u.uhpmax);
-            reachedFullHp = (game.u?.uhp || 0) === (game.u?.uhpmax || 0);
-        }
-        if ((game.u?.uen || 0) < (game.u?.uenmax || 0)) {
-            const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
-            let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
-            for (const item of game.inventory || []) carriedWeight += objectWeight(item) * (item.quan || 1);
-            const capacity = heroCarryCapacity();
-            const burden = carriedWeight - capacity;
-            const wtcap = (game.u?._statusSuffix || '').includes('Overloaded')
-                ? OVERLOADED
-                : burden <= 0 ? 0 : Math.min(Math.trunc(burden * 2 / capacity) + 1, OVERLOADED);
-            const roleName = game.urole?.name?.m || game._startup_role || '';
-            const interval = Math.trunc(((30 + 8 - (game.u?.ulevel || 1)) * (roleName === 'Wizard' ? 3 : 4)) / 6);
-            const energyRegeneration = !!game.u?.energy_regeneration;
-            if ((wtcap < MOD_ENCUMBER && !((game.moves || 1) % interval)) || energyRegeneration) {
-                const magicalBreathing = (game.inventory || []).some(item =>
-                    item.worn && (item.actualKind === 'amulet of magical breathing'
-                        || item.kind === 'amulet of magical breathing'));
-                const upper = Math.trunc(((stats[A_WIS] ?? 10) + (stats[A_INT] ?? 10)) / 15) + 1 + (magicalBreathing ? 2 : 0);
-                game.u.uen = Math.min(game.u.uenmax, game.u.uen + rn1(upper, 1));
-                reachedFullPower = (game.u?.uen || 0) === (game.u?.uenmax || 0);
-            }
-        }
+        const wtcap = game.u.uinvulnerable ? 0 : (game._turn_wtcap ?? heroEncumbranceForWeight(heroCarriedWeight()));
+        const reachedFullHp = regenerateHeroHealth(wtcap);
+        const reachedFullPower = regenerateHeroPower(wtcap);
         if (game._counted_repeat_interruptible && (reachedFullHp || reachedFullPower)) {
             game._pending_time_passed = 0;
             game._skip_pending_time_decrement = 1;
