@@ -1,3 +1,4 @@
+import { currentHeroAttribute } from './attrib.js';
 // js/mhitm.js — Port of NetHack 5.0 src/mhitm.c monster-vs-monster combat core.
 //
 // C references are paths under nethack-c/upstream:
@@ -296,7 +297,7 @@ function mm2wayAggression(magr, mdef) {
 
 /* src/mondata.c:1607-1613 resist_conflict(). */
 export function resistConflict(mon) {
-    const cha = game.u?.acurr?.a?.[5] ?? 10;
+    const cha = currentHeroAttribute(5);
     const resistChance = Math.min(19, cha - mLevel(mon) + (game.u?.ulevel || 1));
     return rnd(20) > resistChance;
 }

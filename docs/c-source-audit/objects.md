@@ -310,3 +310,15 @@ The source-derived regression tests retain their appearances in inventory, and
 the unchanged public seed0014 recording again matches all 714 screens. Armor
 property callback ordering beyond the previously bounded timing changes remains
 unfinished.
+
+## Effective attributes and carrying capacity
+
+`js/attrib.js` owns `attrib.c:acurr` and `acurrstr`. Equipment overrides preserve
+base attributes; every scalar calculation previously reading base attributes in
+command/turn code now uses effective values. Spell hit chance uses Dexterity.
+`hack.c:weight_cap` now handles exceptional Strength, monster body weight/size,
+nymphs, strong mounts, levitation source timing, flight and wounded sides.
+The 52 source-state tests cover saved equipment, loss while wearing power
+gloves, life saving with Ogresmasher, combat/spell/digging consumers and capacity
+boundaries. The fresh C equipment oracle matches 119 screens and 2,949 RNG calls.
+Full attribute mutation and wounded-leg production remain separate work.

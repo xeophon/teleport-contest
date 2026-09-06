@@ -1,3 +1,4 @@
+import { GAUNTLETS_OF_POWER, DUNCE_CAP } from './armor.js';
 // mklev.js — Level generation.
 // C ref: mklev.c — makelevel, makerooms, makecorridors, generate_stairs.
 // Also includes parts of sp_lev.c (create_room) and mkmap.c (litstate_rnd).
@@ -164,7 +165,6 @@ const ELVEN_SHIELD = 10208;
 const URUK_HAI_SHIELD = 10209;
 const ORCISH_SHIELD = 10210;
 const CORNUTHAUM = 10211;
-const DUNCE_CAP = 10212;
 const ELVEN_LEATHER_HELM = 10213;
 const HELM_OF_CAUTION = 10214;
 const HELM_OF_OPPOSITE_ALIGNMENT = 10215;
@@ -1509,7 +1509,6 @@ const HIGH_BOOTS = 10049;
 const LEATHER_GLOVES = 10050;
 const LEATHER_CLOAK = 10051;
 const CLOAK_OF_DISPLACEMENT = 10111;
-const GAUNTLETS_OF_POWER = 10112;
 const GAUNTLETS_OF_FUMBLING = 10114;
 const GAUNTLETS_OF_DEXTERITY = 10115;
 const MUMMY_WRAPPING = 10202;

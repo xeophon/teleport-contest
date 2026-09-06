@@ -1,3 +1,4 @@
+import { WOUNDED_LEGS, LEFT_SIDE } from '../js/const.js';
 import { ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON } from '../js/timeout.js';
 import { scheduleCorpseTimeout, startGlobShrinkTimeout } from '../js/ice.js';
 import { attachEggHatchTimeout } from '../js/egg_timers.js';
@@ -13557,9 +13558,8 @@ test('uncursed enchant armor evaporating gauntlets of power restores strength be
     installCoreRngValues([0, 1]);
     Object.assign(game.u, {
         uac: 5,
-        acurr: { a: [125, 10, 10, 10, 10, 10] },
+        acurr: { a: [18, 10, 10, 10, 10, 10] },
         amax: { a: [18, 10, 10, 10, 10, 10] },
-        _baseStrengthBeforeGauntlets: 18,
     });
     const scroll = scrollOfEnchantArmor(309047, 's', false);
     const gloves = wornArmor(309048, 'gauntlets of power', 'g', 4, {
@@ -35151,13 +35151,13 @@ test('mounted hero polymorph trap checks steed before hero system shock', async 
         uhp: 20,
         uhpmax: 20,
     });
-    game.u.acurr.a[A_CON] = 0;
+    game.u.acurr.a[A_CON] = 3;
     const steed = mountBearTrapPony(10, { data: { name: 'ki-rin', mlet: 'A' } });
     game.inventory = [];
     const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
     enableRngLog({ reset: true });
-    installCoreRngValues([0, 1, 4, 0]);
+    installCoreRngValues([0, 19, 4, 0]);
 
     await rhack('l');
 
@@ -38647,9 +38647,8 @@ test('successful no-hands polyself drops gauntlets of power and restores strengt
         uenmax: 0,
         ulevel: 1,
         uac: 9,
-        acurr: { a: [125, 10, 10, 10, 10, 10] },
+        acurr: { a: [18, 10, 10, 10, 10, 10] },
         amax: { a: [18, 10, 10, 10, 10, 10] },
-        _baseStrengthBeforeGauntlets: 18,
     });
     const gloves = wornArmor(32127, 'gauntlets of power', 'g');
     game.inventory = [gloves];
@@ -56171,7 +56170,8 @@ test('declined ordinary floor burden prompt leaves shop merchandise untouched', 
     const { shkp } = installCommandShopState();
     const stack = foodRationStack(6011, 11);
     game.level.objects = [stack];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
 
@@ -56197,7 +56197,8 @@ test('accepted ordinary floor burden prompt bills after confirmation', async () 
     const { shkp } = installCommandShopState();
     const stack = foodRationStack(6012, 11);
     game.level.objects = [stack];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
 
@@ -56236,7 +56237,8 @@ test('accepted ordinary floor partial-stack burden prompt bills only lifted coun
     const { shkp } = installCommandShopState();
     const stack = foodRationStack(6013, 20);
     game.level.objects = [stack];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
 
@@ -56282,7 +56284,8 @@ test('ordinary floor gold burden prompt splits before shop charging', async () =
     gold.ox = 5;
     gold.oy = 5;
     game.level.objects = [gold];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
 
@@ -56401,7 +56404,8 @@ test('blessed scare monster floor scroll unblesses without setting pickup spe', 
 test('too-heavy scare monster floor scroll stays untouched before quote or billing', async () => {
     const { shkp } = installCommandShopState();
     const scroll = floorScareMonsterScroll(60155, { blessed: true });
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     game.inventory = [{
         id: 60156,
         cls: 'tool',
@@ -56678,7 +56682,8 @@ test('multi-pickup partial scare monster stack preserves remainder state', async
         const filler = foodRation(id + 1);
         filler.section = 'Other Items';
         game.level.objects = [stack, filler];
-        game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+        game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
         await rhack(',');
         assert.equal(game._command_mode, 'pickupList', label);
@@ -56719,7 +56724,8 @@ test('multi-pickup declined burden prompt skips item and continues', async () =>
     const later = blankScroll(6047);
     later.section = 'Other Items';
     game.level.objects = [heavy, later];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
     assert.equal(game._command_mode, 'pickupList');
@@ -56758,7 +56764,8 @@ test('multi-pickup quit burden prompt aborts remaining selections', async () => 
     const later = blankScroll(6049);
     later.section = 'Other Items';
     game.level.objects = [heavy, later];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
     assert.equal(game._command_mode, 'pickupList');
@@ -56790,7 +56797,8 @@ test('menu pickup accepted partial-stack burden prompt bills only lifted count',
     const filler = blankScroll(6051);
     filler.section = 'Other Items';
     game.level.objects = [stack, filler];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
     assert.equal(game._command_mode, 'pickupList');
@@ -56832,7 +56840,8 @@ test('multi-pickup declined gold burden prompt does not charge shop gold and con
     const later = blankScroll(6053);
     later.section = 'Other Items';
     game.level.objects = [gold, later];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
     assert.equal(game._command_mode, 'pickupList');
@@ -56876,7 +56885,8 @@ test('menu pickup accepted shop gold lift charges only lifted amount', async () 
     filler.section = 'Other Items';
     shkp.credit = 5;
     game.level.objects = [gold, filler];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
     assert.equal(game._command_mode, 'pickupList');
@@ -56908,7 +56918,8 @@ test('cursed shop-floor loadstone pickup ignores overweight and bills live item'
     const { shkp } = installCommandShopState();
     const stone = floorLoadstone(6020);
     game.level.objects = [stone];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     const expectedPrice = shop.shopItemPrice(stone, 5, 5);
 
     assert.ok(expectedPrice > 0);
@@ -56982,7 +56993,8 @@ test('loadstone floor pickup from a pile still bypasses burden prompt', async ()
     const ration = foodRation(6025, 'f');
     ration.section = 'Comestibles';
     game.level.objects = [stone, ration];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await rhack(',');
     assert.equal(game._command_mode, 'pickupList');
@@ -57294,7 +57306,8 @@ test('ordinary shop-floor partial stack pickup splits before billing', async () 
     const { shkp } = installCommandShopState();
     const stack = foodRationStack(6028, 20);
     game.level.objects = [stack];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     game.flags.pickup_burden = 'overloaded';
 
     await rhack(',');
@@ -57424,7 +57437,8 @@ test('Sokoban container boulder blocks before throws-rocks override', async () =
 test('throws-rocks hero takes boulder out of a container without burden prompt', async () => {
     installNonShopFloorState();
     installThrowsRocksForm();
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     const container = shopFloorContainer(6145);
     const rock = putObjectInContainer(container, floorBoulder(6146));
     game.level.objects = [container];
@@ -57580,7 +57594,8 @@ test('container take-out capacity preflight refuses objects beyond maximum carry
         owt: 400,
     });
     game.level.objects = [container];
-    game.u.acurr.a = [1, 10, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 10, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await confirmSingleContainerTakeout(container, heavy, 'a', 'Boulders/Statues');
 
@@ -57762,7 +57777,8 @@ test('declined container take-out burden prompt leaves merchandise untouched', a
     const container = shopFloorContainer(6134);
     const contained = putObjectInContainer(container, { ...foodRation(6135), quan: 11 });
     game.level.objects = [container];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await confirmSingleContainerTakeout(container, contained);
 
@@ -57791,7 +57807,8 @@ test('accepted container take-out burden prompt bills after confirmation', async
     const container = shopFloorContainer(6137);
     const contained = putObjectInContainer(container, { ...foodRation(6138), quan: 11 });
     game.level.objects = [container];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
 
     await confirmSingleContainerTakeout(container, contained);
 
@@ -57817,7 +57834,8 @@ test('container take-out partial stack lifting splits before shop billing', asyn
     const container = shopFloorContainer(6140);
     const contained = putObjectInContainer(container, { ...foodRation(6141), quan: 20 });
     game.level.objects = [container];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     game.flags.pickup_burden = 'overloaded';
 
     await confirmSingleContainerTakeout(container, contained);
@@ -57847,7 +57865,8 @@ test('container take-out partial stack clears stale unpaid fields before billing
     contained.unpaid = true;
     contained.unpaidPrice = 999;
     game.level.objects = [container];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     game.flags.pickup_burden = 'overloaded';
 
     await confirmSingleContainerTakeout(container, contained);
@@ -57878,7 +57897,8 @@ test('container take-out partial live unpaid stack splits the bill row', async (
     const totalPrice = shop.shopItemPrice(contained, container.ox, container.oy);
     shop.addObjectToShopBill(shkp, contained, totalPrice);
     game.level.objects = [container];
-    game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     game.flags.pickup_burden = 'overloaded';
 
     await confirmSingleContainerTakeout(container, contained);
@@ -62059,6 +62079,7 @@ test('deferred monster-thrown missed egg keeps ohit false and lands', async () =
 });
 
 async function runMonsterSlingRockLanding({
+    catchRoll = null,
     uac,
     seed = 1,
     heroBlind = true,
@@ -62080,6 +62101,8 @@ async function runMonsterSlingRockLanding({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -62146,6 +62169,7 @@ async function runMonsterSlingRockLanding({
 }
 
 async function runMonsterDartHitLanding({
+    catchRoll = null,
     seed = 8,
     coreRngValues = null,
     heroBlind = true,
@@ -62173,6 +62197,8 @@ async function runMonsterDartHitLanding({
     pushKey('\x1b');
     initRng(seed);
     if (coreRngValues) installCoreRngValues(coreRngValues);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -62248,6 +62274,7 @@ async function runMonsterDartHitLanding({
 }
 
 async function runMonsterKopCreamPieLanding({
+    catchRoll = null,
     seed = 8,
     heroBlind = false,
     heroBlindfolded = false,
@@ -62275,6 +62302,8 @@ async function runMonsterKopCreamPieLanding({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     const status = [
         heroBlind ? 'Blind' : '',
@@ -62350,6 +62379,7 @@ async function runMonsterKopCreamPieLanding({
 }
 
 async function runMonsterPetrifyingEggThrow({
+    catchRoll = null,
     seed = 8,
     coreRngValues = null,
     heroBlind = false,
@@ -62370,6 +62400,8 @@ async function runMonsterPetrifyingEggThrow({
     pushKey('\x1b');
     initRng(seed);
     if (coreRngValues) installCoreRngValues(coreRngValues);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -62435,10 +62467,11 @@ async function runMonsterPetrifyingEggThrow({
 }
 
 async function runMonsterOffensivePotionCatch({
+    catchRoll = null,
     seed = 1,
     coreRngValues = null,
     heroBlind = false,
-    heroDex = 100,
+    heroDex = 25,
     heroOverrides = {},
     potionQuan = 1,
     potion = null,
@@ -62454,6 +62487,8 @@ async function runMonsterOffensivePotionCatch({
     pushKey('\x1b');
     initRng(seed);
     if (coreRngValues) installCoreRngValues(coreRngValues);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -62676,6 +62711,7 @@ async function runMonsterCrudeDaggerCatch({ daggerQuan = 1 } = {}) {
     resetInputState();
     pushKey('\x1b');
     initRng(1);
+    game.coreCtx.r[game.coreCtx.n - 7] = 0n; // C catch roll at Dexterity 25.
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -62690,7 +62726,7 @@ async function runMonsterCrudeDaggerCatch({ daggerQuan = 1 } = {}) {
         uhpmax: 20,
         uac: 100,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 100, 10, 10] },
+        acurr: { a: [10, 10, 10, 25, 10, 10] },
     });
     game.moves = 1;
     game.context = {};
@@ -62749,7 +62785,7 @@ async function runMonsterCrudeDaggerIronBars({
         uhpmax: 20,
         uac,
         umovement: NORMAL_SPEED,
-        acurr: { a: [10, 10, 10, 100, 10, 10] },
+        acurr: { a: [10, 10, 10, 25, 10, 10] },
     });
     game.moves = 1;
     game.context = {};
@@ -62823,10 +62859,11 @@ function crudeDaggerLinePet(x, y = 5, overrides = {}) {
 }
 
 async function runMonsterPlainDaggerIronBars({
+    catchRoll = null,
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
-    heroDex = 100,
+    heroDex = 25,
     uac = 100,
     levelCells = [],
     throwerX = 10,
@@ -62841,6 +62878,8 @@ async function runMonsterPlainDaggerIronBars({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -62925,10 +62964,11 @@ async function runMonsterPlainDaggerIronBars({
 }
 
 async function runMonsterKnifeIronBars({
+    catchRoll = null,
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
-    heroDex = 100,
+    heroDex = 25,
     uac = -100,
     levelCells = [],
     throwerX = 10,
@@ -62942,6 +62982,8 @@ async function runMonsterKnifeIronBars({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -63007,10 +63049,11 @@ async function runMonsterKnifeIronBars({
 }
 
 async function runMonsterSpearIronBars({
+    catchRoll = null,
     seed = 1,
     heroBlind = true,
     heroDeaf = false,
-    heroDex = 100,
+    heroDex = 25,
     uac = -100,
     levelCells = [],
     throwerX = 10,
@@ -63025,6 +63068,8 @@ async function runMonsterSpearIronBars({
     resetInputState();
     pushKey('\x1b');
     initRng(seed);
+    // Force only the chosen catch draw; keep the rest of the seeded throw trace.
+    if (catchRoll !== null) game.coreCtx.r[game.coreCtx.n - 1 - catchRoll] = 0n;
     enableRngLog({ reset: true });
     Object.assign(game.u, {
         ux: 5,
@@ -63924,17 +63969,18 @@ test('production monster sling flint uses flint damage against hero', async () =
 test('production monster sling rock catch retains split rock in inventory', async () => {
     const rockStack = monsterThrownRock(874410, { quan: 2 });
     const { rock, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        catchRoll: 7,
         seed: 1,
         uac: 100,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         projectile: rockStack,
     });
 
     assert.equal(preNhgetchMessages.some(message => /You catch the rock!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(rock, thrower, 'rock');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -63943,17 +63989,18 @@ test('production monster sling rock catch retains split rock in inventory', asyn
 test('production monster sling ruby catch retains split gem in inventory', async () => {
     const rubyStack = monsterThrownGem(874411, 'ruby', { gemTough: true, quan: 2 });
     const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        catchRoll: 7,
         seed: 1,
         uac: 100,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         projectile: rubyStack,
     });
 
     assert.equal(preNhgetchMessages.some(message => /You catch the ruby!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(ammo, thrower, 'ruby');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -64035,17 +64082,18 @@ test('production monster sling loadstone catch retains split gray stone in inven
         quan: 2,
     });
     const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        catchRoll: 7,
         seed: 1,
         uac: 100,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         projectile: loadstoneStack,
     });
 
     assert.equal(preNhgetchMessages.some(message => /You catch the loadstone!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(ammo, thrower, 'loadstone');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -64059,10 +64107,11 @@ test('production unicorn polyself slung loadstone still uses generic catch', asy
         quan: 2,
     });
     const { ammo, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        catchRoll: 7,
         seed: 1,
         uac: 100,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         projectile: loadstoneStack,
         heroPolyself: { name: 'white unicorn', mlet: 'unicorn', likesGems: true, nohands: false },
     });
@@ -64070,16 +64119,17 @@ test('production unicorn polyself slung loadstone still uses generic catch', asy
     assert.equal(preNhgetchMessages.some(message => /You catch the loadstone!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(ammo, thrower, 'loadstone');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
 });
 
 test('production monster sling catch drops split rock when inventory letters are full', async () => {
     const rockStack = monsterThrownRock(874413, { quan: 2 });
     const { rock, thrower, rng, preNhgetchMessages } = await runMonsterSlingRockLanding({
+        catchRoll: 7,
         seed: 1,
         uac: 100,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         projectile: rockStack,
         fullInventory: true,
     });
@@ -64096,7 +64146,7 @@ test('production monster sling catch drops split rock when inventory letters are
     assert.notEqual(dropped.id, rock.id);
     assert.equal(dropped.quan, 1);
     assert.equal(dropped.transientProjectile, false);
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -64106,6 +64156,7 @@ test('production monster sling catch drops split rock when inventory letters are
 
 test('production monster potion catch retains split potion in inventory', async () => {
     const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        catchRoll: 4,
         seed: 1,
         potionQuan: 2,
     });
@@ -64133,12 +64184,13 @@ test('production monster potion catch retains split potion in inventory', async 
     assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
     assert.equal(game.u.uhp, 20);
 
-    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(75)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rn2(7)=')), false, rng.join(', '));
 });
 
 test('production monster potion catch drops split potion when inventory letters are full', async () => {
     const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        catchRoll: 4,
         seed: 1,
         potionQuan: 2,
         fullInventory: true,
@@ -64162,7 +64214,7 @@ test('production monster potion catch drops split potion when inventory letters 
     assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
     assert.equal(game.u.uhp, 20);
 
-    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(75)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rn2(7)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch, but drop, the potion\./.test(message)), true,
         preNhgetchMessages.join('\n'));
@@ -64170,6 +64222,7 @@ test('production monster potion catch drops split potion when inventory letters 
 
 test('production monster potion singleton catch clears monster missile', async () => {
     const { potion, thrower, rng, preNhgetchMessages } = await runMonsterOffensivePotionCatch({
+        catchRoll: 3,
         seed: 1,
         potionQuan: 1,
     });
@@ -64186,7 +64239,7 @@ test('production monster potion singleton catch clears monster missile', async (
     assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
     assert.equal(game.u.uhp, 20);
 
-    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(75)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rn2(7)=')
         || entry.startsWith('rnd(2)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch the potion!/.test(message)), true,
@@ -64213,7 +64266,7 @@ test('production monster potion hits intervening monster before hero catch', asy
         seed: 1,
         potion: paralysis,
         throwerX: 9,
-        heroDex: 100,
+        heroDex: 25,
         heroOverrides: { uhp: 40, uhpmax: 40 },
         extraMonsters: [blocker],
     });
@@ -64258,7 +64311,7 @@ test('production monster potion reveals object mimic on intervening hit', async 
         seed: 1,
         potion: paralysis,
         throwerX: 9,
-        heroDex: 100,
+        heroDex: 25,
         heroOverrides: { uhp: 40, uhpmax: 40 },
         extraMonsters: [mimic],
     });
@@ -64304,7 +64357,7 @@ test('production monster potion reveals furniture mimic on intervening hit', asy
         seed: 1,
         potion: paralysis,
         throwerX: 9,
-        heroDex: 100,
+        heroDex: 25,
         heroOverrides: { uhp: 40, uhpmax: 40 },
         extraMonsters: [mimic],
     });
@@ -64348,7 +64401,7 @@ test('production monster potion leaves ordinary hidden intervening target concea
         seed: 1,
         potion: paralysis,
         throwerX: 9,
-        heroDex: 100,
+        heroDex: 25,
         heroOverrides: { uhp: 40, uhpmax: 40 },
         extraMonsters: [trapper],
     });
@@ -64388,7 +64441,7 @@ test('production monster acid potion kills intervening monster without hero attr
         seed: 1,
         potion: acid,
         throwerX: 9,
-        heroDex: 100,
+        heroDex: 25,
         heroOverrides: { uhp: 40, uhpmax: 40 },
         extraMonsters: [blocker],
     });
@@ -64944,9 +64997,10 @@ test('production visible poisoned kobold dart miss skips poison effects', async 
 test('production visible poisoned kobold dart catch skips poison effects', async () => {
     const projectile = { ...dartStack(874511, 'd', 2, { opoisoned: true }), letter: undefined, line: undefined, spe: 0 };
     const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        catchRoll: 5,
         seed: 1,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         projectile,
     });
     const messages = collectMonsterThrowMessages(preNhgetchMessages);
@@ -65180,9 +65234,10 @@ test('production unseen lethal kobold dart uses deferred death cleanup after hit
 
 test('production visible kobold dart catch retains split dart in inventory', async () => {
     const { dart, thrower, rawRng, preNhgetchMessages } = await runMonsterDartHitLanding({
+        catchRoll: 5,
         seed: 1,
         heroBlind: false,
-        heroDex: 100,
+        heroDex: 25,
         dartQuan: 2,
     });
     const messages = collectMonsterThrowMessages(preNhgetchMessages);
@@ -65194,7 +65249,7 @@ test('production visible kobold dart catch retains split dart in inventory', asy
     assert.equal(game._damage_after_topline_more || 0, 0, rawRng.join(', '));
     assert.equal(game._monster_throw_after_more ?? null, null);
     assert.equal(game.level.objects.some(obj => obj.kind === 'dart'), false, rawRng.join(', '));
-    assert.ok(rawRng.includes('rn2(1)=0'), rawRng.join(', '));
+    assert.ok(rawRng.includes('rn2(75)=0'), rawRng.join(', '));
     assert.equal(rawRng.some(entry => entry.startsWith('rn2(90)=')
         || entry.startsWith('rnd(3)=')
         || entry.startsWith('rnd(20)=')
@@ -65578,7 +65633,7 @@ test('production Kop cream pie hits intervening monster and blinds before hero',
     });
     const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
         seed: 8,
-        heroDex: 99,
+        heroDex: 25,
         throwerX: 9,
         uac: 20,
         extraMonsters: [blocker],
@@ -66222,8 +66277,9 @@ test('production monster cockatrice egg tiny target can leave statue', async () 
 
 test('production monster cockatrice egg catch uses known species name', async () => {
     const { eggProjectile, thrower, rng, preNhgetchMessages } = await runMonsterPetrifyingEggThrow({
+        catchRoll: 4,
         seed: 8,
-        heroDex: 99,
+        heroDex: 25,
         uac: 20,
     });
     const caught = game.inventory.find(obj => obj.id === eggProjectile.id);
@@ -66237,7 +66293,7 @@ test('production monster cockatrice egg catch uses known species name', async ()
     assert.equal(caught.corpsenm?.name, 'cockatrice');
     assert.equal(caught.line, 'a - a cockatrice egg');
 
-    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(1)']);
+    assert.deepEqual(rng.map(rngCallName), ['rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(5)', 'rn2(75)']);
     assert.equal(preNhgetchMessages.some(message => /You catch the cockatrice egg!/.test(message)), true,
         preNhgetchMessages.join('\n'));
 });
@@ -66538,8 +66594,9 @@ test('production monster cursed cockatrice egg zero-vector slip lands at thrower
 
 test('production Kop cream pie catch adds the thrown pie to inventory', async () => {
     const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        catchRoll: 4,
         seed: 8,
-        heroDex: 99,
+        heroDex: 25,
         uac: 20,
     });
 
@@ -66554,7 +66611,7 @@ test('production Kop cream pie catch adds the thrown pie to inventory', async ()
     assert.ok(caught);
     assert.equal(caught.quan, 1);
     assert.equal(caught.line, 'a - a cream pie');
-    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(75)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')), false, rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rnd(25)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch the cream pie!/.test(message)), true,
@@ -66564,8 +66621,9 @@ test('production Kop cream pie catch adds the thrown pie to inventory', async ()
 test('production Kop cream pie catch merges with carried cream pies', async () => {
     const carriedPie = creamPie(876100, 'a', 2);
     const { pie, thrower, rng } = await runMonsterKopCreamPieLanding({
+        catchRoll: 4,
         seed: 8,
-        heroDex: 99,
+        heroDex: 25,
         pieQuan: 3,
         initialInventory: [carriedPie],
         uac: 20,
@@ -66578,14 +66636,15 @@ test('production Kop cream pie catch merges with carried cream pies', async () =
     assert.equal(game.inventory.length, 1);
     assert.equal(carriedPie.quan, 3);
     assert.equal(carriedPie.line, 'a - 3 cream pies');
-    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(75)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')), false, rng.join(', '));
 });
 
 test('production Kop cream pie catch drops the pie when inventory letters are full', async () => {
     const { pie, thrower, rng, preNhgetchMessages } = await runMonsterKopCreamPieLanding({
+        catchRoll: 4,
         seed: 8,
-        heroDex: 99,
+        heroDex: 25,
         fullInventory: true,
         uac: 20,
     });
@@ -66600,7 +66659,7 @@ test('production Kop cream pie catch drops the pie when inventory letters are fu
     assert.ok(dropped);
     assert.equal(dropped.quan, 1);
     assert.equal(dropped.transientProjectile, false);
-    assert.ok(rng.some(entry => entry.startsWith('rn2(1)=')), rng.join(', '));
+    assert.ok(rng.some(entry => entry.startsWith('rn2(75)=')), rng.join(', '));
     assert.equal(rng.some(entry => entry.startsWith('rnd(20)=')), false, rng.join(', '));
     assert.equal(preNhgetchMessages.some(message => /You catch, but drop, the cream pie\./.test(message)), true,
         preNhgetchMessages.join('\n'));
@@ -69496,6 +69555,7 @@ test('production monster crude dagger catch does not queue drop-throw landing', 
 test('production monster spear catch retains split spear in inventory', async () => {
     const spearStack = monsterSpear(874405, { quan: 2 });
     const { spearItem, thrower, rng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        catchRoll: 6,
         seed: 1,
         heroBlind: false,
         uac: 100,
@@ -69505,7 +69565,7 @@ test('production monster spear catch retains split spear in inventory', async ()
     assert.equal(preNhgetchMessages.some(message => /You catch the spear!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(spearItem, thrower, 'spear');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(6)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -69514,6 +69574,7 @@ test('production monster spear catch retains split spear in inventory', async ()
 test('production monster wielded spear catch unwields extracted singleton', async () => {
     const spearItem = monsterSpear(874409);
     const { thrower, rng, preNhgetchMessages } = await runMonsterSpearIronBars({
+        catchRoll: 5,
         seed: 1,
         heroBlind: false,
         uac: 100,
@@ -69533,12 +69594,13 @@ test('production monster wielded spear catch unwields extracted singleton', asyn
     assert.equal(caught.id, spearItem.id);
     assert.equal(caught.quan, 1);
     assert.equal(caught.letter, 'a');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
 });
 
 test('production monster shuriken catch retains split shuriken in inventory', async () => {
     const shurikenStack = monsterShuriken(874406, { quan: 2 });
     const { shurikenItem, thrower, rng, preNhgetchMessages } = await runMonsterShurikenIronBars({
+        catchRoll: 6,
         seed: 1,
         heroBlind: false,
         uac: 100,
@@ -69548,7 +69610,7 @@ test('production monster shuriken catch retains split shuriken in inventory', as
     assert.equal(preNhgetchMessages.some(message => /You catch the shuriken!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(shurikenItem, thrower, 'shuriken');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(8)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -69557,6 +69619,7 @@ test('production monster shuriken catch retains split shuriken in inventory', as
 test('production monster plain dagger catch retains split dagger in inventory', async () => {
     const daggerStack = { ...dagger(874407), letter: undefined, line: undefined, spe: 0, quan: 2 };
     const { daggerItem, thrower, rng, preNhgetchMessages } = await runMonsterPlainDaggerIronBars({
+        catchRoll: 6,
         seed: 1,
         heroBlind: false,
         projectile: daggerStack,
@@ -69565,7 +69628,7 @@ test('production monster plain dagger catch retains split dagger in inventory', 
     assert.equal(preNhgetchMessages.some(message => /You catch the dagger!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(daggerItem, thrower, 'dagger');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(4)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -69574,6 +69637,7 @@ test('production monster plain dagger catch retains split dagger in inventory', 
 test('production monster knife catch retains split knife in inventory', async () => {
     const knifeStack = monsterKnife(874408, { quan: 2 });
     const { knifeItem, thrower, rng, preNhgetchMessages } = await runMonsterKnifeIronBars({
+        catchRoll: 6,
         seed: 1,
         heroBlind: false,
         uac: 100,
@@ -69583,7 +69647,7 @@ test('production monster knife catch retains split knife in inventory', async ()
     assert.equal(preNhgetchMessages.some(message => /You catch the knife!/.test(message)), true,
         preNhgetchMessages.join('\n'));
     assertCaughtSplitThrownObject(knifeItem, thrower, 'knife');
-    assert.ok(rng.includes('rn2(1)'), rng.join(', '));
+    assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
         || entry === 'rn2(3)'), false, rng.join(', '));
@@ -74302,8 +74366,8 @@ test('hero-thrown dart uses C wielded bow glove hit penalty', async (t) => {
             const rngLog = getRngLog();
             if (entry.expectHit) {
                 const damageRoll = rngValuesForCall(rngLog, 'rnd(3)')[0];
-                assert.match(game._pending_message, /The dart hits the goblin\./);
-                assert.equal(goblin.mhp, 20 - damageRoll);
+                assert.match(game._pending_message, /The dart hits the goblin[.!]/);
+                assert.equal(goblin.mhp, 20 - damageRoll - (entry.gloves.kind === 'gauntlets of power' ? 6 : 0));
                 assert.deepEqual(rngLog.map(rngCallName).slice(0, 4), [
                     'rnd(20)', 'rnd(3)', 'rn2(19)', 'rn2(3)',
                 ]);

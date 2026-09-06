@@ -1,3 +1,9 @@
+import { strongmonst, MZ_HUMAN } from './permonst.js';
+import { FLYING } from './const.js';
+import { LEFT_SIDE, RIGHT_SIDE, WT_WOUNDEDLEG_REDUCT } from './const.js';
+import { currentHeroAttribute, currentHeroStrength } from './attrib.js';
+export { currentHeroAttribute } from './attrib.js';
+import { GAUNTLETS_OF_POWER, DUNCE_CAP } from './armor.js';
 import { JAPANESE_ITEM_ALIASES } from './o_init.js';
 import { M_SEEN_ELEC, M_SEEN_REFL, M_SEEN_SLEEP, HALF_SPDAM } from './const.js';
 import { advanceMonsterAttackSlots } from './mhitu.js';
@@ -113,7 +119,7 @@ async function wizardMonsterSpellEffect(mon, spell, { found = true, attack = nul
             addHeroStun(1);
         } else {
             messages.push(wasStunned ? 'You struggle to keep your balance.' : 'You reel...');
-            const duration = d((game.u?.acurr?.a?.[A_DEX] ?? 10) < 12 ? 6 : 4, 4);
+            const duration = d((currentHeroAttribute(A_DEX)) < 12 ? 6 : 4, 4);
             addHeroStun(halfSpell ? Math.ceil(duration / 2) : duration);
             monstersObserveHeroResistance(M_SEEN_MAGR, false);
         }
@@ -1032,7 +1038,7 @@ function untrapBoxDetectionSucceeds(box, confused, force = false) {
 }
 
 function untrapBoxDisarmChance() {
-    let chance = (game.u?.acurr?.a?.[A_DEX] ?? 10) + (game.u?.ulevel || 1);
+    let chance = (currentHeroAttribute(A_DEX)) + (game.u?.ulevel || 1);
     if (heroRoleName() === 'Rogue') chance *= 2;
     return chance;
 }
@@ -1391,10 +1397,10 @@ function applyChestTrapExplosionPayload(box, messages) {
 }
 
 function chestTrapPoisonTell(attr) {
-    if (attr === A_STR) return (game.u?.acurr?.a?.[A_STR] === STR19(25))
+    if (attr === A_STR) return (currentHeroAttribute(A_STR) === STR19(25))
         ? 'You feel innately weaker!'
         : 'You feel weaker!';
-    if (attr === A_CON) return (game.u?.acurr?.a?.[A_CON] === 25)
+    if (attr === A_CON) return (currentHeroAttribute(A_CON) === 25)
         ? 'You feel sick inside!'
         : 'You feel very sick!';
     return '';
@@ -3758,7 +3764,6 @@ const URUK_HAI_SHIELD = 10209;
 const ORCISH_SHIELD = 10210;
 const FEDORA = 10078;
 const CORNUTHAUM = 10211;
-const DUNCE_CAP = 10212;
 const ELVEN_LEATHER_HELM = 10213;
 const ORCISH_HELM = 10022;
 const DWARVISH_IRON_HELM = 10107;
@@ -3813,7 +3818,6 @@ const CLOAK_OF_MAGIC_RESISTANCE = 10065;
 const DWARVISH_CLOAK = 10080;
 const ELVEN_CLOAK = 10110;
 const CLOAK_OF_DISPLACEMENT = 10111;
-const GAUNTLETS_OF_POWER = 10112;
 const GAUNTLETS_OF_FUMBLING = 10114;
 const GAUNTLETS_OF_DEXTERITY = 10115;
 const CLOAK_OF_INVISIBILITY = 10201;
@@ -7129,7 +7133,7 @@ function earthquakeMonsterFalls(mon, messages) {
 function earthquakeHeroPitKeepFooting() {
     const roleName = game.urole?.name?.m || game._startup_role;
     const target = roleName === 'Archeologist' ? 3 : 9;
-    const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+    const dex = currentHeroAttribute(A_DEX);
     return !(game.u?.fumbling && rn2(5))
         && (!rnl(target) || (dex > 7 && rn2(5)));
 }
@@ -8172,16 +8176,6 @@ const DRAGON_SCALE_MAIL_BY_SCALES = new Map([
     ['yellow dragon scales', 'yellow dragon scale mail'],
 ]);
 
-export function updateGauntletsOfPowerStrength(kind, worn) {
-    if (kind !== 'gauntlets of power' || !game.u?.acurr?.a) return;
-    if (worn) {
-        game.u._baseStrengthBeforeGauntlets ??= game.u.acurr.a[A_STR] ?? 10;
-        game.u.acurr.a[A_STR] = 125;
-    } else if (game.u._baseStrengthBeforeGauntlets != null) {
-        game.u.acurr.a[A_STR] = game.u._baseStrengthBeforeGauntlets;
-        delete game.u._baseStrengthBeforeGauntlets;
-    }
-}
 
 const OBJECT_WEIGHTS = {
     'aklys': 15,
@@ -10696,7 +10690,7 @@ function attributesDungeonLocation(uz) {
 }
 
 function genericAttributesPage1() {
-    const stats = game.u?.acurr?.a || [];
+    const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
     const peaks = game.u?.amax?.a || stats;
     const attrLimits = ATTR_LIMITS_BY_RACE[game._startup_race] || {};
     const strength = attrLimits[0] ? `${strengthString(stats[0])} (current; limit:${attrLimits[0]})`
@@ -10851,7 +10845,7 @@ function simpleEquipmentName(item) {
 }
 
 function buildGenericAttributesPage2Rows() {
-    const stats = game.u?.acurr?.a || [];
+    const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
     const peaks = game.u?.amax?.a || stats;
     const attrLimits = ATTR_LIMITS_BY_RACE[game._startup_race] || {};
     const wisdom = attrLimits[2] ? `${stats[2]} (current; limit:${attrLimits[2]})`
@@ -10881,8 +10875,7 @@ function buildGenericAttributesPage2Rows() {
         const unitWeight = OBJECT_WEIGHTS[weightKind] ?? CLASS_WEIGHTS[cls] ?? item.owt ?? 0;
         carriedWeight += unitWeight * quan;
     }
-    const normalCapacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
-    const capacity = Is_airlevel(game.u?.uz) || game.u?.levitating ? 1000 : normalCapacity;
+    const capacity = heroCarryCapacity();
     const burden = game.u?._debug_burden_override ?? (carriedWeight - capacity);
     const encumbrance = burden <= 0 ? 0 : Math.min(Math.trunc(burden * 2 / capacity) + 1, OVERLOADED);
     const statusSuffix = game.u?._statusSuffix || '';
@@ -12449,7 +12442,7 @@ function applyCoinFlip(item) {
         dropFlippedCoinAtHero(item);
         return messages;
     }
-    const dex = Math.max(1, Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? game.u?.dex ?? 10)));
+    const dex = currentHeroAttribute(A_DEX);
     const cursedGloves = !!wornGlovesItem()?.cursed;
     const slips = cursedGloves || heroHasSlipperyFingers() || heroIsFumbling()
         || (dex < 10 && !rn2(dex));
@@ -15890,7 +15883,7 @@ async function doOpenDoorInDirection(dx, dy) {
         return;
     }
     // C ref: src/lock.c:904 — rnl(20) against the average of STR/DEX/CON.
-    const stats = game.u?.acurr?.a || [];
+    const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
     const rawStr = stats[0] ?? 10;
     const str = rawStr <= 18 ? rawStr : rawStr <= 121 ? 19 + Math.trunc(rawStr / 50) : Math.min(rawStr, 125) - 100;
     const openTarget = Math.trunc((str + (stats[3] ?? 10) + (stats[4] ?? 10)) / 3);
@@ -16397,8 +16390,8 @@ async function heroUseSaddle(item, dx, dy) {
         return;
     }
     /* Calculate your chance (steed.c:92-117) */
-    let chance = (game.u?.acurr?.a?.[A_DEX] ?? 10)
-        + Math.floor((game.u?.acurr?.a?.[A_CHA] ?? 10) / 2)
+    let chance = (currentHeroAttribute(A_DEX))
+        + Math.floor((currentHeroAttribute(A_CHA)) / 2)
         + 2 * (mon.mtame || 0);
     chance += (game.u?.ulevel || 1) * (mon.mtame ? 20 : 5);
     if (!mon.mtame) chance -= 10 * (mon.m_lev ?? mon.data?.mlevel ?? 1);
@@ -17058,7 +17051,7 @@ function randomPolyselfMonsterName() {
 }
 
 function polymorphSystemShock() {
-    const con = game.u?.acurr?.a?.[A_CON] ?? 10;
+    const con = currentHeroAttribute(A_CON);
     if (rn2(20) <= con) return null;
     const damage = rnd(30);
     if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
@@ -18224,7 +18217,6 @@ function addPolyselfGlovesOffSideEffects(item) {
     const kind = objectKindKey(item);
     finishArmorBonusChange(item, false);
     if (kind === 'gauntlets of power') {
-        updateGauntletsOfPowerStrength(kind, false);
         recordKnownArmorDiscovery(kind, false);
     }
 }
@@ -18364,9 +18356,9 @@ function becomeMonster(name) {
         // order.  The resulting AMAX/ABASE drift is not displayed (ACURR is)
         // and is not modeled further.
         rn2(5); rn2(5); rn2(5); rn2(5);
-        const con = game.u?.acurr?.a?.[A_CON] || 10;
+        const con = currentHeroAttribute(A_CON);
         const conplus = con <= 3 ? -2 : con <= 6 ? -1 : con <= 14 ? 0 : con <= 16 ? 1 : con === 17 ? 2 : con === 18 ? 3 : 4;
-        const wisDiv2 = Math.trunc((game.u?.acurr?.a?.[A_WIS] || 10) / 2);
+        const wisDiv2 = Math.trunc((currentHeroAttribute(A_WIS)) / 2);
         const rounddiv = (x, y) => { // hack.c:4551-4570
             const sgn = (x < 0) !== (y < 0) ? -1 : 1;
             const ax = Math.abs(x), ay = Math.abs(y);
@@ -19725,26 +19717,6 @@ function crystalBallTooBadMessage(item) {
     return `Too bad you can't see the ${crystalBallObjectName(item)}.`;
 }
 
-// C attrib.c:acurr includes equipment overrides after bonuses and temporary loss.
-export function currentHeroAttribute(index) {
-    const u = game.u || {};
-    const value = (u.acurr?.a?.[index] ?? 10) + (u.abon?.a?.[index] || 0)
-        + (u.atemp?.a?.[index] || 0);
-    if (index === A_STR) {
-        const gloves = wornGlovesItem();
-        return gloves && (gloves.otyp === GAUNTLETS_OF_POWER || armorKind(gloves) === 'gauntlets of power')
-            ? 125 : Math.min(125, Math.max(3, value));
-    }
-    if (index === A_CHA) {
-        const form = pmOf({ data: heroFormData() }) || {};
-        if (value < 18 && (form.mlet === S_NYMPH || form.pm === PM_AMOROUS_DEMON)) return 18;
-    }
-    if (index === A_CON && (game.inventory || []).some(item =>
-        (item.wielded || item === u.uwep) && (item.artifact || item.oartifact) === 'Ogresmasher')) return 25;
-    if ((index === A_INT || index === A_WIS) && (game.inventory || []).some(item =>
-        isWornArmorItem(item) && (item.otyp === DUNCE_CAP || armorKind(item) === 'dunce cap'))) return 6;
-    return Math.max(3, Math.min(25, value));
-}
 
 function crystalBallBackfire(item, messages) {
     if (!item || (item.spe ?? 0) <= 0) return false;
@@ -20661,7 +20633,6 @@ async function takeOffEquipment(item, options = {}) {
     }
     if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
         syncHeroSpeedState();
-    updateGauntletsOfPowerStrength(kind, false);
     updateWornDisplacement();
     const messages = [...wornOffMessages];
     const lightMessage = setArtifactEquipmentLight(item, false);
@@ -21487,7 +21458,7 @@ async function finishMusicalImprovisation(item) {
     }
 
     if (effectiveKind === 'wooden flute') {
-        const dex = Math.max(1, game.u?.acurr?.a?.[A_DEX] ?? 10);
+        const dex = Math.max(1, currentHeroAttribute(A_DEX));
         const calms = doSpec && rn2(dex) + (game.u?.ulevel || 1) > 25;
         messages.push(heroIsDeaf()
             ? `You feel ${instrumentDisplayName(item)} ${calms ? 'trill' : 'toot'}.`
@@ -21500,7 +21471,7 @@ async function finishMusicalImprovisation(item) {
     }
 
     if (effectiveKind === 'wooden harp') {
-        const dex = Math.max(1, game.u?.acurr?.a?.[A_DEX] ?? 10);
+        const dex = Math.max(1, currentHeroAttribute(A_DEX));
         const calms = doSpec && rn2(dex) + (game.u?.ulevel || 1) > 25;
         const normalMessage = calms
             ? `${instrumentTheName(item)} produces ${sameOldSong ? 'a familiar, ' : 'a '}lilting melody.`
@@ -22690,7 +22661,7 @@ function mergeStoneToFleshInventoryResults() {
 function fixHeroPetrification(message = null) {
     if (!game.u?._stonedTimeout) return '';
     const rescueMessage = message ?? (heroIsHallucinating()
-        ? `What a pity--you just ruined a future piece of ${(game.u.acurr?.a?.[A_CHA] || 0) > 15 ? 'fine ' : ''}art!`
+        ? `What a pity--you just ruined a future piece of ${(currentHeroAttribute(A_CHA)) > 15 ? 'fine ' : ''}art!`
         : 'You feel limber!');
     game.u._stonedTimeout = 0;
     game.u._stonedKiller = '';
@@ -25011,7 +24982,7 @@ export function heroThrownPotionHitMonster(potion, mon, { yourFault = true, allo
     const dx = (mon.mx || 0) - (game.u?.ux || 0);
     const dy = (mon.my || 0) - (game.u?.uy || 0);
     const distance = dx * dx + dy * dy;
-    const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+    const dex = currentHeroAttribute(A_DEX);
     if ((distance === 0 || (distance < 3 && !rn2(Math.max(1, Math.trunc((1 + dex) / 2)))))
         && heroCanReceivePotionVapor()) {
         potionBreathe(potion, messages, { allowLifeSaving });
@@ -25288,7 +25259,7 @@ function heroProjectileHitLevel() {
 }
 
 function heroProjectileDexHitBonus() {
-    const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+    const dex = currentHeroAttribute(A_DEX);
     if (dex < 4) return -3;
     if (dex < 6) return -2;
     if (dex < 8) return -1;
@@ -25298,7 +25269,7 @@ function heroProjectileDexHitBonus() {
 
 function heroStrengthDamageBonus() {
     if (polyselfForm()) return 0;
-    const str = game.u?.acurr?.a?.[A_STR] ?? 10;
+    const str = currentHeroAttribute(A_STR);
     if (str < 6) return -1;
     if (str < 16) return 0;
     if (str < 18) return 1;
@@ -25584,7 +25555,7 @@ function heroThrownBoomerangFlightResult(obj, dir, ux, uy) {
         const loc = game.level?.at(x, y);
         if (heroThrownBoomerangPathBlocked(loc)) return { handled: true, x: x - dx, y: y - dy };
         if (x === ux && y === uy) {
-            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+            const dex = currentHeroAttribute(A_DEX);
             if (heroIsFumbling()) return { handled: true, x, y, failedCatch: true };
             if (rn2(20) >= dex) return { handled: true, x, y, failedCatch: true };
             return { handled: true, x, y, caught: true };
@@ -26201,7 +26172,7 @@ function heroWieldedBullwhip() {
 
 function heroBullwhipProficiency() {
     let proficient = heroRoleName() === 'Archeologist' ? 1 : 0;
-    const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const dex = Math.trunc(Number(currentHeroAttribute(A_DEX)));
     if (dex < 6) proficient--;
     else if (dex >= 14) proficient += dex - 14;
     if (heroIsFumbling()) proficient--;
@@ -26747,7 +26718,7 @@ function heroWieldedThrowAndReturnWeapon() {
         const key = tossUpWeaponObjectKey(item);
         if (key === 'aklys' || key === 'boomerang') return true;
         return heroThrownMjollnirObject(item) && heroRoleName() === 'Valkyrie'
-            && Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10)) >= STR19(25);
+            && Math.trunc(Number(currentHeroAttribute(A_STR))) >= STR19(25);
     }) || null;
 }
 
@@ -26912,7 +26883,7 @@ function heroWieldedThrowLauncher() {
 }
 
 function heroThrowCondensedStrength() {
-    const strength = Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10));
+    const strength = Math.trunc(Number(currentHeroAttribute(A_STR)));
     if (strength <= STR18(0)) return Math.max(strength, 3);
     if (strength <= STR19(21)) return 19 + Math.trunc(strength / 50);
     return Math.min(strength, STR19(25)) - 100;
@@ -27121,7 +27092,7 @@ function heroLandingSinkFallEffectAt(x, y, messages) {
     let trapResult = null;
 
     if (canCrash) {
-        const con = game.u?.acurr?.a?.[A_CON] ?? 10;
+        const con = currentHeroAttribute(A_CON);
         const damage = game.u?.uinvulnerable ? 0 : maybeHalfPhysicalDamage(rn1(8, 25 - con));
         messages.push('You crash to the floor!');
         if (damage && game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
@@ -27622,7 +27593,7 @@ async function attemptWaterEscapeTeleport(messages) {
         messages.push(u.teleportation || u.Teleportation ? 'You are not able to teleport at will.' : "You don't know that spell.");
         return {};
     }
-    const incapable = u.uhunger <= 10 ? 'are too weak from hunger' : (u.acurr?.a?.[A_STR] ?? 10) < 4 ? 'lack the strength'
+    const incapable = u.uhunger <= 10 ? 'are too weak from hunger' : (currentHeroAttribute(A_STR)) < 4 ? 'lack the strength'
         : (u.uen || 0) < 30 ? 'lack the energy' : '';
     if (incapable) { messages.push(`You ${incapable} to teleport.`); return {}; }
     if (heroEncumbranceForWeight(heroCarriedWeight()) >= 4) {
@@ -28584,7 +28555,7 @@ function heroLauncherAmmoMultishotCount(obj, launcher, shotLimit = 0) {
     if (quantity <= 1 || !meta || !heroThrowAmmoAndLauncher(obj, launcher)
         || heroIsConfused() || heroIsStunned()) return limit > 0 ? Math.min(1, limit) : 1;
     const role = heroRoleName();
-    const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const dex = Math.trunc(Number(currentHeroAttribute(A_DEX)));
     const weak = role === 'Wizard' || role === 'Cleric' || role === 'Priest'
         || (role === 'Healer' && meta.skill !== P_KNIFE)
         || (role === 'Tourist' && meta.skill !== P_DART)
@@ -28599,7 +28570,7 @@ function heroLauncherAmmoMultishotCount(obj, launcher, shotLimit = 0) {
         if (heroLauncherIsCurrentRoleQuestArtifact(launcher)) multishot++;
     }
     if (multishot > 1 && meta.skill === P_CROSSBOW) {
-        const strength = Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10));
+        const strength = Math.trunc(Number(currentHeroAttribute(A_STR)));
         const threshold = heroRaceName() === 'gnome' ? 16 : 18;
         if (strength < threshold) multishot = rnd(multishot);
     }
@@ -28623,7 +28594,7 @@ function heroThrownStackableWeaponMultishotCount(obj, shotLimit = 0) {
     if (quantity <= 1 || !meta || heroIsConfused() || heroIsStunned())
         return limit > 0 ? Math.min(1, limit) : 1;
     const role = heroRoleName();
-    const dex = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const dex = Math.trunc(Number(currentHeroAttribute(A_DEX)));
     const weak = role === 'Wizard' || role === 'Cleric'
         || (role === 'Healer' && meta.skill !== P_KNIFE)
         || (role === 'Tourist' && meta.skill !== P_DART)
@@ -30111,7 +30082,7 @@ async function throwHeroVenom(item, direction) {
     if (target) {
         heroProjectileObjectHitAdjustment(venom, target);
         rnd(20);
-        if (u.uswallow || (u.acurr?.a?.[A_DEX] ?? 10) > rnd(25)) {
+        if (u.uswallow || (currentHeroAttribute(A_DEX)) > rnd(25)) {
             const impact = isAcidVenomObject(venom)
                 ? await heroThrownAcidVenomHitMonster(venom, target)
                 : heroThrownBlindingVenomHitMonster(venom, target);
@@ -31853,7 +31824,7 @@ async function resumeHeroHorizontalThrow(after) {
         impactMessage = [impactMessage, ...(boomerangSelfHitResult.messages || [])].filter(Boolean).join('  ');
     } else if (targetMon && isCreamPieObject(item)) {
         rnd(20);
-        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        const dex = currentHeroAttribute(A_DEX);
         if (dex > rnd(25)) {
             const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
 
@@ -31873,7 +31844,7 @@ async function resumeHeroHorizontalThrow(after) {
         impactMessage = messages.join('  ');
     } else if (targetMon && isEggItem(item)) {
         rnd(20);
-        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        const dex = currentHeroAttribute(A_DEX);
         if (dex > rnd(25)) {
             const messages = heroThrownEggHitMonster(thrownObject, targetMon);
 
@@ -31895,7 +31866,7 @@ async function resumeHeroHorizontalThrow(after) {
         impactMessage = messages.join('  ');
     } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
         rnd(20);
-        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        const dex = currentHeroAttribute(A_DEX);
         if (dex > rnd(25)) {
             const messages = heroThrownPotionHitMonster(thrownObject, targetMon, { allowLifeSaving: true });
 
@@ -32081,8 +32052,7 @@ async function resumeHeroHorizontalThrow(after) {
                             : invItem.otyp === GEM_CLASS ? 'gem' : '');
             carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
         }
-        const stats = game.u?.acurr?.a || [];
-        const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+        const capacity = heroCarryCapacity();
         if (carriedWeight <= capacity) {
             game._topline_after_more = 'Your movements are now unencumbered.';
             game._unburden_after_topline_more = 1;
@@ -33805,7 +33775,7 @@ function applyUnicornHorn(horn) {
         const duration = rn1(90, 10);
         switch (Math.trunc(rn2(13) / 2)) {
         case 0: {
-            const timeout = sickTime ? Math.trunc(sickTime / 3) + 1 : rn1(u.acurr?.a?.[A_CON] || 10, 20);
+            const timeout = sickTime ? Math.trunc(sickTime / 3) + 1 : rn1(currentHeroAttribute(A_CON), 20);
             if (u.sickResistance || u.sicknessResistance || polyselfForm()?.sickResistance) break;
             messages.push(sickTime ? 'You feel much worse.' : 'You feel deathly sick.');
             u._sickTimeout = timeout;
@@ -34602,7 +34572,7 @@ async function finishWizgenesisSpawn(mdat, disposition, monspec) {
                 created.mtame = Math.max(created.mtame || 0, baseScrollTameness(created));
                 created.mextra ??= {};
                 created.mextra.edog ??= {
-                    apport: game.u?.acurr?.a?.[A_CHA] ?? 3,
+                    apport: currentHeroAttribute(A_CHA),
                     hungrytime: (game.moves || 1) + 1000,
                     dropdist: 10000,
                     whistletime: 0,
@@ -37381,8 +37351,8 @@ async function startTinOpening(tin, floorObject = false) {
                 game.context.move = 1;
                 return true;
             }
-            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-            const str = game.u?.acurr?.a?.[A_STR] ?? 10;
+            const dex = currentHeroAttribute(A_DEX);
+            const str = currentHeroAttribute(A_STR);
             delay = rn1(1 + Math.trunc(500 / Math.max(1, dex + str)), 10);
         }
     }
@@ -37974,7 +37944,7 @@ async function processSpellbookBackfire(messages = []) {
         state.strLoss = resisted ? rn1(2, 1) : rn1(4, 3);
         state.damage = rnd(resisted ? 6 : 10);
         state.extraDamage = 0;
-        const strength = game.u.acurr?.a?.[A_STR] ?? 10;
+        const strength = currentHeroAttribute(A_STR);
         for (let remaining = strength - state.strLoss; remaining < 3; remaining++) {
             state.strLoss--;
             state.extraDamage += rn1(4, 3);
@@ -41999,7 +41969,7 @@ function boulderPushShopBillPrice(obj) {
         multiplier *= 4;
         divisor *= 3;
     }
-    const cha = game.u?.acurr?.a?.[A_CHA] ?? 10;
+    const cha = currentHeroAttribute(A_CHA);
     if (cha > 18) divisor *= 2;
     else if (cha === 18) { multiplier *= 2; divisor *= 3; }
     else if (cha >= 16) { multiplier *= 3; divisor *= 4; }
@@ -42362,7 +42332,7 @@ function kickedFragilePreflightBreakKind(obj) {
 }
 
 function kickFloorObjectRange(obj, x, y, dir) {
-    const stats = game.u?.acurr?.a || [];
+    const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
     const strength = Math.max(0, Math.trunc(Number(stats[A_STR] ?? 10)));
     const weight = globObjectWeight(shopBillableGold(obj) ? obj : { ...obj, quan: 1 });
     let range = Math.trunc(strength / 2) - Math.trunc(weight / 40);
@@ -42468,7 +42438,7 @@ function feelKickOuchLocation(x, y) {
 
 function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null } = {}) {
     messages.push('Ouch!  That hurts!');
-    const stats = game.u?.acurr?.a || [];
+    const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
     rn2(2);
     rn2(2);
     let wakeX = x;
@@ -42641,7 +42611,7 @@ function billKickedLooseShopObject(obj, x, y, messages) {
 function tryKickLooseFloorObject(obj, x, y, messages, dir) {
     if (!kickedObjectLooseSourceAt(x, y)) return null;
     const martial = heroUsesMartialKickRangeBonus();
-    const dexterity = Math.trunc(Number(game.u?.acurr?.a?.[A_DEX] ?? 10));
+    const dexterity = Math.trunc(Number(currentHeroAttribute(A_DEX)));
     const failed = (!martial && rn2(20) > dexterity)
         || kickedObjectLooseSourceAt(game.u?.ux, game.u?.uy);
     if (failed) {
@@ -42943,7 +42913,7 @@ function appendSuccessfulKickObjectAirRecoil(dir, messages) {
 
 function kickedObjectIronBarsBreakChance(obj) {
     if (objectKindKey(obj) !== 'war hammer') return 0;
-    const strength = Math.max(3, Math.trunc(Number(game.u?.acurr?.a?.[A_STR] || game.u?.ustr || 10)));
+    const strength = currentHeroAttribute(A_STR);
     const spe = Math.trunc(Number(obj?.spe || 0));
     return Math.max(2, 60 - strength - spe);
 }
@@ -46581,18 +46551,34 @@ function encumberMsg() {
 // weight (a nymph form maxes it out), then clamps to MAX_CARR_CAP;
 // levitation or the air level also maxes it out.
 export function heroCarryCapacity() {
-    const stats = game.u?.acurr?.a || [];
-    let capacity = 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50;
+    let capacity = 25 * (currentHeroStrength() + currentHeroAttribute(A_CON)) + 50;
     // C ref: src/hack.c:4313-4323 — the Upolyd branch of weight_cap().
     const form = game.u?._polyself_form;
     if (form) {
-        const formCwt = polyselfFormBodyWeight(form);
-        if (form.mlet === 'n') capacity = MAX_CARR_CAP;
-        else if (!form.strong || formCwt > WT_HUMAN)
+        const species = pmOf({ data: form });
+        const formCwt = species?.cwt ?? form.cwt ?? polyselfFormBodyWeight(form);
+        if (form.mlet === 'n' || species?.mlet === S_NYMPH) capacity = MAX_CARR_CAP;
+        else if (!formCwt) capacity = Math.trunc(capacity * (species?.msize ?? form.msize ?? MZ_HUMAN) / MZ_HUMAN);
+        else if (!(species ? strongmonst(species) : form.strong) || formCwt > WT_HUMAN)
             capacity = Math.trunc((capacity * formCwt) / WT_HUMAN);
     }
-    const normalCapacity = Math.min(MAX_CARR_CAP, capacity);
-    return Is_airlevel(game.u?.uz) || game.u?.levitating ? MAX_CARR_CAP : normalCapacity;
+    const steed = game.u?.usteed, mount = steed && pmOf(steed);
+    const levitation = game.u?.uprops?.[LEVITATION], flight = game.u?.uprops?.[FLYING];
+    let levSources = (levitation?.extrinsic || 0);
+    const occupation = game._armor_wear_occupation;
+    if (occupation && occupation.action !== 'takeoff' && occupation.kind === 'levitation boots') levSources &= ~W_ARMF;
+    const levitating = levitation ? !!(levitation.intrinsic || levSources) && !(levitation.blocked & ~I_SPECIAL)
+        : !!game.u?.levitating;
+    const flying = flight ? !!(flight.intrinsic || flight.extrinsic) && !flight.blocked : !!game.u?.flying;
+    if (Is_airlevel(game.u?.uz) || levitating || (mount ? strongmonst(mount) : steed?.data?.strong))
+        return MAX_CARR_CAP;
+    capacity = Math.min(MAX_CARR_CAP, capacity);
+    if (!flying) {
+        const sides = game.u?.uprops?.[WOUNDED_LEGS]?.extrinsic || 0;
+        if (sides & LEFT_SIDE) capacity -= WT_WOUNDEDLEG_REDUCT;
+        if (sides & RIGHT_SIDE) capacity -= WT_WOUNDEDLEG_REDUCT;
+    }
+    return Math.max(1, capacity);
 }
 
 // Body weight (monst.c cwt) of the hero's polyself form.  Human weight is
@@ -48711,7 +48697,6 @@ function destroyWornArmorItem(armor, messages = null) {
     }
     if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
         syncHeroSpeedState();
-    updateGauntletsOfPowerStrength(kind, false);
     if (armorSlot(armor) === 'boots' && Array.isArray(messages))
         addBootsOffSideEffects(armor, messages);
     if ((game.inventory || []).includes(armor))
@@ -52471,7 +52456,7 @@ function shopObjectUnitCost(obj, shkp) {
         multiplier *= 4;
         divisor *= 3;
     }
-    const cha = game.u?.acurr?.a?.[A_CHA] ?? 10;
+    const cha = currentHeroAttribute(A_CHA);
     if (cha > 18) divisor *= 2;
     else if (cha === 18) { multiplier *= 2; divisor *= 3; }
     else if (cha >= 16) { multiplier *= 3; divisor *= 4; }
@@ -53458,7 +53443,7 @@ async function finishDemonBribeOffer() {
         }
         demonBribeVanish(mon);
         paidOff = true;
-    } else if (offer > 0 && rnd(5 * (game.u?.acurr?.a?.[A_CHA] ?? 10)) > demand - offer) {
+    } else if (offer > 0 && rnd(5 * (currentHeroAttribute(A_CHA))) > demand - offer) {
         messages.push(`${sentenceName} scowls at you menacingly, then vanishes.`);
         if (monsterTurn) {
             game._monster_resume_index = adjustedMonsterResumeIndexForRemoval(mon, monsterTurn.nextIndex ?? 0);
@@ -58953,10 +58938,7 @@ function forceWebNoCutWeaponPhrase(primary, secondary) {
 }
 
 function forceWebAcurrstr() {
-    const str = Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10));
-    if (str <= STR18(0)) return Math.max(str, 3);
-    if (str <= STR19(21)) return 19 + Math.trunc(str / 50);
-    return Math.min(str, 125) - 100;
+    return currentHeroStrength();
 }
 
 function forceWebSkillMinusTwo(skillSpec) {
@@ -59166,7 +59148,7 @@ function scheduleSitLevelChange(targetLevel, options = {}) {
     return true;
 }
 
-function webTrapTimeFromStrength(strength = game.u?.acurr?.a?.[A_STR] ?? 10) {
+function webTrapTimeFromStrength(strength = currentHeroAttribute(A_STR)) {
     const str = strength;
     if (str <= 3) return rn1(6, 6);
     if (str < 6) return rn1(6, 4);
@@ -59316,7 +59298,7 @@ function mountedHeroWebTrapSteedResult(trap, messages) {
     }
     messages.push(`${steedTrapProjectileName(steed)} is caught in ${webName}.`);
     steed.mtrapped = 0;
-    const strength = data.strong || steed.strong ? 17 : game.u?.acurr?.a?.[A_STR] ?? 10;
+    const strength = data.strong || steed.strong ? 17 : currentHeroAttribute(A_STR);
     setHeroWebTrapTime(webTrapTimeFromStrength(strength));
     return true;
 }
@@ -65084,7 +65066,7 @@ async function moveHeroStep(dx, dy, ridingMessages) {
         game._run_steps_remaining = 0;
         game._run_stop_now = 1;
         game._suppress_obstructed_message_once = 0;
-        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        const dex = currentHeroAttribute(A_DEX);
         if ((oldx === newx || oldy === newy) && (game.u?.blind || game.u?.stunned || game.u?.fumbling || dex < 10)) {
             await setMessage('Ouch!  You bump into a door.');
             exerciseAttribute(A_DEX, false);
@@ -65101,7 +65083,7 @@ async function moveHeroStep(dx, dy, ridingMessages) {
 
     if (target?.typ === DOOR && (target.doormask & (D_CLOSED | D_LOCKED)) && game._suppress_obstructed_message_once) {
         game._suppress_obstructed_message_once = 0;
-        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        const dex = currentHeroAttribute(A_DEX);
         if ((oldx === newx || oldy === newy) && (game.u?.blind || game.u?.stunned || game.u?.fumbling || dex < 10)) {
             await setMessage('Ouch!  You bump into a door.');
             exerciseAttribute(A_DEX, false);
@@ -65116,7 +65098,7 @@ async function moveHeroStep(dx, dy, ridingMessages) {
     }
 
     if (target?.typ === DOOR && (target.doormask & (D_CLOSED | D_LOCKED))) {
-        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        const dex = currentHeroAttribute(A_DEX);
         const confused = (game.u?._statusSuffix || '').includes('Conf') || (game.u?._confusionTimeout || 0) > 0;
         // C ref: src/hack.c:1097-1098 — auto-open on bump is suppressed while
         // running (svc.context.run; travel sets run = 8 at cmd.c:5366).
@@ -65151,7 +65133,7 @@ async function moveHeroStep(dx, dy, ridingMessages) {
     }
 
     if (target?.typ === DOOR && (target.doormask & D_CLOSED)) {
-        const stats = game.u?.acurr?.a || [];
+        const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
         const rawStr = stats[0] ?? 10;
         const str = rawStr <= 18 ? rawStr : rawStr <= 121 ? 19 + Math.trunc(rawStr / 50) : Math.min(rawStr, 125) - 100;
         const openTarget = Math.trunc((str + (stats[3] ?? 10) + (stats[4] ?? 10)) / 3);
@@ -67157,7 +67139,6 @@ function tutorialEnterStash() {
     game._known_spells = [];
     for (const kind of wornKinds) {
         if (kind === 'speed boots' || isBlueDragonArmorKind(kind)) syncHeroSpeedState();
-        updateGauntletsOfPowerStrength(kind, false);
     }
     updateReflectionFromInventory();
 }
@@ -70320,7 +70301,6 @@ function tutorialEnterStash() {
                         if (game.u) setArmorWorn(item, false);
                         if ((occupation.kind === 'speed boots' || isBlueDragonArmorKind(occupation.kind)) && game.u)
                             syncHeroSpeedState();
-                        updateGauntletsOfPowerStrength(occupation.kind, false);
                         updateWornDisplacement();
                         if (occupation.kind && /boots$/.test(occupation.kind)) {
                             const bootMessages = [];
@@ -71829,7 +71809,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             } else if (sinkRoll === 8) {
                 message = 'Yuk, this water tastes awful.';
             } else if (sinkRoll === 9) {
-                const con = game.u?.acurr?.a?.[4] ?? 10;
+                const con = currentHeroAttribute(4);
                 if (game.u) game.u.uhunger = (game.u.uhunger ?? 900) - (11 + rn2(Math.max(1, 30 - con)));
                 game._helpless_time = Math.max(game._helpless_time || 0, 2);
                 game._wake_message = 'You can move again.';
@@ -72368,7 +72348,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 item.worn = true;
                 item.line = `${ch} - ${wornName} (being worn)`;
                 if (game.u) setArmorWorn(item, true);
-                updateGauntletsOfPowerStrength(kind, true);
                 updateWornDisplacement();
                 if (isSilverDragonArmorKind(kind) && game.u) game.u.reflecting = true;
                 if (kind === 'shield of reflection' && game.u) game.u.reflecting = true;
@@ -76750,7 +76729,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         if (ch === 'y' && target) {
             const loc = game.level?.at(target.x, target.y);
             if (loc?.typ === DOOR) {
-                const dex = game.u?.acurr?.a?.[3] ?? 10;
+                const dex = currentHeroAttribute(3);
                 const chance = 3 * dex + (game.urole?.name?.m === 'Rogue' ? 30 : 0);
                 if (rn2(100) >= chance) {
                     game.context.move = 1;
@@ -76775,7 +76754,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             const chest = target.chest || target;
             const tool = target.tool;
             const name = tool ? inventoryItemName(tool).toLowerCase() : 'lock pick';
-            const dex = game.u?.acurr?.a?.[3] ?? 10;
+            const dex = currentHeroAttribute(3);
             const rogue = game.urole?.name?.m === 'Rogue';
             let chance = name.includes('credit card') ? dex + (rogue ? 20 : 0)
                 : name.includes('key') ? 75 + dex
@@ -83032,7 +83011,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (target?.typ === DOOR && (target.doormask & (D_CLOSED | D_LOCKED))) {
-            const stats = game.u?.acurr?.a || [];
+            const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
             const avgAttr = Math.trunc(((stats[0] ?? 10) + (stats[3] ?? 10) + (stats[4] ?? 10)) / 3);
             const martialKick = role === 'Monk' || role === 'Samurai';
             rn2(19);
@@ -83082,7 +83061,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         // "kick at empty space" vs "Dumb move!" roll is rn2(3) (skipped for
         // martial roles or DEX >= 16), with wounded legs on the dumb move.
         exerciseAttribute(A_DEX, false);
-        const kickStats = game.u?.acurr?.a || [];
+        const kickStats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
         const martialKickDumb = role === 'Monk' || role === 'Samurai';
         if (martialKickDumb || (kickStats[A_DEX] ?? 10) >= 16 || rn2(3)) {
             await setMessage('You kick at empty space.');
@@ -84389,7 +84368,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.context.move = 0;
             return;
         }
-        if (mjollnirThrow && Math.trunc(Number(game.u?.acurr?.a?.[A_STR] ?? 10)) < STR19(25)) {
+        if (mjollnirThrow && Math.trunc(Number(currentHeroAttribute(A_STR))) < STR19(25)) {
             await setMessage("It's too heavy.");
             game._command_mode = null;
             game._throw_item_letter = null;
@@ -85069,8 +85048,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                 : invItem.otyp === GEM_CLASS ? 'gem' : '');
                 carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
             }
-            const stats = game.u?.acurr?.a || [];
-            const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+            const capacity = heroCarryCapacity();
             if (carriedWeight > capacity) {
                 const troublePrefix = containerTakeoutBurdenPrefix(heroEncumbranceForWeight(carriedWeight));
                 const troubleMessage = [...preflightMessages, `${troublePrefix} lifting ${letter} - ${amount}${unpaidSuffix}.`].join('  ');

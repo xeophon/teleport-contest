@@ -12,7 +12,7 @@
 //   // display.topMessage, display.putstr_message are NetHack-specific
 
 import { game } from './gstate.js';
-import { currentHeroAttribute } from './cmd.js';
+import { currentHeroAttribute } from './attrib.js';
 import {
     TUTORIAL,
     In_endgame, Is_airlevel, Is_astralevel, Is_earthlevel, Is_firelevel, Is_waterlevel,

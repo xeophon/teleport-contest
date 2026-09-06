@@ -1,3 +1,4 @@
+import { WOUNDED_LEGS, LEFT_SIDE } from '../js/const.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { game, resetGame } from '../js/gstate.js';
@@ -101,7 +102,8 @@ test('dropping the active Heart marks it dropped before landing pickup', async (
 });
 
 for (const answer of ['y', 'n', 'q']) test(`saved landing pickup burden answer ${answer} completes the artifact command once`, async () => {
-    await setup(); game.u.acurr.a = [1, 1, 10, 10, 1, 10];
+    await setup(); game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE };
     const later = floorItem({ id: 3, cls: 'scroll', glyph: '?', otyp: 293, kind: 'scroll of blank paper', scrollIndex: 21 });
     const heavy = floorItem({ id: 4, cls: 'food', glyph: '%', kind: 'food ration', otyp: 143, quan: 11 });
     enableRngLog({ reset: true }); await invoke();
@@ -218,7 +220,8 @@ test('the attached chain is neither selected nor counted by check_here', async (
 });
 
 test('moveloop completes one turn after a saved pickup burden response', async () => {
-    await setup(); resetInputState(); game.u.acurr.a = [1, 1, 10, 10, 1, 10]; game.u.umovement = 12;
+    await setup(); resetInputState(); game.u.acurr.a = [3, 3, 10, 10, 3, 10];
+    game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE }; game.u.umovement = 12;
     floorItem({ cls: 'food', glyph: '%', kind: 'food ration', otyp: 143, quan: 11 });
     game.level.regions = [{ type: 'gas_cloud', damage: 0, ttl: 5, coords: [{ x: 50, y: 10 }] }];
     game._command_mode = 'invokeObject'; game._pending_message = ''; game._message_more = 0;

@@ -1,3 +1,4 @@
+import { currentHeroAttribute } from './attrib.js';
 // Player spell effects for the Z (cast) command.
 //
 // C refs:
@@ -84,7 +85,7 @@ function spellName(spell) {
 // C ref: zap.c:spell_damage_bonus() — hero INT (and level) adjustment.
 export function spellDamageBonus(dmg) {
     const u = game.u || {};
-    const intell = u.acurr?.a?.[1] ?? 10;
+    const intell = currentHeroAttribute(1);
     const ulevel = u.ulevel || 1;
     if (intell <= 9) {
         if (dmg > 1) dmg = dmg <= 3 ? 1 : dmg - 3;
@@ -100,7 +101,7 @@ export function spellDamageBonus(dmg) {
 function spellHitBonus(spell, D) {
     const skill = D.spellRoleSkillLevel(spell);
     let hitBon = skill >= 4 ? 3 : skill === 3 ? 2 : skill === 2 ? 0 : -4;
-    const dex = game.u?.acurr?.a?.[2] ?? 10;
+    const dex = currentHeroAttribute(3);
     if (dex < 4) hitBon -= 3;
     else if (dex < 6) hitBon -= 2;
     else if (dex < 8) hitBon -= 1;

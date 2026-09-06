@@ -1,3 +1,4 @@
+import { currentHeroAttribute, currentHeroStrength } from './attrib.js';
 // js/dig.js — pick-axe / dwarvish mattock wall & floor digging core.
 // C ref: nethack-c/upstream/src/dig.c — dig_typ(), dig_check(),
 // digcheck_fail_message(), dig(), dighole(), digactualhole(), dig_up_grave(),
@@ -6,7 +7,7 @@
 
 import { game } from './gstate.js';
 import { newsym } from './display.js';
-import { makemon, mksobj, monsterByRndName } from './mklev.js';
+import { makemon, mksobj, monsterByRndName, adjustedMonsterLevel } from './mklev.js';
 import { d, rn1, rn2, rnd } from './rng.js';
 import {
     ALTAR, A_DEX, A_MAX, A_STR, A_WIS, BEAR_TRAP, COLNO, CORR, DBWALL, DIGTYP_BOULDER,
@@ -244,8 +245,9 @@ export function digSurfaceText(x, y) {
 // C ref: weapon.c abon() — attack bonus feeding dig effort.
 export function digAbon() {
     const u = game.u || {};
-    const str = u.acurr?.a?.[A_STR] ?? 10;
-    const dex = u.acurr?.a?.[A_DEX] ?? 10;
+    if (u._polyself_form) return adjustedMonsterLevel(monsterByRndName(u._polyself_form.name) || u._polyself_form) - 3;
+    const str = currentHeroAttribute(A_STR);
+    const dex = currentHeroAttribute(A_DEX);
     let sbon;
     if (str < 6) sbon = -2;
     else if (str < 8) sbon = -1;
@@ -263,7 +265,8 @@ export function digAbon() {
 
 // C ref: weapon.c dbon() — damage bonus for pick self-hit.
 export function digDbon() {
-    const str = game.u?.acurr?.a?.[A_STR] ?? 10;
+    if (game.u?._polyself_form) return 0;
+    const str = currentHeroAttribute(A_STR);
     if (str < 6) return -1;
     if (str < 16) return 0;
     if (str < 18) return 1;
@@ -288,10 +291,7 @@ export function digEffortIncrement(item) {
 
 // C ref: attrib.c acurrstr() — 3..25 compressed strength used by shk costs.
 export function digAcurrStr() {
-    const str = game.u?.acurr?.a?.[A_STR] ?? 10;
-    if (str <= 18) return Math.max(str, 3);
-    if (str <= 121) return 19 + Math.floor(str / 50);
-    return Math.min(str, 125) - 100;
+    return currentHeroStrength();
 }
 
 // C ref: hack.h SHOP_WALL_DMG (10L * ACURRSTR).

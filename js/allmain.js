@@ -1,9 +1,11 @@
+import { heroCarryCapacity } from './cmd.js';
+import { currentHeroAttribute } from './attrib.js';
 import { findAc, setArmorWorn } from './do_wear.js';
 import { FUMBLING, TIMEOUT, FROMOUTSIDE } from './const.js';
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
 import { initializeSkills, ROLE_SKILL_LIMITS, spellSkillType } from './skills.js';
 import { setArtifactEquipmentLight } from './artifact.js';
-import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn, finishArmorBonusChange, currentHeroAttribute } from './cmd.js';
+import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn, finishArmorBonusChange } from './cmd.js';
 import { supportsMonsterAttackSlots } from './mhitu.js';
 import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster, heroIsBlind, hcolor } from './cmd.js';
 import { AT_BOOM, AT_MAGC, AD_SPEL, AD_CLRC, is_hider } from './permonst.js';
@@ -14,7 +16,7 @@ import { AT_BOOM, AT_MAGC, AD_SPEL, AD_CLRC, is_hider } from './permonst.js';
 import { game } from './gstate.js';
 import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv, putSaddleOnMonster } from './mklev.js';
-import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, CORPSE_TIMER_HANDLERS, runOrganicRotTimer, shrinkGlob, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
+import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, CORPSE_TIMER_HANDLERS, runOrganicRotTimer, shrinkGlob, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -3542,7 +3544,7 @@ function processAttributeExercise() {
             if (item.letter === '$' || item.cls === 'coin' || item.otyp === 'coin') continue;
             carriedWeight += objectWeight(item) * (item.quan || 1);
         }
-        const capacity = Math.min(1000, 25 * ((u.acurr?.a?.[A_STR] ?? 10) + (u.acurr?.a?.[A_CON] ?? 10)) + 50);
+        const capacity = heroCarryCapacity();
         const burden = carriedWeight - capacity;
         const encumbrance = burden <= 0 ? 0 : Math.min(Math.trunc(burden * 2 / capacity) + 1, OVERLOADED);
         if (encumbrance === MOD_ENCUMBER) exerciseAttribute(A_STR, true);
@@ -7979,7 +7981,7 @@ if (attack.adtyp === 'steal') {
                                     }
                                     continue;
                                 }
-                                const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                                 const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                     && rn2(Math.max(1, catchChance)) === 0;
@@ -8486,7 +8488,7 @@ if (attack.adtyp === 'steal') {
                         } else if (interveningTarget) {
                             finishEggInterveningHit(interveningTarget);
                         } else {
-                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                            const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                             const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                 && rn2(Math.max(1, catchChance)) === 0;
@@ -8923,7 +8925,7 @@ if (attack.adtyp === 'steal') {
                         });
                         game._clear_transient_projectiles_after_more = 1;
                         newsym(flightX, flightY);
-                        const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                        const catchChance = 100 - (currentHeroAttribute(A_DEX))
                             - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                         const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                             && rn2(Math.max(1, catchChance)) === 0;
@@ -9092,7 +9094,7 @@ if (attack.adtyp === 'steal') {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible || targetVisible);
                         } else {
-                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                            const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                             const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                 && rn2(Math.max(1, catchChance)) === 0;
@@ -9244,7 +9246,7 @@ if (attack.adtyp === 'steal') {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
-                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                            const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                             const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                 && rn2(Math.max(1, catchChance)) === 0;
@@ -9387,7 +9389,7 @@ if (attack.adtyp === 'steal') {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
-                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                            const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                             const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                 && rn2(Math.max(1, catchChance)) === 0;
@@ -9530,7 +9532,7 @@ if (attack.adtyp === 'steal') {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
-                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                            const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                             const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                 && rn2(Math.max(1, catchChance)) === 0;
@@ -9672,7 +9674,7 @@ if (attack.adtyp === 'steal') {
                             newsym(projectileX, projectileY);
                         }
 
-                        const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                        const catchChance = 100 - (currentHeroAttribute(A_DEX))
                             - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                         const caught = heroCanAttemptThrownObjectCatch(thrownPotion)
                             && rn2(Math.max(1, catchChance)) === 0;
@@ -9808,7 +9810,7 @@ if (attack.adtyp === 'steal') {
                                     });
                                 }
                             } else {
-                                const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                                 const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                     && rn2(Math.max(1, catchChance)) === 0;
@@ -9966,7 +9968,7 @@ if (attack.adtyp === 'steal') {
                             });
                             addMonsterThrownFloorMessages(floorMessages, throwerVisible);
                         } else {
-                            const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                            const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                 - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                             const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                 && rn2(Math.max(1, catchChance)) === 0;
@@ -10226,7 +10228,7 @@ if (attack.adtyp === 'steal') {
                             } else if (interveningTarget) {
                                 finishDartInterveningHit(interveningTarget);
                             } else {
-                                const catchChance = 100 - (game.u?.acurr?.a?.[A_DEX] ?? 10)
+                                const catchChance = 100 - (currentHeroAttribute(A_DEX))
                                     - (game._startup_role === 'Monk' || game._startup_role === 'Rogue' ? 20 : 0);
                                 const caught = heroCanAttemptThrownObjectCatch(thrownMissile)
                                     && rn2(Math.max(1, catchChance)) === 0;
@@ -10791,7 +10793,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             u._sicknessTimeout = 0;
             if (!u._sickTimeout) {
                 const foodPoisoning = !(u.usick_type & 2);
-                if (foodPoisoning && rn2(100) < (u.acurr?.a?.[A_CON] ?? 10)) {
+                if (foodPoisoning && rn2(100) < (currentHeroAttribute(A_CON))) {
                     addToplineMessage('You have recovered from your illness.');
                     clearHeroSickness();
                     u.usick_type = 0;
@@ -10960,7 +10962,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                    // reproduces that at the point the fatal blow is queued, so
                    // only a truly-zero u.uhp (not yet healed) suppresses the roll.
                    && (game.u?.uhp || 0) < (game.u?.uhpmax || 0)) {
-            const con = game.u?.acurr?.a?.[4] ?? 10;
+            const con = currentHeroAttribute(4);
             if (process.env.WEREDBG) console.error(`WEREDBG regen moves=${game.moves} uhp=${game.u.uhp}/${game.u.uhpmax} rngidx=${getRngLog().length}`);
             const regenRoll = rn2(100);
             const suppressHpRegen = !!game._suppress_next_hp_regen;
@@ -10978,10 +10980,10 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             reachedFullHp = (game.u?.uhp || 0) === (game.u?.uhpmax || 0);
         }
         if ((game.u?.uen || 0) < (game.u?.uenmax || 0)) {
-            const stats = game.u?.acurr?.a || [];
+            const stats = Array.from({ length: A_MAX }, (_, index) => currentHeroAttribute(index));
             let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
             for (const item of game.inventory || []) carriedWeight += objectWeight(item) * (item.quan || 1);
-            const capacity = Math.min(1000, 25 * ((stats[A_STR] ?? 10) + (stats[A_CON] ?? 10)) + 50);
+            const capacity = heroCarryCapacity();
             const burden = carriedWeight - capacity;
             const wtcap = (game.u?._statusSuffix || '').includes('Overloaded')
                 ? OVERLOADED
@@ -11344,7 +11346,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                         setBlueDragonArmorFast(game, false);
                         if (!game.u?.veryfast) message += '  You slow down.';
                     }
-                    updateGauntletsOfPowerStrength(occupation.kind, false);
                     if (occupation.kind && /boots$/.test(occupation.kind)) {
                         const bootMessages = [];
                         const bootFallout = addBootsOffSideEffects(item, bootMessages);
@@ -11366,7 +11367,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 if (occupation.wornLine) item.line = occupation.wornLine;
                 if (game.u) setArmorWorn(item, true);
                 if (occupation.reflecting && game.u) game.u.reflecting = true;
-                updateGauntletsOfPowerStrength(occupation.kind, true);
             }
             if (occupation.action !== 'takeoff' && isBlueDragonArmorKind(occupation.kind)) {
                 const alreadyFast = !!(game.u?.fast || game.u?.veryfast);
@@ -15630,7 +15630,7 @@ function moveMonsterTowardHero(mon, conflictActive = false, monIndex = null, som
     const apparentY = mon.muy ?? game.u?.uy ?? mon.my;
     const throwRange = game.u?._polyself_base?.throwsRocks
         ? 20
-        : Math.trunc((game.u?.acurr?.a?.[A_STR] ?? 10) / 2) + 1;
+        : Math.trunc((currentHeroAttribute(A_STR)) / 2) + 1;
     const inLine = canSearchItemsThisTurn && !peacefulWander && monsterLinedUp(mon, apparentX, apparentY);
     const inThrowRange = Math.max(Math.abs(mon.mx - apparentX), Math.abs(mon.my - apparentY)) <= throwRange;
     const searchItems = canSearchItemsThisTurn
@@ -16586,7 +16586,7 @@ async function movePet(mon, resumeAfterInventory = false, conflictActive = false
     if (conflictActive) {
         rnd(20);
         const monLevel = mon.m_lev ?? mon.data?.hpLevel ?? mon.data?.mlevel ?? 0;
-        const resistChance = Math.min(19, (game.u?.acurr?.a?.[5] ?? 10) - monLevel + (game.u?.ulevel || 1));
+        const resistChance = Math.min(19, (currentHeroAttribute(5)) - monLevel + (game.u?.ulevel || 1));
         allowHeroAttack = rnd(20) <= resistChance;
     }
     const rawCandidates = mfndpos(mon, monsterAllowFlags(mon, allowHeroAttack, conflictActive));
@@ -18041,7 +18041,6 @@ export async function moveloop_core() {
                             setBlueDragonArmorFast(g, false);
                             if (!g.u?.veryfast) message += '  You slow down.';
                         }
-                        updateGauntletsOfPowerStrength(occupation.kind, false);
                         if (occupation.kind && /boots$/.test(occupation.kind)) {
                             const bootMessages = [];
                             const bootFallout = addBootsOffSideEffects(item, bootMessages);
@@ -18063,7 +18062,6 @@ export async function moveloop_core() {
                     if (occupation.wornLine) item.line = occupation.wornLine;
                     if (g.u) setArmorWorn(item, true, g);
                     if (occupation.reflecting && g.u) g.u.reflecting = true;
-                    updateGauntletsOfPowerStrength(occupation.kind, true);
                 }
                 if (occupation.action !== 'takeoff' && item) finishArmorBonusChange(item, true);
                 if (occupation.action !== 'takeoff' && isBlueDragonArmorKind(occupation.kind)) {
