@@ -3,6 +3,7 @@ import test from 'node:test';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
 import { rhack } from '../js/cmd.js';
+import { touchArtifactObject } from '../js/artifact_touch.js';
 import { initRng, enableRngLog, getRngLog, d, rn2, rnd } from '../js/rng.js';
 import { MONS, PM_WEREWOLF } from '../js/permonst.js';
 import { ROOM, STAIRS, W_WEP, W_ARMH } from '../js/const.js';
@@ -309,3 +310,100 @@ for (const position of ['invocation', 'stairs', 'elsewhere']) {
         if (position === 'invocation') assert.deepEqual(getRngLog(), []);
     });
 }
+
+// artifact.c:touch_artifact returns before retouch_object's silver/bane checks.
+// Holding an object must not accidentally perform those later wield/use checks.
+for (const [artifact, options] of [
+    [undefined, { hero: { ulycn: PM_WEREWOLF }, item: { material: 'silver' } }],
+    ['Sting', { race: 'orc' }],
+    ['Orcrist', { race: 'orc' }],
+    ['Werebane', { hero: { ulycn: PM_WEREWOLF }, item: { material: 'silver' } }],
+]) {
+    test(`touch alone permits ${artifact || 'ordinary silver'} without retouch handling damage`, async () => {
+        const item = setup(artifact, options);
+        const events = [];
+        const D = touchTestDependencies(events);
+        const result = await touchArtifactObject(item, D);
+        assert.equal(result.ok, true);
+        assert.ok(result.messages.every(message => !message.includes("can't handle")));
+        assert.ok(events.every(event => event.type !== 'damage' || event.cause.startsWith('touching ')));
+        assert.ok(events.every(event => event.type !== 'exercise' || event.attribute === 2));
+        assert.equal(!!item.wielded, false);
+    });
+}
+
+function touchTestDependencies(events) {
+    return {
+        antimagic: () => !!game.u.antimagic,
+        isSilver: item => item.material === 'silver',
+        halfPhysical: damage => game.u.halfPhysicalDamage ? Math.ceil(damage / 2) : damage,
+        damageHero: async (messages, damage, cause) => {
+            events.push({ type: 'damage', damage, cause });
+            game.u.uhp -= damage;
+            return game.u.uhp <= 0 ? { fatal: true } : {};
+        },
+        exercise: (attribute, increase) => events.push({ type: 'exercise', attribute, increase }),
+    };
+}
+
+test('touch blast waits for its message before rolling damage and survives serialized continuation', async () => {
+    const item = setup('Stormbringer');
+    const events = [];
+    const D = touchTestDependencies(events);
+    D.message = message => { events.push({ type: 'message', message }); return false; };
+    let state = {};
+    enableRngLog({ reset: true });
+    const pause = await touchArtifactObject(item, D, state);
+    assert.equal(pause.pending, true);
+    assert.equal(game.u.uhp, 200);
+    assert.deepEqual(getRngLog(), []);
+    assert.equal(events.length, 1);
+    assert.match(events[0].message, /blasted by Stormbringer/);
+    state = JSON.parse(JSON.stringify(state));
+    const result = await touchArtifactObject(item, D, state);
+    assert.equal(result.ok, true);
+    assert.equal(events.filter(event => event.type === 'damage').length, 1);
+    assert.equal(events.filter(event => event.type === 'exercise').length, 1);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('d(4,10)')).length, 1);
+    await touchArtifactObject(item, D, state);
+    assert.equal(events.length, 3, 'resuming a completed touch has no further effects');
+});
+
+for (const carried of [false, true]) {
+    test(`touch refusal distinguishes ${carried ? 'carried' : 'floor'} artifacts and pauses after its message`, async () => {
+        const item = setup('The Orb of Detection', { align: 0 });
+        if (!carried) game.inventory = [];
+        const events = [];
+        const D = touchTestDependencies(events);
+        D.message = message => { events.push({ type: 'message', message }); return message.startsWith('You are blasted'); };
+        const state = {};
+        const pause = await touchArtifactObject(item, D, state);
+        assert.equal(pause.pending, true);
+        assert.match(events.at(-1).message, carried ? /beyond your control!/ : /evades your grasp!/);
+        const count = events.length;
+        const result = await touchArtifactObject(item, D, JSON.parse(JSON.stringify(state)));
+        assert.equal(result.ok, false);
+        assert.equal(events.length, count);
+        assert.equal(game.inventory.includes(item), carried);
+    });
+}
+
+test('touch resumes after fatal damage before Wisdom abuse without rolling another blast', async () => {
+    const item = setup('Stormbringer', { hero: { uhp: 1 } });
+    const events = [];
+    const D = touchTestDependencies(events);
+    const state = {};
+    enableRngLog({ reset: true });
+    const pause = await touchArtifactObject(item, D, state);
+    assert.equal(pause.fatal, true);
+    assert.equal(pause.pending, true);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].cause, 'touching Stormbringer');
+    game.u.uhp = 100;
+    const result = await touchArtifactObject(item, D, JSON.parse(JSON.stringify(state)));
+    assert.equal(result.ok, true);
+    assert.equal(game.u.uhp, 100);
+    assert.equal(events.length, 2);
+    assert.deepEqual(events[1], { type: 'exercise', attribute: 2, increase: false });
+    assert.equal(getRngLog().filter(entry => entry.startsWith('d(4,10)')).length, 1);
+});
