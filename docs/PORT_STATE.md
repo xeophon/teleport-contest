@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,073 passing tests**, with no
+The latest source-driven checkpoint has **6,257 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -134,8 +134,7 @@ Twenty-four new spell-health tests cover current-form HP, life saving, saved
 falling-rock recovery, hearing/vision cures, sickness and permanent blindness
 sources; light uses the shared gremlin damage owner, and self-sleep uses C's
 shared occupation and combat-wakeup state.
-Reflected-ray/multiple-blast continuations, menu search and skill practice
-remain further work.
+Menu search and the remaining spell-effect continuations still need source work.
 
 Shared ring on/off/gone handling now owns property masks, charged bonuses,
 recharging and discovery. Electrical destruction retains the worn object
@@ -156,8 +155,10 @@ slot gain/loss and drain retain source history and limits; enhancement lists
 the actual records and preserves saved selection and wizard advancement.
 Normal spells train once after their effects and saved prompts finish, while
 forced wizard/artifact casts skip training. Forty-nine tests cover this work.
-The remaining weapon, riding, thrown attack and exercise call sites still
-need their source integration.
+Projectile and polearm callers now use canonical weapon/dual-wield/riding bonuses and
+source practice eligibility. Riding exercises after 100 eligible movement attempts,
+including refused pet displacement after tentative movement. Ordinary melee,
+gifts, amnesia and drain callers still need their source integration.
 
 The role `#turn` ability now follows C's conduct, chanting/divine rejection,
 confusion, monster ordering, resistance, thresholds, fleeing, pacification,
@@ -181,7 +182,7 @@ directions now clear the previous vertical component, bypass confusion and
 publish release feedback before effect RNG; a second recording matches 30
 screens and 2,044 calls. Ray messages draw canonical hallucinated blast names
 without changing death causes. Complete monster-hit, terrain, monster naming
-and multiple-blast continuations remain open.
+and other elemental callers remain open.
 
 Normal, extra and full healing potions now use source BCU amounts, overflow,
 current-body healing, cures, exercise and wounded-leg rules. Blessed full
@@ -193,13 +194,36 @@ phases, cure and level-gain message boundaries, invalid input, Escape, exactly
 one completed turn and worn stack ownership. Other potion families and the
 complete racial/intrinsic ability-change operation remain open.
 
+Fire/cold spell explosions now retain each blast, cell, hero inventory stack,
+injury and scatter phase through saved message and death prompts. Direct fatal
+feedback, resistance observation, invulnerability, role damage and golem healing
+follow C order. Fire inventory destruction retains in-use objects through vapor
+feedback; confusion, paralysis, sleeping, speed, blindness and healing vapor
+resume before their next RNG or status mutation. Lycanthrope water is deferred
+to C's second inventory pass. Twenty-one new explosion continuation/review tests
+and a fresh C fixture (29 screens, 2,201 RNG calls) cover these branches. Other
+explosion elements/callers and aggregate monster-hit effects remain incomplete.
+
+Armor callbacks now keep brilliance, dexterity and cornuthaum bonuses separate
+from base attributes, honor cancelled dressing and preserve independent fumbling
+sources. Discovery exercises Wisdom once, before attribute bonuses; delayed
+removal runs after the turn tail. Effective Dexterity feeds engraving wear, and
+physical exercise is suppressed while polymorphed. Thirty-seven focused tests
+and a fresh C fixture (81 screens, 2,871 RNG calls) cover these changes. Other
+armor callbacks and direct base-attribute consumers still need source review.
+
+Archon blinding gaze now uses source visibility, awareness, range, resistance,
+hallucination and cancellation gates, with saved feedback before status RNG.
+Twenty-three new tests cover this attack; canonical Eyes blindness blocking
+also clears on ordinary removal and covetous theft.
+
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
 resident monsters and temple entry drive combat and hostility (11 new tests).
 Five cleric spell effects and the real Sanctum Amulet now follow C (24 further
 tests including spell feedback/visibility). C's paralysis duration also reaches
 its damage caller; that executable behavior is intentionally preserved.
-Canonical serial attack slots now drive 36 of the 42 magic-casting species,
+Canonical serial attack slots now drive 37 of the 42 magic-casting species,
 including physical/cold contact and cleric lightning, with saved inventory,
 landing and death continuations (33 new tests). The driver preserves attack
 armor rolls, protection, sleeping wakeups, occupation interruption and queued
@@ -208,7 +232,7 @@ and paralysis now use source rules for Angel, Asmodeus, Yeenoghu and abbot,
 with 41 additional tests. Existing Asmodeus bribery tests now use its C 4d4
 claw damage. Canonical special-object theft now preserves target identity,
 equipment removal, artifact levitation loss, saved death recovery and monster
-pickup before relocation (19 tests). The remaining six caster arrays, polymorph passives,
+pickup before relocation (19 tests). The remaining five caster arrays, polymorph passives,
 special weapons and unfinished spell effects require continued source work.
 Twenty more tests cover live attack/death turn resumption and shared sleep
 state. The main loop parks a suspended attack pass and resumes its remaining
@@ -231,15 +255,11 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit b15107d, passed 49/53
-public sessions (12,499/12,712 screens, 830,226/832,102 RNG calls) and 12/19
+The last complete recording run, at commit 496ea59, passed 51/53 public
+sessions (12,545/12,712 screens, 830,380/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
-zero worker errors. Source corrections to Japanese weapon skill identities
-and domestic monster tameness subsequently restore both affected public
-recordings: seed0107 matches 98 screens and 2,902 RNG calls, and seed9161
-matches 105 screens and 5,927 RNG calls. Full corpora will be rerun from the
-next committed checkpoint. These recording results do not establish full C
-behavior.
+zero worker errors. These denominators precede the current checkpoint and do
+not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

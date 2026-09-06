@@ -151,9 +151,10 @@ for (const timeout of [0, 15]) test(`stealing the worn Eyes applies Blindf_off w
     const { g, mon } = setup(); g.level.flags.noteleport = true;
     const eyes = quest('The Eyes of the Overworld', { worn: true, owornmask: W_TOOL });
     g.inventory = [eyes]; g.u.ublindf = eyes; g.u.blind = false; g.u._blindTimeout = timeout;
-    g.u.uprops = { [BLINDED]: { intrinsic: timeout, extrinsic: 0 } };
+    g.u.uprops = { [BLINDED]: { intrinsic: timeout, extrinsic: 0, blocked: W_TOOL } };
     await runMonsterAttackTurn(mon); await drain(g);
     assert.equal(g.u.blind, !!timeout); assert.equal(g.u._blindTimeout, timeout);
+    assert.equal(g.u.uprops[BLINDED].blocked, 0);
     assert.equal(g.u.ublindf, null); assert.equal(mon.minvent[0], eyes);
     assert.match(g._pending_message, /You were wearing/);
     assert.equal(g._pending_message.includes("You can't see anything now!"), !!timeout);

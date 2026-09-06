@@ -19543,7 +19543,7 @@ test('takeoff command confirmed gloves removal can petrify wielded cockatrice co
 
     assert.equal(gloves.worn, false);
     assert.equal(game.u.uhp, 0);
-    assert.match(game._pending_message, /You finish taking off your leather gloves\./);
+    assert.match(game._pending_message, /You finish taking off your gloves\./);
     assert.match(game._pending_message, /You now wield a cockatrice corpse in your bare hands\./);
     assert.match(game._pending_message, /You turn to stone\.\.\./);
     assert.equal(game._death_cause, 'petrified by removing gloves while wielding a cockatrice corpse');
@@ -19592,7 +19592,7 @@ test('takeoff command levitation boots over lava sink after delayed removal', as
     assert.equal(game.inventory.includes(boots), true);
     assert.equal(boots.known, true);
     assert.equal(game.u.levitating, false);
-    assert.match(game._pending_message || '', /You finish taking off your snow boots\./);
+    assert.match(game._pending_message || '', /You finish taking off your boots\./);
     assert.match(game._pending_message || '', /You sink into the molten lava, but it only burns slightly!/);
     assert.equal(game.u.uhp, 39);
     assert.equal(game.u.utraptype, TT_LAVA);
@@ -19614,7 +19614,7 @@ test('takeoff command fumble boots does not schedule donning fumble timeout', as
     assert.equal(game._armor_wear_occupation, null);
     assert.equal(boots.worn, false);
     assert.equal(game._pending_fumble_boots_timeout || 0, 0);
-    assert.match(game._pending_message || '', /You finish taking off your fumble boots\./);
+    assert.match(game._pending_message || '', /You finish taking off your boots\./);
 });
 
 test('takeoff command blocks covered body armor before select-off checks', async () => {
@@ -38610,7 +38610,8 @@ test('successful no-hands polyself drops gauntlets of dexterity and removes dext
         uenmax: 0,
         ulevel: 1,
         uac: 9,
-        acurr: { a: [10, 10, 10, 14, 10, 10] },
+        acurr: { a: [10, 10, 10, 12, 10, 10] },
+        abon: { a: [0, 0, 0, 2, 0, 0] },
         amax: { a: [10, 10, 10, 12, 10, 10] },
     });
     const gloves = wornArmor(32126, 'gauntlets of dexterity', 'g', 2, {
@@ -38620,6 +38621,7 @@ test('successful no-hands polyself drops gauntlets of dexterity and removes dext
 
     await debugPolyselfInto('wererat');
 
+    assert.equal(game.u.abon.a[A_DEX], 0);
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
     assert.match(pending, /You drop your gloves!/);
@@ -40276,7 +40278,8 @@ test('successful no-hands polyself drops Wizard cornuthaum and removes charisma 
         uenmax: 0,
         ulevel: 1,
         uac: 10,
-        acurr: { a: [10, 10, 10, 10, 10, 11] },
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+        abon: { a: [0, 0, 0, 0, 0, 1] },
         amax: { a: [10, 10, 10, 10, 10, 10] },
     });
     const cornuthaum = wornArmor(32087, 'cornuthaum', 'h');
@@ -40284,6 +40287,7 @@ test('successful no-hands polyself drops Wizard cornuthaum and removes charisma 
 
     await debugPolyselfInto('wererat');
 
+    assert.equal(game.u.abon.a[A_CHA], 0);
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
     assert.match(pending, /Your hat falls to the floor!/);
@@ -40311,7 +40315,8 @@ test('successful no-hands polyself drops non-Wizard cornuthaum and restores char
         uenmax: 0,
         ulevel: 1,
         uac: 10,
-        acurr: { a: [10, 10, 10, 10, 10, 9] },
+        acurr: { a: [10, 10, 10, 10, 10, 10] },
+        abon: { a: [0, 0, 0, 0, 0, -1] },
         amax: { a: [10, 10, 10, 10, 10, 10] },
     });
     const cornuthaum = wornArmor(32088, 'cornuthaum', 'h');
@@ -40319,6 +40324,7 @@ test('successful no-hands polyself drops non-Wizard cornuthaum and restores char
 
     await debugPolyselfInto('wererat');
 
+    assert.equal(game.u.abon.a[A_CHA], 0);
     assert.match(game._pending_message || '', /Your hat falls to the floor!/);
     assert.equal(game.u.acurr.a[A_CHA], 10);
     assert.equal(game.u.amax.a[A_CHA], 10);
@@ -40338,7 +40344,8 @@ test('successful no-hands polyself drops helm of brilliance and removes mental b
         uenmax: 0,
         ulevel: 1,
         uac: 9,
-        acurr: { a: [10, 12, 13, 10, 10, 10] },
+        acurr: { a: [10, 10, 11, 10, 10, 10] },
+        abon: { a: [0, 2, 2, 0, 0, 0] },
         amax: { a: [10, 10, 11, 10, 10, 10] },
     });
     const helm = wornArmor(32089, 'helm of brilliance', 'h', 2, {
@@ -40349,6 +40356,7 @@ test('successful no-hands polyself drops helm of brilliance and removes mental b
 
     await debugPolyselfInto('wererat');
 
+    assert.equal(game.u.abon.a[A_INT], 0);
     const pending = game._pending_message || '';
     assert.equal(game.u._polyself_form?.name, 'wererat');
     assert.match(pending, /Your helm falls to the floor!/);
@@ -45441,13 +45449,14 @@ test('metallivorous eaten strangulation amulet recovers for breathless heroes', 
     assert.match(game._pending_message, /This oval amulet is delicious!/);
     assert.match(game._pending_message, /You choke, but recover your composure\./);
     assert.doesNotMatch(game._pending_message, /You die/);
-    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(2)=0']);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0']);
 });
 
 test('metallivorous eaten strangulation amulet uses C random recovery roll', async () => {
     installCommandShopState();
     installMetallivorousForm();
     initRng(1);
+    installCoreRngValues([0, 0]);
     enableRngLog({ reset: true });
     const amulet = metalAmulet(32204, 'amulet of strangulation', 3, 'a', { appearance: 'oval' });
     game.inventory = [amulet];
@@ -45460,7 +45469,7 @@ test('metallivorous eaten strangulation amulet uses C random recovery roll', asy
     assert.equal(game.u.uhp, 10);
     assert.equal(game.u.uhunger, 920);
     assert.match(game._pending_message, /You choke, but recover your composure\./);
-    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(2)=0', 'rn2(20)=0']);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(20)=0']);
 });
 
 test('metallivorous eaten strangulation amulet can fatally choke over metal', async () => {
@@ -45482,7 +45491,7 @@ test('metallivorous eaten strangulation amulet can fatally choke over metal', as
     assert.equal(game._death_cause, 'choked on an oval amulet');
     assert.match(game._pending_message, /This oval amulet is delicious!/);
     assert.match(game._pending_message, /You choke over your metal\.  You die\.\.\./);
-    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(2)=0', 'rn2(20)=5', 'rn2(1)=0']);
+    assert.deepEqual(getRngLog(), ['rn2(5)=0', 'rn2(20)=4', 'rn2(1)=0']);
 });
 
 test('first bite of unpaid carried food stack splits live and used-up bill rows', () => {
@@ -85419,7 +85428,7 @@ test('f command Samurai skilled ya with yumi uses role multishot bonus', async (
     assert.match(game._pending_message, /You shoot 3 ya\./);
     assert.equal(hitMessages.length, 3);
     assert.equal(damageRolls.length, 3);
-    assert.equal(goblin.mhp, 100 - damageRolls.reduce((sum, roll) => sum + roll + 1, 0));
+    assert.equal(goblin.mhp, 100 - damageRolls.reduce((sum, roll) => sum + roll + 2, 0));
     assert.equal(goblin.msleeping, 0);
     assert.equal(goblin.meating, 0);
     assert.equal(goblin.mstrategy, 0);
@@ -85550,7 +85559,7 @@ test('f command count prefix caps launcher multishot after roll', async () => {
     assert.equal(rngCallValue(rngLog[0]), 3);
     assert.match(game._pending_message, /You shoot 1 ya\./);
     assert.match(game._pending_message, /The ya hits the goblin[.!]/);
-    assert.equal(goblin.mhp, 100 - (damageRoll + 1));
+    assert.equal(goblin.mhp, 100 - (damageRoll + 2));
     assert.equal(missile.quan, 2);
     const landed = game.level.objects.find(obj => obj.kind === 'ya' && obj.ox === 6 && obj.oy === 5);
     assert.ok(landed);
@@ -87646,7 +87655,7 @@ test('wielded potion stack bash consumes one and keeps the stack wielded', async
 test('wielded speed potion bash survivor still runs melee wakeup anger tail', async () => {
     installNonShopFloorState();
     initRng(2);
-    installCoreRngValues([0, 0, 0, 1, 1]);
+    installCoreRngValues([0, 0, 0, 0, 1, 1]);
     game.u.acurr.a[A_STR] = 18;
     game.u.acurr.a[A_DEX] = 25;
     game.u.udaminc = 9;

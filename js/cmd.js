@@ -10,13 +10,14 @@ import { chooseMonsterSpell, monsterSpellWouldBeUseless, MCAST_INDIRECT } from '
 import { ROLE_RANKS } from './roles.js';
 import { autopickTestObject } from './pickup.js';
 import { RING_DEFINITIONS, ringDefinition } from './ring.js';
-import { LOST_DROPPED, W_RINGL, W_RINGR, W_AMUL, FROMOUTSIDE, BLINDED, DEAF, FREE_ACTION, FAINTED } from './const.js';
+import { LOST_DROPPED, W_RINGL, W_RINGR, W_AMUL, FROMOUTSIDE, BLINDED, STUNNED, DEAF, FREE_ACTION, FAINTED } from './const.js';
 import { notake, is_domestic } from './permonst.js';
 import { has_head, is_silent, MS_BUZZ, MS_BURBLE } from './permonst.js';
 import { processGameTimers, monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION, armorBonus, armorSlot } from './armor.js';
-import { findAc, setArmorWorn } from './do_wear.js';
-import { useSkill, loseWeaponSkill, initializeSkills, skillMenuEntries, advanceSkill, spellSkillType, skillAdvanceTip } from './skills.js';
+import { findAc, setArmorWorn, changeArmorBonuses, cancelArmorDressing, adjustArmorAttributeBonuses } from './do_wear.js';
+import { useSkill, loseWeaponSkill, initializeSkills, skillMenuEntries, advanceSkill, spellSkillType, skillAdvanceTip,
+    objectWeaponSkill, weaponSkillBonuses, exerciseSteed, SKILL_NAMES } from './skills.js';
 import { recordWizardSpellbookDiscoveries, appendAfterMoreMessage } from './allmain.js';
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
@@ -29,11 +30,11 @@ import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_
 import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, ANTIMAGIC, SHOCK_RES,
     FIRE_RES, SLEEP_RES, DISINT_RES, TELEPORT_CONTROL, STEALTH, FAST, INVIS,
     W_ARMOR, W_ACCESSORY, LOST_NONE, LOST_THROWN } from './const.js';
-import { S_MIMIC, S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
+import { S_MIMIC, S_NYMPH, PM_AMOROUS_DEMON, PM_ARCHON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsCold, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
-import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
+import { flashRay, flashBurnHero, flashResistance, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
     recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
 
 // mondata.c:1558-1583 and vision.h:m_canseeu: this observation is shared by
@@ -286,7 +287,8 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay, resumeReleasedSpell } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay, resumeReleasedSpell, resumeSelfElementalSpell, resumeSpellBursts } from './spell.js';
+import { resumeSpellExplosion } from './explode.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
@@ -321,10 +323,10 @@ const POISONOUS_CORPSES = new Set(['kobold', 'large kobold', 'kobold leader', 'k
 function exerciseAttribute(attr, increase) {
     const u = game.u;
     if (!u || attr === A_INT || attr === A_CHA) return;
-    if (u._polyself_base && attr !== A_WIS) return;
+    if (u._polyself_form && attr !== A_WIS) return;
     u._aexe ??= Array(A_MAX).fill(0);
     if (Math.abs(u._aexe[attr] || 0) >= 50) return;
-    const current = u.acurr?.a?.[attr] ?? 10;
+    const current = currentHeroAttribute(attr);
     if (increase) u._aexe[attr] += rn2(19) > current ? 1 : 0;
     else u._aexe[attr] -= rn2(2);
 }
@@ -8104,6 +8106,7 @@ function recordKnownArmorDiscovery(kind, starred = false) {
     const existing = game._discoveries.find(entry => entry.section === 'Armor' && entry.name === discoveryName);
     if (existing) {
         existing.text = text;
+        existing.known = true;
         if (!starred) existing.starred = false;
         return;
     }
@@ -10183,34 +10186,55 @@ function playerSpellEffectDependencies() {
     }
 
 
-    async function spellElementalHeroDamage(element, original, damage, cause, messages, { golemDamage = original } = {}) {
-        if (element === 'fire') burnAwayHeroSlime(messages);
-        if (game.u?.uinvulnerable) {
-            damage = golemDamage = 0;
-            messages.push('You are unharmed!');
+    function spellKillHero(messages, cause) {
+        // done's status snapshot precedes zeroing both HP pools. Its callers
+        // supply their own death feedback; there is no implicit losehp line.
+        game._death_status_hp_before_zero = game.u.uhp;
+        game._death_cause = cause;
+        game.u.uhp = 0;
+        if (game.u._polyself_form) game.u.mh = 0;
+        if (consumeLifeSavingAmulet()) {
+            messages.push(`But wait...  Your medallion ${heroIsBlind() ? 'feels warm' : 'begins to glow'}!`);
+            return { lifeSaving: true, more: true };
         }
-        const inventory = element === 'fire'
-            ? fireDamageInventory(original, true, false, { allowLifeSaving: true, igniteBeforeDestroy: true })
-            : coldDamageInventory(original);
-        messages.push(...inventory.messages);
-        if (inventory.fatal) return { fatal: true, more: true };
-        if (inventory.lifeSaving) await spellRestoreLifeSavedHero();
-        const itemResult = applyChestTrapFireDamage(messages, inventory.damage, inventory.deathCause || cause);
-        if (itemResult.fatal) return itemResult;
-        if (itemResult.lifeSaving) await spellRestoreLifeSavedHero();
-        // C ugolemeffects precedes direct explosion damage and uses the
-        // role-adjusted damage, even when elemental resistance shields HP.
-        const form = pmOf({ data: game.u?._polyself_form }) || game.u?._polyself_form;
-        const hp = heroPolyselfFireHpState();
-        if (element === 'fire' && form?.name === 'iron golem' && hp
-            && game.u[hp.hpKey] < game.u[hp.maxKey]) {
-            game.u[hp.hpKey] = Math.min(game.u[hp.maxKey], game.u[hp.hpKey] + golemDamage);
-            messages.push('Strangely, you feel better than before.');
-            exerciseAttribute(A_STR, true);
+        return { fatal: true, more: true };
+    }
+
+    function explosionHeroInjury(state, description) {
+        const u = game.u;
+        if (!state.injuryPhase) {
+            state.injuryPhase = 'done';
+            const hp = heroPolyselfFireHpState();
+            if (!state.heroResistant) {
+                let amount = state.heroDamage;
+                if (state.grabbing && (state.grabX - state.x) ** 2 + (state.grabY - state.y) ** 2 <= 2) amount *= 2;
+                const key = hp ? hp.hpKey : 'uhp';
+                u[key] = (u[key] || 0) - amount;
+            }
+            observeHeroElementResistance(state.element, state.heroResistant);
+            if (u.uhp > 0 && (!hp || u[hp.hpKey] > 0)) return true;
+            if (hp) {
+                const messages = [];
+                if (heroHasUnchanging()) {
+                    const result = spellKillHero(messages, 'killed while stuck in creature form');
+                    return publishMonsterDamageResult(messages, result);
+                }
+                const result = rehumanizeAfterPolyselfDeath();
+                appendRehumanizeDeathResultMessages(messages, result, { allowLifeSaving: true });
+                return publishMonsterDamageResult(messages, messages);
+            }
+            state.injuryPhase = 'death';
+            const message = game._norep_prevmsg === `You are caught in the ${description}!`
+                ? 'It is fatal.' : `The ${description} is fatal.`;
+            if (!addToplineMessage(message)) return false;
         }
-        const result = applyChestTrapFireDamage(messages, damage, cause);
-        if (result.lifeSaving) await spellRestoreLifeSavedHero();
-        return { ...result, lifeSaving: !result.fatal && (!!result.lifeSaving || !!itemResult.lifeSaving || !!inventory.lifeSaving) };
+        if (state.injuryPhase === 'death') {
+            state.injuryPhase = 'done';
+            const messages = [], result = spellKillHero(messages,
+                `caught ${game.flags?.female ? 'herself in her' : 'himself in his'} own ${description}`);
+            return publishMonsterDamageResult(messages, result);
+        }
+        return true;
     }
 
     function spellExplosionFloor(x, y, element, messages) {
@@ -10270,21 +10294,12 @@ function playerSpellEffectDependencies() {
         stopHeroOccupation,
         healHero,
         damageHero: applyHeroHitPointDamage,
-        killHero: (messages, cause) => {
-            // zhitu calls done directly; the usual losehp "You die" line
-            // is absent, and done's bot snapshot precedes zeroing both HP pools.
-            game._death_status_hp_before_zero = game.u.uhp;
-            game._death_cause = cause;
-            game.u.uhp = 0;
-            if (game.u._polyself_form) game.u.mh = 0;
-            if (consumeLifeSavingAmulet()) {
-                messages.push(`But wait...  Your medallion ${heroIsBlind() ? 'feels warm' : 'begins to glow'}!`);
-                return { lifeSaving: true, more: true };
-            }
-            return { fatal: true, more: true };
-        },
+        killHero: spellKillHero,
         publishDamageResult: publishMonsterDamageResult,
         heroColdInventoryDamage: resumeHeroColdInventoryDamage,
+        heroFireInventoryDamage: resumeHeroFireInventoryDamage,
+        explosionHeroInjury,
+        burnAwayHeroSlime,
         halfSpellDamage: amount => {
             const prop = game.u.uprops?.[HALF_SPDAM];
             return game.u.halfSpellDamage || game.u.Half_spell_damage || game.u.extrinsics?.halfSpellDamage
@@ -10390,7 +10405,6 @@ function playerSpellEffectDependencies() {
         coldDamageInventory,
         heroHasColdResistance,
         heroHasFireResistance: () => heroHasFireResistance() || resistsFire({ data: game.u?._polyself_form }),
-        spellElementalHeroDamage,
         observeHeroElementResistance,
         spellExplosionFloor,
         burnMonsterArmorFromFire,
@@ -10624,6 +10638,15 @@ async function resumePlayerSpellEffect() {
         await finishSpellEffectResult(state.spell, result);
     } else if (state.kind === 'releasedSpell') {
         const result = await resumeReleasedSpell(state.state, playerSpellEffectDependencies());
+        await finishSpellEffectResult(state.spell, result);
+    } else if (state.kind === 'selfElementalSpell') {
+        const result = await resumeSelfElementalSpell(state.state, playerSpellEffectDependencies());
+        await finishSpellEffectResult(state.spell, result);
+    } else if (state.kind === 'spellExplosion') {
+        const result = await resumeSpellExplosion(state.state, playerSpellEffectDependencies());
+        await finishSpellEffectResult(state.spell, result);
+    } else if (state.kind === 'spellBursts') {
+        const result = await resumeSpellBursts(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
     }
 }
@@ -12706,6 +12729,7 @@ function removeInventoryItem(item, amount = 1) {
     } else {
         setArtifactEquipmentLight(item, false);
         stopCarriedFigurineTimerOnLeave(item);
+        cancelArmorDressing(item);
         for (const slot of ['uwep', 'uswapwep', 'uquiver', 'uarm', 'uarmc', 'uarmh',
             'uarms', 'uarmg', 'uarmf', 'uarmu', 'uamul', 'uleft', 'uright', 'ublindf']) {
             if (game.u?.[slot] === item) game.u[slot] = null;
@@ -12758,6 +12782,17 @@ function useUpInventoryItem(item, amount = 1) {
     }
     removeInventoryItem(item, usedCount);
     return true;
+}
+
+// setnotworn clears the whole equipment reference even when only part of
+// a wielded stack is consumed by an effect.
+function clearUsedItemEquipment(item) {
+    if (item.wielded || item.alternate || item.owornmask & (W_WEP | W_SWAPWEP)) {
+        game.u.twoweap = false; game._twoweapon = false;
+    }
+    for (const slot of ['uwep', 'uswapwep', 'uquiver']) if (game.u[slot] === item) game.u[slot] = null;
+    item.owornmask = 0;
+    item.worn = item.wielded = item.alternate = item.quivered = false;
 }
 
 // C obfree deletes contents before dealloc_obj stops each object's timers.
@@ -13111,7 +13146,7 @@ function coldInventoryItemProtected() {
     return chance ? rn2(100) < chance : false;
 }
 
-function coldDestroyInventorySelection(items, origDamage) {
+function destroyInventorySelection(items, origDamage, eligibleItem) {
     let limit = Math.trunc(origDamage / 5);
     if (origDamage % 5 > rn2(5)) limit++;
     if (limit < 1) return [];
@@ -13120,12 +13155,22 @@ function coldDestroyInventorySelection(items, origDamage) {
     const selected = [];
     let eligible = 0;
     for (const item of [...(items || [])]) {
-        if (!coldDestroyablePotion(item)) continue;
+        if (!eligibleItem(item)) continue;
         const i = eligible < limit ? eligible : rn2(eligible);
         eligible++;
         if (i < limit) selected[i] = item;
     }
-    return selected.filter(Boolean);
+    const chosen = selected.filter(Boolean);
+    if (items !== game.inventory) return chosen;
+    // zap.c:destroy_items defers water which can change a lycanthrope's
+    // form. Capture the condition before any selected item takes effect.
+    return chosen.map(item => ({ item, deferred: isWaterPotion(item) && !!heroLycanthropeBeastName()
+        && !!(game.u._polyself_form ? item.blessed : item.cursed) }))
+        .sort((a, b) => Number(a.deferred) - Number(b.deferred)).map(entry => entry.item);
+}
+
+function coldDestroyInventorySelection(items, origDamage) {
+    return destroyInventorySelection(items, origDamage, coldDestroyablePotion);
 }
 
 function coldInventoryDestroyVerb(plural) {
@@ -13168,10 +13213,92 @@ function resumeHeroColdInventoryDamage(state) {
             if (!addToplineMessage(`${prefix}${coldPotionDisplayName(item, plural)} ${coldInventoryDestroyVerb(plural)}!`)) return false;
         }
         if (state.phase === 'damage') {
-            removeInventoryItem(state.item, state.destroyed); state.phase = 'exercise';
+            const item = state.item;
+            clearUsedItemEquipment(item);
+            useUpInventoryItem(item, state.destroyed); state.phase = 'exercise';
             const messages = [], result = applyHeroHitPointDamage(messages, state.damage,
                 coldInventoryDeathCause(state.destroyed > 1));
             if (!publishMonsterDamageResult(messages, result)) return false;
+        }
+        if (state.phase === 'exercise') {
+            exerciseAttribute(A_STR, false); state.phase = 'item';
+        }
+    }
+    return true;
+}
+
+// explode.c ignites before destroy_items. Within each stack, feedback and
+// potion vapor precede consumption, and losehp returns before the next stack.
+async function resumeHeroFireInventoryDamage(state) {
+    if (!state.phase) { state.phase = 'armor'; state.output = []; }
+    while (state.phase !== 'done') {
+        while (state.output.length) if (!addToplineMessage(state.output.shift())) return false;
+        if (monsterAttackWaiting()) return false;
+        if (state.phase === 'armor') {
+            const armor = burnWornArmorFromFire();
+            if (armor.message) state.output.push(armor.message);
+            state.ignite = [...(game.inventory || [])]; state.igniteIndex = 0; state.phase = 'ignite';
+            continue;
+        }
+        if (state.phase === 'ignite') {
+            if (state.igniteIndex < state.ignite.length) {
+                const item = state.ignite[state.igniteIndex++];
+                if ((game.inventory || []).includes(item))
+                    maybeIgniteFireItem(item, state.output, [], {}, { joinedArmorMessage: true });
+                continue;
+            }
+            state.items = destroyInventorySelection(game.inventory || [], state.original, item => {
+                const cls = fireDestroyableInventoryClass(item);
+                return cls && !fireInventoryItemImmune(item, cls);
+            });
+            state.index = 0; state.phase = 'item';
+        }
+        if (state.phase === 'item') {
+            if (state.index >= state.items.length) { state.phase = 'done'; break; }
+            const item = state.item = state.items[state.index++];
+            if (!(game.inventory || []).includes(item) || fireInventoryItemProtected()) continue;
+            const cls = state.cls = fireDestroyableInventoryClass(item);
+            state.resistant = cls !== 'potion' && cls !== 'slime' && heroHasFireResistance();
+            if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
+                if (!heroIsBlind()) state.output.push(bookOfTheDeadGlowMessage());
+                continue;
+            }
+            const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+            state.damage = cls === 'scroll' || cls === 'spellbook' ? 1 : fireInventoryItemDamage(item, cls);
+            state.destroyed = 0;
+            for (let i = 0; i < quan; i++) if (!rn2(3)) state.destroyed++;
+            if (!state.destroyed) continue;
+            const plural = state.destroyed > 1;
+            const name = pickupObjectName({ ...item, line: '', quan: plural ? Math.max(2, quan) : 1 });
+            const subject = state.destroyed === 1 && quan === 1 ? `Your ${name}`
+                : state.destroyed === 1 ? `One of your ${name}` : state.destroyed < quan ? `Some of your ${name}`
+                    : quan === 2 ? `Both of your ${name}` : `All of your ${name}`;
+            state.phase = 'vapor';
+            state.output.push(`${subject} ${fireInventoryDestroyVerb(cls, item, plural)}!`);
+            continue;
+        }
+        if (state.phase === 'vapor') {
+            if (state.cls === 'potion') {
+                const result = potionBreathe(state.item, [], { allowLifeSaving: true, serial: true }, state.vapor ??= {});
+                if (result.pending) return false;
+            }
+            state.vapor = null; state.phase = 'consume';
+        }
+        if (state.phase === 'consume') {
+            const item = state.item;
+            clearUsedItemEquipment(item);
+            useUpInventoryItem(item, state.destroyed);
+            state.phase = 'item';
+            if (state.damage) {
+                if (state.resistant) {
+                    if (!addToplineMessage("You aren't hurt!")) return false;
+                } else {
+                    state.phase = 'exercise';
+                    const messages = [], result = applyHeroHitPointDamage(messages, state.damage,
+                        fireInventoryDeathCause(state.cls, item, state.destroyed > 1));
+                    if (!publishMonsterDamageResult(messages, result)) return false;
+                }
+            }
         }
         if (state.phase === 'exercise') {
             exerciseAttribute(A_STR, false); state.phase = 'item';
@@ -13405,6 +13532,7 @@ export async function runMonsterAttackTurn(mon, options = {}) {
         say: text => addToplineMessage(text),
         waiting: () => monsterAttackWaiting(),
         cast: (m, attack, found) => monsterCastSpell(m, { attack, found }),
+        gaze: s => monsterGaze(s.mon, s.attack, s.effect ??= {}),
         wield: m => (!m.mw || m.weapon_check === NEED_WEAPON) ? monWieldItem(m) : 0,
         swing: (m, weapon) => game.flags?.verbose && heroCanSeeMonster(m)
             ? monsterSwingMessage(m, { isHero: true }, weapon) : '',
@@ -13445,6 +13573,55 @@ export async function runMonsterAttackTurn(mon, options = {}) {
 function monsterAttackWaiting() {
     return !!(game._command_mode || game._message_more || game._topline_after_more
         || game._queued_message_after_more || game._queued_messages_after_more?.length);
+}
+
+// mhitu.c:gazemu AD_BLND. A gaze has no hit roll and returns MISS even when
+// it changes a status. Each pline returns before the following status or roll.
+export async function monsterGaze(mon, attack, state = {}) {
+    if (!state.phase) {
+        const cancelled = (heroIsHallucinating() && rn2(4)) || heroIsUnaware() || mon.mcan;
+        state.phase = 'done';
+        if (!heroCanSeeMonster(mon) || flashResistance(null, { heroIsBlind, heroIsUnaware }).resists
+            || (mon.mx - game.u.ux) ** 2 + (mon.my - game.u.uy) ** 2 > BOLT_LIM ** 2) return true;
+        if (cancelled) {
+            let react = rn1(2, 2);
+            if (mon.mcan && pmOf(mon)?.pm === PM_ARCHON && rn2(5)) return true;
+            if (heroIsHallucinating() && rn2(3)) react = rn2(8);
+            const reactions = ['confused', 'stunned', 'puzzled', 'dazzled', 'irritated', 'inflamed', 'tired', 'dulled'];
+            const qualifier = !rn2(3) ? '' : !mon.mcansee ? 'quite ' : !rn2(2) ? 'a bit ' : 'somewhat ';
+            const name = tipHatMonsterPlineName(mon, true, fireScrollMonsterName(mon));
+            return addToplineMessage(`${name} looks ${qualifier}${reactions[react]}.`);
+        }
+        state.blindDuration = d(attack.damn, attack.damd);
+        state.phase = 'blind';
+        const name = tipHatMonsterPlineName(mon, true, fireScrollMonsterName(mon)).replace(/^The /, 'the ');
+        if (!addToplineMessage(`You are blinded by ${name}${name.endsWith('s') ? "'" : "'s"} radiance!`)) return false;
+    }
+    if (state.phase === 'blind') {
+        setHeroBlindedTimeout(state.blindDuration, [], false);
+        state.phase = 'stunRoll';
+        stopHeroOccupation();
+        if (monsterAttackWaiting()) return false;
+    }
+    if (state.phase === 'stunRoll') {
+        state.phase = 'done';
+        if (!heroIsBlind()) return addToplineMessage('Your vision clears.');
+        const prop = game.u.uprops?.[STUNNED];
+        const old = prop ? prop.intrinsic || 0 : game.u._stunTimeout || 0;
+        state.stunDuration = Math.max(old & TIMEOUT, rnd(3));
+        state.phase = 'stun';
+        if (!old && !heroIsUnaware()
+            && !addToplineMessage(game.u.usteed ? 'You wobble in the saddle.' : 'You stagger...')) return false;
+    }
+    if (state.phase === 'stun') {
+        const prop = game.u.uprops?.[STUNNED];
+        if (prop) prop.intrinsic = (prop.intrinsic || 0) & ~TIMEOUT | state.stunDuration;
+        game.u._stunTimeout = state.stunDuration;
+        game.u.stunned = true;
+        addHeroStatusSuffix('Stun');
+        state.phase = 'done';
+    }
+    return true;
 }
 
 // The death prompt belongs to its displayed line. On overflow, retain its
@@ -13497,7 +13674,7 @@ async function resumeMonsterTheft(state) {
         if (effect.phase === 'remove') {
             const item = effect.item, messages = [];
             item.in_use = 1;
-            if (game._armor_wear_occupation?.itemLetter === item.letter) game._armor_wear_occupation = null;
+            cancelArmorDressing(item);
             let result = {};
             if (wornRingItem(item) || effect.ringState.started) {
                 result = await changeHeroRing(item, 0, messages, effect.ringState);
@@ -13511,8 +13688,7 @@ async function resumeMonsterTheft(state) {
                 result = await takeOffEquipment(item, { force: true }) || {};
                 messages.push(...(result.messages || []));
                 const slot = armorSlot(item);
-                if (slot === 'helm') addPolyselfHelmetOffSideEffects(item, messages);
-                if (slot === 'gloves' && objectKindKey(item) === 'gauntlets of dexterity') addPolyselfGlovesOffSideEffects(item);
+                if (slot === 'helm' && objectKindKey(item) === 'helm of opposite alignment') restoreHeroOppositeAlignment(messages);
             } else {
                 const light = setArtifactEquipmentLight(item, false);
                 if (light) messages.push(light);
@@ -16899,7 +17075,9 @@ function heroHasPolymorphControl() {
 }
 
 function heroIsUnaware() {
-    return !!(game.u?.unaware || (game._helpless_time || 0) > 0 && game.u?._unaware);
+    return !!(game.u?.unaware || (game._helpless_time || 0) > 0 && game.u?._unaware
+        || game.multi < 0 && (game.u?.usleep || game.u?.uhs === FAINTED
+            || /^(You awake|You regain con|You are consci)/.test(game._wake_message || '')));
 }
 
 function controllablePolyself() {
@@ -17174,7 +17352,7 @@ function polyselfHeadgearIsFlimsy(helm) {
 }
 
 function polyselfHeadgearBeingDonned(helm) {
-    return !!(helm?.donning || helm?._donning || helm?.takingOff);
+    return !!(helm?._armorDonPending || helm?.donning || helm?._donning || helm?.takingOff);
 }
 
 function polyselfMummyWrappingAllowed(form, cloak) {
@@ -17422,10 +17600,21 @@ function changeHeroLuck(delta) {
     game.u.uluck = next < 0 ? Math.max(next, LUCKMIN) : next > 0 ? Math.min(next, LUCKMAX) : 0;
 }
 
-function adjustHeroWornAttributeBonus(attr, delta) {
-    if (!game.u?.acurr?.a || !delta) return;
-    const before = Number(game.u.acurr.a[attr] ?? 10);
-    game.u.acurr.a[attr] = Math.max(3, Math.min(25, before + delta));
+export function finishArmorBonusChange(item, on) {
+    if (!item) return;
+    if (!on) cancelArmorDressing(item);
+    const discovered = changeArmorBonuses(item, on, game, identifyArmorType);
+    if (discovered) {
+        item.known = true;
+        updateArmorLine(item);
+    }
+}
+
+function identifyArmorType(kind) {
+    const known = (game._discoveries || []).some(entry => entry.section === 'Armor'
+        && entry.name === pairArmorDiscoveryName(kind) && entry.known !== false);
+    if (!known) exerciseAttribute(A_WIS, true);
+    recordKnownArmorDiscovery(kind, false);
 }
 
 function heroRoleName() {
@@ -17972,6 +18161,7 @@ export function addBootsOffSideEffects(item, messages = []) {
     const hadRelocation = game._relocate_after_more;
     const hadLavaDeath = game._polyself_lava_death_more || 0;
     const kind = objectKindKey(item);
+    if (kind === 'fumble boots') finishArmorBonusChange(item, false);
     if (kind === 'water walking boots') addPolyselfWaterWalkingBootsOffSideEffects(item, messages);
     if (kind === 'levitation boots') addPolyselfLevitationBootsOffSideEffects(item, messages);
     if (kind === 'speed boots' && game.u
@@ -18024,26 +18214,16 @@ function clearPolyselfDeferredArmorWearState(items) {
 function addPolyselfHelmetOffSideEffects(item, messages = []) {
     const kind = objectKindKey(item);
     if (kind === 'fedora' && heroRoleName() === 'Archeologist') changeHeroLuck(-1);
-    if (polyselfHeadgearBeingDonned(item)) return;
-    if (kind === 'cornuthaum') {
-        adjustHeroWornAttributeBonus(A_CHA, heroRoleName() === 'Wizard' ? -1 : 1);
-    } else if (kind === 'helm of brilliance') {
-        const delta = -Math.trunc(Number(item?.spe ?? 0));
-        adjustHeroWornAttributeBonus(A_INT, delta);
-        adjustHeroWornAttributeBonus(A_WIS, delta);
-        if (delta) recordKnownArmorDiscovery(kind, false);
-    } else if (kind === 'helm of opposite alignment') {
+    finishArmorBonusChange(item, false);
+    if (kind === 'helm of opposite alignment') {
         restoreHeroOppositeAlignment(messages);
     }
 }
 
 function addPolyselfGlovesOffSideEffects(item) {
     const kind = objectKindKey(item);
-    if (kind === 'gauntlets of dexterity') {
-        const delta = -Math.trunc(Number(item?.spe ?? 0));
-        adjustHeroWornAttributeBonus(A_DEX, delta);
-        if (delta) recordKnownArmorDiscovery(kind, false);
-    } else if (kind === 'gauntlets of power') {
+    finishArmorBonusChange(item, false);
+    if (kind === 'gauntlets of power') {
         updateGauntletsOfPowerStrength(kind, false);
         recordKnownArmorDiscovery(kind, false);
     }
@@ -20305,6 +20485,7 @@ async function takeOffFacewear(item) {
     if (artifactDefinitionForName(item.artifact || item.oartifact)?.name === 'The Eyes of the Overworld') {
         // Blindf_off re-evaluates sight after removing the artifact's override.
         const prop = game.u.uprops?.[BLINDED];
+        if (prop) prop.blocked &= ~W_TOOL;
         const timeout = prop ? (prop.intrinsic || 0) & TIMEOUT : game.u._blindTimeout || 0;
         setHeroBlindedTimeout(timeout, [], false);
         return { messages: [wornMessage, !wasBlind && game.u.blind ? "You can't see anything now!" : ''].filter(Boolean) };
@@ -20453,22 +20634,22 @@ async function takeOffEquipment(item, options = {}) {
 
     const acBonus = armorBonus(item);
     const slot = armorSlot(item);
-    const kind = String(item.kind || '').toLowerCase();
+    const kind = armorKind(item);
     const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
     if (delay && !options.force) {
-        const simpleName = pickupObjectName(item);
         game._armor_wear_occupation = {
             action: 'takeoff',
             itemLetter: item.letter || '?',
             kind,
             baseName,
-            simpleName: / mail$/.test(simpleName) ? 'mail' : simpleName,
+            simpleName: armorSimpleSlotName(item),
             acBonus,
             turns: delay,
         };
         return { messages: [], move: 1 };
     }
 
+    finishArmorBonusChange(item, false);
     item.worn = false;
     item.owornmask = 0;
     item.line = `${item.letter || '?'} - ${baseName}`;
@@ -20656,7 +20837,7 @@ async function finishTakeOffEquipment(item, options = {}) {
             game._pending_message_visual_override = options.visualPromptOverride;
             game._pending_message_visual_override_base = message;
         }
-    } else if (options.keepPromptWhenSilent) {
+    } else if (options.keepPromptWhenSilent && !game._armor_wear_occupation) {
         // C ref: off_msg() is verbose-only (do_wear.c:1048); with it
         // suppressed the takeoff prompt stays on the top line.
         game._keep_pending_message = 1;
@@ -22826,20 +23007,6 @@ function heroHasSleepResistance() {
         || polyselfForm()?.sleepResistance || resistsSleep({ data: game.u?._polyself_form }));
 }
 
-function clearPotionVaporBlindness(messages) {
-    if (!game.u) return;
-    const wasBlind = heroIsBlind();
-    game.u.blind = false;
-    game.u._blindTimeout = 0;
-    game.u.ucreamed = 0;
-    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Blind', '');
-    game.u._deafTimeout = 0;
-    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Deaf', '');
-    if (wasBlind) messages.push(heroIsHallucinating()
-        ? 'Far out!  Everything is all cosmic again!'
-        : 'You can see again.');
-}
-
 function incrementAbilityFromPotionVapor(blessed) {
     const stats = game.u?.acurr?.a;
     if (!stats) return;
@@ -22857,7 +23024,7 @@ function incrementAbilityFromPotionVapor(blessed) {
 
 function healHeroFromPotionVapor(amount) {
     if (!game.u) return;
-    if (game.u._polyself_base && game.u.mh != null && game.u.mhmax != null)
+    if (game.u._polyself_form && game.u.mh != null && game.u.mhmax != null)
         game.u.mh = Math.min(game.u.mhmax, game.u.mh + amount);
     game.u.uhp = Math.min(game.u.uhpmax || game.u.uhp || 1, (game.u.uhp || 1) + amount);
 }
@@ -23089,10 +23256,7 @@ async function quaffHealingPotion(item, kind) {
     if ((item.owornmask || item.worn || item.wielded || item.quivered || item.alternate)
         && (item.quan || 1) > 1) item = splitOneCarriedInventoryItem(item);
     if ((item.quan || 1) === 1) {
-        for (const slot of ['uwep', 'uswapwep', 'uquiver']) if (game.u[slot] === item) game.u[slot] = null;
-        if (item.wielded || item.alternate || item.owornmask & (W_WEP | W_SWAPWEP)) game.u.twoweap = false;
-        item.owornmask = 0;
-        item.worn = item.wielded = item.alternate = item.quivered = false;
+        clearUsedItemEquipment(item);
         item.line = '';
         refreshInventoryObjectLine(item);
     }
@@ -23241,7 +23405,7 @@ function heroLycanthropeBeastName() {
         ? lycanthrope.name
         : typeof lycanthrope === 'string'
             ? lycanthrope
-            : game.u?.ulycnName || game.u?.lycanthropeName || game.u?.wereForm;
+            : MONS[lycanthrope]?.name || game.u?.ulycnName || game.u?.lycanthropeName || game.u?.wereForm;
     const lower = String(source || '').toLowerCase().replace(/^human\s+/, '');
     const beastMatch = lower.match(/^(?:rat|jackal|wolf)\s+(were(?:rat|jackal|wolf))$/);
     return beastMatch ? beastMatch[1] : lower;
@@ -23293,120 +23457,162 @@ function waterVaporLycanthropyEffect(potion, messages, options = {}) {
     return false;
 }
 
-function potionBreathe(potion, messages, options = {}) {
-    const result = {};
-    if (!heroCanReceivePotionVapor()) return result;
-    const name = potionEffectNameFromAppearance(potion, alchemyPotionName(potion));
-    let knownEffect = false;
-    let blockedByWetTowel = false;
-
-    if (heroHasWetWornTowel()) {
-        messages.push('Some vapor passes harmlessly around you.');
-        blockedByWetTowel = true;
+function potionBreathe(potion, messages, options = {}, state = {}) {
+    const emit = text => {
+        if (!text) return true;
+        if (options.serial) return addToplineMessage(text);
+        messages.push(text); return true;
+    };
+    const pending = () => ({ ...state.result, pending: true });
+    if (!state.phase) {
+        if (!heroCanReceivePotionVapor()) return {};
+        Object.assign(state, { phase: 'effect', result: {}, known: false,
+            name: potionEffectNameFromAppearance(potion, alchemyPotionName(potion)),
+            alreadyInUse: !!potion.in_use });
+        potion.in_use = true;
     }
-
-    if (!blockedByWetTowel) {
-        switch (name) {
-        case 'restore ability':
-        case 'gain ability':
-            if (potion.cursed) {
-                if (heroBreathesPotionVapor()) messages.push('Ulch!  That potion smells terrible!');
-                else if (heroHasPotionVaporEyes()) messages.push('Your eyes sting!');
-            } else {
-                incrementAbilityFromPotionVapor(!!potion.blessed);
+    while (state.phase !== 'done') {
+        const u = game.u;
+        switch (state.phase) {
+        case 'effect':
+            state.phase = 'finish';
+            if (heroHasWetWornTowel()) {
+                if (!emit('Some vapor passes harmlessly around you.')) return pending();
+                break;
             }
-            break;
-        case 'full healing':
-            healHeroFromPotionVapor(1);
-            clearPotionVaporBlindness(messages);
-            // fall through
-        case 'extra healing':
-            healHeroFromPotionVapor(1);
-            if (!potion.cursed) clearPotionVaporBlindness(messages);
-            // fall through
-        case 'healing':
-            healHeroFromPotionVapor(1);
-            if (potion.blessed) clearPotionVaporBlindness(messages);
-            exerciseAttribute(A_CON, true);
-            break;
-        case 'sickness':
-            if ((game.urole?.name?.m || game._startup_role) !== 'Healer' && game.u) {
-                game.u.uhp = game.u.uhp <= 5 ? 1 : game.u.uhp - 5;
+            switch (state.name) {
+            case 'restore ability':
+            case 'gain ability':
+                if (potion.cursed) {
+                    const form = heroFormData(), eyes = bodyPart(form, 'eye');
+                    const one = ['Cyclops', 'floating eye'].includes(form.name);
+                    const message = heroBreathesPotionVapor() ? 'Ulch!  That potion smells terrible!'
+                        : heroHasPotionVaporEyes() ? `Your ${one ? eyes : pluralizeMonsterName(eyes)} ${one ? 'stings' : 'sting'}!` : '';
+                    if (!emit(message)) return pending();
+                } else incrementAbilityFromPotionVapor(!!potion.blessed);
+                break;
+            case 'full healing':
+            case 'extra healing':
+            case 'healing':
+                healHeroFromPotionVapor(state.name === 'full healing' ? 3 : state.name === 'extra healing' ? 2 : 1);
+                state.cureBlind = state.name === 'full healing' || (state.name === 'extra healing' && !potion.cursed) || potion.blessed;
+                state.phase = 'healingBlind';
+                break;
+            case 'sickness':
+                if ((game.urole?.name?.m || game._startup_role) !== 'Healer') {
+                    const key = heroPolyselfFireHpState()?.hpKey || 'uhp';
+                    u[key] = Math.max(1, u[key] - 5);
+                    exerciseAttribute(A_CON, false);
+                }
+                break;
+            case 'hallucination':
+                if (!emit('You have a momentary vision.')) return pending();
+                break;
+            case 'confusion':
+            case 'booze':
+                state.phase = 'confusion';
+                if (!heroIsConfused() && !emit('You feel somewhat dizzy.')) return pending();
+                break;
+            case 'invisibility':
+                if (!heroIsBlind() && !u.invisible) {
+                    state.known = true;
+                    if (!emit(`For an instant you ${u.seeInvisible ? 'could see right through yourself' : "couldn't see yourself"}!`)) return pending();
+                }
+                break;
+            case 'paralysis':
+            case 'sleeping': {
+                state.known = true;
+                const sleeping = state.name === 'sleeping';
+                if (!heroHasFreeAction() && (!sleeping || !heroHasSleepResistance())) {
+                    state.phase = 'immobile';
+                    if (!emit(sleeping ? 'You feel rather tired.' : 'Something seems to be holding you.')) return pending();
+                } else {
+                    if (sleeping) state.phase = 'observeSleep';
+                    if (!emit(sleeping ? 'You yawn.' : 'You stiffen momentarily.')) return pending();
+                }
+                break;
+            }
+            case 'speed':
+                state.phase = 'speed';
+                if (!u.fast && !u.veryfast && !emit('Your knees seem more flexible now.')) return pending();
+                break;
+            case 'blindness':
+                state.phase = 'blindness';
+                if (!heroIsBlind() && !heroIsUnaware()) {
+                    state.known = true;
+                    if (!emit('It suddenly gets dark.')) return pending();
+                }
+                break;
+            case 'water': {
+                const feedback = options.serial ? [] : messages;
+                if (!splitGremlinPolyselfFromWaterVapor(feedback)) waterVaporLycanthropyEffect(potion, feedback, options);
+                if (options.serial && !publishMonsterDamageResult(feedback, feedback)) return pending();
+                break;
+            }
+            case 'acid':
+            case 'polymorph':
                 exerciseAttribute(A_CON, false);
+                break;
             }
-            break;
-        case 'hallucination':
-            messages.push('You have a momentary vision.');
             break;
         case 'confusion':
-        case 'booze':
-            if (!heroIsConfused()) messages.push('You feel somewhat dizzy.');
-            addHeroConfusion(rnd(5));
+            addHeroConfusion(rnd(5)); state.phase = 'finish'; break;
+        case 'immobile': {
+            const duration = rnd(5);
+            if (state.name === 'sleeping') state.result.sleepDuration = duration;
+            if ((game.multi || 0) >= -duration) {
+                game.multi = -duration; u.uinvulnerable = false; u.usleep = 0;
+                game._helpless_time = duration;
+                Object.assign(game.context ??= {}, { run: 0, travel: 0, travel1: 0, mv: 0 });
+                game._run_steps_remaining = 0; game._run_stop_now = 1; game._travel_target = null;
+            }
+            game.multi_reason = state.name === 'sleeping' ? 'sleeping off a magical draught' : 'frozen by a potion';
+            game._wake_message = 'You can move again.';
+            exerciseAttribute(A_DEX, false); state.phase = 'finish'; break;
+        }
+        case 'observeSleep':
+            monstersObserveHeroResistance(M_SEEN_SLEEP, true); state.phase = 'finish'; break;
+        case 'speed': {
+            const prop = u.uprops?.[FAST];
+            u._veryfastTimeout = Math.min(TIMEOUT, (prop ? (prop.intrinsic || 0) & TIMEOUT : u._veryfastTimeout || 0) + rnd(5));
+            if (prop) prop.intrinsic = ((prop.intrinsic || 0) & ~TIMEOUT) | u._veryfastTimeout;
+            syncHeroSpeedState(); exerciseAttribute(A_DEX, true); state.phase = 'finish'; break;
+        }
+        case 'blindness': {
+            const prop = u.uprops?.[BLINDED];
+            const timeout = prop ? (prop.intrinsic || 0) & TIMEOUT : u._blindTimeout || 0;
+            applyHeroBlindnessChange(prepareHeroBlindnessChange(timeout + rnd(5), false));
+            state.phase = 'finish';
+            if (!heroIsBlind() && !heroIsUnaware() && !emit('Your vision quickly clears.')) return pending();
             break;
-        case 'invisibility':
-            if (!heroIsBlind() && !game.u?.invisible) {
-                knownEffect = true;
-                messages.push(`For an instant you ${game.u?.seeInvisible
-                    ? 'could see right through yourself'
-                    : "couldn't see yourself"}!`);
+        }
+        case 'healingBlind':
+            state.phase = 'healingBlindCommit';
+            if (state.cureBlind) {
+                state.blindChange = prepareHeroBlindnessChange(0, !u.ucreamed);
+                if (!emit(state.blindChange.message)) return pending();
             }
             break;
-        case 'paralysis':
-            knownEffect = true;
-            if (!heroHasFreeAction()) {
-                messages.push('Something seems to be holding you.');
-                game._helpless_time = Math.max(game._helpless_time || 0, rnd(5));
-                game._wake_message = 'You can move again.';
-                exerciseAttribute(A_DEX, false);
-            } else {
-                messages.push('You stiffen momentarily.');
-            }
+        case 'healingBlindCommit':
+            if (state.blindChange) applyHeroBlindnessChange(state.blindChange);
+            state.phase = 'healingDeaf'; break;
+        case 'healingDeaf': {
+            state.phase = 'healingExercise';
+            const feedback = [];
+            if (state.cureBlind) clearHeroDeafness(feedback);
+            if (!emit(feedback.join('  '))) return pending();
             break;
-        case 'sleeping':
-            knownEffect = true;
-            if (!heroHasFreeAction() && !heroHasSleepResistance()) {
-                messages.push('You feel rather tired.');
-                const duration = rnd(5);
-                result.sleepDuration = duration;
-                game._helpless_time = Math.max(game._helpless_time || 0, duration);
-                game._wake_message = 'You can move again.';
-                exerciseAttribute(A_DEX, false);
-            } else {
-                messages.push('You yawn.');
-            }
-            break;
-        case 'speed':
-            if (!game.u?.fast && !game.u?.veryfast) messages.push('Your knees seem more flexible now.');
-            if (game.u) {
-                game.u._veryfastTimeout = (game.u._veryfastTimeout || 0) + rnd(5);
-                syncHeroSpeedState();
-            }
-            exerciseAttribute(A_DEX, true);
-            break;
-        case 'blindness':
-            if (!heroIsBlind() && !(game._helpless_time > 0 && game._sleeping_time > 0)) {
-                knownEffect = true;
-                messages.push('It suddenly gets dark.');
-            }
-            if (game.u) {
-                game.u.blind = true;
-                game.u._blindTimeout = (game.u._blindTimeout || 0) + rnd(5);
-            }
-            break;
-        case 'water':
-            if (!splitGremlinPolyselfFromWaterVapor(messages))
-                waterVaporLycanthropyEffect(potion, messages, options);
-            break;
-        case 'acid':
-        case 'polymorph':
-            exerciseAttribute(A_CON, false);
-            break;
-        default:
+        }
+        case 'healingExercise':
+            exerciseAttribute(A_CON, true); state.phase = 'finish'; break;
+        case 'finish':
+            potion.in_use = state.alreadyInUse;
+            state.phase = 'done';
+            learnPotionVaporEffect(potion, state.name, state.known);
             break;
         }
     }
-    learnPotionVaporEffect(potion, name, knownEffect);
-    return result;
+    return state.result;
 }
 
 function heroIsNextToPotionVapor(x, y) {
@@ -25341,7 +25547,7 @@ function heroThrownWeaponHitValue(obj, mon) {
     const thrownHitAdj = Number.isFinite(Number(data?.thrownHitAdj))
         ? Math.trunc(Number(data.thrownHitAdj))
         : key === 'boomerang' ? 4 : 2;
-    return heroProjectileBaseHitValue(obj, mon) + thrownHitAdj;
+    return heroProjectileBaseHitValue(obj, mon) + thrownHitAdj + heroWeaponSkillBonuses(obj).hit;
 }
 
 function heroThrowDirectionIndex(dir) {
@@ -28082,24 +28288,18 @@ function heroExplicitWeaponSkillLevel(skill, skillName) {
     return null;
 }
 
-function heroWeaponDamageSkillBonus(skill, skillName) {
-    const level = heroExplicitWeaponSkillLevel(skill, skillName);
-    if (level == null) return 0;
-    if (level <= P_UNSKILLED) return -2;
-    if (level === P_BASIC) return 0;
-    if (level === P_SKILLED) return 1;
-    if (level >= P_EXPERT) return 2;
-    return 0;
+function heroWeaponSkillBonuses(obj) {
+    return weaponSkillBonuses(obj, skill => heroExplicitWeaponSkillLevel(skill, SKILL_NAMES[skill])
+        ?? (skill === P_RIDING ? heroRidingSkillLevel() : P_BASIC));
 }
 
-function heroWeaponHitSkillBonus(skill, skillName) {
-    const level = heroExplicitWeaponSkillLevel(skill, skillName);
-    if (level == null) return 0;
-    if (level <= P_UNSKILLED) return -4;
-    if (level === P_BASIC) return 0;
-    if (level === P_SKILLED) return 2;
-    if (level >= P_EXPERT) return 3;
-    return 0;
+function heroWeaponPracticeMessages(obj, rawDamage, launcherAmmo = false) {
+    // C hmon records this threshold before adding strength or skill damage.
+    if (rawDamage <= (launcherAmmo ? 0 : 1)) return [];
+    const message = useSkill(Math.abs(objectWeaponSkill(obj)), 1);
+    if (!message) return [];
+    const tip = skillAdvanceTip();
+    return tip ? [message, tip] : [message];
 }
 
 function heroLauncherSkillMeta(launcher) {
@@ -28204,10 +28404,11 @@ function heroProjectileWeaponDamage(obj, mon) {
         damage -= Math.max(0, Math.trunc(Number(obj.oeroded || 0)), Math.trunc(Number(obj.oeroded2 || 0)));
         if (damage < 1) damage = 1;
     }
-    damage += heroDamageIncreaseBonus() + heroStrengthDamageBonus();
-    damage += heroWeaponDamageSkillBonus(data.skill, data.skillName);
+    const rawDamage = damage;
+    if (rawDamage > 0)
+        damage += heroDamageIncreaseBonus() + heroStrengthDamageBonus() + heroWeaponSkillBonuses(obj).damage;
     if (damage < 1) damage = 1;
-    return { damage, silverMessage: special.silverMessage };
+    return { damage, silverMessage: special.silverMessage, practice: heroWeaponPracticeMessages(obj, rawDamage) };
 }
 
 const HERO_LAUNCHER_AMMO_MONSTER_DATA = new Map([
@@ -28245,7 +28446,7 @@ function heroFiredLauncherAmmoHitValue(obj, mon, launcher) {
     hitValue += Math.trunc(Number(launcher?.spe || 0)) - objectGreatestErosion(launcher);
     if (Number.isFinite(Number(launcher?.hitbon ?? launcher?.oc_hitbon)))
         hitValue += Math.trunc(Number(launcher.hitbon ?? launcher.oc_hitbon));
-    if (meta) hitValue += heroWeaponHitSkillBonus(meta.skill, meta.skillName);
+    if (meta) hitValue += heroWeaponSkillBonuses(launcher).hit;
     return hitValue;
 }
 
@@ -28273,11 +28474,13 @@ function heroFiredLauncherAmmoDamage(obj, mon, launcher) {
         damage -= objectGreatestErosion(obj);
         if (damage < 1) damage = 1;
     }
-    damage += heroDamageIncreaseBonus();
-    const meta = heroLauncherSkillMeta(launcher) || data;
-    damage += heroWeaponDamageSkillBonus(meta.skill, meta.skillName);
+    if ((heroRoleName() === 'Samurai' && objectKindKey(obj) === 'ya' && objectKindKey(launcher) === 'yumi')
+        || (heroRaceName() === 'elf' && objectKindKey(obj) === 'elven arrow' && objectKindKey(launcher) === 'elven bow'))
+        damage++;
+    const rawDamage = damage;
+    if (rawDamage > 0) damage += heroDamageIncreaseBonus() + heroWeaponSkillBonuses(launcher).damage;
     if (damage < 1) damage = 1;
-    return { damage, silverMessage: special.silverMessage };
+    return { damage, silverMessage: special.silverMessage, practice: heroWeaponPracticeMessages(launcher, rawDamage, true) };
 }
 
 function heroFireProjectileFlightResult(startX, startY, dir, range, obj = null, { ironBars = false } = {}) {
@@ -28458,6 +28661,7 @@ async function heroFiredLauncherAmmoImpact(obj, mon, launcher) {
         const damage = ammoDamage.damage + poison.damage;
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [
+            ...(ammoDamage.practice || []),
             ...poison.messagesBeforeHit,
             `${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`,
         ];
@@ -29688,6 +29892,7 @@ async function heroProjectileWeaponImpact(obj, mon, hitValue, { poisonApplies = 
         const damage = weaponDamage.damage + poison.damage;
         mon.mhp = (mon.mhp || 1) - damage;
         const messages = [
+            ...(weaponDamage.practice || []),
             ...poison.messagesBeforeHit,
             `${floorObjectTheSubject({ ...obj, quan: 1 })} hits ${targetName}${heroProjectileHitPunctuation(damage)}`,
         ];
@@ -35153,9 +35358,8 @@ async function heroPolearmAttackChecks(item, mon, x, y, { autohit = false, confi
 }
 
 function heroAppliedPolearmHitValue(item, mon) {
-    const { skill, skillName } = heroPolearmSkillMeta(item);
     return heroProjectileBaseHitValue(item, mon)
-        + heroWeaponHitSkillBonus(skill, skillName);
+        + heroWeaponSkillBonuses(item).hit;
 }
 
 function heroAppliedPolearmTargetName(mon, x = mon?.mx, y = mon?.my) {
@@ -35209,7 +35413,7 @@ function heroAppliedPolearmExtraDamage(data, prefix) {
 
 function heroAppliedPolearmHitDamage(item, mon) {
     const data = heroAppliedPolearmDamageData(item);
-    if (!data) return Math.max(0, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus());
+    if (!data) return { damage: Math.max(0, rnd(2) + heroStrengthDamageBonus() + heroDamageIncreaseBonus()), practice: [] };
     const largeTarget = heroProjectileMonsterSizeValue(mon) >= 3;
     const prefix = largeTarget ? 'large' : 'small';
     const die = largeTarget ? data.largeDie : data.smallDie;
@@ -35217,15 +35421,17 @@ function heroAppliedPolearmHitDamage(item, mon) {
     damage += heroAppliedPolearmExtraDamage(data, prefix);
     damage += Math.trunc(Number(item?.spe || 0));
     if (damage < 0) damage = 0;
+    const special = heroProjectileSpecialWeaponDamage(item, mon);
+    damage += special.damage;
     if (damage > 0) {
         damage -= objectGreatestErosion(item);
         if (damage < 1) damage = 1;
     }
-    damage += heroStrengthDamageBonus() + heroDamageIncreaseBonus();
-    const { skill, skillName } = heroPolearmSkillMeta(item);
-    damage += heroWeaponDamageSkillBonus(skill, skillName);
+    const rawDamage = damage;
+    if (rawDamage > 0)
+        damage += heroStrengthDamageBonus() + heroDamageIncreaseBonus() + heroWeaponSkillBonuses(item).damage;
     if (damage < 1) damage = 1;
-    return damage;
+    return { damage, silverMessage: special.silverMessage, practice: heroWeaponPracticeMessages(item, rawDamage) };
 }
 
 function heroAppliedPolearmCutWormName(mon) {
@@ -35286,9 +35492,10 @@ async function heroAppliedPolearmImpact(item, mon, { targetX = mon?.mx, targetY 
     if (hitValue >= dieroll) {
         const targetName = heroAppliedPolearmTargetName(mon, targetX, targetY);
         addConductCount('weaphit');
-        const damage = heroAppliedPolearmHitDamage(item, mon);
+        const { damage, practice, silverMessage } = heroAppliedPolearmHitDamage(item, mon);
         if (damage > 0) mon.mhp = (mon.mhp || 1) - damage;
-        const messages = [`You hit ${targetName}${heroProjectileHitPunctuation(damage)}`];
+        const messages = [...practice, `You hit ${targetName}${heroProjectileHitPunctuation(damage)}`];
+        if (silverMessage) messages.push(silverMessage);
         const lethalHit = (mon.mhp || 0) <= 0;
         if (lethalHit) await killMonsterFromHeroProjectileHit(mon, messages, targetName);
         let cutWorm = null;
@@ -46958,7 +47165,7 @@ const ARTIFACT_RETOUCH_DEPS = {
     unwear: async (item, messages) => {
         const oldInUse = item.in_use;
         item.in_use = 1;
-        if (game._armor_wear_occupation?.itemLetter === item.letter) game._armor_wear_occupation = null;
+        cancelArmorDressing(item);
         const fallout = isWornEquipmentItem(item) ? await takeOffEquipment(item, { force: true }) : null;
         if (fallout?.messages) messages.push(...fallout.messages);
         const lightMessage = setArtifactEquipmentLight(item, false);
@@ -48493,6 +48700,7 @@ function destroyWornArmorItem(armor, messages = null) {
     const wasWorn = isWornArmorItem(armor);
     const kind = armorKind(armor);
     if (wasWorn) {
+        finishArmorBonusChange(armor, false);
         setArmorWorn(armor, false);
         findAc();
         armor.line = normalInventoryLine({ ...armor, line: '' });
@@ -48501,10 +48709,7 @@ function destroyWornArmorItem(armor, messages = null) {
     }
     if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
         syncHeroSpeedState();
-    if (armorSlot(armor) === 'gloves')
-        addPolyselfGlovesOffSideEffects(armor);
-    else
-        updateGauntletsOfPowerStrength(kind, false);
+    updateGauntletsOfPowerStrength(kind, false);
     if (armorSlot(armor) === 'boots' && Array.isArray(messages))
         addBootsOffSideEffects(armor, messages);
     if ((game.inventory || []).includes(armor))
@@ -48634,25 +48839,32 @@ function legacyDestroyArm(messages) {
 function armorSimpleSlotName(armor) {
     const name = armorMessageName(armor);
     const kind = armorKind(armor);
+    const known = (game._discoveries || []).some(entry => entry.section === 'Armor'
+        && entry.name === pairArmorDiscoveryName(kind) && entry.known !== false);
+    const appearance = armor.appearance || name;
     switch (armorSlot(armor)) {
     case 'cloak':
         if (kind.includes('robe')) return 'robe';
         if (kind.includes('apron')) return 'apron';
-        if (kind.includes('smock')) return 'smock';
+        if (kind.includes('smock')) return known && armor.dknown !== false ? 'smock' : 'apron';
         if (kind.includes('wrapping')) return 'wrapping';
         return 'cloak';
     case 'body':
-        return name;
+        if (/dragon scale mail$/.test(kind)) return 'dragon mail';
+        if (/dragon scales$/.test(kind)) return 'dragon scales';
+        if (/ mail$/.test(kind)) return 'mail';
+        if (/ jacket$/.test(kind)) return 'jacket';
+        return 'suit';
     case 'shirt':
         return 'shirt';
     case 'helm':
-        return /\b(?:hat|fedora|cornuthaum|cap)\b/.test(kind) ? 'hat' : 'helm';
+        return /\b(?:fedora|cornuthaum|cap|elven leather helm)\b/.test(kind) ? 'hat' : 'helm';
     case 'gloves':
-        return 'gloves';
+        return armor.dknown !== false && /gauntlets/.test(known ? kind : appearance) ? 'gauntlets' : 'gloves';
     case 'boots':
-        return 'boots';
+        return armor.dknown !== false && (/shoes/.test(appearance) || known && /shoes/.test(kind)) ? 'shoes' : 'boots';
     case 'shield':
-        return 'shield';
+        return kind === 'shield of reflection' ? armor.dknown !== false ? 'silver shield' : 'smooth shield' : 'shield';
     default:
         return name;
     }
@@ -48752,6 +48964,8 @@ function destroyArmorCursedCursedEffect(target, messages) {
     messages.push(`${armorSubject(target)} ${armorVerb(target, 'vibrates', 'vibrate')}.`);
     if ((target.spe ?? 0) >= -6) {
         target.spe = (target.spe ?? 0) - 1;
+        const discovered = adjustArmorAttributeBonuses(target, -1, game, identifyArmorType);
+        if (discovered) target.known = true;
         updateWornArmorAcAfterChange(target);
     } else {
         updateArmorLine(target);
@@ -48941,6 +49155,7 @@ function enchantArmorScrollEffect(item) {
         const oldSpe = armor.spe ?? 0;
         armor.spe = capWishSpe(oldSpe + s);
         s = armor.spe - oldSpe;
+        adjustArmorAttributeBonuses(armor, s, game, identifyArmorType);
         if (s && game.u) findAc();
         armor.known = true;
     }
@@ -63690,7 +63905,38 @@ function magicTrapFateResult(fate) {
     return { message };
 }
 
+function commitHeroWalkPosition(oldx, oldy, newx, newy) {
+    Object.assign(game.u, { ux0: oldx, uy0: oldy, ux: newx, uy: newy, umoved: true });
+    if (game.u.usteed) Object.assign(game.u.usteed, { mx: newx, my: newy });
+}
+
+function recordHeroRidingStep(messages) {
+    const message = exerciseSteed();
+    if (!message) return;
+    messages.push(message);
+    const tip = skillAdvanceTip();
+    if (tip) messages.push(tip);
+}
+
 async function moveHero(dx, dy) {
+    const ridingMessages = [];
+    await moveHeroStep(dx, dy, ridingMessages);
+    if (ridingMessages.length) {
+        // Movement's landing operations already own their prompt continuations.
+        // Publish the earlier riding notice before the landing's first message.
+        const lines = packToplineMessages([...ridingMessages, game._pending_message]);
+        const more = !!game._message_more;
+        await setMessage(lines[0], lines.length > 1 || more);
+        if (lines.length > 1) {
+            game._queued_messages_after_more ??= [];
+            game._queued_messages_after_more.unshift(...lines.slice(1).map((text, index) => ({
+                text, more: index < lines.length - 2 || more, processTime: index === lines.length - 2 && !more,
+            })));
+        }
+    }
+}
+
+async function moveHeroStep(dx, dy, ridingMessages) {
     game.u.dx = dx;
     game.u.dy = dy;
     const oldx = game.u?.ux || 0;
@@ -63958,11 +64204,8 @@ async function moveHero(dx, dy) {
                 plugMessage = pitMessages.filter(Boolean).join('  ');
             }
             vision_reset();
-            game.u.ux0 = oldx;
-            game.u.uy0 = oldy;
-            game.u.ux = newx;
-            game.u.uy = newy;
-            game.u.umoved = true;
+            commitHeroWalkPosition(oldx, oldy, newx, newy);
+            recordHeroRidingStep(ridingMessages);
             game.context.move = 1;
             game._run_stop_now = 1;
             game._run_steps_remaining = 0;
@@ -63999,11 +64242,8 @@ async function moveHero(dx, dy) {
         const boulderShopMessage = adjustBoulderPushShopBill(targetBoulder, newx, newy, pushx, pushy);
         vision_reset();
         game._bldrpushtime = pushTurn;
-        game.u.ux0 = oldx;
-        game.u.uy0 = oldy;
-        game.u.ux = newx;
-        game.u.uy = newy;
-        game.u.umoved = true;
+        commitHeroWalkPosition(oldx, oldy, newx, newy);
+        recordHeroRidingStep(ridingMessages);
         game.context.move = 1;
         game._run_stop_now = 1;
         game._run_steps_remaining = 0;
@@ -64087,6 +64327,7 @@ async function moveHero(dx, dy) {
         return;
     }
     if (safePet) {
+        recordHeroRidingStep(ridingMessages);
         const runningStep = game._running_continuation || game._initial_run_command || game._run_steps_remaining > 0;
         if (!runningStep) {
             game._run_stop_now = 1;
@@ -64108,11 +64349,7 @@ async function moveHero(dx, dy) {
         }
         pet.mx = oldx;
         pet.my = oldy;
-        game.u.ux0 = oldx;
-        game.u.uy0 = oldy;
-        game.u.ux = newx;
-        game.u.uy = newy;
-        game.u.umoved = true;
+        commitHeroWalkPosition(oldx, oldy, newx, newy);
         game.context.move = 1;
         const swapStopsRun = !game._initial_run_command
             || target?.typ === DOOR || target?.typ === STAIRS
@@ -64207,6 +64444,7 @@ async function moveHero(dx, dy) {
             game._force_fight_target = null;
         } else {
         const name = mon.data?.name || 'creature';
+        recordHeroRidingStep(ridingMessages);
         if (!rn2(7)) {
             await setMessage(`You stop.  The ${name} is in the way!`);
             game.context.move = 1;
@@ -64214,11 +64452,7 @@ async function moveHero(dx, dy) {
         }
         mon.mx = oldx;
         mon.my = oldy;
-        game.u.ux0 = oldx;
-        game.u.uy0 = oldy;
-        game.u.ux = newx;
-        game.u.uy = newy;
-        game.u.umoved = true;
+        commitHeroWalkPosition(oldx, oldy, newx, newy);
         game.context.move = 1;
         newsym(oldx, oldy);
         newsym(newx, newy);
@@ -65102,15 +65336,8 @@ async function moveHero(dx, dy) {
             redrawWithoutBallChain([oldBallX, oldBallY], [oldChainX, oldChainY], [oldx, oldy]);
         }
     }
-    game.u.ux0 = oldx;
-    game.u.uy0 = oldy;
-    game.u.ux = newx;
-    game.u.uy = newy;
-    game.u.umoved = true;
-    if (game.u.usteed) {
-        game.u.usteed.mx = newx;
-        game.u.usteed.my = newy;
-    }
+    commitHeroWalkPosition(oldx, oldy, newx, newy);
+    recordHeroRidingStep(ridingMessages);
     game.context.move = ballStepNoTime ? 0 : 1;
     if (ballStepNoTime && game.u)
         game.u.umovement = Math.max(0, (game.u.umovement || 0) - NORMAL_SPEED);
@@ -66023,7 +66250,7 @@ export async function rhack(_cmd) {
     }
     if (game._armor_don_knowledge_after_more
         && (game._pending_message || '').includes('You finish your dressing maneuver.')) {
-        game._armor_don_knowledge_after_more.chargeKnown = true;
+        finishArmorBonusChange(game._armor_don_knowledge_after_more, true);
         game._armor_don_knowledge_after_more = null;
     }
     if (game._player_spell_continuation && !game._command_mode
@@ -70073,6 +70300,7 @@ function tutorialEnterStash() {
                     const item = (game.inventory || [])
                         .find(invItem => invItem.letter === occupation.itemLetter);
                     if (item && item.worn && occupation.acBonus != null) {
+                        finishArmorBonusChange(item, false);
                         item.worn = false;
                         item.owornmask = 0;
                         item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
@@ -72121,10 +72349,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 ? baseName
                 : item.noArticle ? `${spe} ${bareName}` : `a ${spe} ${bareName}`;
             const acBonus = armorBonus(item);
-            const kind = String(item.kind || '').toLowerCase();
+            const kind = armorKind(item);
             const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
             if (delay) {
                 const alreadyFast = !!(game.u?.fast || game.u?.veryfast);
+                item._armorDonPending = true;
                 item.worn = true;
                 item.line = `${ch} - ${wornName} (being worn)`;
                 if (game.u) setArmorWorn(item, true);
@@ -72172,6 +72401,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game.context.move = 1;
                 return;
             }
+            finishArmorBonusChange(item, true);
             // C ref: on_msg() only prints "You are now wearing ..." with
             // verbose (do_wear.c:88); without it the prompt line stays up.
             if (game.flags?.verbose !== false) await setMessage(`You are now wearing ${baseName}.`);
@@ -72543,10 +72773,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 ? baseName
                 : armor.noArticle ? `${spe} ${bareName}` : `a ${spe} ${bareName}`;
             const acBonus = armorBonus(armor);
-            const kind = String(armor.kind || '').toLowerCase();
+            const kind = armorKind(armor);
             const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
             if (delay) {
                 const alreadyFast = !!(game.u?.fast || game.u?.veryfast);
+                armor._armorDonPending = true;
                 armor.worn = true;
                 armor.line = `${ch} - ${wornName} (being worn)`;
                 if (game.u) setArmorWorn(armor, true);
@@ -72594,6 +72825,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game.context.move = 2;
                 return;
             }
+            finishArmorBonusChange(armor, true);
             // C ref: on_msg() only prints "You are now wearing ..." with
             // verbose (do_wear.c:88); without it the prompt line stays up.
             if (game.flags?.verbose !== false) await setMessage(`You are now wearing ${baseName}.`);
@@ -74080,6 +74312,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._casting_spell = null;
             game._spell_explosion_target = null;
             game._cursor_override = null;
+            game._command_mode = null;
+            game._pending_message = '';
             const result = await castSpellExplosionEffect(spell, ch === '\x1b' ? null : target, SPELL_EFFECT_DEPS);
             await finishSpellEffectResult(spell, result);
         } else {

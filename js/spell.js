@@ -26,7 +26,7 @@ import {
 } from './const.js';
 import { newsym } from './display.js';
 import { cansee, couldsee } from './vision.js';
-import { explodeSpell } from './explode.js';
+import { explodeSpell, resumeSpellExplosion } from './explode.js';
 import { resumeChainLightning } from './chain_lightning.js';
 import { lightDamageHero } from './flash.js';
 import { fallAsleep } from './timeout.js';
@@ -300,20 +300,9 @@ async function spellZapYourself(spell, D) {
     const messages = [];
     const push = (...parts) => { for (const p of parts) if (p) messages.push(p); };
     switch (name) {
-    case 'fireball': {
-        const result = await explodeSpell(u.ux, u.uy, 'fire', d(6, 6), D, { wand: true });
-        result.messages.unshift('You explode a fireball on top of yourself!');
-        return result;
-    }
-    case 'cone of cold': {
-        const original = d(12, 6);
-        const resistant = D.heroHasColdResistance();
-        push(resistant ? 'You feel a little chill.' : 'You imitate a popsicle!');
-        D.observeHeroElementResistance('cold', resistant);
-        const result = await D.spellElementalHeroDamage('cold', original, resistant ? 0 : original,
-            `zapped ${game.flags?.female ? 'herself' : 'himself'} with a spell`, messages);
-        return { messages, ...result };
-    }
+    case 'fireball':
+    case 'cone of cold':
+        return resumeSelfElementalSpell({ name, phase: 'init' }, D);
     case 'force bolt': {
         // C zap.c:zapyourself() case SPE_FORCE_BOLT (ordinary=TRUE)
         if (D.heroHasAntimagic()) {
@@ -1123,8 +1112,7 @@ export async function resumeSpellRay(state, D) {
             game._transient_beam_cells = null;
             game.bhitpos = state.savedBhitpos;
             if (name === 'fireball' && !state.vanished) {
-                const blast = await explodeSpell(state.sx, state.sy, 'fire', d(12, 6), D);
-                return { ...blast, messages: [game._pending_message, ...blast.messages].filter(Boolean) };
+                return explodeSpell(state.sx, state.sy, 'fire', d(12, 6), D);
             }
             return { published: true, messages: state.messages };
         }
@@ -1244,6 +1232,39 @@ export async function resumeReleasedSpell(state, D) {
     return { ...result, released: !result.published };
 }
 
+export async function resumeSelfElementalSpell(state, D) {
+    const pending = () => ({ published: true, pending: true, messages: [],
+        afterHeroDamage: { kind: 'selfElementalSpell', state } });
+    if (state.phase === 'init') {
+        state.phase = 'effect';
+        if (state.name === 'fireball') {
+            if (!D.say('You explode a fireball on top of yourself!')) return pending();
+        } else {
+            state.original = d(12, 6);
+            state.resistant = D.heroHasColdResistance();
+            if (!D.say(state.resistant ? 'You feel a little chill.' : 'You imitate a popsicle!')) return pending();
+        }
+    }
+    if (state.phase === 'effect') {
+        if (state.name === 'fireball') return explodeSpell(game.u.ux, game.u.uy, 'fire', d(6, 6), D, { wand: true });
+        D.observeHeroElementResistance('cold', state.resistant);
+        state.phase = 'inventory';
+    }
+    if (state.phase === 'inventory') {
+        if (!D.heroColdInventoryDamage(state.inventory ??= { original: state.original })) return pending();
+        state.phase = 'damage';
+    }
+    if (state.phase === 'damage') {
+        state.phase = 'done';
+        if (!state.resistant) {
+            const messages = [], result = D.damageHero(messages, state.original,
+                `zapped ${game.flags?.female ? 'herself' : 'himself'} with a spell`);
+            if (!D.publishDamageResult(messages, result)) return pending();
+        }
+    }
+    return { published: true, messages: [] };
+}
+
 async function castSpellBeamDispatch(spell, dir, D) {
     const name = spellName(spell);
     // C zap.c:weffects(): exercise(A_WIS, TRUE) precedes every beam effect.
@@ -1270,7 +1291,6 @@ export async function castSpellExplosionEffect(spell, target, D) {
         return { messages: ['The spell dissipates over the distance!'] };
     if (u.uswallow) {
         messages.push('The spell is cut short!');
-        D.exerciseAttribute(A_WIS, false);
         x = y = 0;
     } else {
         const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y && !candidate.dead);
@@ -1292,27 +1312,52 @@ export async function castSpellExplosionEffect(spell, target, D) {
         }
         x = px; y = py;
     }
-    const centerX = x, centerY = y;
-    const dz = game._last_spell_dir?.dz || 0;
-    const count = rnd(8) + 1;
-    let result = {};
-    let lifeSaving = false;
-    for (let i = 0; i < count; i++) {
-        result = !x && !y && !dz ? await spellZapYourself(spell, D)
-            : await explodeSpell(x, y, spellName(spell) === 'fireball' ? 'fire' : 'cold',
-                spellDamageBonus(Math.trunc((u.ulevel || 1) / 2) + 1), D);
-        messages.push(...result.messages);
-        lifeSaving ||= !!result.lifeSaving;
-        if (result.fatal) break;
-        x = centerX + rnd(3) - 2;
-        y = centerY + rnd(3) - 2;
-        if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO || !cansee(x, y)
-            || IS_STWALL(game.level?.at(x, y)?.typ ?? STONE) || u.uswallow) {
-            x = centerX; y = centerY;
+    return resumeSpellBursts({ spell, centerX: x, centerY: y, x, y,
+        dz: game._last_spell_dir?.dz || 0, cutShort: !!u.uswallow, phase: 'count', output: messages }, D);
+}
+
+// spelleffects scatters after every completed blast, even the last. A nested
+// done() must return before those draws or the next explosion can occur.
+export async function resumeSpellBursts(state, D) {
+    const pending = () => ({ published: true, pending: true, messages: [],
+        afterHeroDamage: { kind: 'spellBursts', state } });
+    while (!game.gameover) {
+        while (state.output.length) if (!D.say(state.output.shift())) return pending();
+        if (D.waiting()) return pending();
+        if (state.phase === 'count') {
+            if (state.cutShort) D.exerciseAttribute(A_WIS, false);
+            state.count = rnd(8) + 1; state.index = 0; state.phase = 'blast';
+        }
+        if (state.phase === 'blast' || state.phase === 'child') {
+            let result;
+            if (state.phase === 'child') {
+                result = state.child.kind === 'spellExplosion'
+                    ? await resumeSpellExplosion(state.child.state, D)
+                    : await resumeSelfElementalSpell(state.child.state, D);
+            } else if (!state.x && !state.y && !state.dz) {
+                result = await resumeSelfElementalSpell({ name: spellName(state.spell), phase: 'init' }, D);
+            } else {
+                result = await explodeSpell(state.x, state.y, spellName(state.spell) === 'fireball' ? 'fire' : 'cold',
+                    spellDamageBonus(Math.trunc((game.u.ulevel || 1) / 2) + 1), D);
+            }
+            if (result.pending) {
+                state.child = result.afterHeroDamage; state.phase = 'child'; return pending();
+            }
+            state.child = null; state.phase = 'scatter';
+        }
+        if (state.phase === 'scatter') {
+            state.x = state.centerX + rnd(3) - 2;
+            state.y = state.centerY + rnd(3) - 2;
+            if (state.x < 1 || state.x >= COLNO || state.y < 0 || state.y >= ROWNO || !cansee(state.x, state.y)
+                || IS_STWALL(game.level?.at(state.x, state.y)?.typ ?? STONE) || game.u.uswallow) {
+                state.x = state.centerX; state.y = state.centerY;
+            }
+            game._last_spell_dir = { dx: state.x, dy: state.y, dz: state.dz };
+            if (++state.index >= state.count) return { published: true, messages: [] };
+            state.phase = 'blast';
         }
     }
-    game._last_spell_dir = { dx: x, dy: y, dz };
-    return { ...result, messages, lifeSaving: !result.fatal && lifeSaving };
+    return { published: true, messages: [] };
 }
 
 // C ref: detect.c:findit() via zap.c:zapnodir() case SPE_DETECT_UNSEEN.

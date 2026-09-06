@@ -33,3 +33,12 @@ at the hero. All 30 screens and 2,044 RNG calls are compared.
 `healing-quaff` wishes for and drinks each of the three blessed healing tiers
 at full HP. It checks their distinct maximum-HP bonuses, messages, discovery,
 and RNG: 101 screens and 2,792 RNG calls from the unchanged C reference.
+
+`spell-explosions` casts fireball and cone of cold at the hero and refuses
+wizard death. Its 29 screens and 2,201 RNG calls retain the separate fatal
+feedback, zero-HP status display and recovery.
+
+`armor-callbacks` wishes for +3 brilliance and dexterity armor, then wears
+and removes each. Its 81 screens and 2,871 RNG calls check identification
+before bonuses, effective Dexterity during the turn tail, simple removal
+names and delayed callbacks.

@@ -42,6 +42,12 @@ async function directional(name, key = 'l') {
     game._casting_spell = { name, level: 4, category: 'attack' };
     game._command_mode = 'spellDirection';
     await rhack(key);
+    await finishSpellMessages();
+}
+
+async function finishSpellMessages() {
+    for (let i = 0; i < 100 && (game._player_spell_continuation || game._message_more) && !game._command_mode; i++)
+        await rhack(' ');
 }
 
 async function beginSkilled(name) {
@@ -273,9 +279,10 @@ test('fireball ends before a solid obstacle and destroys adjacent closed doors',
 });
 
 async function showLifeSavingMessage() {
-    assert.ok(game._queued_messages_after_more.some(message => message.lifeSaving));
     for (let i = 0; i < 20 && game._command_mode !== 'lifeSavingMore'; i++) await rhack(' ');
     assert.equal(game._command_mode, 'lifeSavingMore');
+    await rhack(' ');
+    await finishSpellMessages();
 }
 
 test('life saving between skilled cold explosions restores HP before the remaining explosions', async () => {
@@ -287,11 +294,12 @@ test('life saving between skilled cold explosions restores HP before the remaini
     enableRngLog();
     await rhack('.');
     const count = Number(getRngLog().find(row => row.startsWith('rnd(8)=')).split('=')[1]) + 1;
-    const messages = [game._pending_message, ...(game._queued_messages_after_more || []).map(message => message.text)].join('  ');
-    assert.equal((messages.match(/Boom!/g) || []).length, count);
+    assert.equal(getRngLog().filter(row => row.startsWith('rnd(3)=')).length, 0,
+        'the first blast waits for done before drawing its scatter');
     await showLifeSavingMessage();
     const survivedHp = game.u.uhp;
-    assert.ok(survivedHp > 0 && survivedHp < 100);
+    assert.ok(survivedHp > 0 && survivedHp < 90);
+    assert.equal(getRngLog().filter(row => row.startsWith('rnd(3)=')).length, 2 * count);
     await rhack(' ');
     assert.equal(game.u.uhp, survivedHp, 'dismissing life-saving text cannot erase later blast damage');
 });

@@ -1,8 +1,9 @@
 import { findAc, setArmorWorn } from './do_wear.js';
+import { FUMBLING, TIMEOUT, FROMOUTSIDE } from './const.js';
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
 import { initializeSkills, ROLE_SKILL_LIMITS, spellSkillType } from './skills.js';
 import { setArtifactEquipmentLight } from './artifact.js';
-import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn } from './cmd.js';
+import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn, finishArmorBonusChange, currentHeroAttribute } from './cmd.js';
 import { supportsMonsterAttackSlots } from './mhitu.js';
 import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster, heroIsBlind, hcolor } from './cmd.js';
 import { AT_BOOM, AT_MAGC, AD_SPEL, AD_CLRC, is_hider } from './permonst.js';
@@ -2858,11 +2859,11 @@ function covetousMonsterNextToHero(mon) {
 function exerciseAttribute(attr, increase) {
     const u = game.u;
     if (!u || attr === A_INT || attr === A_CHA) return;
-    if (u._polyself_base && attr !== A_WIS) return;
+    if (u._polyself_form && attr !== A_WIS) return;
     u._aexe ??= Array(A_MAX).fill(0);
     if (Math.abs(u._aexe[attr] || 0) >= AVAL) return;
 
-    const current = u.acurr?.a?.[attr] ?? 10;
+    const current = currentHeroAttribute(attr);
     if (increase) u._aexe[attr] += rn2(19) > current ? 1 : 0;
     else u._aexe[attr] -= rn2(2);
 }
@@ -10597,8 +10598,10 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
         game._turn_setup_pending = 0;
         // C allmain.c:244: all once-per-turn effects observe the new turn.
         game.moves = (game.moves || 1) + 1;
-        if (game.u?.fumbling) {
+        if (!game.u?.uinvulnerable && (game.u?._fumblingTimeout || 0) > 0) {
             game.u._fumblingTimeout = Math.max(0, (game.u._fumblingTimeout ?? 0) - 1);
+            const prop = game.u.uprops?.[FUMBLING];
+            if (prop) prop.intrinsic = ((prop.intrinsic || 0) & ~TIMEOUT) | game.u._fumblingTimeout;
             if (!game.u._fumblingTimeout) {
                 if (game.u.umoved && !game.u.levitating && !game.u.flying) {
                     const roll = rn2(4);
@@ -10690,7 +10693,13 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
         }
         if (game._finish_fumble_timeout) {
             game._finish_fumble_timeout = 0;
+            const prop = game.u?.uprops?.[FUMBLING];
+            if (prop) {
+                prop.intrinsic &= ~FROMOUTSIDE;
+                game.u.fumbling = !!(prop.intrinsic || prop.extrinsic);
+            }
             if (game.u?.fumbling) game.u._fumblingTimeout = rnd(20);
+            if (prop) prop.intrinsic = ((prop.intrinsic || 0) & ~TIMEOUT) | game.u._fumblingTimeout;
         }
         if (!game.u?.uinvulnerable) {
             if ((game.u?._veryfastTimeout || 0) > 0) {
@@ -11279,6 +11288,17 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
 	        game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Satiated', '');
 	    if (sleepingHunger && !game._helpless_time) game._sleeping_time = 0;
     processAttributeExercise();
+		    // C ref: allmain.c:358-368 — amulet(), then the u_wipe_engr roll,
+	    // then the demigod harassment driver, in moveloop_core order.
+	    if (game.u?.uhave?.amulet) {
+	        for (const amuMessage of wizardAmuletTurn())
+	            if (amuMessage) addToplineMessage(amuMessage);
+	    }
+	    if (!rn2(40 + currentHeroAttribute(A_DEX) * 3)) rnd(3);
+	    if (game.u?.uevent?.udemigod && !game.u?.uinvulnerable) {
+	        for (const harassMessage of await demigodTurnHook())
+	            if (harassMessage) addToplineMessage(harassMessage);
+	    }
     const delaySwallowedArmorFinish = game.u?.uswallow && game._armor_wear_occupation
         && game._pending_time_passed && /You are freezing to death!/.test(game._pending_message || '');
     if (game._armor_wear_occupation && !delaySwallowedArmorFinish) {
@@ -11312,6 +11332,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                     game._message_more = 1;
                     game._process_time_with_more = 0;
                 } else if (item && item.worn && occupation.acBonus != null) {
+                    finishArmorBonusChange(item, false);
                     item.worn = false;
                     item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
                     if (game.u) setArmorWorn(item, false);
@@ -11346,20 +11367,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 if (game.u) setArmorWorn(item, true);
                 if (occupation.reflecting && game.u) game.u.reflecting = true;
                 updateGauntletsOfPowerStrength(occupation.kind, true);
-                if (occupation.kind === 'gauntlets of power') {
-                    if (item) {
-                        item.known = true;
-                        recordArmorDiscoveryByKind(occupation.kind, false);
-                    }
-                    game._gauntlets_power_exercise_after_turn_tail = 1;
-                }
-            }
-            if (occupation.action !== 'takeoff' && occupation.kind === 'gauntlets of power') {
-                if (item) {
-                    item.known = true;
-                    recordArmorDiscoveryByKind(occupation.kind, false);
-                }
-                game._gauntlets_power_exercise_after_turn_tail = 1;
             }
             if (occupation.action !== 'takeoff' && isBlueDragonArmorKind(occupation.kind)) {
                 const alreadyFast = !!(game.u?.fast || game.u?.veryfast);
@@ -11381,8 +11388,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                     item.line = wornSpeedBootsLine(item);
                 }
             }
-            if (occupation.action !== 'takeoff' && occupation.kind === 'fumble boots')
-                game._pending_fumble_boots_timeout = 1;
+
             if (!game._armor_takeoff_after_more) {
                 const lightMessage = setArtifactEquipmentLight(item, occupation.action !== 'takeoff');
                 if (lightMessage) message += '  ' + lightMessage;
@@ -11407,9 +11413,9 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             if (occupation.action !== 'takeoff' && item) {
                 // unmul prints its completion message before Armor_on learns
                 // enchantment; a full preceding topline suspends that callback.
-                if (game._armor_finish_after_more && !item.chargeKnown)
+                if (game._armor_finish_after_more)
                     game._armor_don_knowledge_after_more = item;
-                else item.chargeKnown = true;
+                else game._armor_don_after_turn_tail = item;
             }
             if (armorFinishNeedsMore) {
                 game._message_more = 1;
@@ -11424,28 +11430,10 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             }
         }
     }
-		    // C ref: allmain.c:358-368 — amulet(), then the u_wipe_engr roll,
-	    // then the demigod harassment driver, in moveloop_core order.
-	    if (game.u?.uhave?.amulet) {
-	        for (const amuMessage of wizardAmuletTurn())
-	            if (amuMessage) addToplineMessage(amuMessage);
-	    }
-	    if (!rn2(40 + ((game.u?.acurr?.a?.[3] ?? 14) * 3))) rnd(3);
-	    if (game.u?.uevent?.udemigod && !game.u?.uinvulnerable) {
-	        for (const harassMessage of await demigodTurnHook())
-	            if (harassMessage) addToplineMessage(harassMessage);
-	    }
-    if (game._gauntlets_power_exercise_after_turn_tail) {
-        game._gauntlets_power_exercise_after_turn_tail = 0;
-        exerciseAttribute(A_CON, true);
-    }
-    if (game._pending_fumble_boots_timeout) {
-        game._pending_fumble_boots_timeout = 0;
-        const timeout = rnd(20);
-        if (game.u) {
-            game.u.fumbling = true;
-            game.u._fumblingTimeout = timeout;
-        }
+    if (game._armor_don_after_turn_tail) {
+        const item = game._armor_don_after_turn_tail;
+        game._armor_don_after_turn_tail = null;
+        finishArmorBonusChange(item, true);
     }
     if (game._ball_drag_subtract_after_forced_tail) {
         game._ball_drag_subtract_after_forced_tail = 0;
@@ -18041,6 +18029,7 @@ export async function moveloop_core() {
                 if (occupation.action === 'takeoff') {
                     message = `You finish taking off your ${occupation.simpleName || pickupObjectName(item || {})}.`;
                     if (item && item.worn && occupation.acBonus != null) {
+                        finishArmorBonusChange(item, false);
                         item.worn = false;
                         item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
                         if (g.u) setArmorWorn(item, false, g);
@@ -18075,22 +18064,8 @@ export async function moveloop_core() {
                     if (g.u) setArmorWorn(item, true, g);
                     if (occupation.reflecting && g.u) g.u.reflecting = true;
                     updateGauntletsOfPowerStrength(occupation.kind, true);
-                    if (occupation.kind === 'gauntlets of power') {
-                        if (item) {
-                            item.known = true;
-                            recordArmorDiscoveryByKind(occupation.kind, false);
-                        }
-                        g._gauntlets_power_exercise_after_turn_tail = 1;
-                    }
                 }
-                if (occupation.action !== 'takeoff' && item) item.chargeKnown = true;
-                if (occupation.action !== 'takeoff' && occupation.kind === 'gauntlets of power') {
-                    if (item) {
-                        item.known = true;
-                        recordArmorDiscoveryByKind(occupation.kind, false);
-                    }
-                    g._gauntlets_power_exercise_after_turn_tail = 1;
-                }
+                if (occupation.action !== 'takeoff' && item) finishArmorBonusChange(item, true);
                 if (occupation.action !== 'takeoff' && isBlueDragonArmorKind(occupation.kind)) {
                     const alreadyFast = !!(g.u?.fast || g.u?.veryfast);
                     if (!g.u?.veryfast)
@@ -18111,7 +18086,7 @@ export async function moveloop_core() {
                         item.line = wornSpeedBootsLine(item, g);
                     }
                 }
-                if (occupation.action !== 'takeoff' && occupation.kind === 'fumble boots') g._pending_fumble_boots_timeout = 1;
+
                 const lightMessage = setArtifactEquipmentLight(item, occupation.action !== 'takeoff');
                 if (lightMessage) message += '  ' + lightMessage;
                 g._pending_message = message;

@@ -562,3 +562,29 @@ five. Thirteen new independent tests pass, including actual Samurai startup,
 six genesis species and a tame-dependent saddling threshold. The combined
 skill tests pass 62/62 and the shop suite passes 3,134/3,134. The two affected
 public sessions now match all 203 screens and 8,829 RNG calls.
+
+## Serial explosions and armor callbacks
+
+The current pass follows explode.c's message, inventory, direct injury, golem,
+shop and wakeup order for hero fire/cold spells. Saved child explosions resume
+before skilled scatter, including life saving and wizard death refusal. Fire
+inventory damage now saves each stack and potion vapor before consumption;
+water that can change a lycanthrope's form is deferred as in zap.c:destroy_items.
+The continuation and review suites cover 21 cases, including live turn ownership.
+A fresh C self-casting fixture matches 29 screens and 2,201 RNG calls.
+Remaining work includes aggregate monster-hit callbacks, other explosion types,
+other inventory-damage callers and full potion naming/rehumanization fallout.
+
+Source do_wear.c:Helmet_on/Gloves_on/off/adj_abon now owns separate ABON deltas,
+cancelled donning, cornuthaum role bonuses and fumbling source masks. Discovery
+runs once before brilliance changes Wisdom. Delayed removal occurs after C's
+allmain.c engraving draw and uses objnam.c's simple armor names. The 37 focused
+armor tests and a fresh 81-screen/2,871-call C fixture cover these callbacks.
+Opposite alignment, transformation retouch and other direct ACURR consumers
+remain unfinished.
+
+Weapon.c bonuses now use actual weapon identity for dual wielding, bare hands,
+and riding. Projectile and polearm practice uses the source raw-damage gate;
+steed.c exercise counts 100 eligible tentative movement steps, including failed
+pet displacement after tentative positioning. Ordinary melee practice and full
+hmon execution remain separate source work.
