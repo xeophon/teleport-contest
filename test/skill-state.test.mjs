@@ -215,7 +215,7 @@ for(const rescue of ['amulet','wizard'])test(`saved reflected ray trains once af
     if(rescue==='amulet')game.inventory.push({letter:'a',cls:'amulet',kind:'amulet of life saving',worn:true,quan:1});
     await castKnownSpellByName('magic missile'); await rhack('l');
     assert.equal(game.u.weapon_skills[C.P_ATTACK_SPELL].advance,20);
-    assert.equal(game._player_spell_continuation.kind,'spellRay');
+    assert.equal(game._player_spell_continuation.kind,'heroRay');
     const saved=encodeSaveState(); restoreSaveState(saved);
     await finishCasting();
     assert.ok(game.u.uhp>0); assert.equal(game._player_spell_continuation,null);

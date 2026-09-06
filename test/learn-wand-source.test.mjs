@@ -44,7 +44,7 @@ for (const symbol of ['FROST_HORN', 'SPE_POLYMORPH', 'GENERIC_WAND']) test(`lear
     assert.equal(item.known, false);
 });
 
-for (const kind of ['digging', 'cold']) for (const known of [false, true]) for (const seen of [false, true])
+for (const kind of ['digging', 'cold', 'sleep']) for (const known of [false, true]) for (const seen of [false, true])
     for (const blind of [false, true]) for (const hallucinating of [false, true])
         test(`live ${kind} learning: known=${known} seen=${seen} blind=${blind} hallucinating=${hallucinating}`, async () => {
             resetGame(); initRng(17); game.flags = {}; game.context = {};
@@ -73,7 +73,7 @@ for (const kind of ['digging', 'cold']) for (const known of [false, true]) for (
             }
             assert.equal(getRngLog().filter(line => line.startsWith('rn2(19)')).length, 2 + Number(learned));
             assert.equal(getRngLog().filter(line => line.startsWith(kind === 'digging' ? 'rn2(18)' : 'rn2(7)')).length, 2);
-            if (kind === 'cold') {
+            if (kind !== 'digging') {
                 assert.equal(getRngLog().some(line => line.startsWith('rn2(10)')), false, 'open-room rays do not roll wall bounces');
                 assert.equal(getRngLog().filter(line => line.startsWith('rn2(6)')).length, hallucinating ? 2 : 0);
             }

@@ -25,8 +25,8 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,229 passing tests**, with no
-failures, skips or TODOs. All ten generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **7,268 passing tests**, with no
+failures, skips or TODOs. All eleven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
 Discovery names now use C's object-type formatter and global appearance,
@@ -44,6 +44,17 @@ their rolled dice count for fire vulnerability, and hallucination rolls the
 beam color. Twenty-five new tests cover these branches; seed 0014 again
 matches all 714 screens/cursors and 59,178 random calls. Shared ray effects,
 serial message completion and full monster/hero effect branches remain open.
+
+Sleep wands now share the resumable spell-ray engine, replacing scripted
+reflections and fixed monster sleep durations. It handles repeated targets,
+vertical and swallowed rays, C hit/resistance draws, learning after effects,
+and grip/reflection message boundaries across saves. The existing monster
+sleep owner now handles mimic revelation, interrupted meals and orange dragon
+armor; 2,880 compiled C cases check its state transitions. Worn/embedded orange
+dragon armor supplies hero sleep resistance too. Thirty-nine added tests and
+a fresh recording pass (82 screens/cursors, 2,272 random calls); seed 0002
+matches all 595 screens/cursors and 27,158 random calls. Self-zaps, mounted-ray
+target selection, full mimic vision effects and remaining ray kinds are open.
 
 Full inventory naming now shares the C base-name owner for wizard override and
 permanent identification feedback. Qualifiers cover container knowledge, traps,
@@ -478,13 +489,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The complete recording run after the cold-ray follow-up passes 50/53 public
-sessions (11,895/12,712 screens, 12,286/12,712 cursors and 809,621/832,102 RNG
+The complete recording run after the sleep-ray follow-up passes 51/53 public
+sessions (11,898/12,712 screens, 12,286/12,712 cursors and 809,621/832,102 RNG
 calls) and 12/19 supplemental sessions (3,069/3,346 screens, 3,222/3,346 cursors
 and 137,889/141,728 RNG calls), with zero worker errors. Public failures are
-seeds 0002, 0116 and 4500. The shared naming switch initially reduced
-public passes to 32/53 at 40caf6c; source-state fixes restored 18 recordings.
-Sleep ray learning still differs in 0002; 0116 has a preexisting
+seeds 0116 and 4500. The shared naming switch initially reduced
+public passes to 32/53 at 40caf6c; source-state fixes restored 19 recordings.
+Seed 0116 has a preexisting
 extra experience-source enlightenment row. These measurements do not
 establish full C behavior.
 

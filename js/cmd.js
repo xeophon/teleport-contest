@@ -303,7 +303,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitNameForId, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay, resumeReleasedSpell, resumeSelfElementalSpell, resumeSpellBursts } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, heroRay, resumeHeroRay, resumeReleasedSpell, resumeSelfElementalSpell, resumeSpellBursts } from './spell.js';
 import { resumeSpellExplosion } from './explode.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
@@ -10049,13 +10049,6 @@ function playerSpellEffectDependencies() {
         }
     }
 
-    // C ref: mhitm.c:slept_monst() — a sleeping holder releases its grip.
-    function spellSleptMonster(mon) {
-        if (mon === game.u?.ustuck && !game.u?.uswallow) {
-            game.u.ustuck = null;
-        }
-    }
-
     // C ref: lock.c:doorlock() — knock/wizard lock/force bolt vs (secret) doors.
     function spellDoorlock(spellName, x, y) {
         const loc = game.level?.at(x, y);
@@ -10361,7 +10354,8 @@ function playerSpellEffectDependencies() {
         monsterHurtle: spellMonsterHurtle,
         wakeupMonster: spellWakeupMonster,
         abuseDog: spellAbuseDog,
-        sleptMonster: spellSleptMonster,
+        sleptMonster: sleptMonsterFromPotion,
+        learnRayItem: setKnownWandLine,
         spellDoorlock,
         heroWearsHardHelmet: spellHeroWearsHardHelmet,
         heroIsKnightWithQuestArtifact: spellHeroIsKnightWithQuestArtifact,
@@ -10656,8 +10650,8 @@ async function resumePlayerSpellEffect() {
     } else if (state.kind === 'chainLightning') {
         const result = await resumeChainLightning(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
-    } else if (state.kind === 'spellRay') {
-        const result = await resumeSpellRay(state.state, playerSpellEffectDependencies());
+    } else if (state.kind === 'heroRay') {
+        const result = await resumeHeroRay(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
     } else if (state.kind === 'releasedSpell') {
         const result = await resumeReleasedSpell(state.state, playerSpellEffectDependencies());
@@ -23160,7 +23154,9 @@ function heroHasFreeAction() {
 function heroHasSleepResistance() {
     const prop = game.u?.uprops?.[SLEEP_RES];
     return !!(game.u?.sleepResistance || game.u?.Sleep_resistance || prop?.intrinsic || prop?.extrinsic
-        || polyselfForm()?.sleepResistance || resistsSleep({ data: game.u?._polyself_form }));
+        || polyselfForm()?.sleepResistance || resistsSleep({ data: game.u?._polyself_form })
+        || (game.inventory || []).some(item => isActiveInventoryExtrinsicItem(item)
+            && dragonArmorKindHasProperty(objectTypeData(item)?.name || objectKindKey(item), 'sleep')));
 }
 
 function incrementAbilityFromPotionVapor(blessed) {
@@ -24005,11 +24001,13 @@ function sleepMonsterFromPotion(mon, duration) {
     return true;
 }
 
-function sleptMonsterFromPotion(mon, messages) {
+function sleptMonsterFromPotion(mon, messages, { deferRelease = false } = {}) {
     if (!heroStuckMonsterMatches(mon) || game.u?.uswallow || heroFormSticks()) return false;
     messages.push(`${potionHitMonsterName(mon)}'s grip relaxes.`);
-    game.u.ustuck = null;
-    game.u.uswallow = 0;
+    if (!deferRelease) {
+        game.u.ustuck = null;
+        game.u.uswallow = 0;
+    }
     return true;
 }
 
@@ -70590,10 +70588,6 @@ function tutorialEnterStash() {
                         game._blind_arrival_objects_after_more = null;
                     }
                 }
-                if (next.sleepReflect) {
-                    exerciseAttribute(A_WIS, true);
-                    rn2(20);
-                }
                 if (next.damageAfter)
                     game._queued_damage_after_more = (game._queued_damage_after_more || 0) + next.damageAfter;
                 if (next.polyselfDropAfterMore) game._polyself_drop_items_after_overload_more = 1;
@@ -73649,92 +73643,17 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.context.move = 1;
             return;
         }
+        const sleepWand = item?.wand === 'sleep' || item?.kind === 'sleep'
+            || item?.kind === 'wand of sleep' || item?.wandIndex === 22;
+        if ((dir || verticalDir) && sleepWand) {
+            exerciseAttribute(A_WIS, true);
+            game._pending_message = '';
+            game._command_mode = null;
+            const result = await heroRay({ item, name: 'sleep' }, dir || verticalDir, playerSpellEffectDependencies());
+            await finishSpellEffectResult(null, result);
+            return;
+        }
         if (dir) {
-            const sleepWand = item?.wand === 'sleep' || item?.kind === 'sleep' || item?.kind === 'wand of sleep' || item?.wandIndex === 22;
-            if (sleepWand) {
-                exerciseAttribute(A_WIS, true);
-                let range = rn2(7) + 7;
-                const beam = dir.dy === 0 ? '─' : dir.dx === 0 ? '│' : dir.dx === dir.dy ? '\\' : '/';
-                const beamCells = [];
-                let target = null;
-                let hitHero = false;
-                let bounced = false;
-                let x = game.u?.ux || 0;
-                let y = game.u?.uy || 0;
-                let dx = dir.dx;
-                let dy = dir.dy;
-                while (range-- > 0) {
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    const loc = game.level?.at(nx, ny);
-                    if (nx <= 0 || nx >= COLNO || ny < 0 || ny >= ROWNO || !loc || !ZAP_POS(loc.typ)) {
-                        if (range > 0 && couldsee(x, y)) bounced = true;
-                        if (loc) {
-                            x = nx;
-                            y = ny;
-                            beamCells.push({ x, y, ch: beam, color: CLR_BRIGHT_BLUE });
-                        }
-                        dx = -dx;
-                        dy = -dy;
-                        continue;
-                    }
-                    x = nx;
-                    y = ny;
-                    beamCells.push({ x, y, ch: beam, color: CLR_BRIGHT_BLUE });
-                    if (x === game.u?.ux && y === game.u?.uy) {
-                        hitHero = true;
-                        break;
-                    }
-                    target = game.level?.monsters?.find(mon => mon.mx === x && mon.my === y);
-                    if (target) break;
-                }
-                game._transient_beam_cells = beamCells;
-                if (target) {
-                    rn2(20);
-                    target.msleeping = 0;
-                    target.mcanmove = false;
-                    target.mfrozen = Math.max(target.mfrozen || 0, 2);
-                    await setMessage(`The sleep ray hits the ${target.data?.name || 'monster'}.`);
-                } else if (hitHero) {
-                    rn2(20);
-                    if (game.u?.reflecting) {
-                        const shield = (game.inventory || []).find(invItem =>
-                            invItem.cls === 'armor'
-                            && (invItem.worn || invItem.line?.includes('being worn'))
-                            && String(invItem.actualKind || invItem.kind || '').toLowerCase() === 'shield of reflection');
-                        if (shield) {
-                            shield.known = true;
-                            shield.line = normalInventoryLine({ ...shield, line: '' });
-                            game._discoveries ??= [];
-                            if (!game._discoveries.some(entry => entry.section === 'Armor' && entry.name === 'shield of reflection')) {
-                                game._discoveries.push({
-                                    section: 'Armor',
-                                    name: 'shield of reflection',
-                                    text: 'shield of reflection (polished silver shield) {buy 50}',
-                                    starred: false,
-                                });
-                            }
-                        }
-                        game._queued_messages_after_more = [
-                            { text: 'But it reflects from your shield!  The sleep ray bounces!', more: true, sleepReflect: true },
-                            { text: 'The sleep ray hits you!  But it reflects from your shield!', more: false, processTime: true, clearBeam: true },
-                        ];
-                    } else {
-                        game._helpless_time = Math.max(game._helpless_time || 0, 1);
-                    }
-                    await setMessage(`${bounced ? 'The sleep ray bounces!  ' : ''}The sleep ray hits you!`, true);
-                } else {
-                    game._transient_beam_cells = null;
-                    game._pending_message = '';
-                    game._message_more = 0;
-                }
-                item.known = true;
-                item.kind = 'sleep';
-                item.line = `${item.letter} - a wand of sleep${wandChargeSuffix(item)}`;
-                game._command_mode = null;
-                game.context.move = 1;
-                return;
-            }
             if (coldWand) {
                 // C ref: weffects() exercises wisdom for wands
                 // (zap.c:3435-3436); the instrument improvise path makes no

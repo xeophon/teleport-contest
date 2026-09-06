@@ -86,7 +86,7 @@ for (const rescue of ['amulet', 'wizard'])
         const target = { data: MONS.find(m => m.name === 'wolf'), mx: 9, my: 10, mhp: 1000, mhpmax: 1000, m_lev: 5 };
         game.level.monsters.push(target);
         await rhack('l');
-        assert.equal(target.mhp, 1000); assert.equal(game._player_spell_continuation.kind, 'spellRay');
+        assert.equal(target.mhp, 1000); assert.equal(game._player_spell_continuation.kind, 'heroRay');
         saveRestore(); await finishRay();
         assert.ok(game.level.monsters[0].mhp < 1000); assert.ok(game.u.uhp > 0);
         assert.equal(game._player_spell_continuation, null);
@@ -125,7 +125,7 @@ test('a narrow tty pauses at the hit message before ray damage and survives a sa
     setup('magic missile');
     game.nhDisplay = { cols: 50 };
     await rhack('l');
-    assert.equal(game.u.uhp, 1000); assert.equal(game._player_spell_continuation.kind, 'spellRay');
+    assert.equal(game.u.uhp, 1000); assert.equal(game._player_spell_continuation.kind, 'heroRay');
     assert.ok(!getRngLog().some(line => line.startsWith('d(6,6)')));
     saveRestore(); await finishRay(); assert.ok(game.u.uhp < 1000);
 });

@@ -1,5 +1,23 @@
 # Objects, player magic, and attributes
 
+## Shared sleep rays and monster sleep (2026-09-06)
+
+`zap.c:dobuzz/zhitm/zhitu` now routes sleep wands through the resumable ray
+engine used by spells. Range, hit, resistance and duration draws follow the
+actual ray, including multiple targets, vertical rays and engulfers. Type
+learning occurs after the effect and preserves charge knowledge. Reflection
+and grip-release effects resume after their corresponding message boundary.
+`mhitm.c:sleep_monst` shares the existing combat owner, including mimic
+revelation, resistance-before-movement gates, interrupted meals, stored freeze
+duration, indefinite sleep and orange dragon armor defense. The compiler
+oracle runs 2,880 C state transitions with external operations stubbed;
+separate command tests cover live geometry, equipment and save integration.
+Worn/embedded orange armor now supplies hero sleep resistance. Thirty-nine
+new tests include an 82-screen C recording; seed 0002 fully matches again.
+Remaining: self-zaps, steed selection, complete mimic visibility/unblocking,
+shield animation and other ray kinds. The compiler oracle does not test
+the external operations replaced by stubs or establish whole-ray parity.
+
 ## Cold ray control follow-up (2026-09-06)
 
 `zap.c:dobuzz` now continues after `xkilled`; actual geometry drives bounce

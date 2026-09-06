@@ -268,7 +268,7 @@ test('sleep ray puts monster to sleep with d(nd,25) before the resist roll', asy
     await castSpellDirectionalEffect({ name: 'sleep' }, 'l', deps);
     const trace = rngTrace().map(e => e.split('=')[0]);
     assert.deepEqual(trace.slice(0, 5), ['rn2(19)', 'rn2(7)', 'rn2(20)', 'd(1,25)', 'rn2(100)']);
-    assert.equal(mon.mcanmove, false);
+    assert.equal(!!mon.mcanmove, false);
     assert.ok((mon.mfrozen || 0) > 0);
 });
 
