@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The next source-driven checkpoint has **4,589 passing tests**, with no failures,
+The latest source-driven checkpoint has **4,643 passing tests**, with no failures,
 skips or TODOs, up from 4,309 at the previous checkpoint. Public recordings
 remain 53/53 with 12,712/12,712 screens and 832,102/832,102 RNG calls.
 Supplemental recordings remain 12/19 with 3,070/3,346 screens and
@@ -49,10 +49,17 @@ life-saving HP restoration including generated amulets, Unchanging and
 fire-resistant paper damage. Its combined suite passes 4,589/4,589. The
 recording counts above were last rerun at the preceding 4,520-test checkpoint.
 
-Still open in these slices: migrating the other eight timer callbacks into
+The latest batch puts burn and ice-melt callbacks on the same ordered queue,
+including cancellation, inactive levels, restored identity, map flips and
+lowered drawbridges. It also expands source-derived spell targeting, camera
+illumination, photography records and experience, flash continuation after
+life saving, and petrification checks against the correct genocide flag.
+
+Still open in these slices: migrating the other seven timer callbacks into
 the shared queue and remaining object destruction/transfer lifecycle,
 automatic artifact light activation, remaining artifact powers and property
-loss, and broader explosion/hero-death branches. The independent reviews
+loss, immediate hero water landing after ice melts, and broader
+explosion/hero-death branches. The independent reviews
 found and fixed bulk timer cancellation, inactive level ownership, numeric
 artifact lights, container weight and hiding state. Source quirks are retained,
 including the missing on-time oil hiding recheck in this C revision.
@@ -126,8 +133,8 @@ for each finding. Major unfinished areas include:
 1. **Spells and combat:** remaining ray
    callbacks, directed cleric spells, wizard death-touch/weakening effects,
    and broader attack/damage dispatch.
-2. **Timers and arrival:** shared ordering across corpse, egg, figurine and terrain timers, automatic
-   light activation and candle application, and the complete terrain/region/spot-effects arrival
+2. **Timers and arrival:** shared ordering across corpse, egg, figurine and organic/glob timers, automatic
+   light activation, and the complete terrain/region/spot-effects arrival
    pipeline.
 3. **Quest and artifacts:** 15 named quest maps and remaining artifact invocation branches.
    Existing builder dispatch does not itself prove map parity.

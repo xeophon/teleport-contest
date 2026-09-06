@@ -86,6 +86,9 @@ function objectLightRadius(obj) {
 function markLightSources(next) {
     const u = game.u;
     const sources = [];
+    // Camera/Sunsword flashes remain lit until the entire ray is resolved.
+    for (const { x, y } of game._transientFlashSpots || [])
+        if (next[y]?.[x] & COULD_SEE) next[y][x] |= TEMP_LIT;
     const monsters = (game.level?.monsters || [])
         .filter(mon => !mon.dead && !(mon.mhp != null && mon.mhp <= 0));
     if (u.usteed && !monsters.includes(u.usteed)) monsters.push(u.usteed);

@@ -2,11 +2,57 @@
 // zap.c flashburn/lightdamage/bhit, and apply.c do_blinding_ray.
 import { game } from './gstate.js';
 import { rn2, rnd } from './rng.js';
-import { MONS, PM_HUMAN, PM_GREMLIN, S_LIGHT, haseyes, AD_BLND, AT_EXPL, AT_GAZE } from './permonst.js';
+import { MONS, PM_HUMAN, PM_GREMLIN, PM_GRID_BUG, PM_LONG_WORM, PM_LONG_WORM_TAIL,
+    S_LIGHT, haseyes, AD_BLND, AT_EXPL, AT_GAZE } from './permonst.js';
 import { pmOf } from './mhitm.js';
 import { artifactDefinitionForName } from './mklev.js';
 import { W_WEP, COLNO, ROWNO, ZAP_POS, DOOR, D_CLOSED, D_LOCKED,
     M_AP_TYPE, M_AP_OBJECT, M_AP_MONSTER } from './const.js';
+
+// include/defsym.h: defsyms[].explanation, including furniture disguises.
+export const FLASH_CMAP_EXPLANATIONS = ["stone","wall","wall","wall","wall","wall","wall","wall","wall","wall","wall","wall","doorway","open door","open door","closed door","closed door","iron bars","tree","floor of a room","dark part of a room","engraving","corridor","lit corridor","engraving","staircase up","staircase down","ladder up","ladder down","branch staircase up","branch staircase down","branch ladder up","branch ladder down","altar","grave","opulent throne","sink","fountain","water","ice","molten lava","wall of lava","lowered drawbridge","lowered drawbridge","raised drawbridge","raised drawbridge","air","cloud","water","arrow trap","dart trap","falling rock trap","squeaky board","bear trap","land mine","rolling boulder trap","sleeping gas trap","rust trap","fire trap","pit","spiked pit","hole","trap door","teleportation trap","level teleporter","magic portal","web","statue trap","magic trap","anti-magic field","polymorph trap","vibrating square","trapped door","trapped chest","","","","","","","","","","","","","poison cloud","valid position","","","","","","","","","","","","","","","","",""];
+
+export function resolveFlashDirection(direction, D) {
+    const form = game.u._polyself_form || MONS[game.u.umonnum ?? PM_HUMAN];
+    const gridbug = (pmOf({ data: form }) || form)?.pm === PM_GRID_BUG;
+    const dir = { ...direction };
+    if (gridbug && dir.dx && dir.dy) return { error: "You can't orient yourself that direction." };
+    if (!dir.dz && (D.heroIsStunned() || (D.heroIsConfused() && !rn2(5)))) {
+        const directions = [[-1,0],[0,-1],[1,0],[0,1],[-1,-1],[1,-1],[1,1],[-1,1]];
+        [dir.dx, dir.dy] = directions[rn2(gridbug ? 4 : 8)];
+    }
+    game.u.dx = dir.dx;
+    game.u.dy = dir.dy;
+    game.u.dz = dir.dz;
+    return dir;
+}
+
+export async function recordCameraCloseup(mon, messages, D) {
+    if (D.heroIsHallucinating() || (D.heroIsBlind() && !D.heroBlindTelepathy())) return;
+    const species = pmOf(mon) || mon.data;
+    let index = species.pm;
+    if (M_AP_TYPE(mon) === M_AP_MONSTER && !D.senseMonster(mon)) index = mon.mappearance;
+    if (species.pm === PM_LONG_WORM && game.notonhead) index = PM_LONG_WORM_TAIL;
+    game.mvitals ??= [];
+    game.context.lifelist ??= {};
+    let vital = game.mvitals[index] ??= {};
+    const list = game.context.lifelist;
+    if (!vital.seen_close) {
+        vital.seen_close = 1;
+        list.total_seen_upclose = (list.total_seen_upclose || 0) + 1;
+    }
+    if (!mon.minvis && !mon.mundetected && [0, M_AP_MONSTER].includes(M_AP_TYPE(mon))) {
+        if (M_AP_TYPE(mon) === M_AP_MONSTER) index = mon.mappearance;
+        vital = game.mvitals[index] ??= {};
+        if (!vital.photographed) {
+            vital.photographed = 1;
+            list.total_photographed = (list.total_photographed || 0) + 1;
+            if ((game._startup_role || game.urole?.name?.m) === 'Tourist'
+                && (mon.m_id !== game.context.startingpet_mid || index !== game.context.startingpet_typ)
+                && index === species.pm) await D.gainPhotoExperience(mon, messages);
+        }
+    }
+}
 
 export function flashResistance(mon, D) {
     const hero = !mon;
@@ -22,7 +68,7 @@ export function flashResistance(mon, D) {
     return { resists: !!(blind || !haseyes(species) || innate || artifact), artifact };
 }
 
-export function lightDamageHero(item, amount, messages, D) {
+export async function lightDamageHero(item, amount, messages, D) {
     let damage = amount;
     const form = game.u._polyself_form || MONS[game.u.umonnum ?? PM_HUMAN];
     if ((pmOf({ data: form }) || form)?.pm === PM_GREMLIN && damage) {
@@ -30,7 +76,7 @@ export function lightDamageHero(item, amount, messages, D) {
         if (damage > 10) damage = 10 + rnd(damage - 10);
         damage = Math.min(20, damage);
         messages.push(`Ow, that light hurts${damage > 2 || game.u.mh <= 5 ? '!' : '.'}`);
-        const result = D.damageHero(messages, D.halfPhysical(damage), 'killed while stuck in creature form');
+        const result = await D.damageHero(messages, D.halfPhysical(damage), 'killed while stuck in creature form');
         Object.assign(messages, result);
     }
     return damage;
@@ -60,6 +106,7 @@ export async function lightHitsGremlin(mon, damage, messages, D) {
 }
 
 export async function flashHitsMonster(mon, item, messages, D) {
+    if (game.notonhead) return;
     const species = pmOf(mon) || mon.data || {};
     const visible = D.visible(mon);
     if (M_AP_TYPE(mon)) {
@@ -101,11 +148,14 @@ export async function flashRay(item, dir, messages, D) {
         x += dir.dx; y += dir.dy;
         if (x < 1 || x >= COLNO || y < 0 || y >= ROWNO) break;
         const loc = game.level.at(x, y);
-        const mon = game.level.monsters.find(target => target.mx === x && target.my === y
-            && !target.dead && (target.mhp ?? 1) > 0);
+        if (!D.heroIsBlind()) await D.transientLight(x, y);
+        const mon = game.level.monsters.find(target => !target.dead && (target.mhp ?? 1) > 0
+            && ((target.mx === x && target.my === y)
+                || (target.wormSegments || []).some(segment => segment.x === x && segment.y === y)));
         if (mon && M_AP_TYPE(mon) !== M_AP_OBJECT) {
+            game.notonhead = mon.mx !== x || mon.my !== y;
             await flashHitsMonster(mon, item, messages, D);
-            if (!mon.minvis) break;
+            if (!mon.minvis) return mon;
         }
         if (!ZAP_POS(loc.typ) || (loc.typ === DOOR && (loc.doormask & (D_CLOSED | D_LOCKED)))) break;
     }

@@ -71,6 +71,14 @@ test('a hero polymorphed into a hiding species is exposed when its candle disapp
     assert.equal(game.u.uundetected, 0);
 });
 
+test('late candle cleanup rechecks only a floor monster, as in the source catch-up branch', async () => {
+    setup({ hero: true });
+    game.moves += 3;
+    await processObjectBurnTimers();
+    assert.equal(game.level.objects.length, 0);
+    assert.equal(game.u.uundetected, 1);
+});
+
 for (const [name, options, expected] of [
     ['another covering object', { other: [{ kind: 'rock' }] }, true],
     ['nine remaining coins', { other: [{ cls: 'coin', quan: 9 }] }, false],

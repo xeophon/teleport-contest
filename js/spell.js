@@ -1101,7 +1101,7 @@ export async function castSpellExplosionEffect(spell, target, D) {
         x = y = 0;
     } else {
         const mon = (game.level?.monsters || []).find(candidate => candidate.mx === x && candidate.my === y && !candidate.dead);
-        if ((x !== u.ux || y !== u.uy) && !cansee(x, y) && !(mon && D.visibleMonsterForScroll(mon))
+        if ((x !== u.ux || y !== u.uy) && !cansee(x, y) && !(mon && D.heroCanSpotMonster(mon))
             || IS_STWALL(game.level?.at(x, y)?.typ ?? STONE))
             return { messages: ['Your mind fails to lock onto that location!'] };
         // dothrow.c:walk_path uses strict > for its Bresenham tie break and

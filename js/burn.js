@@ -136,7 +136,9 @@ export function burnObject(obj, timeout, deps = {}, g = game) {
         else if (candle || oil) {
             if (deps.remove) deps.remove(obj, entry);
             else entry.list.splice(entry.list.indexOf(obj), 1);
-            if (floor && (candle || late)) deps.unhide?.(entry.x, entry.y);
+            const recheckHiding = late ? (g.level?.monsters || []).some(mon =>
+                mon.mx === entry.x && mon.my === entry.y && !mon.dead && (mon.mhp ?? 1) > 0) : candle;
+            if (floor && recheckHiding) deps.unhide?.(entry.x, entry.y);
         }
     } else beginBurn(obj, true, g);
     if (floor && !entry.parent && !late) newsym(entry.x, entry.y);

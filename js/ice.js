@@ -1,5 +1,6 @@
 import { game } from './gstate.js';
 import { endBurn } from './burn.js';
+import { TIMER_LEVEL, MELT_ICE_AWAY, startTimer, stopSpotTimers, spotTimerExpires, runTimers } from './timeout.js';
 import {
     BEAR_TRAP, BLCORNER, BRCORNER, COLNO, CROSSWALL, DB_FLOOR, DB_ICE,
     DB_LAVA, DB_MOAT, DB_UNDER, DBWALL, DOOR, DRAWBRIDGE_DOWN, D_CLOSED,
@@ -88,6 +89,7 @@ function heroPassesRocks() {
 }
 
 function stopMeltTimers(x, y) {
+    stopSpotTimers(x, y, MELT_ICE_AWAY);
     const loc = game.level?.at(x, y);
     if (loc) {
         delete loc.meltIceTurn;
@@ -108,18 +110,13 @@ function removeMeltTimers(loc, x, y) {
 }
 
 export function spotMeltIceTimeLeft(x, y) {
-    const lvl = game.level;
-    if (!lvl?.meltIceTimers?.length) return 0;
-    const timer = lvl.meltIceTimers
-        .filter(item => item.x === x && item.y === y)
-        .sort((a, b) => (a.turn || 0) - (b.turn || 0))[0];
-    return timer ? Math.max(0, (timer.turn || 0) - (game.moves || 0)) : 0;
+    const expiry = spotTimerExpires(x, y, MELT_ICE_AWAY);
+    return expiry ? expiry - (game.moves || 0) : 0;
 }
 
 export function startMeltIceTimeout(x, y, minTime = 0) {
     const loc = game.level?.at(x, y);
     if (!loc) return 0;
-    stopMeltTimers(x, y);
 
     let when = Math.trunc(minTime || 0);
     if (when < MIN_ICE_TIME - 1) when = MIN_ICE_TIME - 1;
@@ -128,7 +125,15 @@ export function startMeltIceTimeout(x, y, minTime = 0) {
     }
     if (when > MAX_ICE_TIME) return 0;
 
+    return scheduleMeltIceTimeout(x, y, when);
+}
+
+// Source scripts can supply a fixed duration; ordinary freezing rolls above.
+export function scheduleMeltIceTimeout(x, y, when) {
+    const loc = game.level?.at(x, y);
+    if (!loc) return 0;
     const turn = (game.moves || 0) + when;
+    if (!startTimer(when, TIMER_LEVEL, MELT_ICE_AWAY, (x << 16) | y)) return 0;
     loc.meltIceTurn = turn;
     loc.meltIceTimeout = turn;
     loc.meltIceAwayTurn = turn;
@@ -138,31 +143,27 @@ export function startMeltIceTimeout(x, y, minTime = 0) {
     return turn;
 }
 
-export function processMeltIceTimers(g = game, { afterMelt = null } = {}) {
-    const lvl = g.level;
-    if (!lvl?.meltIceTimers?.length) return [];
-    const due = [];
-    const pending = [];
-    for (const timer of lvl.meltIceTimers) {
-        if ((timer.turn || 0) <= (g.moves || 0)) due.push(timer);
-        else pending.push(timer);
+export function meltIceAway(where, timeout, { afterMelt = null } = {}, g = game) {
+    const x = (where >>> 16) & 0xffff;
+    const y = where & 0xffff;
+    const moving = g._monster_moving;
+    const contextMoving = g.context?.mon_moving;
+    g._monster_moving = true;
+    (g.context ??= {}).mon_moving = true;
+    try {
+        stopMeltTimers(x, y);
+        const result = meltIceAt(x, y, { message: ICE_TIMER_MELT_MESSAGE });
+        if (afterMelt) result.messages.push(...afterMelt(x, y, result));
+        return result.messages;
+    } finally {
+        g._monster_moving = moving;
+        g.context.mon_moving = contextMoving;
     }
-    if (!due.length) return [];
-    lvl.meltIceTimers = pending;
-    due.sort((a, b) => ((a.turn || 0) - (b.turn || 0)) || ((a.seq || 0) - (b.seq || 0)));
+}
 
-    const messages = [];
-    for (const timer of due) {
-        const loc = lvl.at(timer.x, timer.y);
-        if (!loc) continue;
-        delete loc.meltIceTurn;
-        delete loc.meltIceTimeout;
-        delete loc.meltIceAwayTurn;
-        const result = meltIceAt(timer.x, timer.y, { message: ICE_TIMER_MELT_MESSAGE });
-        messages.push(...result.messages);
-        if (afterMelt) messages.push(...afterMelt(timer.x, timer.y, result));
-    }
-    return messages;
+export async function processMeltIceTimers(g = game, options = {}) {
+    return (await runTimers({ [MELT_ICE_AWAY]: { run: (arg, time) => meltIceAway(arg, time, options, g) } },
+        g, timer => timer.func === MELT_ICE_AWAY)).flat();
 }
 
 function isCorpseObject(obj) {
@@ -949,7 +950,10 @@ export function applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage = null 
 
     if (isIceAt(x, y)) {
         const meltTime = spotMeltIceTimeLeft(x, y);
-        if (meltTime) startMeltIceTimeout(x, y, meltTime);
+        if (meltTime) {
+            stopMeltTimers(x, y);
+            startMeltIceTimeout(x, y, meltTime);
+        }
         return { handled: true, messages: [], rangeMod: 0, stopped: false };
     }
 
@@ -1032,7 +1036,9 @@ export function applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage = null 
 
 export function meltIceAt(x, y, { message = ICE_MELT_MESSAGE, buriedMerchandiseDebtMessage = null } = {}) {
     const loc = game.level?.at(x, y);
-    if (!loc || !isIceAt(x, y)) return { melted: false, messages: [], becameLiquid: false };
+    // A lowered drawbridge covers the ice, but its underlying moat still thaws.
+    const coveredIce = loc?.typ === DRAWBRIDGE_DOWN && ((loc.flags || 0) & DB_UNDER) === DB_ICE;
+    if (!loc || (!isIceAt(x, y) && !coveredIce)) return { melted: false, messages: [], becameLiquid: false };
 
     if (loc.typ === DRAWBRIDGE_UP || loc.typ === DRAWBRIDGE_DOWN) {
         loc.flags = ((loc.flags || 0) & ~DB_UNDER) | DB_MOAT;

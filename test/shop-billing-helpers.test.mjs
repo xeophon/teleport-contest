@@ -5,6 +5,7 @@ import { advanceRegions, interruptEatingOccupation, moveloop_core, processEating
 import { activateStatueTrap, burnFloorObjectsByFire, earthFloorEffects, finishForceLock, heroThrownPotionHitMonster, landMonsterThrownObject, maybeQueueQuestLeaderTalk, maybeQueueQuestTalk, monsterThrownPotionHitMonster, processCorpseTimers, processForceLockOccupationTick, processGlobShrinkTimers, processSpellbookStudyOccupation, recordVanquished, rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { newsym, refreshHallucinatedMap } from '../js/display.js';
 import { game, resetGame } from '../js/gstate.js';
+import { scheduleMeltIceTimeout } from '../js/ice.js';
 import { pushKey, resetInputState } from '../js/input.js';
 import { createMonsterCorpseOrGlob, mkcorpstat, mkobj, mksobj, monsterByRndName } from '../js/mklev.js';
 import { enableDisplayRngLog, enableRngLog, getRngLog, initRng } from '../js/rng.js';
@@ -44369,7 +44370,7 @@ test('m-prefix fatal lava life saving warns on melting ice landing', async () =>
     game.level.traps = [];
     game.level.objects = [];
     game.level.monsters = [];
-    game.level.meltIceTimers = [{ x: landingX, y: landingY, turn: (game.moves || 0) + 4, seq: 1 }];
+    scheduleMeltIceTimeout(landingX, landingY, 4);
 
     await rhack(' ');
 
@@ -44596,7 +44597,7 @@ test('explore m-prefix fatal lava rescue warns on melting ice landing', async ()
     game.level.traps = [];
     game.level.objects = [];
     game.level.monsters = [];
-    game.level.meltIceTimers = [{ x: landingX, y: landingY, turn: (game.moves || 0) + 4, seq: 1 }];
+    scheduleMeltIceTimeout(landingX, landingY, 4);
 
     await rhack('n');
 

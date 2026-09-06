@@ -188,9 +188,34 @@ amulet generation/put-on, low maximum HP at four levels, extrinsic versus
 intrinsic form locks, and the inventory-protection failure branch. The combined
 explosion, endgame, shop/combat and monster-spell tests passed 3,211/3,211.
 
-Remaining inspected follow-ups include sensed unseen skilled-spell targets,
+Remaining inspected follow-ups include
 non-fire/cold explosion types and their scroll/wand/monster callers, and the
 status/expulsion/message portions of `savelife` outside the spell continuation.
 The existing Constitution adjustment helper also lacks the full `adjattrib`
 fixed-ability and minimum-attribute rules; the HP recovery helper assumes that
 the caller has applied the applicable adjustment.
+
+## Sensed spell targets
+
+`spell.c:throwspell:1681-1697` accepts a monster known through `canspotmon` even
+when its square is unseen. The spell dependency now shares the existing rolling
+boulder perception path as `cmd.js:heroCanSpotMonster`, including detection,
+telepathy and species warning. Generic danger warning does not identify a target.
+The visible branch now uses canonical `M3_INFRAVISIBLE` and the worm segment
+check from `display.h:canseemon` / `worm.c:worm_known:883`. The shared
+`display.js:sensesTelepathically` uses canonical `M1_MINDLESS`, and its worn source
+count recognizes generated ESP amulets without a known name. The count is
+exported for the camera's separate telepathic-capability check.
+
+Fifteen additional spell/telepathy tests cover accepted and rejected dark
+targets, actual generated amulet put-on, blind versus sighted telepathy, squared
+range boundaries, mindless species, worm segments and blocked spell paths.
+Eight of the first thirteen cases failed before the changes; all 48 explosion
+and targeting cases now pass. A broader 3,246-case run passes 3,244, with the two
+failures in the concurrent ice-timer migration reported to its owner. Previously
+existing rolling-boulder death naming remains covered: C spotting predicates
+also operate after lethal HP damage, before cleanup removes the monster.
+
+Artifact `SPFX_ESP` sources and remaining shared rendering/perception callers
+still need the complete `worn.c:recalc_telepat_range` / `display.h` property model;
+this change does not claim global perception parity.

@@ -51,8 +51,10 @@ import { MONS as PERMONST_MONS } from './permonst.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
-import { processBuriedOrganicRot, processMeltIceTimers, removedFromIcebox } from './ice.js';
-import { processObjectBurnTimers } from './cmd.js';
+import { processBuriedOrganicRot, meltIceAway, removedFromIcebox } from './ice.js';
+import { runObjectBurnTimer } from './cmd.js';
+import { BURN_OBJECT, MELT_ICE_AWAY, runTimers } from './timeout.js';
+import { objectLocations } from './obj_location.js';
 import { restoreLifeSavedBody } from './end.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
@@ -4279,13 +4281,21 @@ async function processFigurineTransformTimeouts(g) {
     }
 }
 
+export async function processGameTimers(g = game) {
+    const handlers = {
+        [BURN_OBJECT]: { run: runObjectBurnTimer },
+        [MELT_ICE_AWAY]: { run: (where, time) => meltIceAway(where, time, {
+            afterMelt: (x, y, result) => result.becameLiquid
+                ? applyMeltedIceMonsterLiquidEffects(x, y, { recordKill: recordVanquished }) : [],
+        }, g) },
+    };
+    const results = await runTimers(handlers, g,
+        timer => handlers[timer.func] && !objectLocations(g, true).get(timer.arg)?.saved);
+    return results.flat();
+}
+
 async function afterMoveTurn(g, includeHeroTime = true) {
-    for (const msg of await processObjectBurnTimers(g)) addToplineMessage(msg);
-    for (const msg of processMeltIceTimers(g, {
-        afterMelt: (x, y, result) => result.becameLiquid
-            ? applyMeltedIceMonsterLiquidEffects(x, y, { recordKill: recordVanquished })
-            : [],
-    })) addToplineMessage(msg);
+    for (const msg of await processGameTimers(g)) addToplineMessage(msg);
     for (const msg of await processCorpseTimers(g)) addToplineMessage(msg);
     for (const msg of processGlobShrinkTimers(g)) addToplineMessage(msg);
     processBuriedOrganicRot(g);

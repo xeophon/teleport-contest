@@ -7,6 +7,7 @@ import { COULD_SEE, IN_SIGHT, ROOM, STONE, P_ATTACK_SPELL, P_SKILLED, WEB, POOL,
 import { MONS } from '../js/permonst.js';
 import { d, rn2, initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { vision_reset } from '../js/vision.js';
+import { sensesTelepathically } from '../js/display.js';
 
 function setup(seed = 41) {
     resetGame();
@@ -429,4 +430,111 @@ test('worn fire resistance shields burning-paper damage even when inventory prot
         assert.equal(result.damage, 0);
     }
     assert.ok(witnessedDestruction, 'exercise the 1% inventory-protection failure');
+});
+
+for (const [label, hero, species, litSight, accepted] of [
+    ['blind intrinsic telepathy', { blind: true, telepathy: true }, 'wolf', 0, true],
+    ['mindless target with blind telepathy', { blind: true, telepathy: true }, 'acid blob', 0, false],
+    ['sighted intrinsic telepathy', { telepathy: true }, 'wolf', 0, false],
+    ['monster detection', { detectMonsters: true }, 'acid blob', 0, true],
+    ['matching species warning', { warnOfMonsterSpecies: 'wolf' }, 'wolf', 0, true],
+    ['different species warning', { warnOfMonsterSpecies: 'wolf' }, 'acid blob', 0, false],
+    ['generic danger warning', { warning: true }, 'wolf', 0, false],
+    ['unlit square without infravision', {}, 'wolf', COULD_SEE, false],
+    ['warm target in infravision', { infravision: true }, 'wolf', COULD_SEE, true],
+    ['cold target in infravision', { infravision: true }, 'lizard', COULD_SEE, false],
+]) {
+    test(`skilled spell targeting honors C canspotmon: ${label}`, async () => {
+        setup();
+        Object.assign(game.u, hero);
+        const mon = monster(species, 8, 10);
+        await beginSkilled('cone of cold');
+        game.viz_array = Array.from({ length: 21 }, () => Array(80).fill(litSight));
+        for (let step = 0; step < 3; step++) await rhack('l');
+        enableRngLog();
+        await rhack('.');
+        if (accepted) {
+            assert.ok(mon.mhp < 1000);
+            assert.ok(getRngLog().some(row => row.startsWith('rnd(8)=')));
+            assert.doesNotMatch(game._pending_message, /fails to lock/);
+        } else {
+            assert.equal(mon.mhp, 1000);
+            assert.equal(game._pending_message, 'Your mind fails to lock onto that location!');
+            assert.deepEqual(getRngLog(), []);
+        }
+    });
+}
+
+test('generated ESP amulet enables unseen skilled targeting only while worn', async () => {
+    setup();
+    let amulet;
+    for (let i = 0; i < 1000; i++) {
+        const item = mkobj(15, false);
+        if (item.amuletIndex === 0) { amulet = item; break; }
+    }
+    assert.ok(amulet);
+    assert.equal(amulet.kind, undefined);
+    amulet.letter = 'a';
+    game.inventory.push(amulet);
+    const mon = monster('wolf', 8, 10, { minvis: true, mundetected: true });
+    assert.equal(sensesTelepathically(mon), false);
+    await rhack('P');
+    await rhack('a');
+    assert.equal(sensesTelepathically(mon), true);
+    await beginSkilled('fireball');
+    game.viz_array = Array.from({ length: 21 }, () => Array(80).fill(0));
+    for (let step = 0; step < 3; step++) await rhack('l');
+    await rhack('.');
+    assert.ok(mon.mhp < 1000);
+});
+
+test('telepathy checks canonical mindlessness and the squared range boundary', () => {
+    setup();
+    game.inventory.push({ cls: 'amulet', amuletIndex: 0, worn: true });
+    const minded = monster('wolf', 13, 10);
+    const mindless = monster('acid blob', 6, 10);
+    assert.equal(sensesTelepathically(minded), true, 'one source permits squared distance 64');
+    minded.mx = 14;
+    assert.equal(sensesTelepathically(minded), false);
+    assert.equal(sensesTelepathically(mindless), false);
+    game.u.blind = true;
+    assert.equal(sensesTelepathically(minded), true, 'blind telepathy has no distance limit');
+    assert.equal(sensesTelepathically(mindless), false);
+});
+
+test('telepathy rejects canonical mindless species even without a legacy mindless boolean', () => {
+    setup();
+    game.u.blind = game.u.telepathy = true;
+    for (const name of ['acid blob', 'brown mold', 'gas spore', 'stone golem']) {
+        const mon = monster(name, 8, 10);
+        assert.equal(mon.data.mindless, undefined);
+        assert.equal(sensesTelepathically(mon), false, name);
+    }
+});
+
+test('seeing a long-worm segment permits targeting its unseen head', async () => {
+    setup();
+    const mon = monster('long worm', 8, 10, { wormno: 1, wormSegments: [{ x: 6, y: 10 }, { x: 7, y: 10 }] });
+    await beginSkilled('cone of cold');
+    game.viz_array = Array.from({ length: 21 }, () => Array(80).fill(0));
+    game.viz_array[10][6] = COULD_SEE | IN_SIGHT;
+    for (let step = 0; step < 3; step++) await rhack('l');
+    await rhack('.');
+    assert.ok(mon.mhp < 1000);
+    assert.doesNotMatch(game._pending_message, /fails to lock/);
+});
+
+test('sensed target behind an obstacle is accepted but spell walk_path still stops at the obstacle', async () => {
+    setup();
+    game.u.detectMonsters = true;
+    const mon = monster('wolf', 8, 10);
+    game.level.at(7, 10).typ = STONE;
+    await beginSkilled('cone of cold');
+    game.viz_array = Array.from({ length: 21 }, () => Array(80).fill(0));
+    for (let step = 0; step < 3; step++) await rhack('l');
+    enableRngLog();
+    await rhack('.');
+    assert.ok(getRngLog().some(row => row.startsWith('rnd(8)=')));
+    assert.equal(mon.mhp, 1000);
+    assert.ok(game.u.uhp < 1000, 'center moves to square six, adjacent to the hero');
 });

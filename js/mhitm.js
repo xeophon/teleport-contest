@@ -64,7 +64,7 @@ import {
     is_animal, is_golem, is_whirly, touch_petrifies, acidic, is_undead, is_demon, is_were,
     is_giant, is_minion, thick_skinned, PM_WOOD_GOLEM,
 } from './permonst.js';
-import { W_ARM, W_ARMOR, W_ACCESSORY, W_AMUL, W_WEP, W_ARMC, W_ARMG, W_ARMH, W_ARMF, MSLOW, MFAST } from './const.js';
+import { W_ARM, W_ARMOR, W_ACCESSORY, W_AMUL, W_WEP, W_ARMC, W_ARMG, W_ARMH, W_ARMF, MSLOW, MFAST, G_GENOD } from './const.js';
 
 /* include/monattk.h:108-112 combat result bits. */
 export const M_ATTK_MISS = 0x0;    /* aggressor missed */
@@ -349,7 +349,7 @@ export function attkProtection(aatyp) {
 function polyWhenStoned(mon) {
     const pm = pmOf(mon);
     return !!pm && is_golem(pm) && pm.pm !== PM_STONE_GOLEM
-        && !(game.mvitals?.[PM_STONE_GOLEM] & 0x4000 /* G_GENOD-ish */);
+        && !(game.mvitals?.[PM_STONE_GOLEM]?.mvflags & G_GENOD);
 }
 
 /* src/mon.c healmon() port (hp and maxhp deltas). */

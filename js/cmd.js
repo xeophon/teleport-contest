@@ -1,14 +1,15 @@
 import { monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
 import { monCatchupElapsedTime } from './dog.js';
-import { beginBurn, endBurn, cleanupBurn, processBurnTimers } from './burn.js';
+import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers } from './burn.js';
 import { BURN_OBJECT, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { maybeUnhideAt } from './monster_hiding.js';
 import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL } from './const.js';
-import { AD_BLND, AD_STCK, AT_HUGS, AT_ENGL, perceives, PM_GREMLIN } from './permonst.js';
+import { AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal } from './artifact.js';
-import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin } from './flash.js';
+import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
+    recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
 
 // mondata.c:1558-1583 and vision.h:m_canseeu: this observation is shared by
 // every monster in line of sight, including one other than the caster.
@@ -171,7 +172,7 @@ import { wizardCussMessage, wizdeadorgone, aggravate as wizardAggravate, clonewi
 import { WERE_SPECIES } from './were.js';
 import { MONS, MZ_MEDIUM, amphibious, amorphous, humanoid, is_clinger, is_swimmer, is_whirly, noncorporeal, unsolid, haseyes, throws_rocks } from './permonst.js'; // js port of include/monsters.h rows (natural AC via .ac)
 import { nhgetch } from './input.js';
-import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, show_glyph_cell, strengthString } from './display.js';
+import { bot, cls, docrt, flush_screen, monsterGlyph, newsym, pline, recordObservedObjectDiscovery, refreshHallucinatedMap, seeMonsters, seeNearbyObjects, sensesTelepathically, telepathySourceCount, show_glyph_cell, strengthString } from './display.js';
 import { cansee, couldsee, vision_recalc, vision_reset } from './vision.js';
 import { RANDOM_MONSTER_BY_NAME, SHOP_TYPES, STALKER_MONSTERS, add_to_container, add_to_minv, adjustedMonsterLevel, artifactDefinitionForName, artifactObjectName, enextoMonsterSpot, pickNasty, make_tutorial1_level, makemon, makeArtifactWishObject, maketrap, mkcorpstat, mklev, mkobj, mkobj_at, mksobj, monsterByRndName, monster_hp, morgueMonster, nameObjectAsArtifact, next_ident, object_display, potionIndexForRoll, randomHallucinatedShopkeeperName, resurrectWizardOfYendor, rndmonnum, scrollIndexForRoll, set_mimic_sym_rng, syncDungeonContext, u_on_dnstairs, u_on_rndspot, u_on_upstairs, wipe_engr_at, dropMonsterInventory as dropMonsterInventoryRaw, l_nhcore_init, getrumor, getbogusmon, level_difficulty, set_malign, somexyspace, fumaroles, fix_wall_spines, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, noteleportLevelForMonster, rlocNoMsg } from './mklev.js';
 import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_NEUTRAL, A_NONE, A_STR, A_WIS, ALTAR, AM_SANCTUM, AM_SHRINE, Align2amask, Amask2align, BC_BALL, BC_CHAIN, BEAR_TRAP, BLCORNER, BOLT_LIM, BRCORNER, CANDLESHOP, CLOUD, COLNO, CORPSTAT_FEMALE, CORPSTAT_GENDER, CORPSTAT_HISTORIC, CORPSTAT_MALE, CORPSTAT_NEUTER, CORR, DB_DIR, DB_EAST, DB_FLOOR, DB_ICE, DB_LAVA, DB_MOAT, DB_NORTH, DB_SOUTH, DB_UNDER, DB_WEST, DBWALL, DELPHI, DOOR, DRAWBRIDGE_DOWN, DRAWBRIDGE_UP, BURN, D_BROKEN, D_CLOSED, D_ISOPEN, D_LOCKED, D_NODOOR, D_TRAPPED, DUST, ENGRAVE, ENGR_BLOOD, FOUNTAIN, F_LOOTED, GRAVE, GLOC_DOOR, GLOC_EXPLORE, GLOC_MONS, GLOC_OBJS, HEADSTONE, HWALL, ICE, ICED_MOAT, ICED_POOL, IN_SIGHT, IRONBARS, IS_AIR, IS_FURNITURE, IS_LAVA, IS_OBSTRUCTED, IS_POOL, IS_ROOM, IS_SOFT, IS_STWALL, IS_TREE, IS_WALL, In_endgame, In_quest, In_sokoban, In_V_tower, Is_airlevel, Is_astralevel, Is_botlevel, Is_earthlevel, Is_firelevel, Is_rogue_level, Is_stronghold, Is_waterlevel, LADDER, LAVAPOOL, LAVAWALL, LUCKMAX, LUCKMIN, MAGIC_PORTAL, MARK, MAXULEV, MAX_EGG_HATCH_TIME, MIGR_LADDER_UP, MIGR_RANDOM, MIGR_SSTAIRS, MIGR_STAIRS_UP, MM_ADJACENTOK, MM_EDOG, MM_NOCOUNTBIRTH, MM_NOMSG, MM_NOTAIL, MM_NOWAIT, MOAT, MON_LIMBO, MON_MIGRATING, MORGUE, M_AP_FURNITURE, M_AP_MONSTER, M_AP_OBJECT, M_AP_TYPE, NEED_WEAPON, N_DIRS, NEW_MOON, NO_MINVENT, NORMAL_SPEED, OBJ_INVENT, OROOM, OVERLOADED, MAX_CARR_CAP, WT_BABY_DRAGON, WT_DRAGON, WT_HUMAN, P_AXE, P_BARE_HANDED_COMBAT, P_BASIC, P_BOOMERANG, P_BOW, P_BROAD_SWORD, P_CLUB, P_CROSSBOW, P_DAGGER, P_DART, P_EXPERT, P_GRAND_MASTER, P_HAMMER, P_KNIFE, P_LANCE, P_LONG_SWORD, P_MASTER, P_NONE, P_PICK_AXE, P_POLEARMS, P_RIDING, P_SABER, P_SHORT_SWORD, P_SHURIKEN, P_SKILLED, P_SLING, P_SPEAR, P_TWO_HANDED_SWORD, P_TWO_WEAPON_COMBAT, P_UNSKILLED, PIT, POOL, REPAIR_DELAY, ROLLING_BOULDER_TRAP, ROOM, ROOMOFFSET, ROWNO, SCORR, SDOOR, SHARED, SHARED_PLUS, SHOPBASE, SHOP_DOOR_COST, SINK, SPIKED_PIT, STAIRS, STONE, STR18, STR19, STRAT_APPEARMSG, STRAT_ARRIVE, STRAT_WAITFORU, STRAT_WAITMASK, S_LDWASHER, S_LPUDDING, S_LRING, TDWALL, TEMPLE, THRONE, TLCORNER, TRCORNER, TREE, TREE_LOOTED, TREE_SWARM, TT_BEARTRAP, TT_BURIEDBALL, TT_INFLOOR, TT_LAVA, TT_PIT, TT_WEB, TUWALL, T_LOOTED, VAULT, VIBRATING_SQUARE, VWALL, WAND_BACKFIRE_CHANCE, WATER, WEB, WM_MASK, WT_IRON_BALL_BASE, WT_IRON_BALL_INCR, WT_TO_DMG, WT_TOOMUCH_DIAGONAL, W_ARMF, W_NONDIGGABLE, W_NONPASSWALL, W_SADDLE, W_TOOL, ZAP_POS, is_hole, is_pit, isok, xdir, ydir } from './const.js';
@@ -17681,11 +17682,7 @@ async function createWizardTrapWishResult(trapWish) {
 
 function clearWizardTerrainTimers(loc, x, y) {
     if (!loc) return;
-    delete loc.meltIceTurn;
-    delete loc.meltIceTimeout;
-    delete loc.meltIceAwayTurn;
-    if (game.level?.meltIceTimers)
-        game.level.meltIceTimers = game.level.meltIceTimers.filter(timer => timer.x !== x || timer.y !== y);
+    stopMeltIceTimersAt(x, y);
 }
 
 function deleteWizardTerrainEngraving(x, y) {
@@ -18364,21 +18361,27 @@ function beginWishedBurn(item) {
 
 const endWishedBurn = endBurn;
 
+const OBJECT_BURN_DEPS = {
+    unhide: (x, y) => maybeUnhideAt(x, y),
+    name: obj => pickupObjectName({ ...obj, line: '' }),
+    monsterName: mon => mon.givenName || `The ${mon.data?.name || mon.name || 'monster'}`,
+    remove(obj, entry) {
+        if (entry.parent) removeCorpseTimerObject(entry);
+        else if (entry.source === 'inventory')
+            useUpInventoryItem(obj, obj.quan || 1);
+        else if (entry.source === 'migrating') {
+            rememberUsedUpShopBill(obj);
+            entry.list.splice(entry.list.indexOf(obj), 1);
+        } else removeCorpseTimerObject({ ...entry, source: entry.buried ? 'buried' : entry.source });
+    },
+};
+
+export function runObjectBurnTimer(obj, timeout, g = game) {
+    return burnObject(obj, timeout, OBJECT_BURN_DEPS, g);
+}
+
 export async function processObjectBurnTimers(g = game) {
-    return processBurnTimers(g, {
-        unhide: (x, y) => maybeUnhideAt(x, y, {}, g),
-        name: obj => pickupObjectName({ ...obj, line: '' }),
-        monsterName: mon => mon.givenName || `The ${mon.data?.name || mon.name || 'monster'}`,
-        remove(obj, entry) {
-            if (entry.parent) removeCorpseTimerObject(entry);
-            else if (entry.source === 'inventory')
-                useUpInventoryItem(obj, obj.quan || 1);
-            else if (entry.source === 'migrating') {
-                rememberUsedUpShopBill(obj);
-                entry.list.splice(entry.list.indexOf(obj), 1);
-            } else removeCorpseTimerObject({ ...entry, source: entry.buried ? 'buried' : entry.source });
-        },
-    });
+    return processBurnTimers(g, OBJECT_BURN_DEPS);
 }
 
 function applyWishedLightState(item, state) {
@@ -27741,9 +27744,9 @@ function maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAc
     }
 }
 
-async function applyHeroKillLiveExperience(mon, messages) {
+async function applyHeroKillLiveExperience(mon, messages, killedCount = game._vanquished_counts?.[mon?.data?.name] || 1) {
     if (!game.u || !mon) return false;
-    const experience = monsterExperienceValue(mon, game._vanquished_counts?.[mon.data?.name] || 1);
+    const experience = monsterExperienceValue(mon, killedCount);
     game.u.uexp = (game.u.uexp || 0) + experience;
     const oldLevel = game.u?.ulevel || 1;
     const nextLevelExp = oldLevel < 10 ? 10 * (2 ** oldLevel)
@@ -58926,13 +58929,21 @@ function heroWarnsOfMonsterTypeForRollingBoulder(mon) {
         || heroWarnOfMonSpeciesMatches(mon, game.u?.warn_of_monster_species));
 }
 
-function heroRollingBoulderMonsterCanBeSpotted(mon) {
+// display.h:canspotmon distinguishes knowing a monster's position from seeing
+// its square. Telepathy, detection and species warning also reveal hiders.
+function heroCanSpotMonster(mon) {
     if (!mon) return false;
     if (heroDetectsMonsterForRollingBoulder(mon)) return true;
     if (heroSensemonRestrictionsAllowRollingBoulder(mon) && sensesTelepathically(mon)) return true;
     if (heroWarnsOfMonsterTypeForRollingBoulder(mon)) return true;
-    return !game.u?.blind && !mon.mundetected
-        && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my);
+    if (game.u?.blind || mon.mundetected || (mon.minvis && !game.u?.seeInvisible)) return false;
+    if (mon.wormno)
+        return cansee(mon.mx, mon.my) || (mon.wormSegments || []).some(seg => cansee(seg.x, seg.y));
+    const hasInfravision = game.u?.infravision
+        || infravision(game.u?._polyself_form || {})
+        || ['dwarven', 'elven', 'gnomish', 'orcish'].includes(game.urace?.adj);
+    return cansee(mon.mx, mon.my)
+        || (hasInfravision && infravisible(pmOf(mon) || mon.data || {}) && couldsee(mon.mx, mon.my));
 }
 
 function observeHeroRollingBoulderProjectile(movingBoulder, visible) {
@@ -58958,7 +58969,7 @@ function heroRollingBoulderApparentMonsterName(mon) {
 }
 
 function heroRollingBoulderMonsterObservedName(mon) {
-    if (!heroRollingBoulderMonsterCanBeSpotted(mon)) return '';
+    if (!heroCanSpotMonster(mon)) return '';
     let name = (heroRollingBoulderApparentMonsterName(mon) || fireScrollMonsterName(mon))
         .replace(/^The /, 'The ');
     if (mon?.minvis && !/^(?:the )?invisible\b/i.test(name))
@@ -58980,7 +58991,7 @@ function heroRollingBoulderMonsterDeathIsDestroyed(mon) {
     const rawMlet = String(mon?.mlet || data.mlet || data.glyph || '');
     const mlet = rawMlet.toLowerCase();
     const name = String(data.name || mon?.name || '').toLowerCase();
-    return !heroRollingBoulderMonsterCanBeSpotted(mon)
+    return !heroCanSpotMonster(mon)
         || !!(mon?.vampshifter || data.vampshifter
             || mon?.nonliving || data.nonliving
             || mlet === 'w' || mlet === 'm' || mlet === 'z'
@@ -59047,7 +59058,7 @@ function reviveVampshifterFromRollingBoulderKill(mon, messages, visible) {
     delete mon.chamName;
     delete mon.cham;
 
-    if (visible && heroRollingBoulderMonsterCanBeSpotted(mon)) {
+    if (visible && heroCanSpotMonster(mon)) {
         const before = specialDeath ? oldDisplayName : oldDisplayName.replace(/^The /, 'The seemingly dead ');
         const action = specialDeath ? 'suddenly reconstitutes' : 'suddenly transforms';
         messages.push(`${before} ${action} and rises as ${indefiniteArticle(baseData.name)} ${baseData.name}!`);
@@ -70829,6 +70840,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         zapDigFallingRockMessage,
         placeRockAtHero,
         visibleMonsterForScroll,
+        heroCanSpotMonster,
         monsterResistsEffect,
         monsterResistsCold,
         monsterResistsFire,
@@ -74405,12 +74417,45 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     }
 
     const ARTIFACT_INVOKE_DEPS = {
-        heroIsBlind, damageHero: applyChestTrapFireDamage, halfPhysical: maybeHalfPhysicalDamage,
+        heroIsBlind, heroIsStunned, heroIsConfused, heroIsHallucinating,
+        heroBlindTelepathy: () => !!(game.u.telepathy || game.u.telepathetic || game.u.HTelepat || telepathySourceCount()),
+        senseMonster: mon => heroDetectsMonsterForRollingBoulder(mon) || heroWarnsOfMonsterTypeForRollingBoulder(mon)
+            || (heroSensemonRestrictionsAllowRollingBoulder(mon) && sensesTelepathically(mon)),
+        async gainPhotoExperience(mon, messages) {
+            game.u.urexp = (game.u.urexp || 0) + 4 * monsterExperienceValue(mon, 0);
+            await applyHeroKillLiveExperience(mon, messages, 0);
+        },
+        async damageHero(messages, damage, cause) {
+            const result = applyChestTrapFireDamage(messages, damage, cause);
+            if (result.lifeSaving) await spellRestoreLifeSavedHero();
+            return result;
+        },
+        halfPhysical: maybeHalfPhysicalDamage,
         name: spellMonsterTheName, kill: killMonsterFromHeroProjectileHit,
         visible: mon => !heroIsBlind() && !mon.mundetected
-            && (!mon.minvis || game.u?.seeInvisible) && couldsee(mon.mx, mon.my),
-        seeSquare: couldsee, newsym, mapInvisible: bullwhipMapInvisibleAt,
+            && (!mon.minvis || game.u?.seeInvisible) && cansee(mon.mx, mon.my),
+        seeSquare: cansee, newsym, mapInvisible: bullwhipMapInvisibleAt,
         wake: wakeNearbyMonstersAt, anger: setHeroObjectHitMonsterAngry, flee: directMeleeMonflee,
+        async transientLight(x, y) {
+            if (game.level.at(x, y).lit) return;
+            (game._transientFlashSpots ??= []).push({ x, y });
+            vision_recalc(0);
+            await flush_screen(0);
+            for (const mon of game.level.monsters || [])
+                if (!mon.dead && mon.mx === x && mon.my === y && ARTIFACT_INVOKE_DEPS.visible(mon)) mon.mtemplit = 1;
+        },
+        async cleanupFlash() {
+            if (game._transientFlashSpots?.length) {
+                delete game._transientFlashSpots;
+                vision_recalc(0);
+            }
+            for (const mon of game.level.monsters || []) {
+                if (mon.dead || !mon.mtemplit) continue;
+                mon.mtemplit = 0;
+                if (!heroCanSpotMonster(mon)) bullwhipMapInvisibleAt(mon.mx, mon.my);
+            }
+            await flush_screen(0);
+        },
         blindHero(duration) {
             game.u._blindTimeout = duration;
             const eyes = (game.inventory || []).some(obj => isWornInventoryItem(obj)
@@ -74421,9 +74466,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             vision_recalc(0);
         },
         revealMimic(mon, messages) {
-            const explanation = mon.appearDescription || (mon.appearGlyph === '+' ? 'closed door'
-                : mon.appearGlyph === '>' ? 'staircase down' : mon.appearGlyph === '<' ? 'staircase up'
-                    : mon.appearGlyph === '_' ? 'altar' : 'something');
+            const explanation = FLASH_CMAP_EXPLANATIONS[mon.mappearance] || mon.appearDescription || 'something';
             const wasVisible = !heroIsBlind() && couldsee(mon.mx, mon.my) && (!mon.minvis || game.u?.seeInvisible);
             revealHeroProjectileHitMimicAppearance(mon);
             if (wasVisible) messages.push(`That ${explanation} is really ${mon.mtame ? 'your ' + mon.data.name : articleFor(mon.data.name)}${mon.mtame ? '.' : '!'}`);
@@ -74440,34 +74483,67 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             await setMessage('Never mind.');
             return;
         }
-        const dir = commandDirection(ch);
-        if (!dir) return;
+        if (ch === '?') return;
+        const inputDirection = commandDirection(ch === 's' ? '.' : ch);
+        const dir = inputDirection && resolveFlashDirection(inputDirection, ARTIFACT_INVOKE_DEPS);
+        if (!dir || dir.error) {
+            item.age = game.moves || 0;
+            game._invoking_artifact = null;
+            game._command_mode = null;
+            game.context.move = 0;
+            await setMessage(`${dir?.error || 'What a strange direction!'}  Never mind.`);
+            return;
+        }
         game._invoking_artifact = null;
         game._command_mode = null;
         const messages = [];
-        if (dir.dx || dir.dy) await flashRay(item, dir, messages, ARTIFACT_INVOKE_DEPS);
+        if (dir.dx || dir.dy) {
+            await flashRay(item, dir, messages, ARTIFACT_INVOKE_DEPS);
+            await ARTIFACT_INVOKE_DEPS.cleanupFlash();
+        }
         else if (dir.dz) {
             const ux = game.u.ux, uy = game.u.uy;
             const loc = game.level.at(ux, uy);
-            const waslit = loc.waslit;
             const noOp = lightScrollNoOpLevel();
             if (!heroIsBlind()) {
-                if (game.u.uswallow) messages.push(`${fireScrollMonsterName(game.u.ustuck)}'s ${bodyPart(game.u.ustuck, 'stomach')} is lit.`);
+                if (game.u.uswallow) {
+                    const mon = game.u.ustuck;
+                    const species = pmOf(mon) || mon.data;
+                    const digesting = species.attacks?.some(attack => attack.adtyp === AD_DGST);
+                    messages.push(digesting ? `${possessiveMonsterName(fireScrollMonsterName(mon))} ${bodyPart(mon, 'stomach')} is lit.`
+                        : is_whirly(species) ? `${fireScrollMonsterName(mon)} shines briefly.` : `${fireScrollMonsterName(mon)} glistens.`);
+                }
                 else if (!(Is_rogue_level(game.u.uz) || game.level.flags?.rogue_level) || loc.typ !== CORR)
                     messages.push(`A lit field ${noOp ? 'briefly ' : ''}surrounds you!`);
             }
             if (!noOp) {
-                if (Is_rogue_level(game.u.uz) || game.level.flags?.rogue_level) applyLightScrollArea(true, item);
-                else loc.lit = true;
-                vision_recalc(2);
+                const room = (Is_rogue_level(game.u.uz) || game.level.flags?.rogue_level)
+                    ? levelRoomByRoomno(loc.roomno || 0) : null;
+                const squares = [];
+                if (room) {
+                    for (let x = room.lx - 1; x <= room.hx + 1; x++)
+                        for (let y = room.ly - 1; y <= room.hy + 1; y++) squares.push({ x, y });
+                    room.rlit = 1;
+                } else if (!(Is_rogue_level(game.u.uz) || game.level.flags?.rogue_level)) squares.push({ x: ux, y: uy });
+                const gremlins = [];
+                for (const { x, y } of squares) {
+                    game.level.at(x, y).lit = true;
+                    const mon = (game.level.monsters || []).find(mon => mon.mx === x && mon.my === y && !mon.dead);
+                    if (mon && pmOf(mon)?.pm === PM_GREMLIN) gremlins.unshift(mon);
+                }
+                if (!heroIsBlind()) vision_recalc(2);
                 game.vision_full_recalc = 1;
+                if (gremlins.length) {
+                    vision_recalc(0);
+                    for (const mon of gremlins) await lightHitsGremlin(mon, rnd(5), messages, ARTIFACT_INVOKE_DEPS);
+                }
             }
-            messages.push(!heroIsBlind() && loc.lit && !waslit ? 'It is lit here now.' : 'Nothing seems to happen.');
+            messages.push(!heroIsBlind() && loc.lit && !loc.waslit ? 'It is lit here now.' : 'Nothing seems to happen.');
         } else {
             const damage = item.blessed ? 15 : item.cursed ? 5 : 10;
             const form = pmOf({ data: game.u._polyself_form }) || game.u._polyself_form;
             const gremlin = form?.name === 'gremlin' || game.u.umonnum === PM_GREMLIN;
-            if (gremlin) lightDamageHero(item, 2 * damage, messages, ARTIFACT_INVOKE_DEPS);
+            if (gremlin) await lightDamageHero(item, 2 * damage, messages, ARTIFACT_INVOKE_DEPS);
             if (!flashBurnHero(damage + rnd(damage), messages, ARTIFACT_INVOKE_DEPS) && !gremlin)
                 messages.push('Nothing seems to happen.');
         }
@@ -74485,14 +74561,19 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             await setMessage('Never mind.');
             return;
         }
-        const dir = movementDirection(ch);
-        const verticalDir = !dir && ch === '<' ? { dx: 0, dy: 0, dz: -1 }
-            : !dir && ch === '>' ? { dx: 0, dy: 0, dz: 1 } : null;
-        const selfZap = ch === '.';
-        if (!dir && !verticalDir && !selfZap) {
-            game._keep_pending_message = 1;
+        if (ch === '?') return;
+        const inputDirection = commandDirection(ch === 's' ? '.' : ch);
+        const direction = inputDirection && resolveFlashDirection(inputDirection, ARTIFACT_INVOKE_DEPS);
+        if (!direction || direction.error) {
+            game._apply_camera_letter = null;
+            game._command_mode = null;
+            game.context.move = 0;
+            await setMessage(direction?.error || 'What a strange direction!');
             return;
         }
+        const verticalDir = direction.dz ? direction : null;
+        const dir = direction.dx || direction.dy ? direction : null;
+        const selfZap = !dir && !verticalDir;
         game._apply_camera_letter = null;
         game._command_mode = null;
         if (!item) return;
@@ -74504,17 +74585,19 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         const flashHero = item.cursed && !rn2(2);
         if (flashHero) {
-            const damage = lightDamageHero(item, 5, messages, ARTIFACT_INVOKE_DEPS);
+            const damage = await lightDamageHero(item, 5, messages, ARTIFACT_INVOKE_DEPS);
             flashBurnHero(damage + rnd(25), messages, ARTIFACT_INVOKE_DEPS);
         } else if (game.u.uswallow) {
             messages.push(`You take a picture of ${possessiveMonsterName(spellMonsterTheName(game.u.ustuck))} ${bodyPart(game.u.ustuck, 'stomach')}.`);
         } else if (verticalDir) {
             messages.push(`You take a picture of the ${verticalDir.dz > 0 ? polyselfFalloffSurfaceName(game.u.ux, game.u.uy) : heroThrowCeilingName()}.`);
         } else if (selfZap) {
-            const damage = lightDamageHero(item, 5, messages, ARTIFACT_INVOKE_DEPS);
+            const damage = await lightDamageHero(item, 5, messages, ARTIFACT_INVOKE_DEPS);
             flashBurnHero(damage + rnd(25), messages, ARTIFACT_INVOKE_DEPS);
         } else if (dir) {
-            await flashRay(item, dir, messages, ARTIFACT_INVOKE_DEPS);
+            const target = await flashRay(item, dir, messages, ARTIFACT_INVOKE_DEPS);
+            if (target) await recordCameraCloseup(target, messages, ARTIFACT_INVOKE_DEPS);
+            await ARTIFACT_INVOKE_DEPS.cleanupFlash();
         }
         await setMessage(messages.join('  '), messages.length > 1);
         game.context.move = 1;

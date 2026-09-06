@@ -13,7 +13,7 @@ import { cansee } from './vision.js';
 import { vfsDeleteFile, vfsReadFile } from './storage.js';
 import { restoreBonesLevel } from './save.js';
 import { beginBurn, cleanupBurn } from './burn.js';
-import { BURN_OBJECT, stopObjectTimers } from './timeout.js';
+import { BURN_OBJECT, MELT_ICE_AWAY, TIMER_LEVEL, stopObjectTimers } from './timeout.js';
 import { createGasCloud, createGasCloudSelection } from './region.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, d, rne, rnz, getRngLog } from './rng.js';
 import {
@@ -26,7 +26,7 @@ import { depth as depth_of_level } from './hacklib.js';
 import { NOLIMBS_MONSTERS, RNDMONST_COMMON_MONSTERS } from './monster_data.js';
 import { datFileText } from './dat_files.js';
 import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
-import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, startCorpseTimeout } from './ice.js';
+import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, scheduleMeltIceTimeout, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
 import { QUEST_FILLERS } from './quest_filler_data.js';
 import { QUEST_LEVELS } from './quest_level_data.js';
@@ -15677,6 +15677,13 @@ function flipSpecialLevelRnd(xminArg = null, yminArg = null, xmaxArg = null, yma
         }
     }
     for (const trap of map.traps || []) point(trap, 'tx', 'ty');
+    for (const timer of game.timers || []) {
+        if (timer.kind !== TIMER_LEVEL || timer.func !== MELT_ICE_AWAY || timer.level !== map) continue;
+        const coord = { x: (timer.arg >>> 16) & 0xffff, y: timer.arg & 0xffff };
+        point(coord, 'x', 'y');
+        timer.arg = (coord.x << 16) | coord.y;
+    }
+    for (const timer of map.meltIceTimers || []) point(timer, 'x', 'y');
     for (const trap of map.traps || []) {
         point(trap.launch, 'x', 'y');
         point(trap.launch2, 'x', 'y');
@@ -23017,15 +23024,7 @@ function themeroom_light_source(croom) {
 }
 
 function startThemeroomMeltIceTimer(x, y, timeout) {
-    const loc = game.level?.at(x, y);
-    if (!loc) return;
-    const turn = (game.moves || 0) + Math.trunc(timeout);
-    loc.meltIceTurn = turn;
-    loc.meltIceTimeout = turn;
-    loc.meltIceAwayTurn = turn;
-    game.level.meltIceTimers ??= [];
-    game._meltIceTimerSeq = (game._meltIceTimerSeq || 0) + 1;
-    game.level.meltIceTimers.push({ x, y, turn, seq: game._meltIceTimerSeq });
+    scheduleMeltIceTimeout(x, y, Math.trunc(timeout));
 }
 
 function themeroom_ice_room(croom) {
@@ -23158,6 +23157,7 @@ async function themeroom_storeroom(croom) {
 }
 
 export const __mklevTestHooks = {
+    flipSpecialLevelRnd,
     questFillerOperations,
     mkmap_init,
     mkmap_run_passes,
