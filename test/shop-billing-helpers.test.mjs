@@ -20761,6 +20761,9 @@ test('inventory action on sickness offers unicorn horn as dip target', async () 
     const horn = unicornHorn(30990, 'u');
     const potion = sicknessPotion(30991, 's');
     game.inventory = [horn, potion];
+    game._object_descriptions = { potions: [] };
+    game._object_descriptions.potions[potion.potionIndex] = { description: 'black' };
+    game._object_descriptions.potions[22] = { description: 'orange' };
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: FOUNTAIN });
 
     await rhack('i');
@@ -20778,7 +20781,8 @@ test('inventory action on sickness offers unicorn horn as dip target', async () 
     assert.equal(potion.kind, 'fruit juice');
     assert.equal(potion.actualKind, 'potion of fruit juice');
     assert.equal(potion.potionIndex, 22);
-    assert.match(game._pending_message, /The potion turns/);
+    assert.equal(potion.dknown, true);
+    assert.match(game._pending_message, /The black potion turns orange/);
 });
 
 test('dipping unicorn horn into sickness stack neutralizes one potion into fruit juice', async () => {

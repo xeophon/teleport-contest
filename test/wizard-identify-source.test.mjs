@@ -197,3 +197,19 @@ test('the special all entry identifies in inventory chain order', async () => {
     assert.equal(game.inventory[2].known, false);
     await finish();
 });
+
+test('full wizard sorting applies source weapon subclasses before displayed names', async () => {
+    setup(); game.flags.sortloot = 'f';
+    const sword = add('LONG_SWORD', 'a'), arrow = add('ARROW', 'b'), dagger = add('DAGGER', 'c');
+    await command();
+    assert.deepEqual(game._wizard_identify.menuOrder, [arrow, dagger, sword]);
+});
+
+test('a custom pack order controls wizard headings and object choices', async () => {
+    setup(); game.flags.packorder = '/!';
+    const potion = add('POT_GAIN_ABILITY', 'a'), wand = add('WAN_WISHING', 'b');
+    await command();
+    assert.deepEqual(game._wizard_identify.menuOrder, [wand, potion]);
+    const headings = game._overlay_lines.filter(row => row[3] === 1).map(row => row[2]);
+    assert.deepEqual(headings, ['Wands', 'Potions']);
+});

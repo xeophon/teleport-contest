@@ -1,4 +1,5 @@
-import { objectTypeData, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
+import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT } from './inventory_sort.js';
+import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
 import { FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
 import { hasWoundedLegs, setWoundedLegs } from './do.js';
@@ -51056,32 +51057,51 @@ function lockableBoxDoname(box) {
     return `${/^[aeiou]/i.test(lockPrefix + base) ? 'an' : 'a'} ${lockPrefix}${base}${suffix}`;
 }
 
-// C ref: display_pickinv() sorts inventory by inv_order class rank
-// (options.c:118-121 def_inv_order).
-function containerSortRank(item) {
-    if (item.otyp === GOLD_PIECE || item.cls === 'coin' || item.glyph === '$') return 0;
-    if (item.cls === 'amulet' || item.otyp === AMULET_CLASS || item.glyph === '"') return 1;
-    if (item.cls === 'weapon' || item.otyp === WEAPON_CLASS || item.glyph === ')') return 2;
-    if (item.cls === 'armor' || item.otyp === ARMOR_CLASS || item.glyph === '[') return 3;
-    if (item.otyp === FOOD_CLASS || item.cls === 'food' || item.glyph === '%' || item.otyp === 'corpse' || item.otyp === CORPSE) return 4;
-    if (item.otyp === SCROLL_CLASS || item.cls === 'scroll' || item.glyph === '?') return 5;
-    if (item.cls === 'spellbook' || item.glyph === '+') return 6;
-    if (item.otyp === POTION_CLASS || item.cls === 'potion' || item.glyph === '!') return 7;
-    if (item.otyp === RING_CLASS || item.cls === 'ring' || item.glyph === '=') return 8;
-    if (item.otyp === WAND_CLASS || item.cls === 'wand' || item.glyph === '/') return 9;
-    if (item.otyp === TOOL_CLASS || item.cls === 'tool' || item.glyph === '(') return 10;
-    if (item.otyp === GEM_CLASS || item.cls === 'gem' || item.glyph === '*') return 11;
-    if (isBoulderObject(item) || item.otyp === STATUE || item.cls === 'rock' || item.glyph === '`') return 12;
-    return 13;
-}
-
-function containerLootSortKey(item) {
-    return pickupObjectName({ ...item, quan: 1 }).toLowerCase();
-}
-
-function compareContainerLootItems(a, b) {
-    return containerSortRank(a) - containerSortRank(b)
-        || containerLootSortKey(a).localeCompare(containerLootSortKey(b));
+function inventorySortDependencies(wizard = false) {
+    const calledName = item => {
+        const appearance = item.appearance || (item.cls === 'potion'
+            ? game._object_descriptions?.potions?.[item.potionIndex]?.description
+            : item.cls === 'scroll' ? game._object_descriptions?.scrolls?.[item.scrollIndex]
+                : game._object_descriptions?.spellbooks?.[item.spellbookIndex]);
+        return game['_called_' + ({ potion: 'potions', scroll: 'scrolls', spellbook: 'spellbooks' })[item.cls]]?.[appearance];
+    };
+    return {
+        blind: heroIsBlind(),
+        observe: item => {
+            if (heroIsHallucinating() || (objectTypeData(item)?.id ?? 0) < 18) return;
+            item.dknown = true;
+            recordObservedObjectDiscovery(item);
+        },
+        called: calledName,
+        xname: item => {
+            const type = objectTypeData(item);
+            if (!type) return pickupObjectName(item);
+            if (item.artifact || item.oartifact) return artifactObjectName({ ...item, _identify_override: wizard });
+            const known = wizard || objectTypeIsKnown(item, type);
+            const seen = wizard || item.dknown;
+            const description = item.appearance || (type.class === 8
+                ? game._object_descriptions?.potions?.[item.potionIndex]?.description
+                : type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex]
+                    : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex]
+                        : type.class === 11 ? game._object_descriptions?.wands?.[item.wandIndex]?.description
+                            : type.class === 4 ? game._object_descriptions?.rings?.[(item.ringRoll || 0) - 1]
+                                : type.description);
+            const cls = ({ 4: 'ring', 8: 'potion', 9: 'scroll', 10: 'spellbook', 11: 'wand' })[type.class];
+            if (cls) {
+                if (!seen) return cls;
+                if (known) return type.symbol === 'SCR_MAIL' ? 'stamped scroll'
+                    : type.symbol === 'SPE_NOVEL' ? 'novel' : type.symbol === 'SPE_BOOK_OF_THE_DEAD' ? 'Book of the Dead' : cls + ' of ' + type.name;
+                const called = calledName(item);
+                if (called) return cls + ' called ' + called;
+                return type.class === 9 && type.magic ? 'scroll labeled ' + description : description + ' ' + cls;
+            }
+            if (type.class === 13) return !seen ? type.material === 21 ? 'stone' : 'gem'
+                : known ? type.name : description + (type.material === 21 ? ' stone' : ' gem');
+            if ([2, 3, 5, 6].includes(type.class)) return known || !description ? type.name
+                : type.class === 5 ? (seen ? description + ' amulet' : 'amulet') : description;
+            return pickupObjectName({ ...item, blessed: false, cursed: false, bknown: false, lamplit: false });
+        },
+    };
 }
 
 function isIceBoxObject(obj) {
@@ -52005,7 +52025,8 @@ function containerLootCategory(item) {
 }
 
 function beginIceBoxTakeout(iceBox) {
-    const contents = [...(iceBox?.contents || [])].sort(compareContainerLootItems);
+    const contents = sortLoot(iceBox?.contents || [], (game.flags?.sortloot === 'n' ? 0 : SORTLOOT_LOOT)
+        | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies());
     if (!contents.length) return false;
     const seen = new Set(contents.map(containerLootCategory));
     const typeEntries = [...seen]
@@ -63703,11 +63724,6 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
                         : item.otyp === RING_CLASS ? 'Rings'
                             : isBoulderObject(item) || item.otyp === STATUE ? 'Boulders/Statues'
                                 : item.otyp === GEM_CLASS ? 'Gems/Stones' : 'Other Items');
-    const sectionOrder = [
-        'Coins', 'Amulets', 'Weapons', 'Armor', 'Comestibles', 'Scrolls',
-        'Spellbooks', 'Potions', 'Rings', 'Wands', 'Tools', 'Gems/Stones',
-        'Boulders/Statues', 'Other Items',
-    ];
     const rows = wizard ? [
         [wizard.items.length ? 'Debug Identify -- unidentified or partially identified item' + (wizard.items.length === 1 ? '' : 's') : 'Debug Identify', 0],
         [wizard.items.length ? '_ ' + (wizard.selected.includes('_') ? '+' : '-') + ' select '
@@ -63715,17 +63731,12 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
             + (wizard.items.length > 1 ? ' (^I for all)' : '') : '(all items are permanently identified already)', 0, wizard.items.length ? '_' : null],
     ] : [];
     let lastSection = '';
-    const items = [...(game.inventory || [])].filter(item => !match || match(item)).sort((a, b) => {
-        const sectionDiff = wizard && game.flags?.sortpack === false ? 0
-            : sectionOrder.indexOf(sectionName(a)) - sectionOrder.indexOf(sectionName(b));
-        return sectionDiff || (wizard
-            ? INVENTORY_LETTERS.indexOf(a.letter) - INVENTORY_LETTERS.indexOf(b.letter)
-            : String(a.letter || '').localeCompare(String(b.letter || '')));
-    });
+    const items = sortLoot(game.inventory || [], (game.flags?.sortloot === 'f' ? SORTLOOT_LOOT : SORTLOOT_INVLET)
+        | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies(!!wizard), match);
     if (wizard) wizard.menuOrder = items;
     for (const item of items) {
         const section = sectionName(item);
-        if (section !== lastSection && (!wizard || game.flags?.sortpack !== false)) {
+        if (section !== lastSection && game.flags?.sortpack !== false) {
             rows.push([section, identify && !wizard ? 0 : 1]);
             lastSection = section;
         }
@@ -79854,7 +79865,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             if (iceBox) iceBox.cknown = true;
             const rows = [[0, 41, 'Contents of the ice box:']];
             let row = 2;
-            const contents = [...(iceBox?.contents || [])].sort(compareContainerLootItems);
+            const contents = sortLoot(iceBox?.contents || [], (game.flags?.sortloot === 'n' ? 0 : SORTLOOT_LOOT)
+        | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies());
             for (const item of contents) {
                 rows.push([row++, 43, containerObjectPhrase(item)]);
                 if (row >= 23) break;
@@ -80320,7 +80332,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             container.cknown = true;
             const rows = [[0, 41, `Contents of the ${name}:`]];
             let row = 2;
-            const contents = [...(container.contents || [])].sort(compareContainerLootItems);
+            const contents = sortLoot(container.contents || [], (game.flags?.sortloot === 'n' ? 0 : SORTLOOT_LOOT)
+                    | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies());
             for (const item of contents) {
                 rows.push([row++, 43, containerObjectPhrase(item)]);
             }
@@ -80446,7 +80459,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     ? new Set(typeEntries.map(entry => entry.label))
                     : new Set(typeEntries.filter(entry => selected.has(entry.letter)).map(entry => entry.label));
                 const entries = [];
-                const contents = [...(container.contents || [])].sort(compareContainerLootItems);
+                const contents = sortLoot(container.contents || [], (game.flags?.sortloot === 'n' ? 0 : SORTLOOT_LOOT)
+                    | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies());
                 for (const item of contents) {
                     const label = containerLootCategory(item);
                     if (!selectedLabels.has(label)) continue;

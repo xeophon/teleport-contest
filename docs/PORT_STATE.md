@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 80 JavaScript modules and approximately 176,000 lines;
+The port now has 81 JavaScript modules and approximately 176,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,684 passing tests**, with no
+The latest source-driven checkpoint has **6,751 passing tests**, with no
 failures, skips or TODOs. All six generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -110,8 +110,18 @@ saved per-object continuation. C's bulk-selection exception, inventory-letter
 ordering, sorting toggle and More cancellation are preserved. Starting objects
 receive C's instance-known initialization. Twenty-nine new source-state tests
 and a fresh C oracle pass (108 screens and 2,737 random calls). General
-identify/discovery consumers, full object-name formatting and description-based
-inventory sorting remain integration work.
+identify/discovery consumers and full object-name formatting remain integration
+work.
+
+Inventory and container views now use C's shared loot classification and sorting:
+class/pack order, subclasses, discovery, normalized names, BUC, grease, greatest
+erosion, known proofing, known enchantment, inventory letters and stable ties.
+The owner also implements in-use slot ordering and petrifying-corpse filter
+augmentation for remaining callers. Full/loot/none sorting, custom pack order
+and bulk-menu inversion options now parse to their C state. Sixty-six new tests
+and a fresh C recording pass (184 screens and 2,753 random calls). General
+pickup/in-use view integration, complete xname formatting and centralized
+observation/discovery are still open.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

@@ -66,3 +66,18 @@ test('an uncontinued comment terminates a pending config statement', () => {
 test('too-short and unrelated config statement names do not match OPTIONS', () => {
     assert.equal(parseNethackrc('OPT=name:Wrong\nOPTIONS_EXTRA=name:Wrong').name, '');
 });
+
+for (const [text, expected] of [['full', 'f'], ['Loot', 'l'], ['none', 'n'], ['invalid', undefined]])
+    test(`C sortloot option accepts its leading choice: ${text}`, () => {
+        assert.equal(parseNethackrc(`OPTIONS=sortloot:${text}`).flags.sortloot, expected);
+    });
+for (const [text, expected] of [['0', 0], ['1', 1], ['2', 2], ['bad', 0], ['3', undefined], ['-1', undefined]])
+    test(`C menuinvertmode uses atoi and keeps valid values: ${text}`, () => {
+        assert.equal(parseNethackrc(`OPTIONS=menuinvertmode:${text}`).iflags.menuinvertmode, expected);
+    });
+
+test('packorder keeps last duplicates, places omitted gold first and appends previous classes', () => {
+    const order = parseNethackrc('OPTIONS=packorder:!!?x').flags.packorder;
+    assert.equal(order, '$!?\")[%+=/(*`0_');
+    assert.equal(parseNethackrc('OPTIONS=packorder:!?\nOPTIONS=packorder:)$').flags.packorder, ')$!?\"[%+=/(*`0_');
+});
