@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 78 JavaScript modules and approximately 172,000 lines;
+The port now has 79 JavaScript modules and approximately 176,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,8 +25,8 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,596 passing tests**, with no
-failures, skips or TODOs. All five generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **6,610 passing tests**, with no
+failures, skips or TODOs. All six generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
@@ -91,6 +91,15 @@ Eight shared-contact tests, thirty wish-state tests and three fresh C recordings
 pass (73 screens and 8,208 random calls). Full artifact discovery/personal-name
 formatting, pickup/apply/swap contact integration, carried extrinsics and the
 remaining general drop/life-saving phases still require source work.
+
+All 481 enabled C object definitions now have a generated JavaScript table,
+including native IDs, descriptions, knowledge flags, mergeability, properties,
+materials, weights, prices and damage fields. The generator compiles C's own
+initializer and enum macros against unmodified source; its check detects drift.
+Artifact base descriptions consume this table, replacing their local subset.
+Fourteen source-data tests pass. Native C IDs remain distinct from the existing
+JavaScript IDs. Identification, general generation and combat consumers still
+need to be moved to the canonical metadata.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
@@ -339,10 +348,11 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at commit c86eb3f, passed 51/53 public
-sessions (11,899/12,712 screens, 809,608/832,102 RNG calls) and 12/19
+The last complete recording run, at commit b01d161, passed 51/53 public
+sessions (11,891/12,712 screens, 809,608/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
-zero worker errors. These measurements precede the latest turn-rule changes.
+zero worker errors. These measurements include the artifact-wish and
+observation follow-ups; they precede the new generated object metadata.
 The two failing public recordings remain seeds 0116 and 4500; restoring all
 passing-session counts does not imply every trace within failing sessions
 improved. These measurements do not establish full C behavior.

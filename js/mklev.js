@@ -1,3 +1,4 @@
+import { OBJECT_DATA } from './object_data.js';
 import { GAUNTLETS_OF_POWER, DUNCE_CAP } from './armor.js';
 // mklev.js — Level generation.
 // C ref: mklev.c — makelevel, makerooms, makecorridors, generate_stairs.
@@ -4116,12 +4117,10 @@ export function artifactObjectName(obj) {
     const typeKnown = obj.dknown !== false && (obj.known !== false || (game._discoveries || []).some(entry =>
         entry.name === base && (entry.known || entry.starred)));
     if (!typeKnown) {
-        const weapon = WEAPON_ROLL_KINDS.find(row => row[1] === base);
-        base = weapon?.[3] || ({ runesword: 'runed broadsword', tsurugi: 'long samurai sword',
-            'crystal ball': 'glass orb', mirror: 'looking glass', 'skeleton key': 'key',
-            luckstone: 'gray stone', 'helm of brilliance': 'crystal helmet',
-            'amulet of ESP': `${game._object_descriptions?.amulets?.[0] || 'circular'} amulet`,
-        }[base]) || base;
+        const data = OBJECT_DATA.find(type => type.name === def.base);
+        base = data?.description || base;
+        if (def.cls === 'amulet') base = `${game._object_descriptions?.amulets?.[0] || base} amulet`;
+        if (def.cls === 'gem') base += ' stone';
     }
     if (def.base === 'lenses') base = 'pair of ' + base;
     if (obj.dknown === false) return def.cls === 'amulet' ? 'amulet' : base;
