@@ -57798,7 +57798,8 @@ test('worn gloves allow dangerous corpse take-out without fatal touch', async ()
     assert.equal(game.inventory.includes(body), true);
     assert.equal(game.u.uhp, 10);
     assert.equal(game._death_cause || '', '');
-    assert.equal(shkp.billct, 0);
+    assert.equal(shkp.billct, 1);
+    assert.equal(body.unpaid, true);
     assert.equal(game.context.move, 1);
 });
 

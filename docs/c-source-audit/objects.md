@@ -1,5 +1,19 @@
 # Objects, player magic, and attributes
 
+## Shop quote follow-up (2026-09-06)
+
+`shk.c:439-491/3362/4057/4153`, `objnam.c:1645-1685` and
+`o_init.c:690-721` now have shared per-type buy/sell quote history in `shk.js`.
+Billing, inventory, floor quotes, prompted sales and discoveries use it with
+option, type-knowledge and suppressed-price gates. The independent generator
+compiles the original C quote functions unchanged for 704 range/buffer cases;
+26 added tests cover those answers, actual commands and save restoration.
+Canonical object costs replace missing base prices. Full monster-food price
+adjustments, unknown-gem valuation and serial sale prompt timing remain open.
+Reflection shield sightings preserve unknown type state; actual reflection
+learning preserves instance enchantment knowledge. Remaining duplicated wand
+reflection branches still need consolidation.
+
 ## Type-state follow-up (2026-09-06)
 
 `mkobj.c:925-940`, `u_init.c:1208-1250`, `eat.c:1462-1511` and

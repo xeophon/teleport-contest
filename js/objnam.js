@@ -476,7 +476,7 @@ export function doname(item, D = {}, { withPrice = false, vagueQuantity = false,
     if (worn & W_QUIVER) name += ' (' + (type.class === 2 ? type.subtype >= -22 && type.subtype <= -20
         ? type.subtype === -20 ? 'in quiver' : 'in quiver pouch' : 'at the ready'
         : [4, 5, 11, 12, 13].includes(type.class) ? 'in quiver pouch' : 'at the ready') + ')';
-    if (!D.suppressPrice && !D.restoring) name += D.priceSuffix?.(item, withPrice) || '';
+    if (!D.suppressPrice && !D.restoring) name += D.priceSuffix?.(item, withPrice, name) || '';
     if (prefix.startsWith('a ')) prefix = indefiniteArticle(prefix.slice(2) || name) + prefix.slice(2);
     if (D.wizard && D.wizweight) name = withPrice && name.endsWith(')')
         ? name.slice(0, -1) + `, ${item.owt || 0} aum)` : name + ` (${item.owt || 0} aum)`;

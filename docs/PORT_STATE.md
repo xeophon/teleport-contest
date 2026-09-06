@@ -25,8 +25,8 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,116 passing tests**, with no
-failures, skips or TODOs. All seven generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **7,142 passing tests**, with no
+failures, skips or TODOs. All eight generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
 Full inventory naming now shares the C base-name owner for wizard override and
@@ -44,7 +44,7 @@ Wisdom credit, and preserves charge knowledge; wishing learns after makewish
 returns, including saved input. Freshly tinned tins preserve C hidden BUC and
 variety state. Twenty-five new state tests and two fresh recordings pass
 (118 screens, including cursors, and 4,396 random calls). Other name consumers,
-cached price quotes, full discovery integration and rejected-wish prompt pauses
+full discovery integration and rejected-wish prompt pauses
 still need source passes.
 
 Canonical lookup now accepts the existing generator class tags, Japanese names,
@@ -56,6 +56,14 @@ no longer append duplicate unknown discoveries. Thirty-nine new state tests and
 two fresh C recordings pass (17 screens and 5,357 random calls).
 The fresh Samurai swap probe also exposed incomplete swap turn timing; it is
 retained as a follow-up alongside wand learning, discovery and armor callbacks.
+
+Shop price quotes now accumulate buy/sell ranges by object type, survive saves,
+and appear through C's inventory, billing, floor-price, prompted-sale and
+discovery gates. Canonical metadata supplies base prices; observing a reflection
+shield no longer identifies it or fabricates a price. Twenty-six new tests
+include 704 quote histories and buffer boundaries from compiled C functions.
+Full corpse/tin price adjustments, unknown-gem valuation and remaining shop
+prompt continuations still need source passes.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
 bonuses, movement/load gates, sleeping regeneration, separate active monster HP

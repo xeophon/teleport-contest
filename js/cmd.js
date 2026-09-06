@@ -2,6 +2,8 @@ import { tinVariety, TIN_VARIETY_TEXTS } from './eat.js';
 import { makePlural as pluralizeMonsterName, xname, doname } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject, learnWandType } from './object_knowledge.js';
+import { recordPriceQuote, appendPriceQuote } from './shk.js';
+import { OBJECT_DATA } from './object_data.js';
 import { W_ARM, W_ARMC, W_ARMH, W_ARMS, W_ARMG, W_ARMU, W_BALL, W_CHAIN, FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
 import { hasWoundedLegs, setWoundedLegs } from './do.js';
@@ -21291,21 +21293,9 @@ function heroZapReflectSourceWord() {
 function identifyReflectedShieldOfReflection(item) {
     const known = !!(game._discoveries || []).find(entry =>
         entry.section === 'Armor' && entry.name === 'shield of reflection' && entry.known !== false);
+    recordKnownArmorDiscovery('shield of reflection', false);
     if (item) {
-        item.known = true;
         item.line = normalInventoryLine({ ...item, line: '' });
-    }
-    game._discoveries ??= [];
-    if (!game._discoveries.some(entry => entry.section === 'Armor' && entry.name === 'shield of reflection')) {
-        game._discoveries.push({
-            section: 'Armor',
-            name: 'shield of reflection',
-            text: 'shield of reflection (polished silver shield) {buy 50}',
-            starred: false,
-        });
-    } else {
-        const entry = game._discoveries.find(e => e.section === 'Armor' && e.name === 'shield of reflection');
-        entry.known = true;
     }
     if (!known) exerciseAttribute(A_WIS, true);
 }
@@ -41844,6 +41834,7 @@ function addObjectToShopBill(shkp, obj, totalPrice, { useup = false } = {}) {
     shkp.billct = ledger.length;
     obj.unpaid = true;
     obj.unpaidPrice = shopBillEntryTotal(entry);
+    recordPriceQuote(objectTypeData(obj)?.id, shopBillEntryUnitPrice(entry), true);
     syncUnpaidBillLine(obj);
     return entry;
 }
@@ -44280,9 +44271,22 @@ function shopDroppedPaidObjectSaleInfo(obj, x, y) {
 function beginDroppedPaidObjectSale(obj, x, y, declineMessage = '') {
     const sale = shopDroppedPaidObjectSaleInfo(obj, x, y);
     if (!sale?.prompt) return sale;
+    sale.promptMessage = shopSaleQuoteMessage(sale);
     game._shop_sale_pending = { ...sale, declineMessage };
     game._command_mode = 'shopSaleConfirm';
     return sale;
+}
+
+function shopSaleQuoteMessage(sale) {
+    const { obj, shkp, offer } = sale;
+    // sellobj records only an offer that prompts the player, before doname
+    // can include that same quote in a credit offer for an unknown type.
+    recordPriceQuote(objectTypeData(obj)?.id, Math.trunc(offer / (obj.quan || 1)), false);
+    if (sale.credit) {
+        const name = doname(obj, objectNameDependencies());
+        return `${shopkeeperDisplayName(shkp)} cannot pay you at present.  Will you accept ${offer} zorkmid${offer === 1 ? '' : 's'} in credit for ${name}? [ynaq] (n)`;
+    }
+    return sale.promptMessage;
 }
 
 function shopFloorContainerPutSaleInfo(container, putItem, location = null) {
@@ -45778,6 +45782,7 @@ export const __shopBillingTestHooks = {
     shopkeeperCash,
     shopBaseCost,
     shopItemPrice,
+    shopItemPriceSuffix,
     shopPaymentCashDue,
     shopSaleableObject,
     shopSaleOffer,
@@ -51010,13 +51015,14 @@ function objectNameDependencies(override = false) {
     const description = (item, type) => {
         const armor = type.class === 3 && ARMOR_WISH_APPEARANCES[type.name];
         if (armor) return game._object_descriptions?.[armor[0]]?.[armor[1]] || item.appearance || armor[2];
+        const index = type.id - (OBJECT_DATA.find(candidate => candidate.id >= 18 && candidate.class === type.class)?.id || 0);
         return item.appearance || (type.class === 8
-        ? game._object_descriptions?.potions?.[item.potionIndex]?.description
-        : type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex]
-            : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex]
-                : type.class === 11 ? game._object_descriptions?.wands?.[item.wandIndex]?.description
-                    : type.class === 4 ? game._object_descriptions?.rings?.[(item.ringRoll || 0) - 1]
-                        : type.class === 5 ? game._object_descriptions?.amulets?.[item.amuletIndex]
+        ? game._object_descriptions?.potions?.[item.potionIndex ?? index]?.description
+        : type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex ?? index]
+            : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex ?? index]
+                : type.class === 11 ? game._object_descriptions?.wands?.[item.wandIndex ?? index]?.description
+                    : type.class === 4 ? game._object_descriptions?.rings?.[item.ringRoll != null ? item.ringRoll - 1 : index]
+                        : type.class === 5 ? game._object_descriptions?.amulets?.[item.amuletIndex ?? index]
                             : type.description);
     };
     return {
@@ -51058,7 +51064,7 @@ function objectNameDependencies(override = false) {
             const mon = game.level?.monsters?.find(mon => mon.m_id === id && !mon.dead && mon.mhp > 0);
             return mon && spellMonsterTheName(mon);
         },
-        priceSuffix: (item, withPrice) => {
+        priceSuffix: (item, withPrice, name) => {
             let price = 0, unpaid = false;
             const pending = [item];
             while (pending.length) {
@@ -51070,8 +51076,13 @@ function objectNameDependencies(override = false) {
                 }
                 pending.push(...globContents(object));
             }
-            if (unpaid) return ` (${item.unpaid ? 'unpaid' : 'contents'}, ${price} zorkmid${price === 1 ? '' : 's'})`;
-            return withPrice ? shopItemPriceSuffix(item, item.ox ?? game.u?.ux, item.oy ?? game.u?.uy) : '';
+            if (unpaid) {
+                recordPriceQuote(objectTypeData(item)?.id, Math.trunc(price / (item.quan || 1)), true);
+                return ` (${item.unpaid ? 'unpaid' : 'contents'}, ${price} zorkmid${price === 1 ? '' : 's'})`;
+            }
+            if (withPrice) return shopItemPriceSuffix(item, item.ox ?? game.u?.ux, item.oy ?? game.u?.uy, name);
+            return game.flags?.price_quotes && !objectTypeIsKnown(item)
+                ? appendPriceQuote(name, objectTypeData(item)?.id).slice(name.length) : '';
         },
         observe: recordObservedObjectDiscovery,
         called: (item, type = objectTypeData(item)) => {
@@ -51886,6 +51897,7 @@ async function showContainerSalePrompt(pending, messages) {
         await setMessage(preceding.join('  '), true);
     } else {
         game._command_mode = 'shopSaleConfirm';
+        pending.promptMessage = shopSaleQuoteMessage(pending);
         await setMessage(pending.promptMessage);
     }
 }
@@ -55754,6 +55766,12 @@ function pickupObjectPhrase(obj) {
 function shopBaseCost(obj) {
     const artifact = artifactDefinitionForName(obj.artifact || obj.oartifact);
     if (artifact) return artifact.cost || 100 * shopBaseCost({ ...obj, artifact: null, oartifact: null });
+    const type = objectTypeData(obj);
+    if (type) {
+        if (type.symbol === 'POT_WATER' && !obj.blessed && !obj.cursed
+            || type.class === 11 && obj.spe === -1) return 0;
+        return type.cost;
+    }
     const cls = obj.cls || '';
     let kind = String(obj.actualKind || obj.kind || '').toLowerCase();
     kind = kind.replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -56067,14 +56085,19 @@ function shopFloorItemPriceInfo(obj, x = game.u?.ux, y = game.u?.uy) {
     };
 }
 
-function shopItemPriceSuffix(obj, x = game.u?.ux, y = game.u?.uy) {
+function shopItemPriceSuffix(obj, x = game.u?.ux, y = game.u?.uy, name = null) {
+    if (game.iflags?.suppress_price || game.program_state?.restoring) return '';
     const info = shopFloorItemPriceInfo(obj, x, y);
-    if (!info) return '';
-    if (info.itemPrice > 0) {
+    if (info?.itemPrice > 0) {
+        recordPriceQuote(objectTypeData(obj)?.id, Math.trunc(info.itemPrice / (obj.quan || 1)), true);
         const label = info.contentsOnly ? 'contents' : 'for sale';
         return ` (${label}, ${info.itemPrice} zorkmid${info.itemPrice === 1 ? '' : 's'})`;
     }
-    if (info.noCharge) return ' (no charge)';
+    if (info?.noCharge) return ' (no charge)';
+    if (game.flags?.price_quotes && !objectTypeIsKnown(obj)) {
+        name ??= pickupObjectPhrase(obj);
+        return appendPriceQuote(name, objectTypeData(obj)?.id).slice(name.length);
+    }
     return '';
 }
 
@@ -63924,12 +63947,30 @@ function discoveryOverlayLines(page = 0) {
             addDiscovery('Amulets', String(item.actualKind || item.kind || `amulet (${appearance})`).toLowerCase(), `amulet (${appearance})`);
     }
     const body = [];
+    const names = objectNameDependencies();
     for (const section of sectionOrder) {
         const entries = discoveries
             .filter(entry => entry.section === section);
         if (!entries.length) continue;
         body.push([section, 1]);
-        for (const entry of entries) body.push([`${entry.starred ? '*' : ' '} ${entry.text}`, 0]);
+        for (const entry of entries) {
+            const [cls, classId] = ({ Coins: ['coin', 12], Amulets: ['amulet', 5],
+                Weapons: ['weapon', 2], Armor: ['armor', 3], Comestibles: ['food', 7],
+                Scrolls: ['scroll', 9], Spellbooks: ['spellbook', 10], Potions: ['potion', 8],
+                Rings: ['ring', 4], Wands: ['wand', 11], Tools: ['tool', 6], 'Gems/Stones': ['gem', 13],
+                'Boulders/Statues': ['rock', 14], 'Iron balls': ['ball', 15],
+                Chains: ['chain', 16], Venoms: ['venom', 17] })[section] || [];
+            let type = objectTypeData({ _c_otyp: entry.typeId, cls, kind: entry.name });
+            if (!type) type = OBJECT_DATA.find(candidate => {
+                if (candidate.id < 18 || candidate.class !== classId || !candidate.description) return false;
+                const item = { _c_otyp: candidate.id };
+                const description = names.description(item, candidate) || candidate.description;
+                return (entry.text?.includes('(' + description + ')') || entry.name === description
+                        || cls === 'gem' && entry.name === description + (candidate.material === 21 ? ' stone' : ' gem'));
+            });
+            const text = type ? String(entry.text).replace(/ \{(?:buy|sell) [^}]*\}$/, '') : entry.text;
+            body.push([appendPriceQuote(`${entry.starred ? '*' : ' '} ${text}`, type?.id), 0]);
+        }
     }
     if (!body.length) body.push(['You have discovered nothing yet.', 0]);
     const firstPageSize = 21;
@@ -66316,22 +66357,21 @@ async function moveHeroStep(dx, dy, ridingMessages) {
     }
     const priceSuffix = objHere ? shopItemPriceSuffix(objHere, newx, newy) : '';
     let objHereMessage = '';
-    if (objHere?.cls === 'armor') {
+    if (objHere?.cls === 'armor' && !heroIsBlind() && !heroIsHallucinating()) {
         const seenArmorName = pickupObjectName(objHere);
         const actualArmorName = String(objHere.actualKind || objHere.kind || '').toLowerCase();
-        if (['plumed helmet', 'conical hat'].includes(seenArmorName) || actualArmorName === 'shield of reflection') {
-            const price = shopItemPrice(objHere, newx, newy);
-            const discoveryName = actualArmorName === 'shield of reflection' ? actualArmorName : seenArmorName;
-            const appearance = actualArmorName === 'shield of reflection'
-                ? (objHere.appearance || 'polished silver shield')
-                : '';
+        const type = objectTypeData(objHere);
+        if (type?.description && !objectTypeIsKnown(objHere, type)) {
             game._discoveries ??= [];
-            if (!game._discoveries.some(entry => entry.section === 'Armor' && entry.name === discoveryName)) {
+            if (!game._discoveries.some(entry => entry.typeId === type.id
+                || entry.section === 'Armor' && [actualArmorName, seenArmorName].includes(entry.name))) {
                 game._discoveries.push({
                     section: 'Armor',
-                    name: discoveryName,
-                    text: `${discoveryName}${appearance ? ` (${appearance})` : ''}${price > 0 ? ` {buy ${price}}` : ''}`,
+                    typeId: type.id,
+                    name: actualArmorName,
+                    text: seenArmorName,
                     starred: false,
+                    known: false,
                 });
             }
         }
