@@ -472,7 +472,7 @@ const WEAPON_NONERODIBLE_ROLLS = [
     [96, 122], [373, 374], [445, 447], [553, 558], [768, 769],
 ];
 
-const WEAPON_ROLL_KINDS = [
+export const WEAPON_ROLL_KINDS = [
     [55, 'arrow', 1], [75, 'elven arrow', 1, 'runed arrow'],
     [95, 'orcish arrow', 1, 'crude arrow'], [107, 'silver arrow', 1],
     [122, 'ya', 1, 'bamboo arrow'], [177, 'crossbow bolt', 1],
@@ -9545,7 +9545,7 @@ function equipmentInRange(oclass, first, last) {
     return table.find(row => roll <= row[0])[1];
 }
 
-function namedEquipment(name, init = true, artif = false) {
+export function namedEquipment(name, init = true, artif = false) {
     if (name === 'walking shoes') name = 'low boots'; // objects.h non-shuffled description.
     for (const [oclass, table] of [[WEAPON_CLASS, WEAPON_ROLL_KINDS], [ARMOR_CLASS, ARMOR_ROLL_KINDS]]) {
         const row = table.find(entry => entry[1].toLowerCase() === name.toLowerCase());

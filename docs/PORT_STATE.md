@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,468 passing tests**, with no
+The latest source-driven checkpoint has **6,500 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -43,8 +43,18 @@ at one HP, fainting pauses before Constitution abuse and `fall_asleep`. Saved
 continuations resume before power regeneration without repeating regions or
 HP regeneration, and More input preserves the current turn's movement flag.
 Forty-five new tests pass. Combat overexertion and the remaining full
-`interrupt_multi` scheduling are separate follow-ups. A fresh C heavy-wish
-probe also confirms missing `hold_another_object` rejection in the wish path.
+`interrupt_multi` scheduling are separate follow-ups.
+
+Wish delivery now applies `hold_another_object` load, inventory-letter,
+fumbling, cursed-loadstone and dangerous-corpse gates. Rejected potion/gold
+merges retain the original inventory quantity, and fumbling keeps the incoming
+gold identity. Comparison, landing and load feedback have saved continuations
+before divine notice; accepted missiles/ammunition follow C's autoquiver gates.
+Missing ordinary weapon wishes reuse the class generator's source tables.
+Twenty-nine new state tests pass, including save/restore and ignored More keys.
+Three fresh C recordings match all 138 screens and 8,270 random calls. General
+wish stack merging, artifact touch, levitated/swallowed drops and full serial
+floor effects remain open. Weapon name/quantity edge cases need a wider pass.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

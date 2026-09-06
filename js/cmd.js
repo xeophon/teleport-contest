@@ -1,3 +1,5 @@
+import { FUMBLING, STONE_RES } from './const.js';
+import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
 import { hasWoundedLegs, setWoundedLegs } from './do.js';
 import { strongmonst, MZ_HUMAN } from './permonst.js';
 import { FLYING } from './const.js';
@@ -525,6 +527,8 @@ function heroHasSlipperyFingers() {
 }
 
 function heroIsFumbling() {
+    const prop = game.u?.uprops?.[FUMBLING];
+    if (prop) return !!(prop.intrinsic || prop.extrinsic);
     return !!(game.u?.fumbling || game.u?._fumblingTimeout || (game.u?._statusSuffix || '').includes('Fumbling')
         || (game.inventory || []).some(item => isWornArmorItem(item)
             && String(item.kind || item.actualKind || '').toLowerCase() === 'fumble boots'));
@@ -12704,7 +12708,7 @@ function syncHeroSpeedState() {
 function removeInventoryItem(item, amount = 1) {
     const messages = [];
     if (shopBillableGold(item)) {
-        removeGoldFromHero(amount);
+        removeGoldFromHero(amount, (game.inventory || []).includes(item) ? item : undefined);
         updateWornDisplacement();
         return messages;
     }
@@ -18603,6 +18607,121 @@ function godsNoticeWish() {
     game.u.ublesscnt = (game.u.ublesscnt || 0) + rn2(100) + 50;
 }
 
+// invent.c:hold_another_object checks the post-add inventory against the
+// greater of its previous burden and pickup_burden. Cursed loadstones bypass
+// only the weight check; coins do not consume an inventory letter.
+function heldObjectMustDrop(item, previousEncumbrance) {
+    const unsafeCorpse = isPetrifyingCorpseObject(item) && !wornGlovesItem()
+        && !heroPolyselfResistsStoning() && !game.u.stoneResistance
+        && !(game.u.uprops?.[STONE_RES]?.intrinsic || game.u.uprops?.[STONE_RES]?.extrinsic);
+    if (heroIsFumbling() || item.wishedfor && unsafeCorpse) return true;
+    const inventoryCount = (game.inventory || []).filter(obj => !isGoldObject(obj)).length;
+    if (inventoryCount > INVENTORY_LETTERS.length) return true;
+    return !(isLoadstoneObject(item) && item.cursed)
+        && heroEncumbranceForWeight(heroCarriedWeight()) > Math.max(previousEncumbrance, pickupBurdenLimit());
+}
+
+async function beginRejectedWish(item, prefix = '', comparison = '') {
+    const unsafeCorpse = isPetrifyingCorpseObject(item) && !wornGlovesItem()
+        && !heroPolyselfResistsStoning() && !game.u.stoneResistance
+        && !(game.u.uprops?.[STONE_RES]?.intrinsic || game.u.uprops?.[STONE_RES]?.extrinsic);
+    const quantity = item.quan || 1;
+    const name = isGoldObject(item) ? (quantity > 1 ? 'gold pieces' : 'gold piece') : pickupObjectName(item);
+    const noun = quantity > 1 ? quantity + ' ' + name : name;
+    const verb = Is_airlevel(game.u.uz) || game.u.uinwater ? 'slip' : unsafeCorpse ? 'materialize' : 'drop';
+    const action = floorObjectVerb(item, verb + 's', verb);
+    const typ = game.level?.at(game.u.ux,game.u.uy)?.typ;
+    const ending = game.u.uswallow ? 'out of your reach' : Is_airlevel(game.u.uz) || Is_waterlevel(game.u.uz)
+        || typ < IRONBARS || typ >= ICE ? 'away from you' : unsafeCorpse ? 'on the floor' : 'to the floor';
+    const message = prefix + (unsafeCorpse && ending === 'on the floor' ? 'Careful! ' : 'Oops!  ')
+        + 'The ' + noun + ' ' + action + ' ' + ending + '!';
+    item.wishedfor = unsafeCorpse ? false : item.wishedfor;
+    item.nomerge = false;
+    game._rejected_wish = { item, phase: 'drop', messages: [], index: 0 };
+    await setMessage(comparison || message);
+    if (comparison && !addToplineMessage(message)) {
+        game._rejected_wish.pendingMessage = game._topline_after_more;
+        game._topline_after_more = '';
+        game._command_mode = 'rejectedWishMore';
+        game._process_time_with_more = 0;
+        return;
+    }
+    await resumeRejectedWish();
+}
+
+async function resumeRejectedWish() {
+    const state = game._rejected_wish;
+    if (state.phase === 'drop') {
+        state.phase = 'messages';
+        dropCarriedObjectAtHero(state.item, state.messages);
+    }
+    while (state.index < state.messages.length) {
+        const message = state.messages[state.index++];
+        if (!state.skipMessages && !addToplineMessage(message)) {
+            state.pendingMessage = game._topline_after_more;
+            game._topline_after_more = '';
+            game._command_mode = 'rejectedWishMore';
+            game._process_time_with_more = 0;
+            return;
+        }
+    }
+    godsNoticeWish();
+    game._rejected_wish = null;
+    game._command_mode = null;
+    await setWishResultMessage(game._pending_message, !!game._message_more);
+}
+
+// prinv and encumber_msg both return before makewish advances divine notice.
+async function finishHeldWishFeedback(messages = null, item = null) {
+    if (messages) {
+        // hold_another_object readies only missiles or ammunition matching
+        // either wielded launcher, after the inventory/load gates accept it.
+        if (item && game.flags?.autoquiver && !game.u.uquiver
+            && !(game.inventory || []).some(isQuiveredItem) && !item.owornmask
+            && (heroAutoquiverMissileItem(item)
+                || heroThrowAmmoAndLauncher(item, game.u.uwep || (game.inventory || []).find(itemIsWielded))
+                || heroThrowAmmoAndLauncher(item, game.u.uswapwep || (game.inventory || []).find(obj => obj.alternate)))) {
+            item.quivered = true;
+            item.owornmask = W_QUIVER;
+            game.u.uquiver = item;
+            item.line += quiverSuffix(item);
+            messages[messages.length - 1] = messages.at(-1).replace(/\.?$/, suffix => quiverSuffix(item) + suffix);
+        }
+        game._held_wish = { messages, item, index: 1, phase: 'messages' };
+        await setMessage(messages[0]);
+    }
+    const state = game._held_wish;
+    while (state.phase !== 'notice') {
+        let message = '';
+        if (state.phase === 'messages') {
+            if (state.index < state.messages.length) message = state.messages[state.index++];
+            else { state.phase = 'load'; continue; }
+        } else {
+            state.phase = 'notice';
+            message = encumberMsg();
+        }
+        if (message && !state.skipMessages && !addToplineMessage(message)) {
+            state.pendingMessage = game._topline_after_more;
+            game._topline_after_more = '';
+            game._command_mode = 'heldWishMore';
+            game._process_time_with_more = 0;
+            return;
+        }
+    }
+    godsNoticeWish();
+    const grantAmuletWish = !!state.item?.realAmuletOfYendor && !game.u?.uevent?.amulet_wish;
+    if (grantAmuletWish) {
+        game.u.uhave ??= {};
+        game.u.uhave.amulet = 1;
+        game.u.uevent ??= {};
+        game.u.uevent.amulet_wish = 1;
+    }
+    game._held_wish = null;
+    game._command_mode = null;
+    await setWishResultMessage(game._pending_message, !!game._message_more || grantAmuletWish);
+    if (grantAmuletWish) game._command_mode = 'amuletBestowMore';
+}
+
 // C ref: invent.c mergable()/merged() — a wished potion that stacks with an
 // existing one merges into it (hold_another_object observes the new object
 // first, invent.c:1217, maximizing mergeability); when the two stacks differ
@@ -18715,14 +18834,18 @@ async function finishRandomBlankWish(prefix = '') {
     recordWishConduct();
     game._wish_tries = 0;
     const letter = nextInventoryLetter();
+    const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
     const item = Object.assign({ letter, quan: 1 }, makeRandomWishObject());
     item.line = `${letter} - ${wishedInventoryPhrase(item)}`;
     game.inventory ??= [];
     game.inventory.push(item);
     maybeAttachCarriedFigurineTimeout(item);
     game._pet_food_scan_inventory = game.inventory;
-    godsNoticeWish();
-    await setWishResultMessage(`${prefix}${item.line}.`);
+    if (heldObjectMustDrop(item, previousEncumbrance)) {
+        await beginRejectedWish(item, prefix);
+        return;
+    }
+    await finishHeldWishFeedback([`${prefix}${item.line}.`], item);
 }
 
 const MAX_WISH_TRIES = 5;
@@ -43673,6 +43796,7 @@ function addGoldToHero(amount) {
     const money = game.inventory.find(item => item.letter === '$' || item.cls === 'coin' || item.otyp === GOLD_PIECE);
     if (money) {
         money.quan = game._goldCount;
+        money.owt = goldStackWeight(game._goldCount);
         updateMoneyLine(money);
     } else {
         game.inventory.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount });
@@ -43681,19 +43805,19 @@ function addGoldToHero(amount) {
     return gold;
 }
 
-function removeGoldFromHero(amount) {
-    const money = (game.inventory || []).find(item => item.letter === '$' || item.cls === 'coin' || item.otyp === GOLD_PIECE);
-    const available = Math.max(0, Math.trunc(Number(game._goldCount || money?.quan || 0)));
+function removeGoldFromHero(amount, money = (game.inventory || []).find(item => isGoldObject(item))) {
+    const available = Math.max(0, Math.trunc(Number(money?.quan || game._goldCount || 0)));
     const gold = Math.min(available, Math.max(0, Math.trunc(Number(amount || 0))));
     if (!gold) return 0;
-    game._goldCount = Math.max(0, available - gold);
+    game._goldCount = Math.max(0, (game._goldCount ?? available) - gold);
     game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
-    if (money && game._goldCount) {
-        money.quan = game._goldCount;
+    if (money && available > gold) {
+        money.quan = available - gold;
+        money.owt = goldStackWeight(money.quan);
         updateMoneyLine(money);
     } else {
         if (game.u?.uquiver === money) game.u.uquiver = null;
-        game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin' && item.otyp !== GOLD_PIECE);
+        game.inventory = (game.inventory || []).filter(item => item !== money);
     }
     game._pet_food_scan_inventory = game.inventory;
     return gold;
@@ -50306,6 +50430,19 @@ function wishedBaseObjectFromName(lowerName, qualifiers = {}, originalName = low
         const metadata = localWishMetadata ?? wishObjectMetadataForItem(baseFields);
         const otmp = makeWishedBaseObject(baseObject, metadata);
         return Object.assign(otmp, baseFields, { wishedfor: true });
+    }
+
+    // The class generator and wish lookup use the same objects.h weapon
+    // names, descriptions and probabilities. A named wish adds one to the
+    // generation probability, then initializes that type without a type roll.
+    const weaponIndex = WEAPON_ROLL_KINDS.findIndex(([, name, , appearance]) =>
+        [name, appearance].some(value => value && (lowerName === value || lowerName === value + 's')));
+    if (weaponIndex >= 0) {
+        const [upper, name, , appearance] = WEAPON_ROLL_KINDS[weaponIndex];
+        if (!spellingAlias.skipNamedesc) rn2(upper - (WEAPON_ROLL_KINDS[weaponIndex - 1]?.[0] || 0) + 1);
+        const item = namedEquipment(name);
+        return Object.assign(item, object_display(item), { known: false, wishedfor: true,
+            plural: (appearance || name) === 'shuriken' ? 'shuriken' : (appearance || name) + 's' });
     }
 
     const wandWish = lowerName.match(/^wand of ([a-z ]+?)$/);
@@ -67838,6 +67975,36 @@ function tutorialEnterStash() {
         return;
     }
 
+    if (game._command_mode === 'heldWishMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const state = game._held_wish;
+        game._dismissed_more_this_command = 1;
+        if (ch === '\x1b') state.skipMessages = true;
+        await setMessage(state.skipMessages ? '' : state.pendingMessage);
+        state.pendingMessage = '';
+        game._command_mode = null;
+        await finishHeldWishFeedback();
+        return;
+    }
+
+    if (game._command_mode === 'rejectedWishMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const state = game._rejected_wish;
+        game._dismissed_more_this_command = 1;
+        if (ch === '\x1b') state.skipMessages = true;
+        await setMessage(state.skipMessages ? '' : state.pendingMessage || '');
+        state.pendingMessage = '';
+        game._command_mode = null;
+        await resumeRejectedWish();
+        return;
+    }
+
     if (game._command_mode === 'healingPotionMore') {
         if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
             game._keep_pending_message = 1;
@@ -70088,10 +70255,6 @@ function tutorialEnterStash() {
                     const burdenLevel = game._burden_after_more === true ? 1 : game._burden_after_more;
                     game._burden_after_more = 0;
                     syncHeroEncumbranceStatus(burdenLevel);
-                }
-                if (game._wish_notice_after_more) {
-                    game._wish_notice_after_more = 0;
-                    godsNoticeWish();
                 }
                 if (game._destroy_armor_uac_delta_after_more) {
                     if (game.u) findAc();
@@ -78630,19 +78793,36 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             if (isWishedMoneyName(lowerName)) {
                 const moneyQuan = wishedMoneyQuantity(lowerName, wishedQuan, wishedQuanForced);
                 recordWishConduct();
-                next_ident();
-                godsNoticeWish();
-                game._goldCount = (game._goldCount || 0) + moneyQuan;
+                const id = next_ident();
+                const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
+                const previousGold = game._goldCount || 0;
+                game._goldCount = previousGold + moneyQuan;
                 game.inventory ??= [];
-                const money = game.inventory.find(item => item.letter === '$' || item.cls === 'coin');
+                let money = heroIsFumbling() ? null : game.inventory.find(item => isGoldObject(item));
+                const merged = !!money;
                 if (money) {
                     money.quan = game._goldCount;
                     money.owt = goldStackWeight(game._goldCount);
                     updateMoneyLine(money);
+                } else {
+                    money = { id, letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$',
+                        quan: moneyQuan, owt: goldStackWeight(moneyQuan) };
+                    game.inventory.push(money);
                 }
-                else game.inventory.push({ letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount, owt: goldStackWeight(game._goldCount) });
                 game._pet_food_scan_inventory = game.inventory;
-                await setWishResultMessage(`$ - ${moneyQuan} gold piece${moneyQuan === 1 ? '' : 's'}.`);
+                if (heldObjectMustDrop(money, previousEncumbrance)) {
+                    const dropped = merged ? splitInventoryObjectForContainerPut(money, moneyQuan) : money;
+                    if (dropped !== money) {
+                        money.quan -= moneyQuan;
+                        money.owt = goldStackWeight(money.quan);
+                        updateMoneyLine(money);
+                        game.inventory.push(dropped);
+                    }
+                    dropped.owt = goldStackWeight(moneyQuan);
+                    await beginRejectedWish(dropped);
+                    return;
+                }
+                await finishHeldWishFeedback([`$ - ${moneyQuan} gold piece${moneyQuan === 1 ? '' : 's'}.`]);
                 return;
             }
             const bearLandResolution = wizardBearLandTrapWish(lowerName, wishedQualifiers);
@@ -78693,17 +78873,27 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             // that stacks with an existing one merges into it (zap.c makewish
             // -> hold_another_object -> addinv -> merged) before the landing
             // message; type/BUC knowledge gaps are learned by comparison.
-            const mergeTarget = findWishedPotionInventoryMergeTarget(item);
+            const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
+            const mergeTarget = heroIsFumbling() ? null : findWishedPotionInventoryMergeTarget(item);
             if (mergeTarget) {
                 const merged = mergeWishedPotionIntoInventory(item, mergeTarget);
                 game._pet_food_scan_inventory = game.inventory;
-                godsNoticeWish();
-                if (merged.discovered) {
-                    game._queued_message_after_more = merged.landing;
-                    await setWishResultMessage('You learn more about your items by comparing them.', true);
-                } else {
-                    await setWishResultMessage(merged.landing);
+                if (heldObjectMustDrop(mergeTarget, previousEncumbrance)) {
+                    const count = item.quan || 1;
+                    const dropped = splitInventoryObjectForContainerPut(mergeTarget, count);
+                    mergeTarget.quan -= count;
+                    mergeTarget.owt = wishedObjectFinalWeight(mergeTarget);
+                    mergeTarget.line = normalInventoryLine({ ...mergeTarget, line: '' });
+                    dropped.owt = wishedObjectFinalWeight(dropped);
+                    game.inventory.push(dropped);
+                    await beginRejectedWish(dropped, '', merged.discovered
+                        ? 'You learn more about your items by comparing them.' : '');
+                    return;
                 }
+                await finishHeldWishFeedback([
+                    ...(merged.discovered ? ['You learn more about your items by comparing them.'] : []),
+                    merged.landing,
+                ], mergeTarget);
                 return;
             }
             let letter = nextInventoryLetter();
@@ -78731,38 +78921,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.inventory.push(item);
             maybeAttachCarriedFigurineTimeout(item);
             game._pet_food_scan_inventory = game.inventory;
-            // C ref: hold_another_object() → addinv() → encumber_msg()
-            // (invent.c:1285, pickup.c:1978) — after the wish lands, crossing
-            // a capacity tier prints the encumbrance report after a --More--.
-            const encumbrance = heroEncumbranceForWeight(heroCarriedWeight());
-            const alreadyEncumbered = ENCUMBER_ALL_STATUS
-                .some(status => (game.u?._statusSuffix || '').includes(status));
-            if (encumbrance > 0 && !alreadyEncumbered) {
-                item.owt = finalWishedWeight;
-                game._encumbrance_level = encumbrance;
-                game._burden_after_more = encumbrance;
-                game._queued_message_after_more = encumberIncreaseMessage(encumbrance);
-                game._wish_notice_after_more = 1;
-                await setWishResultMessage(`${item.line}.`, true);
+            item.owt = finalWishedWeight;
+            if (heldObjectMustDrop(item, previousEncumbrance)) {
+                await beginRejectedWish(item);
                 return;
             }
-            item.owt = finalWishedWeight;
-            godsNoticeWish();
-            // C ref: allmain.c:447-453 — once-per-player-input post-command
-            // check: when the hero newly holds the real Amulet of Yendor,
-            // u.uevent.amulet_wish is set and makewish() is invoked right away
-            // ("The Amulet is bestowing a wish upon you!").
-            const grantAmuletWish = !!item.realAmuletOfYendor
-                && !game.u?.uevent?.amulet_wish;
-            if (grantAmuletWish) {
-                game.u ??= {};
-                game.u.uhave ??= {};
-                game.u.uhave.amulet = 1;
-                game.u.uevent ??= {};
-                game.u.uevent.amulet_wish = 1;
-            }
-            await setWishResultMessage(`${item.line}.`, grantAmuletWish);
-            if (grantAmuletWish) game._command_mode = 'amuletBestowMore';
+            await finishHeldWishFeedback([`${item.line}.`], item);
             return;
         }
         if (key === 8 || key === 127) game._wish_text = (game._wish_text || '').slice(0, -1);

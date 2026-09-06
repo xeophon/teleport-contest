@@ -825,7 +825,7 @@ test('wished ration foods use concrete C object metadata', async () => {
         await submitWish(wish);
 
         const item = game.inventory[0];
-        assert.equal(game._command_mode, null);
+        assert.equal(game._command_mode, weight > heroCarryCapacity() ? 'heldWishMore' : null);
         assert.equal(item.otyp, otyp);
         assert.equal(item.kind, kind);
         assert.equal(item.plural, plural);
@@ -857,7 +857,7 @@ test('plural wished ration foods keep C plural metadata and weights', async () =
         await submitWish(wish);
 
         const item = game.inventory[0];
-        assert.equal(game._command_mode, null);
+        assert.equal(game._command_mode, weight > heroCarryCapacity() ? 'heldWishMore' : null);
         assert.equal(item.otyp, otyp);
         assert.equal(item.kind, kind);
         assert.equal(item.plural, plural);

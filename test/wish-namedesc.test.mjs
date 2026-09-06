@@ -242,7 +242,11 @@ test('wished potion merges into an existing stack with comparison discovery', as
     assert.equal(stack.kind, 'booze');
     assert.equal(stack.bknown, true);
     assert.equal(game._pending_message, 'You learn more about your items by comparing them.');
-    assert.equal(game._queued_message_after_more, 'h - an uncursed potion of booze');
+    assert.equal(game._command_mode, 'heldWishMore');
+    assert.equal(game.u.ublesscnt || 0, 0, 'divine notice waits until inventory feedback returns');
+    await rhack(' ');
+    assert.equal(game._pending_message, 'h - an uncursed potion of booze');
+    assert.ok(game.u.ublesscnt >= 50);
 });
 
 // C ref: invent.c mergable — stacks with different BUC states never merge.
