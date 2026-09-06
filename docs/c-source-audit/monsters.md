@@ -304,8 +304,20 @@ seventeen reproduced failures before their fixes. All 31 ownership tests,
 theft/pet/container-merge tests (103 combined), and shop/burn/save tests
 (3,201 combined) pass at this checkpoint.
 
-This is not a complete transfer audit: monster projectile splits and other
-direct floor-removal destruction callers still need review, along with the
-remaining non-timer stack compatibility properties. Full drowning effects
-between every individual pline also remain broader than the successful-crawl
-continuation implemented here.
+Monster projectile splits and land-mine scatter splits now duplicate object
+timers at their original deadlines (`mthrowu.c:m_throw:612`,
+`explode.c:scatter:765`, `mkobj.c:splitobj:457-507`). The monster landing
+operation preserves missile identity on a miss and cancels timers when an
+egg breaks on impact (`mthrowu.c:drop_throw:162-192`). Seven new tests cover
+live stack throws, direct hit/miss landings, candle scatter through expiration,
+and egg/oil scatter destruction; six reproduced failures before the changes.
+The oil case also caught a live ordering defect: the exploding potion remained
+in the floor pile and its own explosion reignited it. Scatter now removes the
+breaking object before side effects, and oil stops burning before damage dice,
+matching `explode.c:scatter:769` and `explode_oil:974-985`.
+
+This is not a complete transfer audit: remote projectile shipping, terrain
+consumption and other direct floor-removal destruction callers still need
+review, along with the remaining non-timer stack compatibility properties.
+Full drowning effects between every individual pline also remain broader than
+the successful-crawl continuation implemented here.

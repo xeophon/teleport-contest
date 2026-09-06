@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM, W_WEP } from '../js/const.js';
+import { ROOM, W_WEP, LANDMINE } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
-import { rhack, holdCaughtThrownObject, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { rhack, holdCaughtThrownObject, landMonsterThrownObject, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { beginBurn, processBurnTimers } from '../js/burn.js';
 import { attachEggHatchTimeout } from '../js/egg_timers.js';
 import { BURN_OBJECT, HATCH_EGG, peekTimer } from '../js/timeout.js';
@@ -361,4 +361,103 @@ test('nymph theft transfers the whole egg stack without leaving a duplicate carr
     assert.equal(eggs.quan, 3);
     assert.equal(peekTimer(HATCH_EGG, eggs), 200);
     assert.equal(game.timers.length, 1);
+});
+
+for (const hit of [false, true]) {
+    test(`a monster-thrown hatching egg ${hit ? 'breaks and cancels its timer' : 'lands with its original timer identity'}`, () => {
+        // C mthrowu.c:drop_throw places the same object, or delobj stops timers.
+        setup();
+        const egg = { kind: 'egg', otyp: 10001, cls: 'food', quan: 1 };
+        attachEggHatchTimeout(egg, 100);
+        const result = landMonsterThrownObject(egg, 12, 10, { ohit: hit });
+        assert.equal(result.consumed, hit);
+        assert.equal(peekTimer(HATCH_EGG, egg), hit ? 0 : 200);
+        assert.equal(egg.timed, hit ? 0 : 1);
+        if (!hit) assert.equal(result.object, egg);
+        assert.equal(game.timers.length, hit ? 0 : 1);
+    });
+}
+
+for (const hit of [false, true]) {
+    test(`a live monster egg-stack throw ${hit ? 'deletes only the broken split timer' : 'preserves both hatch deadlines on a miss'}`, async () => {
+        // C mthrowu.c:m_throw calls splitobj before flight; each portion owns a timer.
+        setup();
+        game.u.uac = hit ? 30 : -100;
+        game.u.stoneResistance = true;
+        const eggs = { kind: 'egg', otyp: 10001, cls: 'food', quan: 3,
+            corpsenm: { name: 'cockatrice', touchPetrifies: true }, known: true };
+        const mon = { data: monsterByRndName('soldier'), mx: 14, my: 10, mux: 10, muy: 10,
+            mhp: 20, mhpmax: 20, movement: 12, mcanmove: true, mcansee: true,
+            minvent: [eggs] };
+        game.level.monsters.push(mon);
+        attachEggHatchTimeout(eggs, 100);
+        await processMonsterTurns();
+        assert.equal(eggs.quan, 2);
+        assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+        assert.equal(game.timers.length, hit ? 1 : 2);
+        const landing = game.level.objects.find(obj => obj.kind === 'egg');
+        if (hit) assert.equal(landing, undefined);
+        else {
+            assert.ok(landing);
+            assert.notEqual(landing, eggs);
+            assert.equal(landing.quan, 1);
+            assert.equal(landing.timed, 1);
+            assert.equal(peekTimer(HATCH_EGG, landing), 200);
+        }
+    });
+}
+
+async function scatterAtDeferredLandmine(obj) {
+    game.u.uhp = game.u.uhpmax = 100;
+    game.sokoban_dnum = 999;
+    const trap = { ttyp: LANDMINE, tx: 10, ty: 10, tseen: false };
+    game.level.traps.push(trap);
+    game.level.objects.push(Object.assign(obj, { ox: 10, oy: 10 }));
+    game._command_mode = 'objectListMore';
+    game._overlay_lines = [[0, 0, 'Items on the floor']];
+    game._pending_landmine_trap = trap;
+    await rhack(' ');
+    assert.equal(game._pending_landmine_trap, null);
+}
+
+test('live landmine scatter preserves burn timers on every surviving candle portion', async () => {
+    // C explode.c:scatter splits each stack with mkobj.c:splitobj before movement.
+    setup();
+    const candles = { kind: 'tallow candle', cls: 'tool', otyp: 370, quan: 3, age: 100 };
+    beginBurn(candles);
+    await scatterAtDeferredLandmine(candles);
+    const portions = game.level.objects.filter(obj => obj.kind === 'tallow candle');
+    assert.ok(portions.length > 1);
+    assert.equal(portions.reduce((sum, obj) => sum + obj.quan, 0), 3);
+    for (const portion of portions) {
+        assert.equal(portion.timed, 1);
+        assert.equal(peekTimer(BURN_OBJECT, portion), 125);
+    }
+    assert.equal(game.timers.length, portions.length);
+    game.moves = 200;
+    await processBurnTimers();
+    for (const portion of portions) assert.equal(portion.lamplit, false);
+});
+
+test('live landmine scatter destroys every egg portion and cancels all hatch callbacks', async () => {
+    // C explode.c:scatter -> dothrow.c:breaks/breakobj -> delobj/dealloc_obj.
+    setup();
+    const eggs = { kind: 'egg', cls: 'food', otyp: 10001, quan: 3 };
+    attachEggHatchTimeout(eggs, 100);
+    await scatterAtDeferredLandmine(eggs);
+    assert.equal(game.level.objects.some(obj => obj.kind === 'egg'), false);
+    assert.equal(eggs.timed, 0);
+    assert.equal(game.timers.length, 0);
+});
+
+test('live landmine scatter exploding burning oil retires the burn callback', async () => {
+    setup();
+    initRng(2);
+    const oil = { kind: 'potion of oil', cls: 'potion', otyp: 252, quan: 1, age: 100 };
+    beginBurn(oil);
+    await scatterAtDeferredLandmine(oil);
+    assert.equal(game.level.objects.includes(oil), false);
+    assert.equal(oil.lamplit, false);
+    assert.equal(oil.timed, 0);
+    assert.equal(game.timers.length, 0);
 });

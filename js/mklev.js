@@ -35,6 +35,7 @@ import { mkFakeAmuletOfYendor } from './wizard.js';
 import { dressMonster } from './worn.js';
 import { mdropSpecialObjs } from './steal.js';
 import { objectLocations } from './obj_location.js';
+import { clearConjoinedPits } from './dig.js';
 import { selectHwep } from './mhitm.js';
 import { QUEST_LEVELS } from './quest_level_data.js';
 import * as questSpecies from './permonst.js';
@@ -49,6 +50,7 @@ import {
     COCKNEST, ANTHOLE, VAULT, TEMPLE, THEMEROOM, ROOMOFFSET, MAXNROFROOMS, SHARED, SHARED_PLUS, SHOPBASE,
     DELPHI,
     SDOOR, SCORR, IRONBARS, FOUNTAIN, SINK, THRONE, ALTAR, GRAVE,
+    F_LOOTED, F_WARNED, S_LPUDDING, S_LDWASHER, S_LRING, T_LOOTED, TREE_LOOTED, TREE_SWARM,
     DIR_N, DIR_S, DIR_E, DIR_W, DIR_180,
     IS_WALL, IS_STWALL, IS_DOOR, IS_ROOM, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL, IS_LAVA,
     ACCESSIBLE, IN_SIGHT, W_ARMH, W_ARMS,
@@ -1715,29 +1717,29 @@ const FOOD_RATION = 143;
 const CRAM_RATION = 145;
 const LEMBAS_WAFER = 146;
 const SPECIFIC_FOOD_INFO = new Map([
-    [KELP_FROND, ['kelp frond', 'kelp fronds', CLR_GREEN]],
-    [FOOD_RATION, ['food ration', 'food rations', CLR_BROWN]],
-    [CRAM_RATION, ['cram ration', 'cram rations', CLR_BROWN]],
-    [LEMBAS_WAFER, ['lembas wafer', 'lembas wafers', CLR_WHITE]],
-    [K_RATION, ['K-ration', 'K-rations', CLR_BROWN]],
-    [C_RATION, ['C-ration', 'C-rations', CLR_BROWN]],
-    [EUCALYPTUS_LEAF, ['eucalyptus leaf', 'eucalyptus leaves', CLR_GREEN]],
-    [APPLE, ['apple', 'apples', CLR_RED]],
-    [ORANGE, ['orange', 'oranges', CLR_ORANGE]],
-    [PEAR, ['pear', 'pears', CLR_BRIGHT_GREEN]],
-    [MELON, ['melon', 'melons', CLR_BRIGHT_GREEN]],
-    [BANANA, ['banana', 'bananas', CLR_YELLOW]],
-    [CARROT, ['carrot', 'carrots', CLR_ORANGE]],
-    [SPRIG_OF_WOLFSBANE, ['sprig of wolfsbane', 'sprigs of wolfsbane', CLR_GREEN]],
-    [CLOVE_OF_GARLIC, ['clove of garlic', 'cloves of garlic', CLR_WHITE]],
-    [SLIME_MOLD, ['slime mold', 'slime molds', CLR_BROWN]],
-    [LUMP_OF_ROYAL_JELLY, ['lump of royal jelly', 'lumps of royal jelly', CLR_YELLOW]],
-    [CREAM_PIE, ['cream pie', 'cream pies', CLR_WHITE]],
-    [FORTUNE_COOKIE, ['fortune cookie', 'fortune cookies', CLR_YELLOW]],
-    [PANCAKE, ['pancake', 'pancakes', CLR_YELLOW]],
-    [MEATBALL, ['meatball', 'meatballs', CLR_BROWN]],
-    [MEAT_STICK, ['meat stick', 'meat sticks', CLR_BROWN]],
-    [ENORMOUS_MEATBALL, ['enormous meatball', 'enormous meatballs', CLR_BROWN]],
+    [KELP_FROND, ['kelp frond', 'kelp fronds', CLR_GREEN, 1]],
+    [FOOD_RATION, ['food ration', 'food rations', CLR_BROWN, 20]],
+    [CRAM_RATION, ['cram ration', 'cram rations', CLR_BROWN, 15]],
+    [LEMBAS_WAFER, ['lembas wafer', 'lembas wafers', CLR_WHITE, 5]],
+    [K_RATION, ['K-ration', 'K-rations', CLR_BROWN, 10]],
+    [C_RATION, ['C-ration', 'C-rations', CLR_BROWN, 10]],
+    [EUCALYPTUS_LEAF, ['eucalyptus leaf', 'eucalyptus leaves', CLR_GREEN, 1]],
+    [APPLE, ['apple', 'apples', CLR_RED, 2]],
+    [ORANGE, ['orange', 'oranges', CLR_ORANGE, 2]],
+    [PEAR, ['pear', 'pears', CLR_BRIGHT_GREEN, 2]],
+    [MELON, ['melon', 'melons', CLR_BRIGHT_GREEN, 5]],
+    [BANANA, ['banana', 'bananas', CLR_YELLOW, 2]],
+    [CARROT, ['carrot', 'carrots', CLR_ORANGE, 2]],
+    [SPRIG_OF_WOLFSBANE, ['sprig of wolfsbane', 'sprigs of wolfsbane', CLR_GREEN, 1]],
+    [CLOVE_OF_GARLIC, ['clove of garlic', 'cloves of garlic', CLR_WHITE, 1]],
+    [SLIME_MOLD, ['slime mold', 'slime molds', CLR_BROWN, 5]],
+    [LUMP_OF_ROYAL_JELLY, ['lump of royal jelly', 'lumps of royal jelly', CLR_YELLOW, 2]],
+    [CREAM_PIE, ['cream pie', 'cream pies', CLR_WHITE, 10]],
+    [FORTUNE_COOKIE, ['fortune cookie', 'fortune cookies', CLR_YELLOW, 1]],
+    [PANCAKE, ['pancake', 'pancakes', CLR_YELLOW, 2]],
+    [MEATBALL, ['meatball', 'meatballs', CLR_BROWN, 1]],
+    [MEAT_STICK, ['meat stick', 'meat sticks', CLR_BROWN, 1]],
+    [ENORMOUS_MEATBALL, ['enormous meatball', 'enormous meatballs', CLR_BROWN, 400]],
 ]);
 const VEGETARIAN_FOOD_PROBS = [
     [85, EGG],
@@ -3763,6 +3765,23 @@ function bad_location(x, y, nlx, nly, nhx, nhy) {
     return false;
 }
 
+// mkmaze.c:put_lregion_here removes a misplaced, destroyable trap when the
+// entrance has only one possible square or has reached its exhaustive scan.
+function lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, oneshot) {
+    if (bad_location(x, y, nlx, nly, nhx, nhy) || is_exclusion_zone(rtype, x, y)) {
+        if (!oneshot) return false;
+        const trap = t_at(x, y);
+        if (trap && !undestroyable_trap(trap.ttyp)) {
+            const mon = game.level.monsters?.find(mon => mon.mx === x && mon.my === y);
+            if (mon) mon.mtrapped = 0;
+            clearConjoinedPits(trap);
+            game.level.traps.splice(game.level.traps.indexOf(trap), 1);
+        }
+        if (bad_location(x, y, nlx, nly, nhx, nhy) || is_exclusion_zone(rtype, x, y)) return false;
+    }
+    return true;
+}
+
 function add_exclusion_zone(zonetype, lx, ly, hx, hy) {
     if (!game.level) return null;
     game.level.exclusionZones ??= [];
@@ -3815,8 +3834,7 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
         }
         const occupiedByMonster = rtype >= LR_TELE && rtype <= LR_DOWNTELE
             && game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
-        if (!bad_location(x, y, nlx, nly, nhx, nhy)
-            && !is_exclusion_zone(rtype, x, y)
+        if (lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, lx === hx && ly === hy)
             && !occupiedByMonster) {
             if (rtype === LR_BRANCH) {
                 place_branch(is_branchlev(), x, y);
@@ -3839,8 +3857,7 @@ export function place_lregion(lx, ly, hx, hy, nlx, nly, nhx, nhy, rtype, lev) {
     // Deterministic fallback
     for (let x = lx; x <= hx; x++)
         for (let y = ly; y <= hy; y++)
-            if (!bad_location(x, y, nlx, nly, nhx, nhy)
-                && !is_exclusion_zone(rtype, x, y)) {
+            if (lregionLocationValid(x, y, nlx, nly, nhx, nhy, rtype, true)) {
                 if (rtype === LR_BRANCH) {
                     place_branch(is_branchlev(), x, y);
                     return;
@@ -4170,13 +4187,14 @@ export function mksobj(otyp, init, artif) {
     }
     const specificFood = SPECIFIC_FOOD_INFO.get(otyp);
     if (specificFood) {
-        const [singular, plural, color] = specificFood;
+        const [singular, plural, color, mass] = specificFood;
         Object.assign(otmp, {
             cls: 'food',
             kind: singular,
             singular,
             plural,
             _display_color: color,
+            owt: mass * otmp.quan,
             age: otmp.age ?? Math.max(game.moves || 0, 1),
         });
         if (otyp === SLIME_MOLD) applySlimeMoldFruitFields(otmp, otmp.spe || undefined);
@@ -4916,6 +4934,8 @@ export function mkobj(oclass, artif) {
             otmp.plural = food?.[2] || 'food rations';
         }
         otmp.foodRoll = prob;
+        const info = [...SPECIFIC_FOOD_INFO.values()].find(row => row[0] === food?.[1]);
+        if (info) otmp.owt = info[3] * otmp.quan;
         otmp._display_color = objectColorForRoll(prob, FOOD_ROLL_COLORS);
         return otmp;
     }
@@ -9404,8 +9424,9 @@ function equipmentInRange(oclass, first, last) {
 }
 
 function namedEquipment(name, init = true, artif = false) {
+    if (name === 'walking shoes') name = 'low boots'; // objects.h non-shuffled description.
     for (const [oclass, table] of [[WEAPON_CLASS, WEAPON_ROLL_KINDS], [ARMOR_CLASS, ARMOR_ROLL_KINDS]]) {
-        const row = table.find(entry => entry[1] === name);
+        const row = table.find(entry => entry[1].toLowerCase() === name.toLowerCase());
         if (row) return makeEquipment(oclass, row[0], init, artif);
     }
     const dragon = { 'gray dragon scale mail': GRAY_DRAGON_SCALE_MAIL, 'gold dragon scale mail': GOLD_DRAGON_SCALE_MAIL,
@@ -9948,8 +9969,13 @@ async function questFillerOperations(operations, state, croom = null) {
                 splevMinesLevelInit(fg, SPECIAL_TERRAIN[arg.bg], { ...arg, icedpools: state.icedpools });
             } else {
                 const lit = arg.lit ?? rn2(2);
-                for (let x = 1; x < COLNO; x++)
-                    for (let y = 0; y < ROWNO; y++) Object.assign(game.level.at(x, y), { typ: fg, lit: !!lit });
+                // lvlfill_solid uses the even maze bounds (decl.c); it does
+                // not assign icedpool for ICE, unlike des.map/terrain.
+                for (let x = 2; x <= ((COLNO - 1) & ~1); x++)
+                    for (let y = 0; y <= ((ROWNO - 1) & ~1); y++) {
+                        if (setSpecialTerrainLit(x, y, fg, lit))
+                            Object.assign(game.level.at(x, y), { flags: 0, horizontal: false, roomno: 0, edge: 0 });
+                    }
             }
             break;
         }
@@ -10046,6 +10072,24 @@ async function questFillerOperations(operations, state, croom = null) {
             state.levregions.push({ include, exclude, type: types[arg.type], target });
             break;
         }
+        case 'feature': {
+            const spec = typeof arg === 'string' ? { type: arg, coord: rest.length === 1 ? rest[0] : rest.length ? rest : null } : arg;
+            const typ = ({ fountain: FOUNTAIN, sink: SINK, pool: POOL, throne: THRONE, tree: TREE })[spec.type];
+            if (!Number.isInteger(typ)) throw new Error(`Unsupported quest feature ${spec.type}`);
+            const pos = questFillerLocation(state.area, croom, DRY, false, spec.coord || (spec.x != null ? [spec.x, spec.y] : null));
+            if (!pos) break;
+            const loc = game.level.at(pos.x, pos.y);
+            if (!IS_FURNITURE(loc.typ)) loc.typ = typ;
+            if (loc.typ !== typ) break;
+            const flags = ({ [FOUNTAIN]: { looted: F_LOOTED, warned: F_WARNED },
+                [SINK]: { pudding: S_LPUDDING, dishwasher: S_LDWASHER, ring: S_LRING },
+                [THRONE]: { looted: T_LOOTED }, [TREE]: { looted: TREE_LOOTED, swarm: TREE_SWARM } })[typ] || {};
+            for (const [name, mask] of Object.entries(flags)) {
+                if (spec[name] === true) loc.flags = (loc.flags || 0) | mask;
+                else if (spec[name] === false) loc.flags = (loc.flags || 0) & ~mask;
+            }
+            break;
+        }
         case 'drawbridge': {
             const pos = questFillerLocation(state.area, croom, DRY | WET | HOT, false, arg.coord || [arg.x, arg.y]);
             const dir = ({ north: DB_NORTH, south: DB_SOUTH, west: DB_WEST, east: DB_EAST })[arg.dir];
@@ -10076,7 +10120,7 @@ async function questFillerOperations(operations, state, croom = null) {
             if (!pos) break;
             const def = artifactDefinitionForName(spec.name);
             const types = { chest: CHEST, tin: TIN, 'blank paper': SCR_BLANK_PAPER, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
-            const otyp = def?.otyp ?? types[spec.id];
+            const otyp = def?.otyp ?? types[spec.id] ?? [...SPECIFIC_FOOD_INFO].find(([, info]) => info[0] === spec.id)?.[0];
             const classes = { ')': WEAPON_CLASS, '[': ARMOR_CLASS, '*': GEM_CLASS, '(': TOOL_CLASS,
                 '%': FOOD_CLASS, '!': POTION_CLASS, '?': SCROLL_CLASS, '/': WAND_CLASS, '=': RING_CLASS,
                 '"': AMULET_CLASS, '+': SPBOOK_CLASS };

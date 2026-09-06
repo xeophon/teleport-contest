@@ -8,10 +8,10 @@ import { objectMergeableByCMetadata, mergeStackableObject } from './mklev.js';
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
-import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP } from './const.js';
+import { W_ARTI, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP } from './const.js';
 import { AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsAcid } from './mhitm.js';
-import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
+import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
     recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
@@ -2162,7 +2162,7 @@ function carriedDropDisplayColor(item) {
 function dropCarriedObjectAtHero(item, messages = [], dropTarget = null) {
     const dropX = dropTarget?.x ?? game.u?.ux ?? 0;
     const dropY = dropTarget?.y ?? game.u?.uy ?? 0;
-    removeInventoryItem(item, item.quan || 1);
+    messages.push(...(removeInventoryItem(item, item.quan || 1) || []));
     const dropped = Object.assign(item, {
         invlet: item.invlet ?? item.letter,
         letter: undefined,
@@ -7792,8 +7792,56 @@ export async function finishLevelTeleport(targetLevel, options = {}) {
     // on every level arrival; migrating monsters land here (before vision
     // and the fall-damage roll at do.c:1990).
     arriveMigratingMonsters();
+    return await finishLevelArrival({ kind: 'teleport', targetLevel, options,
+        fromLevel, preserveMovement, savedTarget: !!savedTarget, targetIsNew, fromTemperature });
+}
+
+// C goto_level waits inside run_timers before completing destination setup.
+// The continuation stores data so saving while a timer prompts remains valid.
+async function finishLevelArrival(state = game._level_arrival_continuation) {
+    game._level_arrival_continuation = state;
     for (const message of await processGameTimers())
         (game._queued_messages_after_more ??= []).push({ text: message, more: true });
+    if (game._timer_callback_pending) {
+        game.context.move = 0;
+        return false;
+    }
+    game._level_arrival_continuation = null;
+    const { kind, fromLevel, targetIsNew, fallDownStairs, ballAndChain } = state;
+    if (kind !== 'teleport') {
+        if (targetIsNew) game._utrack = [];
+        vision_reset();
+        game._redraw_level_after_more = 1;
+        if (kind === 'up') {
+            game._stairs_arrival_after_more = { fromLevel, silent: !ballAndChain.length };
+            await setMessage(game.u?.uball ? 'With great effort, you climb up the stairs.' : 'You climb up the stairs.', true);
+        } else if (fallDownStairs || game.flags?.verbose !== false) {
+            await setMessage(fallDownStairs ? 'You fall down the stairs.' : 'You descend the stairs.', true);
+        } else {
+            game._redraw_level_after_more = 0;
+            vision_recalc(0);
+            await docrt();
+            await bot();
+        }
+        game.context.move = 1;
+        return true;
+    }
+    const ok = await finishTeleportArrival(state);
+    if (state.menu) await finishMenuArrival(state.menu, ok);
+    if (state.options.questRejection) {
+        game._pending_message = '';
+        game._message_more = 0;
+        game._resume_time_after_more = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        game._process_deferred_context_now = 1;
+        game._command_mode = null;
+    }
+    return ok;
+}
+
+async function finishTeleportArrival({ targetLevel, options, fromLevel,
+    preserveMovement, savedTarget, targetIsNew, fromTemperature }) {
     if (game.level?.flags?.fumaroles) fumaroles();
     if (Is_airlevel(game.u?.uz)) movebubbles();
     // C ref: src/cmd.c:1021 — goto_level resets the cached travel
@@ -12219,10 +12267,11 @@ function syncHeroSpeedState() {
 }
 
 function removeInventoryItem(item, amount = 1) {
+    const messages = [];
     if (shopBillableGold(item)) {
         removeGoldFromHero(amount);
         updateWornDisplacement();
-        return;
+        return messages;
     }
     const wasWornSpeedChanger = item.cls === 'armor'
         && isWornInventoryItem(item)
@@ -12241,10 +12290,17 @@ function removeInventoryItem(item, amount = 1) {
             if (game.u?.[slot] === item) game.u[slot] = null;
         }
         game.inventory = (game.inventory || []).filter(other => other !== item);
+        const { power } = artifactInvocation(item);
+        if (power === 'CONFLICT' || power === 'INVIS') {
+            const [id] = INVOKED_PROPERTIES[power];
+            if (game.u?.uprops?.[id]?.extrinsic & W_ARTI)
+                messages.push(...toggleArtifactProperty(item, ARTIFACT_PROPERTY_DEPS).messages);
+        }
     }
     if (wasWornSpeedChanger) syncHeroSpeedState();
     updateWornDisplacement();
     game._pet_food_scan_inventory = game.inventory;
+    return messages;
 }
 
 function useUpInventoryItem(item, amount = 1) {
@@ -23068,8 +23124,8 @@ function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
 }
 
 function explodeBurningOilPotion(potion, x, y, messages) {
-    const damage = d(potion?.odiluted ? 3 : 4, 4);
     endBurn(potion);
+    const damage = d(potion?.odiluted ? 3 : 4, 4);
 
     if (!heroIsDeaf())
         messages.push(burningOilExplosionVisible(x, y) ? 'Boom!' : 'You hear a blast.');
@@ -44246,6 +44302,15 @@ function artifactPowerSourceName(obj) {
     return name.replace(/^The\b/, 'the');
 }
 
+const ARTIFACT_PROPERTY_DEPS = {
+    heroIsBlind, heroIsHallucinating,
+    refreshHero: () => newsym(game.u.ux, game.u.uy),
+    propertySources: power => (game.inventory || []).some(obj => isWornInventoryItem(obj)
+        && (power === 'CONFLICT' ? objectKindKey(obj) === 'ring of conflict'
+            : power === 'INVIS' ? ['ring of invisibility', 'cloak of invisibility'].includes(objectKindKey(obj))
+                : ['ring of levitation', 'levitation boots'].includes(objectKindKey(obj)))),
+};
+
 const ARTIFACT_RETOUCH_DEPS = {
     antimagic: heroHasAntimagic,
     isSilver: heroTossUpObjectIsSilver,
@@ -45314,6 +45379,7 @@ export function landMonsterThrownObject(missile, x, y, {
     };
     if (dropThrow.broken) {
         if (mulched) rn2(100);
+        stopDestroyedObjectTreeTimers(missile);
         newsym(x, y);
         return {
             consumed: true,
@@ -45326,8 +45392,7 @@ export function landMonsterThrownObject(missile, x, y, {
     }
     const passiveObjectTarget = liveMonsterThrownPassiveTarget(passiveTarget, x, y)
         || monsterAtSquareForPassiveObject(x, y);
-    const landing = {
-        ...missile,
+    const landing = Object.assign(missile, {
         ox: x,
         oy: y,
         quan: Math.max(1, quan || 1),
@@ -45337,7 +45402,7 @@ export function landMonsterThrownObject(missile, x, y, {
         hidden: false,
         buried: false,
         transientProjectile: false,
-    };
+    });
     delete landing.line;
     const shipObject = landing.otyp === BOULDER
         ? projectileShipObjectResult()
@@ -48525,13 +48590,13 @@ function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, op
         shkp: options.salePending?.shkp,
         sellobjResult,
     });
-    removeInventoryItem(item, count);
+    const propertyMessages = removeInventoryItem(item, count);
     freezeObjectInIcebox(putItem);
     const contained = add_to_container(iceBox, putItem);
     if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
     if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     game._pet_food_scan_inventory = game.inventory;
-    const messages = [sellobjResult?.message, `You put ${name} into the ice box.`].filter(Boolean);
+    const messages = [sellobjResult?.message, ...propertyMessages, `You put ${name} into the ice box.`].filter(Boolean);
     return { moved: true, message: messages.join('  '), messages };
 }
 
@@ -48568,10 +48633,11 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
         removeInventoryItem(item, count);
         return explodeMagicBagTransfer(bag, putItem, [], { triggerHeld: true });
     }
-    removeInventoryItem(item, count);
+    const messages = removeInventoryItem(item, count);
     add_to_container(bag, putItem);
     game._pet_food_scan_inventory = game.inventory;
-    return { moved: true, message: `You put ${name} into the bag.` };
+    messages.push(`You put ${name} into the bag.`);
+    return { moved: true, message: messages.join('  '), messages };
 }
 
 function splitInventoryObjectForContainerPut(item, count) {
@@ -48686,13 +48752,13 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
         shkp: options.salePending?.shkp,
         sellobjResult,
     });
-    removeInventoryItem(item, count);
+    const propertyMessages = removeInventoryItem(item, count);
     const contained = add_to_container(container, putItem);
     if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
     if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
     refreshTipContainerWeight(container);
     game._pet_food_scan_inventory = game.inventory;
-    const messages = [sellobjResult?.message, `You put ${name} into the ${containerName}.`].filter(Boolean);
+    const messages = [sellobjResult?.message, ...propertyMessages, `You put ${name} into the ${containerName}.`].filter(Boolean);
     return { moved: true, message: messages.join('  '), messages };
 }
 
@@ -56440,6 +56506,7 @@ async function captureCurrentGridSnapshot() {
     return snapshot;
 }
 
+
 async function finishMenuLevelTeleport(targetLevel, options = {}) {
     const prerequisiteMessage = grantEndgamePrerequisiteIfNeeded(targetLevel);
     const prerequisiteSnapshot = prerequisiteMessage
@@ -56449,6 +56516,15 @@ async function finishMenuLevelTeleport(targetLevel, options = {}) {
         ? { ...options, endgameLevelTeleport: true }
         : options;
     const ok = await finishLevelTeleport(targetLevel, finalOptions);
+    const menu = { targetLevel, finalOptions, prerequisiteMessage, prerequisiteSnapshot };
+    if (game._level_arrival_continuation) {
+        game._level_arrival_continuation.menu = menu;
+        return false;
+    }
+    return await finishMenuArrival(menu, ok);
+}
+
+async function finishMenuArrival({ targetLevel, finalOptions, prerequisiteMessage, prerequisiteSnapshot }, ok) {
     const forceEndgameWizard = !!game._force_endgame_wizard_after_arrival;
     game._force_endgame_wizard_after_arrival = 0;
     const shouldAmuletWish = ok
@@ -58236,12 +58312,15 @@ function splitLandmineScatterStackObject(obj) {
         ...obj,
         id: next_ident(),
         quan: splitCount,
+        timed: 0,
+        owornmask: 0,
         contents: Array.isArray(obj.contents) ? [...obj.contents] : obj.contents,
         cobj: Array.isArray(obj.cobj) ? [...obj.cobj] : obj.cobj,
     };
     delete splitObj.o_id;
     delete splitObj._shopBillObjectId;
     delete splitObj.line;
+    splitObjectTimers(obj, splitObj);
     if (obj.unpaid) splitCarriedObjectShopBill(obj, splitObj, splitCount);
     return splitObj;
 }
@@ -58249,6 +58328,8 @@ function splitLandmineScatterStackObject(obj) {
 function landmineScatterDestroyBreakableObject(obj, x, y, messages) {
     const breakKind = projectileTopLevelBreakKind(obj);
     if (!breakKind) return false;
+    // C scatter extracts the object before breakobj can affect the floor pile.
+    removeFloorObject(obj);
     if (floorObjectVisible(x, y)) projectileTopLevelBreakMessage(obj, breakKind, messages);
     if (isExpensiveCameraObject(obj)) {
         releaseBrokenCameraDemonImmediately(obj, messages, x, y);
@@ -58259,7 +58340,7 @@ function landmineScatterDestroyBreakableObject(obj, x, y, messages) {
         brokenPotionBreathe(obj, x, y, messages);
     }
     applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y);
-    removeFloorObject(obj);
+    stopDestroyedObjectTreeTimers(obj);
     newsym(x, y);
     return true;
 }
@@ -62909,6 +62990,8 @@ async function finishOfferObject(obj, { floor = false } = {}) {
 
 export async function rhack(_cmd) {
     await rhackInternal(_cmd);
+    if (game._level_arrival_continuation && game._water_operation_resumed)
+        await finishLevelArrival();
     const invocation = game._artifact_untrap;
     if (!invocation) return;
     invocation.spent ||= !!game.context?.move;
@@ -63582,14 +63665,8 @@ async function rhackInternal(_cmd) {
                 exerciseAttribute(A_WIS, true);
             }
             game._quest_leader_talk_automatic = 0;
-            await finishLevelTeleport(branchLevel(game.u?.uz?.dnum ?? -1) || { dnum: 0, dlevel: 14 }, { portalArrival: true });
-            game._pending_message = '';
-            game._message_more = 0;
-            game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-            game.context.move = 0;
-            game._process_deferred_context_now = 1;
-            game._command_mode = null;
+            await finishLevelTeleport(branchLevel(game.u?.uz?.dnum ?? -1) || { dnum: 0, dlevel: 14 },
+                { portalArrival: true, questRejection: true });
         }
         return;
     }
@@ -65670,7 +65747,7 @@ function tutorialEnterStash() {
 	                        .find(invItem => invItem.letter === game._nymph_steal_after_more.itemLetter);
 	                    if (item) {
 	                        const mon = game._nymph_steal_after_more.mon;
-                        removeInventoryItem(item, item.quan || 1);
+                        if (appendToplineAfterMoreMessages(removeInventoryItem(item, item.quan || 1))) keepMore = true;
 	                        if (mon) {
                             const stolen = item;
 	                            delete stolen.line;
@@ -65695,7 +65772,7 @@ function tutorialEnterStash() {
                     const item = (game.inventory || [])
                         .find(invItem => invItem.letter === action.itemLetter) || action.item;
                     if (item && action.whereTo) {
-                        removeInventoryItem(item, item.quan || 1);
+                        if (appendToplineAfterMoreMessages(removeInventoryItem(item, item.quan || 1))) keepMore = true;
                         const dropped = Object.assign(item, {
                             line: undefined,
                             worn: false,
@@ -76126,7 +76203,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             const droppedName = inventoryItemName(item);
             const stoppedLight = setArtifactEquipmentLight(item, false);
-            removeInventoryItem(item, item.quan || 1);
+            const propertyMessages = removeInventoryItem(item, item.quan || 1);
             const dropped = Object.assign(item, {
                 invlet: item.invlet ?? item.letter,
                 letter: undefined,
@@ -76171,7 +76248,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             game._message_more = 0;
-            const dropMessages = stoppedLight ? [stoppedLight] : [];
+            const dropMessages = [...(stoppedLight ? [stoppedLight] : []), ...propertyMessages];
             if (item.cls === 'weapon' || item.kind === 'chest') {
                 if (game.flags?.verbose === false) {
                     dropMessages.push(...floorMessages);
@@ -76421,12 +76498,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             isCrystalBallObject, clearHeroSickness, removeHeroStatusSuffix,
             heroHasBlindfold: () => (game.inventory || []).some(obj => isWornInventoryItem(obj)
                 && ['blindfold', 'towel'].includes(objectKindKey(obj))),
-            heroIsBlind, heroIsHallucinating,
-            refreshHero: () => newsym(game.u.ux, game.u.uy),
-            propertySources: power => (game.inventory || []).some(obj => isWornInventoryItem(obj)
-                && (power === 'CONFLICT' ? objectKindKey(obj) === 'ring of conflict'
-                    : power === 'INVIS' ? ['ring of invisibility', 'cloak of invisibility'].includes(objectKindKey(obj))
-                        : ['ring of levitation', 'levitation boots'].includes(objectKindKey(obj)))),
+            ...ARTIFACT_PROPERTY_DEPS,
             floatArtifact: async (on, messages) => {
                 const u = game.u;
                 if (on) {
@@ -83726,22 +83798,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             placeFollowerAfterLevelChange(carriedPet);
             deliverQueuedImpactDroppedObjects(game.u?.uz);
             arriveMigratingMonsters();
-            for (const message of await processGameTimers())
-                (game._queued_messages_after_more ??= []).push({ text: message, more: true });
-            vision_reset();
-            game._redraw_level_after_more = 1;
-            // C ref: src/do.c:1797-1800 — the ordinary "You descend the
-            // stairs." is verbose-only; the fall-down message (do.c:1782)
-            // is not.
-            if (fallDownStairs || game.flags?.verbose !== false) {
-                await setMessage(fallDownStairs ? 'You fall down the stairs.' : 'You descend the stairs.', true);
-            } else {
-                game._redraw_level_after_more = 0;
-                vision_recalc(0);
-                await docrt();
-                await bot();
-            }
-            game.context.move = 1;
+            await finishLevelArrival({ kind: 'down', fallDownStairs, targetIsNew: false });
             return;
         }
         if (carriedPet)
@@ -83779,22 +83836,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         placeFollowerAfterLevelChange(carriedPet);
         deliverQueuedImpactDroppedObjects(game.u?.uz);
         arriveMigratingMonsters();
-        for (const message of await processGameTimers())
-            (game._queued_messages_after_more ??= []).push({ text: message, more: true });
-        game._utrack = [];
-        vision_reset();
-        game._redraw_level_after_more = 1;
-        // C ref: src/do.c:1797-1800 — the ordinary "You descend the stairs."
-        // is verbose-only; the fall-down message (do.c:1782) is not.
-        if (fallDownStairs || game.flags?.verbose !== false) {
-            await setMessage(fallDownStairs ? 'You fall down the stairs.' : 'You descend the stairs.', true);
-        } else {
-            game._redraw_level_after_more = 0;
-            vision_recalc(0);
-            await docrt();
-            await bot();
-        }
-        game.context.move = 1;
+        await finishLevelArrival({ kind: 'down', fallDownStairs, targetIsNew: true });
         return;
     }
 
@@ -83871,13 +83913,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         deliverQueuedImpactDroppedObjects(game.u?.uz);
         arriveMigratingMonsters();
-        for (const message of await processGameTimers())
-            (game._queued_messages_after_more ??= []).push({ text: message, more: true });
-        vision_reset();
-        game._redraw_level_after_more = 1;
-        game._stairs_arrival_after_more = { fromLevel, silent: !ballAndChain.length };
-        await setMessage(game.u?.uball ? 'With great effort, you climb up the stairs.' : 'You climb up the stairs.', true);
-        game.context.move = 1;
+        await finishLevelArrival({ kind: 'up', fromLevel, ballAndChain, targetIsNew: !saved });
         return;
     }
 

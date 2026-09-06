@@ -9,7 +9,7 @@ import { is_demon, S_IMP, MS_NEMESIS, M2_LORD, M2_PRINCE } from './permonst.js';
 import { couldsee, objectLightRadius } from './vision.js';
 import { artifactLight, beginBurn, endBurn, lightObjectKind } from './burn.js';
 
-const INVOKED_PROPERTIES = { CONFLICT: [CONFLICT, 'conflict'], LEVITATION: [LEVITATION, 'levitating'], INVIS: [INVIS, 'invisible'] };
+export const INVOKED_PROPERTIES = { CONFLICT: [CONFLICT, 'conflict'], LEVITATION: [LEVITATION, 'levitating'], INVIS: [INVIS, 'invisible'] };
 
 const INVOCATIONS = new Map([
     ['Grimtooth', 'FLING_POISON'], ['Frost Brand', 'SNOWSTORM'], ['Fire Brand', 'FIRESTORM'],
@@ -94,14 +94,60 @@ export async function openArtifactPortal(dnum, D) {
     return messages;
 }
 
+// C arti_invoke's property branch is synchronous until float_up/float_down.
+// Returning that action lets an inventory owner await landing before transfer.
+export function toggleArtifactProperty(item, D) {
+    const { definition, power } = artifactInvocation(item);
+    const u = game.u;
+    const now = game.moves || 0;
+    const messages = [];
+    const result = { messages, power, time: true };
+    const [id, field] = INVOKED_PROPERTIES[power];
+    u.uprops ??= {};
+    const prop = u.uprops[id] ??= { intrinsic: 0, extrinsic: 0 };
+    const on = !(prop.extrinsic & W_ARTI);
+    if (on && item.age > now) {
+        messages.push(`You feel that ${definition.name.replace(/^The /, 'the ')} is ignoring you.`);
+        item.age += d(3, 10);
+        return result;
+    }
+    u._artifactInvokeBaseline ??= {};
+    if (on) u._artifactInvokeBaseline[power] = !!u[field]
+        && !(prop.intrinsic || (prop.extrinsic & ~W_ARTI) || D.propertySources(power));
+    prop.extrinsic = (prop.extrinsic || 0) ^ W_ARTI;
+    if (!on) item.age = now + rnz(100);
+    const other = !!((prop.extrinsic & ~W_ARTI) || prop.intrinsic
+        || u._artifactInvokeBaseline[power] || D.propertySources(power));
+    u[field] = on || other;
+    item._invokedProperty = on ? power : null;
+    if (!on) delete u._artifactInvokeBaseline[power];
+    if (other) messages.push('You feel a surge of power, but nothing seems to happen.');
+    else if (power === 'CONFLICT') messages.push(on
+        ? 'You feel like a rabble-rouser.' : 'You feel the tension decrease around you.');
+    else if (power === 'INVIS') {
+        if (u.BInvis || D.heroIsBlind()) messages.push('You feel a surge of power, but nothing seems to happen.');
+        else messages.push(on ? `Your body takes on a ${D.heroIsHallucinating() ? 'normal' : 'strange'} transparency...`
+            : 'Your body seems to unfade...');
+        D.refreshHero();
+    } else Object.assign(result, { action: 'FLOAT_ARTIFACT', on });
+    return result;
+}
+
 export async function invokeArtifact(item, D) {
+    const touch = await D.retouch(item, artifactInvocation(item).definition);
+    if (!touch.ok || touch.skip) return { messages: touch.messages || [], time: true,
+        fatal: touch.fatal, lifeSaving: touch.lifeSaving, pending: touch.pending, more: touch.more };
+    const result = await invokeArtifactPower(item, D);
+    result.messages.unshift(...(touch.messages || []));
+    return result;
+}
+
+// C arti_invoke is also called directly when losing an invoked property;
+// those calls must not perform touch_artifact or retouch_object again.
+export async function invokeArtifactPower(item, D) {
     const { definition, power } = artifactInvocation(item);
     const messages = [];
     const result = { messages, power, time: true };
-    const touch = await D.retouch(item, definition);
-    messages.push(...(touch.messages || []));
-    if (!touch.ok || touch.skip) return { ...result, fatal: touch.fatal,
-        lifeSaving: touch.lifeSaving, pending: touch.pending, more: touch.more };
     if (!power) {
         if (D.isCrystalBallObject(item)) result.action = 'CRYSTAL_BALL';
         else messages.push('Nothing happens.');
@@ -111,34 +157,12 @@ export async function invokeArtifact(item, D) {
     const property = ['CONFLICT', 'LEVITATION', 'INVIS'].includes(power);
     const now = game.moves || 0;
     if (property) {
-        const [id, field] = INVOKED_PROPERTIES[power];
-        u.uprops ??= {};
-        const prop = u.uprops[id] ??= { intrinsic: 0, extrinsic: 0 };
-        const on = !(prop.extrinsic & W_ARTI);
-        if (on && item.age > now) {
-            messages.push(`You feel that ${definition.name.replace(/^The /, 'the ')} is ignoring you.`);
-            item.age += d(3, 10);
-            return result;
+        const toggle = toggleArtifactProperty(item, D);
+        if (toggle.action === 'FLOAT_ARTIFACT') {
+            delete toggle.action;
+            Object.assign(toggle, await D.floatArtifact(toggle.on, toggle.messages));
         }
-        u._artifactInvokeBaseline ??= {};
-        if (on) u._artifactInvokeBaseline[power] = !!u[field];
-        prop.extrinsic = (prop.extrinsic || 0) ^ W_ARTI;
-        if (!on) item.age = now + rnz(100);
-        const other = !!((prop.extrinsic & ~W_ARTI) || prop.intrinsic
-            || u._artifactInvokeBaseline[power] || D.propertySources(power));
-        u[field] = on || other;
-        item._invokedProperty = on ? power : null;
-        if (!on) delete u._artifactInvokeBaseline[power];
-        if (other) messages.push('You feel a surge of power, but nothing seems to happen.');
-        else if (power === 'CONFLICT') messages.push(on
-            ? 'You feel like a rabble-rouser.' : 'You feel the tension decrease around you.');
-        else if (power === 'INVIS') {
-            if (u.BInvis || D.heroIsBlind()) messages.push('You feel a surge of power, but nothing seems to happen.');
-            else messages.push(on ? `Your body takes on a ${D.heroIsHallucinating() ? 'normal' : 'strange'} transparency...`
-                : 'Your body seems to unfade...');
-            D.refreshHero();
-        } else await D.floatArtifact(on, messages);
-        return result;
+        return toggle;
     }
     if (!property) {
         if (item.age > now) {

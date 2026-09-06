@@ -11818,7 +11818,9 @@ function splitMonsterThrownInventoryObject(mon, index) {
     const missileQuan = Math.max(1, Math.trunc(Number(missile.quan || 1)));
     if (missileQuan > 1) {
         missile.quan = missileQuan - 1;
-        const thrown = { ...missile, id: next_ident(), quan: 1 };
+        const thrown = { ...missile, id: next_ident(), quan: 1, timed: 0, owornmask: 0 };
+        splitObjectTimers(missile, thrown);
+        delete thrown.o_id;
         delete thrown.letter;
         delete thrown.line;
         return thrown;
