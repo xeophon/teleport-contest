@@ -172,3 +172,11 @@ test('observing an identified amulet preserves its learned discovery text',()=>{
     game._discoveries=[entry];recordObservedObjectDiscovery({cls:'amulet',actualKind:entry.name,appearance:'circular'});
     assert.deepEqual(game._discoveries,[entry]);assert.equal(entry.known,true);
 });
+
+test('observing an amulet description does not mark its object type known', () => {
+    setup();
+    recordObservedObjectDiscovery({ cls: 'amulet', actualKind: 'amulet of reflection',
+        appearance: 'circular', known: false, dknown: true });
+    assert.equal(game._discoveries[0].known, false);
+    assert.equal(game._discoveries[0].text, 'amulet (circular)');
+});

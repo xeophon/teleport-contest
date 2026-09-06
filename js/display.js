@@ -572,7 +572,7 @@ function addObservedDiscovery(section, name, text = name) {
     if (!section || !name || !text) return;
     game._discoveries ??= [];
     if ((game._discoveries || []).some(entry => entry.section === section && entry.name === name)) return;
-    const entry = { section, name, text, starred: false };
+    const entry = { section, name, text, starred: false, known: false };
     if (section === 'Armor' && /^pair of /.test(name)) {
         const index = game._discoveries.findIndex(item =>
             item.section === 'Armor' && !item.starred && !/^pair of /.test(item.name || ''));

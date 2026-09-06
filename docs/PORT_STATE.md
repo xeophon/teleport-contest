@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,595 passing tests**, with no
+The latest source-driven checkpoint has **6,596 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -76,7 +76,9 @@ addinv intrinsic side effects still require source passes.
 Amulet observation and the worn-item discovery view now share type identity,
 so repeated sightings do not duplicate a row or suppress another amulet type.
 Four new tests pass; the four affected recordings again match all 1,742 screens
-and 241,544 random calls.
+and 241,544 random calls. Observation now explicitly marks a type unknown
+until identification; the returning-horn reflection recording again matches
+all 170 screens and 2,641 draws, including first-discovery Wisdom exercise.
 
 Artifact wishes now call the shared C contact routine before entering inventory.
 The object remains on the floor through blast, refusal and fatal-damage prompts;
