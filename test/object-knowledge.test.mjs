@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { OBJECT_DATA } from '../js/object_data.js';
-import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified } from '../js/object_knowledge.js';
+import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from '../js/object_knowledge.js';
 import { artifactObjectName } from '../js/mklev.js';
 
 function identified(symbol) {
@@ -101,4 +101,39 @@ test('artifact personal names require artifact discovery and every applicable kn
     assert.equal(artifactObjectName(item), 'Excalibur');
     item.rknown = false;
     assert.equal(artifactObjectName(item), 'long sword named Excalibur');
+});
+
+for (const hallucinating of [false, true]) test(`full identification observes through blindness but respects hallucination=${hallucinating}`, async () => {
+    const item = identified('POT_HEALING');
+    Object.assign(item, { known: false, bknown: false, dknown: false, rknown: false });
+    game.u = { blind: true }; game._known_object_types = [];
+    const events = [];
+    const D = { hallucinating, exercise: (...args) => events.push(['exercise', ...args]),
+        discover: () => events.push(['discover']), learnEgg: () => assert.fail('not an egg') };
+    assert.equal(fullyIdentifyObject(item, D), true);
+    assert.equal(item.dknown, !hallucinating);
+    assert.equal(item.known, true); assert.equal(item.bknown, true); assert.equal(item.rknown, true);
+    assert.deepEqual(events, [['exercise', 2, true], ['discover']]);
+    fullyIdentifyObject(item, D);
+    assert.equal(events.filter(event => event[0] === 'exercise').length, 1);
+});
+
+for (const symbol of ['SACK', 'STATUE', 'TIN', 'LONG_SWORD']) test(`full identification applies ${symbol} container knowledge without identifying children`, async () => {
+    const item = identified(symbol);
+    const child = { cls: 'potion', actualKind: 'potion of healing', known: false };
+    Object.assign(item, { cknown: false, lknown: false, contents: [child] });
+    fullyIdentifyObject(item, { hallucinating: false, exercise: () => assert.fail('already known'),
+        discover: () => {}, learnEgg: () => assert.fail('not an egg') });
+    assert.equal(item.cknown, symbol !== 'LONG_SWORD');
+    assert.equal(item.lknown, symbol === 'SACK' || symbol === 'STATUE');
+    assert.equal(item.contents[0], child);
+    assert.equal(child.known, false);
+});
+
+test('full identification discovers an artifact before its personal name is used', async () => {
+    const item = identified('LONG_SWORD'); item.artifact = 'Excalibur';
+    fullyIdentifyObject(item, { hallucinating: false, exercise: () => assert.fail('known type'),
+        discover: () => {}, learnEgg: () => assert.fail('not an egg') });
+    assert.equal(objectIsFullyIdentified(item), true);
+    assert.equal(artifactObjectName(item), 'Excalibur');
 });

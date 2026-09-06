@@ -1,3 +1,4 @@
+import { objectTypeData, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
 import { FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
 import { hasWoundedLegs, setWoundedLegs } from './do.js';
@@ -34584,7 +34585,7 @@ function eggObjectName(obj) {
     const buc = foodBucPrefix(obj);
     const plural = (obj?.quan || 1) > 1;
     let name = plural ? 'eggs' : 'egg';
-    if (obj?.corpsenm?.name && (obj.known || obj.eggKnown)) {
+    if (obj?.corpsenm?.name && (obj.known || obj.eggKnown || game._known_egg_types?.includes(obj.corpsenm.name))) {
         name = `${obj.corpsenm.name} ${plural ? 'eggs' : 'egg'}`;
         if (!plural && obj.spe === 1) name = `${name} (laid by you)`;
     }
@@ -63689,7 +63690,7 @@ export async function processSpellbookStudyOccupation(resume = false) {
     game._spellbook_study_occupation = null;
 }
 
-function inventoryOverlayLines(page = 0, identify = false, match = null) {
+function inventoryOverlayLines(page = 0, identify = false, match = null, wizard = null) {
     const sectionName = item => item.section || ({
         coin: 'Coins', amulet: 'Amulets', weapon: 'Weapons', armor: 'Armor', food: 'Comestibles',
         scroll: 'Scrolls', spellbook: 'Spellbooks', potion: 'Potions',
@@ -63707,15 +63708,25 @@ function inventoryOverlayLines(page = 0, identify = false, match = null) {
         'Spellbooks', 'Potions', 'Rings', 'Wands', 'Tools', 'Gems/Stones',
         'Boulders/Statues', 'Other Items',
     ];
-    const rows = [];
+    const rows = wizard ? [
+        [wizard.items.length ? 'Debug Identify -- unidentified or partially identified item' + (wizard.items.length === 1 ? '' : 's') : 'Debug Identify', 0],
+        [wizard.items.length ? '_ ' + (wizard.selected.includes('_') ? '+' : '-') + ' select '
+            + (wizard.items.length === 1 ? 'it' : 'any or all of them') + ' to permanently identify'
+            + (wizard.items.length > 1 ? ' (^I for all)' : '') : '(all items are permanently identified already)', 0, wizard.items.length ? '_' : null],
+    ] : [];
     let lastSection = '';
-    for (const item of [...(game.inventory || [])].filter(item => !match || match(item)).sort((a, b) => {
-        const sectionDiff = sectionOrder.indexOf(sectionName(a)) - sectionOrder.indexOf(sectionName(b));
-        return sectionDiff || String(a.letter || '').localeCompare(String(b.letter || ''));
-    })) {
+    const items = [...(game.inventory || [])].filter(item => !match || match(item)).sort((a, b) => {
+        const sectionDiff = wizard && game.flags?.sortpack === false ? 0
+            : sectionOrder.indexOf(sectionName(a)) - sectionOrder.indexOf(sectionName(b));
+        return sectionDiff || (wizard
+            ? INVENTORY_LETTERS.indexOf(a.letter) - INVENTORY_LETTERS.indexOf(b.letter)
+            : String(a.letter || '').localeCompare(String(b.letter || '')));
+    });
+    if (wizard) wizard.menuOrder = items;
+    for (const item of items) {
         const section = sectionName(item);
-        if (section !== lastSection) {
-            rows.push([section, identify ? 0 : 1]);
+        if (section !== lastSection && (!wizard || game.flags?.sortpack !== false)) {
+            rows.push([section, identify && !wizard ? 0 : 1]);
             lastSection = section;
         }
         if ((game.u?._statusSuffix || '').includes('Hallu')) {
@@ -63723,12 +63734,14 @@ function inventoryOverlayLines(page = 0, identify = false, match = null) {
             if (objectIndex + FIRST_DISPLAY_OBJECT === C_RANDOM_CORPSE)
                 rn2_on_display_rng(DISPLAY_MONSTER_GLYPHS.length);
         }
-        const name = identify ? identifiedInventoryLine(item) : normalInventoryLine(item);
-        rows.push([name, 0]);
+        let name = wizard ? wizardIdentifiedItemLine(item) : identify ? identifiedInventoryLine(item) : normalInventoryLine(item);
+        if (wizard && wizard.selected.includes(item.letter)) name = name.replace(' - ', ' + ');
+        rows.push([name, 0, item.letter]);
     }
     if (!rows.length) rows.push(['You are not carrying anything.', 0]);
     const start = page * 23;
     const pageRows = rows.slice(start, start + 23);
+    if (wizard) wizard.pageLetters = pageRows.map(row => row[2]).filter(Boolean);
     game._inventory_overlay_total_pages = Math.max(1, Math.ceil(rows.length / 23));
     const footer = rows.length > start + 23 ? `(${page + 1} of ${game._inventory_overlay_total_pages})` : game._inventory_overlay_total_pages > 1 ? `(${page + 1} of ${game._inventory_overlay_total_pages})` : '(end)';
     const width = Math.max(footer.length, ...pageRows.map(([text]) => String(text).length));
@@ -63743,6 +63756,95 @@ function showInventoryOverlay(page = 0, identify = false, match = null) {
     const fullScreen = game._inventory_overlay_total_pages > 1 || lines.length >= 24;
     const clearCol = fullScreen ? null : Math.max(0, Math.min(...lines.map(([, col]) => col)) - 1);
     setOverlay(lines, fullScreen ? 24 : lines.length, fullScreen, clearCol);
+}
+
+// Wizard override_ID reveals the complete name without modifying the object.
+function wizardIdentifiedItemLine(item) {
+    const type = objectTypeData(item);
+    const view = { ...item, known: true, dknown: true, bknown: true, rknown: true,
+        cknown: true, lknown: true, chargeKnown: true, line: '', _identify_override: true };
+    if (type) {
+        if (!item.artifact && !item.oartifact) view.kind = type.name;
+        view.actualKind = type.name;
+        if (type.class === 8) view.actualKind = 'potion of ' + type.name;
+        if (type.class === 11) view.wand = type.name;
+    }
+    let line = identifiedInventoryLine(view);
+    if (item.artifact || item.oartifact) {
+        const name = artifactObjectName(view);
+        if (type && (type.class === 5 || type.class === 13)) line = line.replace(type.name, name);
+        line = line.replace(/^([a-zA-Z$] - )an? /, '$1the ');
+    }
+    return line;
+}
+
+async function beginWizardIdentify() {
+    game._command_mode = null;
+    await setMessage('');
+    if (!(game.inventory || []).length) {
+        await setMessage('You are not carrying anything.');
+        return;
+    }
+    game._wizard_identify = { items: game.inventory.filter(item => !objectIsFullyIdentified(item)), selected: [], page: 0 };
+    showWizardIdentify();
+}
+
+function showWizardIdentify() {
+    const state = game._wizard_identify;
+    const rows = inventoryOverlayLines(state.page, true, item => state.items.includes(item), state);
+    const fullScreen = game._inventory_overlay_total_pages > 1 || rows.length >= 24;
+    const clearCol = fullScreen ? null : Math.max(0, Math.min(...rows.map(([, col]) => col)) - 1);
+    setOverlay(rows, fullScreen ? 24 : rows.length, fullScreen, clearCol);
+    game._command_mode = 'wizardIdentify';
+}
+
+function recordIdentifiedObjectType(item, type) {
+    if (type.class === 8) { recordKnownPotionDiscovery(item, type.name); return; }
+    if (type.class === 5) { recordKnownAmuletDiscovery(type.name, item); return; }
+    if (type.class === 4) { recordKnownRingDiscovery(type.name, item); return; }
+    if (type.class === 3) { recordKnownArmorDiscovery(type.name, false); return; }
+    if (!type.description) return;
+    const section = ({ 2: 'Weapons', 6: 'Tools', 9: 'Scrolls', 10: 'Spellbooks',
+        11: 'Wands', 13: 'Gems/Stones' })[type.class];
+    if (!section) return;
+    const name = ({ 9: 'scroll of ', 10: 'spellbook of ', 11: 'wand of ' })[type.class] || '';
+    const fullName = name + type.name;
+    const description = type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex]
+        : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex]
+            : type.class === 11 ? game._object_descriptions?.wands?.[item.wandIndex]?.description
+                : item.appearance || type.description;
+    const text = description ? fullName + ' (' + description + ')' : fullName;
+    game._discoveries ??= [];
+    const entry = game._discoveries.find(entry => entry.section === section && entry.name === fullName);
+    if (entry) Object.assign(entry, { text, known: true, starred: false });
+    else game._discoveries.push({ section, name: fullName, text, known: true, starred: false });
+}
+
+async function finishWizardIdentify() {
+    const state = game._wizard_identify;
+    while (state.index < state.identifying.length) {
+        const item = state.identifying[state.index++];
+        if (objectIsFullyIdentified(item)) continue;
+        fullyIdentifyObject(item, { hallucinating: heroIsHallucinating(), exercise: exerciseAttribute,
+            discover: recordIdentifiedObjectType,
+            learnEgg: egg => {
+                const species = egg.corpsenm?.name ?? egg.corpsenm;
+                game._known_egg_types ??= [];
+                if (!game._known_egg_types.includes(species)) game._known_egg_types.push(species);
+            } });
+        item.chargeKnown = !!objectTypeData(item)?.usesKnown;
+        item.line = wizardIdentifiedItemLine(item);
+        if (!state.skipMessages && !addToplineMessage(item.line + '.')) {
+            state.pendingMessage = game._topline_after_more;
+            game._topline_after_more = '';
+            game._command_mode = 'wizardIdentifyMore';
+            game._process_time_with_more = 0;
+            return;
+        }
+    }
+    game._wizard_identify = null;
+    game._command_mode = null;
+    game.context.move = 0;
 }
 
 function discoveryOverlayLines(page = 0) {
@@ -68104,6 +68206,62 @@ function tutorialEnterStash() {
         state.pendingMessage = '';
         game._command_mode = null;
         await resumeWishedArtifact();
+        return;
+    }
+
+    if (game._command_mode === 'wizardIdentify') {
+        const state = game._wizard_identify;
+        const allLetters = state.items.map(item => item.letter);
+        if (ch === '>' || ch === ' ' && state.page < game._inventory_overlay_total_pages - 1) {
+            state.page = Math.min(state.page + 1, game._inventory_overlay_total_pages - 1);
+        } else if (ch === '<') state.page = Math.max(0, state.page - 1);
+        else if (['\x1b', '\n', '\r', ' '].includes(ch)) {
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._command_mode = null;
+            if (ch === '\x1b' || !state.selected.length) {
+                game._wizard_identify = null;
+                return;
+            }
+            state.identifying = state.selected.includes('_') ? [...game.inventory]
+                : state.menuOrder.filter(item => state.selected.includes(item.letter));
+            state.index = 0;
+            await finishWizardIdentify();
+            return;
+        } else {
+            const group = Object.entries(OBJECT_CLASS_GLYPHS).find(([, glyph]) => glyph === ch)?.[0];
+            const letters = ch === '_' || ch === '\t' ? (state.items.length ? ['_'] : [])
+                : [',', '-', '@'].includes(ch) ? ['_', ...allLetters]
+                    : ['.', '\\', '~'].includes(ch) ? state.pageLetters
+                        : allLetters.includes(ch) ? [ch]
+                            : group ? state.items.filter(item => item.cls === group).map(item => item.letter) : [];
+            const selected = new Set(state.selected);
+            for (const letter of letters) {
+                // windows.c:menuitem_invert_test applies only to bulk operations.
+                if (letter === '_' && [',', '-', '@', '.', '\\', '~'].includes(ch)) {
+                    const mode = game.iflags?.menuinvertmode ?? 1;
+                    if (mode === 2 || mode === 1 && !selected.has('_')) continue;
+                }
+                if (ch === '-' || ch === '\\') selected.delete(letter);
+                else if (ch === ',' || ch === '.') selected.add(letter);
+                else if (selected.has(letter)) selected.delete(letter);
+                else selected.add(letter);
+            }
+            state.selected = [...selected];
+        }
+        showWizardIdentify();
+        return;
+    }
+
+    if (game._command_mode === 'wizardIdentifyMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) { game._keep_pending_message = 1; return; }
+        const state = game._wizard_identify;
+        if (ch === '\x1b') state.skipMessages = true;
+        game._dismissed_more_this_command = 1;
+        await setMessage(state.skipMessages ? '' : state.pendingMessage);
+        state.pendingMessage = '';
+        game._command_mode = null;
+        await finishWizardIdentify();
         return;
     }
 
@@ -81563,12 +81721,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (command === 'wizidentify' && game.flags?.debug) {
-                setOverlay([
-                    [0, 32, 'Debug Identify'],
-                    [1, 32, '(all items are permanently identified already)'],
-                    [2, 32, '(end)'],
-                ], 3);
-                game._command_mode = 'simpleOverlay';
+                await beginWizardIdentify();
                 return;
             }
 	            if (command === 'polyself' && game.flags?.debug) {
@@ -84789,6 +84942,11 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         await beginHeroFireProjectile(projectile, { readyMessage: autoquiverMessage });
+        return;
+    }
+
+    if (ch === '\t' && game.flags?.debug && !game._command_mode) {
+        await beginWizardIdentify();
         return;
     }
 

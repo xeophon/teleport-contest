@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,654 passing tests**, with no
+The latest source-driven checkpoint has **6,684 passing tests**, with no
 failures, skips or TODOs. All six generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -104,8 +104,14 @@ type knowledge from enchantment/charges, blessing, observation, contents, locks,
 artifact discovery and applicable erosion proofing. Native tags and existing
 class/name/index fields resolve without confusing the two ID namespaces.
 Artifact personal names use that predicate; 44 new source-state tests pass.
-The wizard selection UI and the remaining identify/discovery side effects
-are the next integration work.
+Wizard identification now reveals a read-only name view, accepts individual,
+class, page and all-object selections, and permanently identifies through a
+saved per-object continuation. C's bulk-selection exception, inventory-letter
+ordering, sorting toggle and More cancellation are preserved. Starting objects
+receive C's instance-known initialization. Twenty-nine new source-state tests
+and a fresh C oracle pass (108 screens and 2,737 random calls). General
+identify/discovery consumers, full object-name formatting and description-based
+inventory sorting remain integration work.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

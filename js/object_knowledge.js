@@ -1,5 +1,6 @@
 // C objnam.c:not_fully_identified and the object knowledge used by xname.
 import { game } from './gstate.js';
+import { A_WIS } from './const.js';
 import { OBJECT_DATA } from './object_data.js';
 
 const CLASSES = { weapon: 2, armor: 3, ring: 4, amulet: 5, tool: 6, food: 7,
@@ -19,7 +20,7 @@ export function objectTypeData(item) {
     const cls = CLASSES[item.cls] || ({ ')': 2, '[': 3, '=': 4, '"': 5, '(': 6,
         '%': 7, '!': 8, '?': 9, '+': 10, '/': 11, '$': 12, '*': 13, '`': 14 }[item.glyph]);
     const candidates = cls ? CLASS_TYPES[cls] : OBJECT_DATA;
-    for (const name of [item.actualKind, item.kind, item.spellName, item.wand,
+    for (const name of [item.actualKind, item.kind, item.spellName, item.spell?.name, item.wand,
         typeof item.otyp === 'string' ? item.otyp : '', item.gemDescription]) {
         if (!name) continue;
         const normalized = String(name).toLowerCase().replace(/ named .+$/, '')
@@ -70,4 +71,28 @@ export function objectIsFullyIdentified(item) {
     const damageable = material === 11 || material === 13 || rottable || flammable
         || material === 19 && type.class === 3;
     return !damageable;
+}
+
+// invent.c:fully_identify_obj. This mutates one object, including a container
+// itself; it never identifies that container's contents recursively.
+export function fullyIdentifyObject(item, D) {
+    const type = objectTypeData(item);
+    if (!type) return false;
+    const wasKnown = objectTypeIsKnown(item, type);
+    game._known_object_types ??= [];
+    if (!game._known_object_types.includes(type.id)) game._known_object_types.push(type.id);
+    if (!wasKnown) D.exercise(A_WIS, true);
+    D.discover(item, type);
+    const artifact = item.artifact || item.oartifact;
+    if (artifact) {
+        game._identified_artifacts ??= [];
+        if (!game._identified_artifacts.includes(artifact)) game._identified_artifacts.push(artifact);
+    }
+    if (!D.hallucinating) item.dknown = true;
+    item.known = item.bknown = item.rknown = true;
+    const container = type.id >= SYMBOLS.get('LARGE_BOX').id && type.id <= SYMBOLS.get('BAG_OF_TRICKS').id;
+    if (container || type.symbol === 'STATUE') item.cknown = item.lknown = true;
+    else if (type.symbol === 'TIN') item.cknown = true;
+    if (type.symbol === 'EGG' && item.corpsenm != null && item.corpsenm !== -1) D.learnEgg(item);
+    return true;
 }

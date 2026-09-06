@@ -1279,7 +1279,8 @@ function initInventoryObject(item, state, recordInventory = true, stackQuan = 1)
     const obj = item.random ? initRandomObject(item.cls, state) : initSpecificObject(item);
     applyRaceInventorySubstitution(obj, state.raceName);
     if ((obj.cls === 'weapon' || obj.cls === 'armor' || obj.kind === 'pick-axe') && obj.spe == null) obj.spe = 0;
-    if (obj.cls === 'weapon' || obj.cls === 'armor' || obj.kind === 'pick-axe') obj.known = true;
+    // C mksobj initializes non-uses_known types; ini_inv sets the rest.
+    obj.known = true;
     if (item.blessed !== undefined) {
         obj.blessed = item.blessed;
         obj.cursed = false;
