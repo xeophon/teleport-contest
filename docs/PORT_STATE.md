@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,181 passing tests**, with no
+The latest source-driven checkpoint has **7,185 passing tests**, with no
 failures, skips or TODOs. All nine generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -63,6 +63,11 @@ command tests cover sight/hallucination gates, discovery score and repeated use;
 a fresh two-zap C recording matches 45 screens/cursors and 2,104 random calls.
 Other wand rays, full digging terrain/engulfing behavior and serial message
 completion remain separate source work.
+The swallowed-cold completion path now retains the armor-on callback, so
+finished armor learns its enchantment and applies attribute bonuses once.
+Four new command/save tests pass; the affected recording matches all 219
+screens/cursors and 16,915 random calls. Broader swallowed-turn scheduling
+remains incomplete.
 
 Shop price quotes now accumulate buy/sell ranges by object type, survive saves,
 and appear through C's inventory, billing, floor-price, prompted-sale and

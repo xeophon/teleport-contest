@@ -68174,9 +68174,13 @@ function tutorialEnterStash() {
             game._pending_message = queuedFinish;
             game._keep_pending_message = 1;
         } else if (game._armor_wear_occupation) {
+            const occupation = game._armor_wear_occupation;
             game._armor_wear_occupation = null;
             game._pending_message = 'You finish your dressing maneuver.';
             game._keep_pending_message = 1;
+            if (occupation.action !== 'takeoff')
+                game._armor_don_knowledge_after_more = (game.inventory || [])
+                    .find(item => item.letter === occupation.itemLetter);
         }
         if (game._swallow_overlay_active && game._pending_message) {
             if (game._overlay_lines?.[0]) game._overlay_lines[0][2] = game._pending_message;

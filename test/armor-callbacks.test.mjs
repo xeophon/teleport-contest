@@ -111,6 +111,33 @@ for (const kind of ['helm of brilliance', 'gauntlets of dexterity']) test(`polym
     assert.equal(game.u.acurr.a[A_DEX], base[A_DEX]);
 });
 
+for (const saved of [false, true]) for (const kind of ['gray dragon scale mail', 'helm of brilliance'])
+    test(`${kind} finishes its callback after swallowed cold feedback, saved=${saved}`, async () => {
+        setup(kind, 3);
+        await rhack('W'); await rhack('a');
+        game._command_mode = 'swallowColdMore';
+        game._message_more = 1;
+        game._pending_message = 'You are freezing to death!';
+        assert.equal(game.inventory[0].known, false);
+        await rhack('z');
+        assert.equal(game.inventory[0].known, false);
+        if (saved) {
+            const { coreCtx, displayCtx, rng } = game;
+            restoreSaveState(encodeSaveState()); Object.assign(game, { coreCtx, displayCtx, rng });
+        }
+        await rhack(' ');
+        const item = game.inventory[0];
+        assert.equal(item.known, true);
+        assert.equal(item._armorDonPending, false);
+        assert.equal(game._armor_wear_occupation, null);
+        assert.equal(game._armor_don_knowledge_after_more, null);
+        assert.equal(game.context.move, 0);
+        assert.equal(game._pending_message, 'You finish your dressing maneuver.');
+        assert.equal(game.u.abon.a[A_INT], kind === 'helm of brilliance' ? 3 : 0);
+        await rhack('i');
+        assert.equal(game.u.abon.a[A_INT], kind === 'helm of brilliance' ? 3 : 0);
+    });
+
 for (const kind of ['fumble boots', 'gauntlets of fumbling']) for (const source of ['none', 'timed', 'permanent', 'otherArmor']) {
     test(`${kind} callback respects ${source} fumbling source`, async () => {
         setup(kind);

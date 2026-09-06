@@ -1,5 +1,14 @@
 # Objects, player magic, and attributes
 
+## Swallowed armor callback follow-up (2026-09-06)
+
+The existing swallowed-cold completion branch now retains the armor-on callback
+through the shared pending completion field, following `hack.c:unmul`'s
+message-before-`afternmv` boundary. Four tests cover body armor, brilliance,
+ignored input and saved state; the 219-screen affected recording fully matches
+again. This fixes dropped completion state, not the broader swallowed-cold
+damage/timing approximations still present in the turn loop.
+
 ## Digging-wand knowledge follow-up (2026-09-06)
 
 `zap.c:weffects/learnwand` now applies Wisdom exercise before digging and type
