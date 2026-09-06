@@ -53,12 +53,12 @@ import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 import { processBuriedOrganicRot, meltIceAway, removedFromIcebox } from './ice.js';
 import { runObjectBurnTimer } from './cmd.js';
-import { BURN_OBJECT, MELT_ICE_AWAY, runTimers } from './timeout.js';
+import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, MELT_ICE_AWAY, runTimers } from './timeout.js';
 import { objectLocations } from './obj_location.js';
 import { restoreLifeSavedBody } from './end.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
-import { eggHatchMonsterData, eggHasHatchTimer, isEggObject, killEggHatchTimer } from './egg_timers.js';
+import { attachEggHatchTimeout, eggHatchMonsterData, killEggHatchTimer } from './egg_timers.js';
 import { metallivoreObjectResists, monsterCouldEatMetalItem as sharedMonsterCouldEatMetalItem, monsterIsMetallivore, monsterIsRustMonster } from './metallivore.js';
 
 const ROLE_STATE = {
@@ -4037,13 +4037,6 @@ function removeHatchedEgg(entry) {
     }
 }
 
-function rescheduleHatchedEggStack(egg) {
-    const delay = rnd(12);
-    egg.eggHatchTurn = (game.moves || 1) + delay;
-    egg._egg_hatch_consumed = true;
-    egg._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
-}
-
 function ensureHatchedPetExtension(mon) {
     mon.mextra ??= {};
     mon.mextra.edog ??= {
@@ -4095,129 +4088,54 @@ function reportEggHatch(entry, mon, hatchcount, x, y, yours) {
     }
 }
 
-function containedObjectChildren(obj) {
-    const lists = [];
-    if (Array.isArray(obj?.contents)) lists.push(obj.contents);
-    if (Array.isArray(obj?.cobj) && obj.cobj !== obj.contents) lists.push(obj.cobj);
-    return lists.flat();
-}
-
-function appendContainedDueEggEntries(entries, container, context, seen, moves) {
-    for (const child of containedObjectChildren(container)) {
-        if (!child || seen.has(child)) continue;
-        seen.add(child);
-        if (isEggObject(child) && eggHasHatchTimer(child) && child.eggHatchTurn <= moves)
-            entries.push({ egg: child, source: 'contained', container, ...context });
-        appendContainedDueEggEntries(entries, child, context, seen, moves);
+// C timeout.c hatch_egg: blocked species still consume the ownership and
+// stack-size draws. Containers and migrating objects have no hatch location.
+export async function hatchEgg(egg, timeout, g = game) {
+    const location = objectLocations(g).get(egg);
+    killEggHatchTimer(egg, g);
+    if (!location || !egg.corpsenm?.name) return;
+    const source = location.parent ? 'contained' : location.buried ? 'buried' : location.source;
+    const entry = { egg, source, carrier: location.owner, silent: timeout !== g.moves };
+    const yours = !!egg.spe || (source === 'inventory' && !g.flags?.female && !rn2(2));
+    if (source === 'contained' || source === 'buried' || source === 'migrating') return;
+    const { x, y } = eggObjectLocation(entry);
+    const targetCount = rnd(Math.max(1, egg.quan || 1));
+    const data = eggHatchMonsterData(egg, g);
+    if (!data) return;
+    let hatched = 0;
+    let lastMon = null;
+    for (let i = 0; i < targetCount; i++) {
+        const spot = enextoMonsterSpot(x, y, data);
+        if (!spot) break;
+        const mon = await makemon(data, spot.x, spot.y, NO_MINVENT | MM_NOMSG);
+        if (!mon) break;
+        tameHatchedMonster(mon, entry, yours);
+        newsym(mon.mx, mon.my);
+        lastMon = mon;
+        // C breaks before decrementing its loop counter if this birth
+        // exhausts the species, so this last monster consumes no egg.
+        if ((g._extinct_monsters || []).includes(data.name)) break;
+        hatched++;
     }
-}
-
-function appendInertDueEggEntries(entries, objects, source, seen, moves, context = {}) {
-    if (!Array.isArray(objects)) return;
-    for (const obj of objects) {
-        if (!obj || seen.has(obj)) continue;
-        seen.add(obj);
-        if (isEggObject(obj) && eggHasHatchTimer(obj) && obj.eggHatchTurn <= moves)
-            entries.push({ egg: obj, source, ...context });
-        appendInertDueEggEntries(entries, containedObjectChildren(obj), source, seen, moves, context);
-    }
-}
-
-function appendMigratingDueEggEntries(entries, g, seen, moves) {
-    if (g._impact_drop_migrations instanceof Map) {
-        for (const objects of g._impact_drop_migrations.values())
-            appendInertDueEggEntries(entries, objects, 'migrating', seen, moves);
-    }
-    appendInertDueEggEntries(entries, g.migrating_objs, 'migrating', seen, moves);
-    appendInertDueEggEntries(entries, g._migrating_objs, 'migrating', seen, moves);
-    for (const carrier of [...(g.migrating_mons || []), ...(g._migrating_mons || [])])
-        appendInertDueEggEntries(entries, carrier?.minvent, 'migrating', seen, moves, { carrier });
-}
-
-function dueEggEntries(g) {
-    const entries = [];
-    const containedSeen = new Set();
-    const inertSeen = new Set();
-    const moves = g.moves || 0;
-    for (const egg of [...(g.inventory || [])]) {
-        if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
-            entries.push({ egg, source: 'inventory' });
-        appendContainedDueEggEntries(entries, egg, { containerSource: 'inventory' }, containedSeen, moves);
-    }
-    for (const egg of [...(g.level?.objects || [])]) {
-        if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
-            entries.push({ egg, source: 'floor' });
-        appendContainedDueEggEntries(entries, egg, { containerSource: 'floor' }, containedSeen, moves);
-    }
-    for (const carrier of [...(g.level?.monsters || [])]) {
-        for (const egg of [...(carrier.minvent || [])]) {
-            if (isEggObject(egg) && eggHasHatchTimer(egg) && egg.eggHatchTurn <= moves)
-                entries.push({ egg, source: 'minvent', carrier });
-            appendContainedDueEggEntries(entries, egg, { containerSource: 'minvent', carrier }, containedSeen, moves);
-        }
-    }
-    appendInertDueEggEntries(entries, g.level?.buriedobjlist, 'buried', inertSeen, moves);
-    appendMigratingDueEggEntries(entries, g, inertSeen, moves);
-    return entries.sort((a, b) => ((a.egg.eggHatchTurn || 0) - (b.egg.eggHatchTurn || 0))
-        || ((b.egg._egg_hatch_seq || 0) - (a.egg._egg_hatch_seq || 0)));
+    if (!lastMon) return;
+    egg.quan = Math.max(0, (egg.quan || 1) - hatched);
+    reportEggHatch(entry, lastMon, hatched, x, y, yours);
+    g._egg_hatch_processed = (g._egg_hatch_processed || 0) + hatched;
+    if (egg.quan > 0) {
+        attachEggHatchTimeout(egg, rnd(12), g);
+        egg.owt = egg.quan;
+    } else removeHatchedEgg(entry);
 }
 
 export async function processEggHatchTimeouts(g = game) {
-    for (const entry of dueEggEntries(g)) {
-        const egg = entry.egg;
-        killEggHatchTimer(egg);
-        const data = eggHatchMonsterData(egg, g);
-        if (!data || entry.source === 'contained' || entry.source === 'buried' || entry.source === 'migrating') continue;
-
-        const yours = !!egg.spe || (entry.source === 'inventory' && !game.flags?.female && !rn2(2));
-        const { x, y } = eggObjectLocation(entry);
-        const targetCount = rnd(Math.max(1, egg.quan || 1));
-        let hatched = 0;
-        let lastMon = null;
-        for (let i = 0; i < targetCount; i++) {
-            const spot = enextoMonsterSpot(x, y, data);
-            if (!spot) break;
-            const mon = await makemon(data, spot.x, spot.y, NO_MINVENT | MM_NOMSG);
-            if (!mon) break;
-            tameHatchedMonster(mon, entry, yours);
-            newsym(mon.mx, mon.my);
-            lastMon = mon;
-            hatched++;
-        }
-        if (!hatched) continue;
-
-        egg.quan = Math.max(0, (egg.quan || 1) - hatched);
-        reportEggHatch(entry, lastMon, hatched, x, y, yours);
-        game._egg_hatch_processed = (game._egg_hatch_processed || 0) + hatched;
-        if ((egg.quan || 0) > 0) rescheduleHatchedEggStack(egg);
-        else removeHatchedEgg(entry);
-    }
+    await runTimers({ [HATCH_EGG]: { run: hatchEgg } }, g,
+        timer => timer.func === HATCH_EGG && !objectLocations(g, true).get(timer.arg)?.saved);
 }
 
 function figurineTransformLocation(entry) {
     if (entry.source === 'inventory') return { x: game.u?.ux || 0, y: game.u?.uy || 0 };
     if (entry.source === 'minvent') return { x: entry.carrier?.mx || 0, y: entry.carrier?.my || 0 };
     return { x: entry.figurine.ox || 0, y: entry.figurine.oy || 0 };
-}
-
-function dueFigurineEntries(g) {
-    const entries = [];
-    for (const figurine of [...(g.inventory || [])]) {
-        if (isFigurineObject(figurine) && figurine.figurineTransformTurn && figurine.figurineTransformTurn <= g.moves)
-            entries.push({ figurine, source: 'inventory' });
-    }
-    for (const figurine of [...(g.level?.objects || [])]) {
-        if (isFigurineObject(figurine) && figurine.figurineTransformTurn && figurine.figurineTransformTurn <= g.moves)
-            entries.push({ figurine, source: 'floor' });
-    }
-    for (const carrier of [...(g.level?.monsters || [])]) {
-        for (const figurine of [...(carrier.minvent || [])]) {
-            if (isFigurineObject(figurine) && figurine.figurineTransformTurn && figurine.figurineTransformTurn <= g.moves)
-                entries.push({ figurine, source: 'minvent', carrier });
-        }
-    }
-    return entries.sort((a, b) => ((a.figurine.figurineTransformTurn || 0) - (b.figurine.figurineTransformTurn || 0))
-        || ((b.figurine._figurine_transform_seq || 0) - (a.figurine._figurine_transform_seq || 0)));
 }
 
 function removeTransformedFigurine(entry) {
@@ -4255,34 +4173,38 @@ function reportFigurineTransform(entry, mon, x, y, silent) {
     }
 }
 
-async function processFigurineTransformTimeouts(g) {
-    for (const entry of dueFigurineEntries(g)) {
-        const figurine = entry.figurine;
-        const timeout = figurine.figurineTransformTurn;
-        stopFigurineTransformTimeout(figurine);
-        let { x, y } = figurineTransformLocation(entry);
-        if (entry.source === 'inventory' || entry.source === 'minvent') {
-            const spot = enextoMonsterSpot(x, y, figurine.corpsenm || {});
-            if (!spot) {
-                attachFigurineTransformTimeout(figurine, rnd(5000));
-                continue;
-            }
-            x = spot.x;
-            y = spot.y;
-        }
-        const check = figurineLocationCheck(figurine, x, y);
-        if (!check.ok) {
-            attachFigurineTransformTimeout(figurine, rnd(5000));
-            continue;
-        }
-        const result = await makeFigurineFamiliar(figurine, x, y, { quietly: true });
-        removeTransformedFigurine(entry);
-        reportFigurineTransform(entry, result.mon, x, y, timeout !== g.moves);
+export async function transformFigurine(figurine, timeout, g = game) {
+    const location = objectLocations(g).get(figurine);
+    stopFigurineTransformTimeout(figurine, g);
+    if (!location) return;
+    if (location.parent || location.buried || location.source === 'migrating') {
+        attachFigurineTransformTimeout(figurine, rnd(5000), g);
+        return;
     }
+    const entry = { figurine, source: location.source, carrier: location.owner };
+    let { x, y } = figurineTransformLocation(entry);
+    if (entry.source === 'inventory' || entry.source === 'minvent') {
+        const spot = enextoMonsterSpot(x, y, figurine.corpsenm || {});
+        if (!spot) {
+            attachFigurineTransformTimeout(figurine, rnd(5000), g);
+            return;
+        }
+        x = spot.x;
+        y = spot.y;
+    }
+    if (!figurineLocationCheck(figurine, x, y).ok) {
+        attachFigurineTransformTimeout(figurine, rnd(5000), g);
+        return;
+    }
+    const result = await makeFigurineFamiliar(figurine, x, y, { quietly: true });
+    removeTransformedFigurine(entry);
+    reportFigurineTransform(entry, result.mon, x, y, timeout !== g.moves);
 }
 
 export async function processGameTimers(g = game) {
     const handlers = {
+        [HATCH_EGG]: { run: hatchEgg },
+        [FIG_TRANSFORM]: { run: transformFigurine },
         [BURN_OBJECT]: { run: runObjectBurnTimer },
         [MELT_ICE_AWAY]: { run: (where, time) => meltIceAway(where, time, {
             afterMelt: (x, y, result) => result.becameLiquid
@@ -4299,8 +4221,6 @@ async function afterMoveTurn(g, includeHeroTime = true) {
     for (const msg of await processCorpseTimers(g)) addToplineMessage(msg);
     for (const msg of processGlobShrinkTimers(g)) addToplineMessage(msg);
     processBuriedOrganicRot(g);
-    await processEggHatchTimeouts(g);
-    await processFigurineTransformTimeouts(g);
     if (includeHeroTime && g.moves >= (g.context.seer_turn || 0)) {
         if (g._prayer_debug_pleased && (g._prayer_pending_done && (g._pending_time_passed || 0) <= 1
             || (g._pending_prayer_finish_message

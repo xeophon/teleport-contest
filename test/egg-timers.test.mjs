@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resetGame } from '../js/gstate.js';
+import { game, resetGame } from '../js/gstate.js';
+import { HATCH_EGG, TIMER_OBJECT, startTimer } from '../js/timeout.js';
+import { initRng } from '../js/rng.js';
 import {
     eggHatchMonsterData,
     killDeadSpeciesEggHatchTimers,
@@ -12,6 +14,7 @@ const EGG = 10001;
 
 function installTimerTestGame() {
     const g = resetGame();
+    initRng(1);
     g.moves = 100;
     g.flags = {};
     g.inventory = [];
@@ -26,7 +29,7 @@ function installTimerTestGame() {
 }
 
 function timedEgg(name, extra = {}) {
-    return {
+    const egg = {
         otyp: EGG,
         kind: 'egg',
         quan: 1,
@@ -36,6 +39,8 @@ function timedEgg(name, extra = {}) {
         _egg_hatch_consumed: true,
         ...extra,
     };
+    startTimer(egg.eggHatchTurn - game.moves, TIMER_OBJECT, HATCH_EGG, egg);
+    return egg;
 }
 
 function assertEggHatchTimerCleared(egg) {

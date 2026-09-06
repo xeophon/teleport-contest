@@ -5,6 +5,8 @@
 // Copyright (c) 1992 by Dean Luick
 // Copyright (c) 1991-2 by M. Stephenson
 // Copyright (c) 1991,92 by M. Stephenson
+// Copyright (c) 1991-92 by M. Stephenson, P. Winner
+// Copyright (c) 1992 by David Cohrs
 // NetHack may be freely redistributed. See nethack-c/upstream/dat/license.
 // Preserve declaration order: geometry and population share the live RNG.
 export const QUEST_LEVELS = {
@@ -4627,6 +4629,1836 @@ export const QUEST_LEVELS = {
         [
           "monster",
           "xorn"
+        ]
+      ]
+    }
+  },
+  "Samurai": {
+    "x-goal": {
+      "source": "Sam-goal.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": " "
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "noteleport"
+        ],
+        [
+          "map",
+          "                                             \n           .......................           \n       ......-------------------......       \n    ......----.................----......    \n   ....----.....-------------.....----....   \n  ....--.....----...........----.....--....  \n  ...||....---....---------....---....||...  \n  ...|....--....---.......---....--....|...  \n ....|...||...---...--+--...---...||...|.... \n ....|...|....|....|-...-|....|....|...|.... \n ....|...|....|....+.....+....|....|...|.... \n ....|...|....|....|-...-|....|....|...|.... \n ....|...||...---...--+--...---...||...|.... \n  ...|....--....---.......---....--....|...  \n  ...||....---....---------....---....||...  \n  ....--.....----...........----.....--....  \n   ....----.....-------------.....----....   \n    ......----.................----......    \n       ......-------------------......       \n           .......................           "
+        ],
+        [
+          "@local",
+          "place",
+          [
+            [
+              2,
+              11
+            ],
+            [
+              42,
+              9
+            ]
+          ]
+        ],
+        [
+          "@local",
+          "placeidx",
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              1,
+              {
+                "lua": "unary",
+                "op": "#",
+                "operand": {
+                  "lua": "var",
+                  "name": "place"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              44,
+              19
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "door",
+          "closed",
+          19,
+          10
+        ],
+        [
+          "door",
+          "closed",
+          22,
+          8
+        ],
+        [
+          "door",
+          "closed",
+          22,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          25,
+          10
+        ],
+        [
+          "stair",
+          {
+            "dir": "up",
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": {
+                "lua": "var",
+                "name": "placeidx"
+              }
+            }
+          }
+        ],
+        [
+          "@local",
+          "place",
+          [
+            [
+              22,
+              14
+            ],
+            [
+              30,
+              10
+            ],
+            [
+              22,
+              6
+            ],
+            [
+              14,
+              10
+            ]
+          ]
+        ],
+        [
+          "@local",
+          "placeidx",
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              1,
+              {
+                "lua": "unary",
+                "op": "#",
+                "operand": {
+                  "lua": "var",
+                  "name": "place"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          "terrain",
+          {
+            "lua": "index",
+            "value": {
+              "lua": "var",
+              "name": "place"
+            },
+            "index": {
+              "lua": "var",
+              "name": "placeidx"
+            }
+          },
+          "."
+        ],
+        [
+          "@local",
+          "place",
+          [
+            [
+              22,
+              4
+            ],
+            [
+              35,
+              10
+            ],
+            [
+              22,
+              16
+            ],
+            [
+              9,
+              10
+            ]
+          ]
+        ],
+        [
+          "@local",
+          "placeidx",
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              1,
+              {
+                "lua": "unary",
+                "op": "#",
+                "operand": {
+                  "lua": "var",
+                  "name": "place"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          "terrain",
+          {
+            "lua": "index",
+            "value": {
+              "lua": "var",
+              "name": "place"
+            },
+            "index": {
+              "lua": "var",
+              "name": "placeidx"
+            }
+          },
+          "."
+        ],
+        [
+          "@local",
+          "place",
+          [
+            [
+              22,
+              2
+            ],
+            [
+              22,
+              18
+            ]
+          ]
+        ],
+        [
+          "@local",
+          "placeidx",
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              1,
+              {
+                "lua": "unary",
+                "op": "#",
+                "operand": {
+                  "lua": "var",
+                  "name": "place"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          "terrain",
+          {
+            "lua": "index",
+            "value": {
+              "lua": "var",
+              "name": "place"
+            },
+            "index": {
+              "lua": "var",
+              "name": "placeidx"
+            }
+          },
+          "."
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              44,
+              19
+            ]
+          }
+        ],
+        [
+          "object",
+          {
+            "id": "tsurugi",
+            "x": 22,
+            "y": 10,
+            "buc": "blessed",
+            "spe": 0,
+            "name": "The Tsurugi of Muramasa"
+          }
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "trap",
+          "board",
+          22,
+          9
+        ],
+        [
+          "trap",
+          "board",
+          24,
+          10
+        ],
+        [
+          "trap",
+          "board",
+          22,
+          11
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          "Ashikaga Takauji",
+          22,
+          10
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "wolf"
+        ],
+        [
+          "monster",
+          "wolf"
+        ],
+        [
+          "monster",
+          "wolf"
+        ],
+        [
+          "monster",
+          "wolf"
+        ],
+        [
+          "monster",
+          "d"
+        ],
+        [
+          "monster",
+          "d"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ]
+      ]
+    },
+    "x-loca": {
+      "source": "Sam-loca.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": " "
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "hardfloor"
+        ],
+        [
+          "map",
+          "............................................................................\n............................................................................\n........-----..................................................-----........\n........|...|..................................................|...|........\n........|...---..}..--+------------------------------+--..}..---...|........\n........|-|...|.....|...|....|....|....|....|....|.|...|.....|...|-|........\n..........|...-------...|....|....|....|....|....S.|...-------...|..........\n..........|-|.........------+----+-+-------+-+--------.........|-|..........\n............|..--------.|}........................}|.--------..|............\n............|..+........+..........................+........+..|............\n............|..+........+..........................+........+..|............\n............|..--------.|}........................}|.--------..|............\n..........|-|.........--------+-+-------+-+----+------.........|-|..........\n..........|...-------...|.S....|....|....|....|....|...-------...|..........\n........|-|...|.....|...|.|....|....|....|....|....|...|.....|...|-|........\n........|...---..}..--+------------------------------+--..}..---...|........\n........|...|..................................................|...|........\n........-----..................................................-----........\n............................................................................\n............................................................................"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              75,
+              19
+            ]
+          },
+          "lit"
+        ],
+        [
+          "door",
+          "locked",
+          22,
+          4
+        ],
+        [
+          "door",
+          "locked",
+          22,
+          15
+        ],
+        [
+          "door",
+          "locked",
+          53,
+          4
+        ],
+        [
+          "door",
+          "locked",
+          53,
+          15
+        ],
+        [
+          "door",
+          "locked",
+          49,
+          6
+        ],
+        [
+          "door",
+          "locked",
+          26,
+          13
+        ],
+        [
+          "door",
+          "locked",
+          28,
+          7
+        ],
+        [
+          "door",
+          "locked",
+          30,
+          12
+        ],
+        [
+          "door",
+          "locked",
+          33,
+          7
+        ],
+        [
+          "door",
+          "locked",
+          32,
+          12
+        ],
+        [
+          "door",
+          "locked",
+          35,
+          7
+        ],
+        [
+          "door",
+          "locked",
+          40,
+          12
+        ],
+        [
+          "door",
+          "locked",
+          43,
+          7
+        ],
+        [
+          "door",
+          "locked",
+          42,
+          12
+        ],
+        [
+          "door",
+          "locked",
+          45,
+          7
+        ],
+        [
+          "door",
+          "locked",
+          47,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          15,
+          9
+        ],
+        [
+          "door",
+          "closed",
+          15,
+          10
+        ],
+        [
+          "door",
+          "closed",
+          24,
+          9
+        ],
+        [
+          "door",
+          "closed",
+          24,
+          10
+        ],
+        [
+          "door",
+          "closed",
+          51,
+          9
+        ],
+        [
+          "door",
+          "closed",
+          51,
+          10
+        ],
+        [
+          "door",
+          "closed",
+          60,
+          9
+        ],
+        [
+          "door",
+          "closed",
+          60,
+          10
+        ],
+        [
+          "stair",
+          "up",
+          10,
+          10
+        ],
+        [
+          "stair",
+          "down",
+          25,
+          14
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              75,
+              19
+            ]
+          }
+        ],
+        [
+          "object",
+          "*",
+          25,
+          5
+        ],
+        [
+          "object",
+          "*",
+          26,
+          5
+        ],
+        [
+          "object",
+          "*",
+          27,
+          5
+        ],
+        [
+          "object",
+          "*",
+          28,
+          5
+        ],
+        [
+          "object",
+          "*",
+          25,
+          6
+        ],
+        [
+          "object",
+          "*",
+          26,
+          6
+        ],
+        [
+          "object",
+          "*",
+          27,
+          6
+        ],
+        [
+          "object",
+          "*",
+          28,
+          6
+        ],
+        [
+          "object",
+          "[",
+          40,
+          5
+        ],
+        [
+          "object",
+          "[",
+          41,
+          5
+        ],
+        [
+          "object",
+          "[",
+          42,
+          5
+        ],
+        [
+          "object",
+          "[",
+          43,
+          5
+        ],
+        [
+          "object",
+          "[",
+          40,
+          6
+        ],
+        [
+          "object",
+          "[",
+          41,
+          6
+        ],
+        [
+          "object",
+          "[",
+          42,
+          6
+        ],
+        [
+          "object",
+          "[",
+          43,
+          6
+        ],
+        [
+          "object",
+          ")",
+          27,
+          13
+        ],
+        [
+          "object",
+          ")",
+          28,
+          13
+        ],
+        [
+          "object",
+          ")",
+          29,
+          13
+        ],
+        [
+          "object",
+          ")",
+          30,
+          13
+        ],
+        [
+          "object",
+          ")",
+          27,
+          14
+        ],
+        [
+          "object",
+          ")",
+          28,
+          14
+        ],
+        [
+          "object",
+          ")",
+          29,
+          14
+        ],
+        [
+          "object",
+          ")",
+          30,
+          14
+        ],
+        [
+          "object",
+          "(",
+          37,
+          13
+        ],
+        [
+          "object",
+          "(",
+          38,
+          13
+        ],
+        [
+          "object",
+          "(",
+          39,
+          13
+        ],
+        [
+          "object",
+          "(",
+          40,
+          13
+        ],
+        [
+          "object",
+          "(",
+          37,
+          14
+        ],
+        [
+          "object",
+          "(",
+          38,
+          14
+        ],
+        [
+          "object",
+          "(",
+          39,
+          14
+        ],
+        [
+          "object",
+          "(",
+          40,
+          14
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 15,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 16,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "wolf",
+          17,
+          5
+        ],
+        [
+          "monster",
+          "wolf",
+          18,
+          5
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 19,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "wolf",
+          15,
+          14
+        ],
+        [
+          "monster",
+          "wolf",
+          16,
+          14
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 17,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 18,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "wolf",
+          56,
+          5
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 57,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "wolf",
+          58,
+          5
+        ],
+        [
+          "monster",
+          "wolf",
+          59,
+          5
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 56,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "wolf",
+          57,
+          14
+        ],
+        [
+          "monster",
+          {
+            "id": "ninja",
+            "x": 58,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "d",
+          59,
+          14
+        ],
+        [
+          "monster",
+          "wolf",
+          60,
+          14
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          "stalker"
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "x": 30,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "x": 31,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "x": 32,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "x": 32,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "x": 33,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "samurai",
+            "x": 34,
+            "y": 14,
+            "peaceful": 0
+          }
+        ]
+      ]
+    }
+  },
+  "Wizard": {
+    "x-goal": {
+      "source": "Wiz-goal.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": " "
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel"
+        ],
+        [
+          "map",
+          "                                                                            \n                                                                            \n                                                                            \n                   -------------                 -------------              \n                   |...........|                 |...........|              \n            -------|...........-------------------...........|              \n            |......S...........|..|..|..|..|..|..|...........|              \n            |......|...........|..|..|..|..|..|..|...........|              \n            |......|...........-F+-F+-F+-F+-F+-F+-...........|              \n            --S----|...........S.................+...........|              \n            |......|...........-F+-F+-F+-F+-F+-F+-...........|              \n            |......|...........|..|..|..|..|..|..|...........|              \n            |......|...........|..|..|..|..|..|..|...........|              \n            -------|...........-------------------...........|              \n                   |...........|                 |...........|              \n                   -------------                 -------------              \n                                                                            \n                                                                            \n                                                                            \n                                                                            "
+        ],
+        [
+          "region",
+          {
+            "region": [
+              13,
+              10,
+              18,
+              12
+            ],
+            "lit": 0,
+            "type": "temple",
+            "filled": 2
+          }
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              13,
+              6,
+              18,
+              8
+            ]
+          },
+          "lit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              20,
+              4,
+              30,
+              14
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              32,
+              6,
+              33,
+              7
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              35,
+              6,
+              36,
+              7
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              38,
+              6,
+              39,
+              7
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              41,
+              6,
+              42,
+              7
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              44,
+              6,
+              45,
+              7
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              47,
+              6,
+              48,
+              7
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              32,
+              9,
+              48,
+              9
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              32,
+              11,
+              33,
+              12
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              35,
+              11,
+              36,
+              12
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              38,
+              11,
+              39,
+              12
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              41,
+              11,
+              42,
+              12
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              44,
+              11,
+              45,
+              12
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              47,
+              11,
+              48,
+              12
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              50,
+              4,
+              60,
+              14
+            ]
+          },
+          "lit"
+        ],
+        [
+          "door",
+          "locked",
+          19,
+          6
+        ],
+        [
+          "door",
+          "locked",
+          14,
+          9
+        ],
+        [
+          "door",
+          "locked",
+          31,
+          9
+        ],
+        [
+          "door",
+          "locked",
+          33,
+          8
+        ],
+        [
+          "door",
+          "locked",
+          36,
+          8
+        ],
+        [
+          "door",
+          "locked",
+          39,
+          8
+        ],
+        [
+          "door",
+          "locked",
+          42,
+          8
+        ],
+        [
+          "door",
+          "locked",
+          45,
+          8
+        ],
+        [
+          "door",
+          "locked",
+          48,
+          8
+        ],
+        [
+          "door",
+          "locked",
+          33,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          36,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          39,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          42,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          45,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          48,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          49,
+          9
+        ],
+        [
+          "stair",
+          "up",
+          55,
+          5
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              75,
+              19
+            ]
+          }
+        ],
+        [
+          "altar",
+          {
+            "coord": [
+              16,
+              11
+            ],
+            "aligned": "noncoaligned",
+            "type": "altar"
+          }
+        ],
+        [
+          "object",
+          {
+            "id": "amulet of ESP",
+            "x": 16,
+            "y": 11,
+            "buc": "blessed",
+            "spe": 0,
+            "name": "The Eye of the Aethiopica"
+          }
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          "Dark One",
+          16,
+          11
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "B",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          "vampire bat"
+        ],
+        [
+          "monster",
+          {
+            "class": "i",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "rogue",
+            "x": 35,
+            "y": 6,
+            "peaceful": 1,
+            "name": "Pug"
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "owlbear",
+            "x": 47,
+            "y": 6,
+            "peaceful": 1,
+            "asleep": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "wizard",
+            "x": 32,
+            "y": 11,
+            "peaceful": 1,
+            "asleep": 1,
+            "name": "Newt"
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "Grey-elf",
+            "x": 44,
+            "y": 11,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "hill giant",
+            "x": 47,
+            "y": 11,
+            "peaceful": 1,
+            "asleep": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "gnomish wizard",
+            "x": 38,
+            "y": 6,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "prisoner",
+            "x": 35,
+            "y": 11,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "prisoner",
+            "x": 41,
+            "y": 11,
+            "peaceful": 1,
+            "asleep": 1
+          }
         ]
       ]
     }

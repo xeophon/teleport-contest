@@ -28,6 +28,7 @@ import { datFileText } from './dat_files.js';
 import { TRIBUTE_NOVEL_TITLES } from './tribute.js';
 import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, objectIceEffect, restoreBuriedBallIfNeeded, scheduleMeltIceTimeout, startCorpseTimeout } from './ice.js';
 import { applySlimeMoldFruitFields } from './fruit.js';
+import { attachEggHatchTimeout } from './egg_timers.js';
 import { QUEST_FILLERS } from './quest_filler_data.js';
 import { QUEST_LEVELS } from './quest_level_data.js';
 import * as questSpecies from './permonst.js';
@@ -4217,7 +4218,7 @@ export function mksobj(otyp, init, artif) {
 // objects created during mklev.
 // C ref: mkobj.c — scroll identities implied by specific otyps; index is the
 // JS SCROLL_NAMES order (allmain.js:622), not the raw otyp value.
-const SCROLL_INDEX_BY_OTYP = new Map([[SCR_TELEPORTATION, 10]]);
+const SCROLL_INDEX_BY_OTYP = new Map([[SCR_TELEPORTATION, 10], [SCR_CREATE_MONSTER, 6], [SCR_EARTH, 17]]);
 
 function mksobj_init(otmp, otyp, artif) {
     // For BOULDER, GOLD_PIECE: no extra init RNG
@@ -4537,6 +4538,7 @@ function mksobj_init(otmp, otyp, artif) {
         || otyp === WAN_POLYMORPH || otyp === WAN_LIGHT) {
         const wandIndex = game._mkobj_wand_index;
         game._mkobj_wand_index = null;
+        if (otyp !== WAND_CLASS) Object.assign(otmp, { cls: 'wand', glyph: '/', wandIndex: wandIndexForObject(otmp) });
         if (otyp === WAND_CLASS && wandIndex === 4) {
             otmp.spe = 1;
             blessorcurse(otmp, 17);
@@ -4690,6 +4692,11 @@ function wandIndexForObject(otmp) {
     if (otmp.otyp === WAN_TELEPORTATION) return 14;
     if (otmp.otyp === WAN_DIGGING) return 18;
     if (otmp.otyp === WAN_MAGIC_MISSILE) return 19;
+    if (otmp.otyp === WAN_FIRE) return 20;
+    if (otmp.otyp === WAN_COLD) return 21;
+    if (otmp.otyp === WAN_SLEEP) return 22;
+    if (otmp.otyp === WAN_DEATH) return 23;
+    if (otmp.otyp === WAN_LIGHTNING) return 24;
     return null;
 }
 
@@ -4803,6 +4810,53 @@ function mksobj_at(otyp, x, y, init, artif) {
     return place_object(mksobj(otyp, init, artif), x, y);
 }
 
+// Construct a chosen type using the same class initialization as mkobj.
+function makeEquipment(oclass, roll, init, artif) {
+    if (oclass === ARMOR_CLASS) {
+        const glassArmor = (roll >= 31 && roll <= 36) || (roll >= 107 && roll <= 116);
+        const copperArmor = roll >= 117 && roll <= 139;
+        const nonErodingArmor = (roll >= 263 && roll <= 287) || (roll >= 827 && roll <= 833);
+        if (init) {
+            game._mkobj_armor_autocurse = (roll >= 53 && roll <= 62)
+                || (roll >= 849 && roll <= 856)
+                || roll >= 977;
+            game._mkobj_armor_erosion = {
+                primary: !nonErodingArmor && !copperArmor,
+                secondary: !nonErodingArmor && !glassArmor,
+            };
+        }
+        const otmp = mksobj(ARMOR_CLASS, init, artif);
+        otmp.cls = 'armor';
+        otmp.kind = ARMOR_ROLL_KINDS.find(([max]) => roll <= max)?.[1] || 'armor';
+        const colorKey = ARMOR_APPEARANCE_COLOR_KEYS[otmp.kind];
+        otmp._display_color = colorKey
+            ? game._object_descriptions?.[colorKey[0]]?.[colorKey[1]] ?? objectColorForRoll(roll, ARMOR_ROLL_COLORS)
+            : objectColorForRoll(roll, ARMOR_ROLL_COLORS);
+        return otmp;
+    }
+    if (oclass === WEAPON_CLASS) {
+        const weapon = WEAPON_ROLL_KINDS.find(([upper]) => roll <= upper);
+        if (init) {
+            game._mkobj_weapon_multigen = roll <= 272;
+            game._mkobj_weapon_poisonable = roll <= 272;
+            game._mkobj_weapon_erodible = !WEAPON_NONERODIBLE_ROLLS.some(([lo, hi]) => roll >= lo && roll <= hi);
+            game._mkobj_weapon_actual_kind = weapon?.[1] || null;
+        }
+        const otmp = mksobj(WEAPON_CLASS, init, artif);
+        otmp._display_color = objectColorForRoll(roll, WEAPON_ROLL_COLORS);
+        if (weapon) {
+            const [, name, weight, appearance] = weapon;
+            Object.assign(otmp, {
+                cls: 'weapon',
+                kind: appearance || name,
+                actualKind: name,
+                owt: weight,
+            });
+        }
+        return otmp;
+    }
+}
+
 export function mkobj(oclass, artif) {
     if (oclass === RANDOM_CLASS) {
         let tprob = rnd(100);
@@ -4816,47 +4870,8 @@ export function mkobj(oclass, artif) {
             if (tprob <= 0) { oclass = cls; break; }
         }
     }
-    if (oclass === ARMOR_CLASS) {
-        const roll = rnd(1000);
-        const glassArmor = (roll >= 31 && roll <= 36) || (roll >= 107 && roll <= 116);
-        const copperArmor = roll >= 117 && roll <= 139;
-        const nonErodingArmor = (roll >= 263 && roll <= 287) || (roll >= 827 && roll <= 833);
-        game._mkobj_armor_autocurse = (roll >= 53 && roll <= 62)
-            || (roll >= 849 && roll <= 856)
-            || roll >= 977;
-        game._mkobj_armor_erosion = {
-            primary: !nonErodingArmor && !copperArmor,
-            secondary: !nonErodingArmor && !glassArmor,
-        };
-        const otmp = mksobj(ARMOR_CLASS, true, artif);
-        otmp.cls = 'armor';
-        otmp.kind = ARMOR_ROLL_KINDS.find(([max]) => roll <= max)?.[1] || 'armor';
-        const colorKey = ARMOR_APPEARANCE_COLOR_KEYS[otmp.kind];
-        otmp._display_color = colorKey
-            ? game._object_descriptions?.[colorKey[0]]?.[colorKey[1]] ?? objectColorForRoll(roll, ARMOR_ROLL_COLORS)
-            : objectColorForRoll(roll, ARMOR_ROLL_COLORS);
-        return otmp;
-    }
-    if (oclass === WEAPON_CLASS) {
-        const roll = rnd(1002);
-        const weapon = WEAPON_ROLL_KINDS.find(([upper]) => roll <= upper);
-        game._mkobj_weapon_multigen = roll <= 272;
-        game._mkobj_weapon_poisonable = roll <= 272;
-        game._mkobj_weapon_erodible = !WEAPON_NONERODIBLE_ROLLS.some(([lo, hi]) => roll >= lo && roll <= hi);
-        game._mkobj_weapon_actual_kind = weapon?.[1] || null;
-        const otmp = mksobj(WEAPON_CLASS, true, artif);
-        otmp._display_color = objectColorForRoll(roll, WEAPON_ROLL_COLORS);
-        if (weapon) {
-            const [, name, weight, appearance] = weapon;
-            Object.assign(otmp, {
-                cls: 'weapon',
-                kind: appearance || name,
-                actualKind: name,
-                owt: weight,
-            });
-        }
-        return otmp;
-    }
+    if (oclass === ARMOR_CLASS || oclass === WEAPON_CLASS)
+        return makeEquipment(oclass, rnd(oclass === ARMOR_CLASS ? 1000 : 1002), true, artif);
     if (oclass === GEM_CLASS) {
         const prob = rnd(1000);
         const otmp = mksobj(GEM_CLASS, false, artif);
@@ -5258,18 +5273,8 @@ function t_at(x, y) {
     return game.level?.traps?.find(trap => trap.tx === x && trap.ty === y) || null;
 }
 
-// set_corpsenm stub
 function set_corpsenm(otmp, pm) {
-    if (otmp?.otyp === EGG && otmp.corpsenm) {
-        for (let i = 151; i <= 200; i++) {
-            if (rnd(i) > 150) {
-                otmp.eggHatchTurn = (game.moves || 1) + i;
-                otmp._egg_hatch_consumed = true;
-                otmp._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
-                break;
-            }
-        }
-    }
+    if (otmp?.otyp === EGG && otmp.corpsenm) attachEggHatchTimeout(otmp);
 }
 
 function savedMonsterTraitsForCorpstat(mtmp) {
@@ -6535,6 +6540,7 @@ function mongets(otyp, erodes = true) {
     else if (otyp === WAN_POLYMORPH) Object.assign(otmp, { cls: 'wand', kind: 'polymorph', wandIndex: 12 });
     else if (otyp === WAN_NOTHING) Object.assign(otmp, { cls: 'wand', kind: 'nothing' });
     else if (otyp === WAN_WISHING) Object.assign(otmp, { cls: 'wand', glyph: '/', kind: 'wishing', wand: 'wishing', wandIndex: 4, known: false });
+    else if (otyp === AMULET_CLASS) Object.assign(otmp, { cls: 'amulet', kind: 'amulet of life saving', actualKind: 'amulet of life saving', amuletIndex: 1 });
     if (game._mongets_target) {
         game._mongets_target.minvent = [otmp, ...(game._mongets_target.minvent || [])];
         game._mongets_target.hasInventory = true;
@@ -7079,6 +7085,14 @@ function m_initweap(ptr) {
             game._mongets_target.minvent = [otmp, ...(game._mongets_target.minvent || [])];
             game._mongets_target.hasInventory = true;
         }
+    } else if (ptr.name === 'ninja') {
+        const missile = namedEquipment(rn2(4) ? 'shuriken' : 'dart');
+        Object.assign(missile, object_display(missile));
+        if (game._mongets_target) {
+            game._mongets_target.minvent = [missile, ...(game._mongets_target.minvent || [])];
+            game._mongets_target.hasInventory = true;
+        }
+        mongets(rn2(4) ? SHORT_SWORD : AXE);
     } else if (ptr.guardian && ptr.name === 'chieftain') {
         mongets(rn2(3) ? LONG_SWORD : SHORT_SWORD);
         mongets(rn2(3) ? CHAIN_MAIL : LEATHER_ARMOR);
@@ -9307,6 +9321,7 @@ function questMonsterData(data) {
         ...data, mlet: RNDMONST_MLET_BY_GLYPH.get(data.sym) || data.sym, glyph: data.sym,
         mlevel: data.lvl, hpLevel: adjustedMonsterLevel({ mlevel: data.lvl }),
         mac: data.ac, maligntyp: data.align, randomInventory: true,
+        mplayer: data.pm >= questSpecies.PM_ARCHEOLOGIST && data.pm <= questSpecies.PM_WIZARD,
         male: is_male(data), female: is_female(data), neuter: questSpecies.is_neuter(data),
         unique: !!(data.geno & questSpecies.G_UNIQ), noCorpse: !!(data.geno & questSpecies.G_NOCORPSE),
         nemesis: data.sound === questSpecies.MS_NEMESIS, waiting: !!(data.m3 & questSpecies.M3_WAITFORU),
@@ -9329,12 +9344,154 @@ function questMonsterData(data) {
     };
 }
 
+// C ref: objnam.c:rnd_class. The roll tables store cumulative object
+// probabilities; range selection must not add a second random-type roll.
+function equipmentInRange(oclass, first, last) {
+    const table = oclass === WEAPON_CLASS ? WEAPON_ROLL_KINDS : ARMOR_ROLL_KINDS;
+    const start = table.findIndex(row => row[1] === first);
+    const end = table.findIndex(row => row[1] === last);
+    const lower = table[start - 1]?.[0] || 0;
+    const roll = lower + rnd(table[end][0] - lower);
+    return table.find(row => roll <= row[0])[1];
+}
+
+function namedEquipment(name, init = true, artif = false) {
+    for (const [oclass, table] of [[WEAPON_CLASS, WEAPON_ROLL_KINDS], [ARMOR_CLASS, ARMOR_ROLL_KINDS]]) {
+        const row = table.find(entry => entry[1] === name);
+        if (row) return makeEquipment(oclass, row[0], init, artif);
+    }
+    // These weapons have zero random-generation probability and therefore
+    // have no interval in the class roll table (objects.h).
+    const fixed = {
+        athame: [ATHAME, 10, null], scalpel: [WEAPON_CLASS, 5, null],
+        yumi: [WEAPON_CLASS, 30, 'long bow'], tsurugi: [TSURUGI, 60, 'long samurai sword'],
+        runesword: [RUNESWORD, 40, 'runed broadsword'],
+        'unicorn horn': [TOOL_CLASS, 20, null],
+    }[name];
+    if (!fixed) return null;
+    const [otyp, mass, appearance] = fixed;
+    if (otyp === WEAPON_CLASS && init) {
+        game._mkobj_weapon_multigen = false;
+        game._mkobj_weapon_poisonable = false;
+        game._mkobj_weapon_erodible = true;
+        game._mkobj_weapon_actual_kind = name;
+    }
+    const obj = mksobj(otyp, init && otyp !== TOOL_CLASS, artif);
+    Object.assign(obj, { cls: otyp === TOOL_CLASS ? 'tool' : 'weapon',
+        kind: appearance || name, actualKind: name, owt: mass, _display_color: CLR_CYAN });
+    Object.assign(obj, object_display(obj));
+    return obj;
+}
+
+// C ref: mplayer.c:116-329, the non-endgame branch used by des.monster.
+// Armor choices still consume RNG here even though only endgame mplayers
+// receive that armor. The ordinary makemon inventory is retained.
+export async function mk_mplayer(ptr, x, y) {
+    const data = ptr && (QUEST_MONSTERS[ptr.pm] || QUEST_MONSTERS.find(mon => mon.name === ptr.name));
+    if (!data || data.pm < questSpecies.PM_ARCHEOLOGIST || data.pm > questSpecies.PM_WIZARD) return null;
+    if (ptr.mlevel == null) ptr = questMonsterData(data);
+    const mon = await makemon(ptr, x, y, 0);
+    if (!mon) return null;
+    mon.m_lev = rnd(16);
+    mon.mhp = mon.mhpmax = d(mon.m_lev, 10) + 30;
+    mon.mpeaceful = 0;
+    set_malign(mon);
+
+    let weapon = !rn2(2) ? 'long sword' : equipmentInRange(WEAPON_CLASS, 'spear', 'bullwhip');
+    rn2(10); // gray through yellow dragon scale mail, each with probability 0
+    if (rn2(8)) equipmentInRange(ARMOR_CLASS, 'oilskin cloak', 'cloak of displacement');
+    let helm = rn2(8) ? equipmentInRange(ARMOR_CLASS, 'elven leather helm', 'helm of telepathy') : null;
+    if (rn2(8)) equipmentInRange(ARMOR_CLASS, 'elven shield', 'shield of reflection');
+    switch (data.pm) {
+    case questSpecies.PM_ARCHEOLOGIST:
+        if (rn2(2)) weapon = 'bullwhip';
+        break;
+    case questSpecies.PM_BARBARIAN:
+        if (rn2(2)) weapon = rn2(2) ? 'two-handed sword' : 'battle-axe';
+        if (rn2(2)) equipmentInRange(ARMOR_CLASS, 'plate mail', 'chain mail');
+        break;
+    case questSpecies.PM_CAVE_DWELLER:
+        if (rn2(4)) weapon = 'mace';
+        else if (rn2(2)) weapon = 'club';
+        break;
+    case questSpecies.PM_HEALER:
+        if (rn2(4)) weapon = 'quarterstaff';
+        else if (rn2(2)) weapon = rn2(2) ? 'unicorn horn' : 'scalpel';
+        if (rn2(4)) helm = rn2(2) ? 'helm of brilliance' : 'helm of telepathy';
+        rn2(2);
+        break;
+    case questSpecies.PM_KNIGHT:
+        if (rn2(4)) weapon = 'long sword';
+        if (rn2(2)) equipmentInRange(ARMOR_CLASS, 'plate mail', 'chain mail');
+        break;
+    case questSpecies.PM_MONK:
+        weapon = !rn2(3) ? 'shuriken' : null;
+        rn2(2);
+        break;
+    case questSpecies.PM_CLERIC:
+        if (rn2(2)) weapon = 'mace';
+        if (rn2(2)) equipmentInRange(ARMOR_CLASS, 'plate mail', 'chain mail');
+        rn2(4);
+        if (rn2(4)) helm = rn2(2) ? 'helm of brilliance' : 'helm of telepathy';
+        rn2(2);
+        break;
+    case questSpecies.PM_RANGER:
+        if (rn2(2)) weapon = 'elven dagger';
+        break;
+    case questSpecies.PM_ROGUE:
+        if (rn2(2)) weapon = rn2(2) ? 'short sword' : 'orcish dagger';
+        break;
+    case questSpecies.PM_SAMURAI:
+        if (rn2(2)) weapon = 'katana';
+        break;
+    case questSpecies.PM_VALKYRIE:
+        if (rn2(2)) weapon = 'war hammer';
+        if (rn2(2)) equipmentInRange(ARMOR_CLASS, 'plate mail', 'chain mail');
+        break;
+    case questSpecies.PM_WIZARD:
+        if (rn2(4)) weapon = rn2(2) ? 'quarterstaff' : 'athame';
+        if (rn2(2)) rn2(2);
+        rn2(4);
+        break;
+    }
+    if (weapon) {
+        const obj = namedEquipment(weapon);
+        obj.oeroded = obj.oeroded2 = 0;
+        obj.spe = rn2(4);
+        if (!rn2(3)) obj.oerodeproof = true;
+        else if (!rn2(2)) obj.greased = true;
+        // weapon.c:rwep excludes tridents, athames, scalpels and boomerangs.
+        if (/spear$/.test(weapon) || ['javelin', 'shuriken', 'ya', 'silver arrow', 'elven arrow', 'arrow',
+            'orcish arrow', 'crossbow bolt', 'silver dagger', 'elven dagger', 'dagger', 'orcish dagger', 'knife', 'dart'].includes(weapon)) {
+            obj.quan += rn2(/spear$/.test(weapon) || weapon === 'javelin' ? 4 : 8);
+            obj.owt *= obj.quan;
+        }
+        Object.assign(obj, object_display(obj));
+        mon.minvent = [obj, ...(mon.minvent || [])];
+    }
+    const previous = game._mongets_target;
+    game._mongets_target = mon;
+    try {
+        for (const choose of [() => rnd_offensive_item(ptr), () => rnd_defensive_item(mon), () => rnd_misc_item(ptr, mon)]) {
+            for (let count = rnd(3); count > 0; count--) {
+                const otyp = choose();
+                if (otyp) mongets(otyp);
+            }
+        }
+    } finally {
+        game._mongets_target = previous;
+    }
+    mon.hasInventory = !!mon.minvent?.length;
+    return mon;
+}
+
 async function questFillerMonster(spec, area, croom, coord = null) {
     const name = typeof spec === 'string' ? spec : spec.id || spec.class;
     const named = name.length > 1;
     let ptr = named ? monsterByRndName(name) : null;
     let pm = named ? QUEST_MONSTERS.find(mon => mon.name === name) : null;
     if (!ptr && pm) ptr = questMonsterData(pm);
+    const mplayer = pm?.pm >= questSpecies.PM_ARCHEOLOGIST && pm?.pm <= questSpecies.PM_WIZARD;
     const gender = !named ? 0 : is_female(pm) ? 1 : is_male(pm) ? 0 : rn2(2);
     // sp_lev.c:find_montype precedes create_monster's alignment and class rolls.
     inducedAlign80();
@@ -9362,7 +9519,7 @@ async function questFillerMonster(spec, area, croom, coord = null) {
     if (game.level.monsters.some(mon => mon.mx === pos.x && mon.my === pos.y))
         pos = enextoMonsterSpot(pos.x, pos.y, ptr || {});
     if (!pos || (croom && !splevInsideRoom(croom, pos.x, pos.y))) return;
-    const mon = await makemon(ptr, pos.x, pos.y, 0);
+    const mon = mplayer ? await mk_mplayer(ptr, pos.x, pos.y) : await makemon(ptr, pos.x, pos.y, 0);
     if (mon) {
         mon.female = !!gender;
         setMonsterPeaceful(mon, typeof spec === 'string' ? null : spec.peaceful);
@@ -9664,9 +9821,13 @@ async function questFillerOperations(operations, state, croom = null) {
             const def = artifactDefinitionForName(spec.name);
             const types = { chest: CHEST, tin: TIN, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
             const otyp = def?.otyp ?? types[spec.id];
-            if (spec.id && otyp == null) throw new Error(`Unsupported quest object ${spec.id}`);
+            const classes = { ')': WEAPON_CLASS, '[': ARMOR_CLASS, '*': GEM_CLASS, '(': TOOL_CLASS,
+                '%': FOOD_CLASS, '!': POTION_CLASS, '?': SCROLL_CLASS, '/': WAND_CLASS, '=': RING_CLASS,
+                '"': AMULET_CLASS, '+': SPBOOK_CLASS };
+            const oclass = classes[spec.class || spec.id];
+            if (spec.id && otyp == null && oclass == null) throw new Error(`Unsupported quest object ${spec.id}`);
             const obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
-                : mkobj_at(RANDOM_CLASS, pos.x, pos.y, !spec.name);
+                : mkobj_at(oclass ?? RANDOM_CLASS, pos.x, pos.y, !spec.name);
             if (otyp === WAN_LIGHTNING) Object.assign(obj, { kind: 'lightning', cls: 'wand', wandIndex: 24,
                 glyph: '/', color: game._object_descriptions?.wands?.[24]?.color ?? CLR_BROWN });
             if (otyp === SCR_TELEPORTATION) Object.assign(obj, { kind: 'scroll of teleportation', cls: 'scroll', scrollIndex: 10 });
@@ -23159,6 +23320,7 @@ async function themeroom_storeroom(croom) {
 export const __mklevTestHooks = {
     flipSpecialLevelRnd,
     questFillerOperations,
+    questMonsterData,
     mkmap_init,
     mkmap_run_passes,
     mkmap_finish,

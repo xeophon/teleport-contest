@@ -203,7 +203,7 @@ import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAtt
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
-import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
+import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
 import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection } from './spell.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
@@ -33226,17 +33226,6 @@ function canWishedEggBeHatched(monster) {
     return eggMonster;
 }
 
-function consumeWishedEggHatchTimer(otmp) {
-    for (let i = 151; i <= 200; i++) {
-        if (rnd(i) > 150) {
-            otmp.eggHatchTurn = (game.moves || 1) + i;
-            otmp._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
-            break;
-        }
-    }
-    otmp._egg_hatch_consumed = true;
-}
-
 function makeWishedEggObject(eggWish, qualifiers = {}) {
     const resolved = resolveWishedCorpstatMonsterName(
         eggWish?.monsterName,
@@ -33250,11 +33239,9 @@ function makeWishedEggObject(eggWish, qualifiers = {}) {
     const requestedMonster = monster ? wishedNonFigurineCorpstatMonster(monster) : null;
     const eggMonster = requestedMonster ? canWishedEggBeHatched(requestedMonster) : otmp.corpsenm;
     otmp.corpsenm = eggMonster || null;
-    if (eggMonster && !hadHatchTimer) consumeWishedEggHatchTimer(otmp);
+    if (eggMonster && !hadHatchTimer) attachEggHatchTimeout(otmp);
     if (!eggMonster) {
-        delete otmp.eggHatchTurn;
-        delete otmp._egg_hatch_consumed;
-        delete otmp._egg_hatch_seq;
+        killEggHatchTimer(otmp);
     }
     Object.assign(otmp, {
         cls: 'food',
@@ -55322,19 +55309,6 @@ function eggQuiverVerb(egg) {
     return (egg?.quan || 1) > 1 ? 'quiver' : 'quivers';
 }
 
-function attachEggHatchTimer(item) {
-    if (!isEggItem(item) || !item.corpsenm?.name || item.eggHatchTurn) return false;
-    for (let i = 151; i <= 200; i++) {
-        if (rnd(i) > 150) {
-            item.eggHatchTurn = (game.moves || 1) + i;
-            item._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
-            break;
-        }
-    }
-    item._egg_hatch_consumed = true;
-    return !!item.eggHatchTurn;
-}
-
 async function rubRoyalJellyOnEgg(jelly, egg) {
     const oldName = egg?.corpsenm?.name || '';
     const smearName = pickupObjectName(egg);
@@ -55347,13 +55321,11 @@ async function rubRoyalJellyOnEgg(jelly, egg) {
     if (jelly?.cursed) {
         if (egg.eggHatchTurn || changedType) messages.push(`The ${effectName} ${eggQuiverVerb(egg)} feebly.`);
         else messages.push('Nothing seems to happen.');
-        delete egg.eggHatchTurn;
-        delete egg._egg_hatch_seq;
-        delete egg._egg_hatch_consumed;
+        killEggHatchTimer(egg);
     } else {
         const wasTimed = !!egg.eggHatchTurn;
         if (egg.corpsenm?.name) {
-            if (!egg.eggHatchTurn) attachEggHatchTimer(egg);
+            if (!egg.eggHatchTurn) attachEggHatchTimeout(egg);
             if (jelly?.blessed && !egg.spe) egg.spe = 2;
         }
         if ((egg.eggHatchTurn && !wasTimed) || egg.spe === 2 || changedType)
@@ -55400,7 +55372,7 @@ function createHeroLaidEgg() {
         ox: game.u?.ux || 0,
         oy: game.u?.uy || 0,
     });
-    if (eggMonster) consumeWishedEggHatchTimer(egg);
+    if (eggMonster) attachEggHatchTimeout(egg);
     game.level.objects ??= [];
     game.level.objects.push(egg);
     newsym(egg.ox, egg.oy);
@@ -59743,17 +59715,9 @@ function removeDeadbookRevivedItem(item, source) {
 }
 
 function deadbookAttachEggHatchTimer(item) {
-    if (!isEggItem(item) || !item.corpsenm?.name || item.eggHatchTurn) return false;
-    if (eggSpeciesGenocidedForHatching(item, game)) return false;
-    for (let i = 151; i <= 200; i++) {
-        if (rnd(i) > 150) {
-            item.eggHatchTurn = (game.moves || 1) + i;
-            item._egg_hatch_seq = game._egg_hatch_timer_seq = (game._egg_hatch_timer_seq || 0) + 1;
-            break;
-        }
-    }
-    item._egg_hatch_consumed = true;
-    return !!item.eggHatchTurn;
+    if (!isEggItem(item) || !item.corpsenm?.name || eggHasHatchTimer(item)
+        || eggSpeciesGenocidedForHatching(item, game)) return false;
+    return attachEggHatchTimeout(item);
 }
 
 async function reviveDeadbookCorpseItem(item, source) {

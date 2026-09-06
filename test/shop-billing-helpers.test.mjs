@@ -1,3 +1,4 @@
+import { attachEggHatchTimeout } from '../js/egg_timers.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -60306,6 +60307,7 @@ test('covered simple food pickup merge excludes remaining special food exception
 
 test('special food pickup merge accepts compatible nontimed eggs and rejects hatch timers', () => {
     installShopState();
+    game.moves = 100;
     const carried = { ...egg(7151, 'e'), corpsenm: { name: 'newt' }, age: 100 };
     const floorObj = { ...egg(7152), letter: undefined, line: undefined, corpsenm: { name: 'newt' }, age: 300 };
     game.inventory = [carried];
@@ -60326,6 +60328,7 @@ test('special food pickup merge accepts compatible nontimed eggs and rejects hat
         eggHatchTurn: game.moves + 5,
         _egg_hatch_seq: 1,
     };
+    attachEggHatchTimeout(timedEgg, 5);
     game.inventory = [{ ...egg(7154, 'f'), corpsenm: { name: 'newt' } }];
 
     assert.equal(shop.findPickedObjectInventoryMergeTarget(timedEgg, 0), null);
@@ -98911,6 +98914,7 @@ test('floor stacking merges compatible unpaid bill rows', () => {
 
 test('floor stacking keeps hatching eggs separate from compatible egg stacks', () => {
     installShopState();
+    game.moves = 100;
     const floorStack = { ...egg(8903), letter: undefined, line: undefined, corpsenm: { name: 'red dragon' }, ox: 7, oy: 5 };
     const hatching = {
         ...egg(8904),
@@ -98925,6 +98929,7 @@ test('floor stacking keeps hatching eggs separate from compatible egg stacks', (
     };
     game.level.objects = [floorStack];
 
+    attachEggHatchTimeout(hatching, 10);
     const stacked = shop.placeStackableFloorObject(hatching);
 
     assert.equal(stacked, hatching);
