@@ -78829,6 +78829,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     await beginRejectedWish(dropped);
                     return;
                 }
+                // addinv_core1 marks status dirty for coins, so its next
+                // redraw sees the new load even before encumber_msg returns.
+                (game.disp ??= {}).botl = true;
+                syncHeroEncumbranceStatus(heroEncumbranceForWeight(heroCarriedWeight()));
                 await finishHeldWishFeedback([`$ - ${moneyQuan} gold piece${moneyQuan === 1 ? '' : 's'}.`]);
                 return;
             }

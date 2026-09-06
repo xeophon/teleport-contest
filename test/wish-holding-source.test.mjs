@@ -99,6 +99,7 @@ for(const key of [' ','\x1b'])test(`a saved wish load report precedes divine not
     assert.equal(game._command_mode,'heldWishMore');
     assert.equal(game.u.ublesscnt,0);assert.equal(game._goldCount,80000);
     assert.equal(game._encumbrance_level??0,0,'load status changes only after the report returns');
+    assert.match(game.u._statusSuffix,/Burdened/,'coins independently invalidate the displayed status');
     const calls=getRngLog().length,saved=encodeSaveState(),{coreCtx,displayCtx,rng}=game;
     resetGame();restoreSaveState(saved);Object.assign(game,{coreCtx,displayCtx,rng});
     await rhack('z');assert.equal(game._command_mode,'heldWishMore');
@@ -109,6 +110,15 @@ for(const key of [' ','\x1b'])test(`a saved wish load report precedes divine not
     assert.ok(game.u.ublesscnt>=50&&game.u.ublesscnt<150);
     assert.equal(game._goldCount,80000);assert.equal(game.moves,100);
     if(key===' ')assert.equal(game._pending_message,'Your movements are slowed slightly because of your load.');
+});
+
+test('ordinary wished objects defer the burden display until their load report returns',async()=>{
+    setup();await wish('2 enormous meatballs');
+    assert.equal(game._command_mode,'heldWishMore');
+    assert.equal(game._encumbrance_level??0,0);
+    assert.doesNotMatch(game.u._statusSuffix||'',/Burdened/);
+    await rhack(' ');
+    assert.equal(game._encumbrance_level,1);assert.match(game.u._statusSuffix,/Burdened/);
 });
 
 test('comparison feedback blocks a rejected potion before it leaves the inventory',async()=>{

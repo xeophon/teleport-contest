@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,500 passing tests**, with no
+The latest source-driven checkpoint has **6,501 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -57,6 +57,9 @@ wish stack merging, artifact touch, levitated/swallowed drops and full serial
 floor effects remain open. Weapon name/quantity edge cases need a wider pass.
 Load status now commits after its report returns, as `encumber_msg` does;
 this restores both affected recordings (612 screens and 14,068 random calls).
+Coins independently invalidate status in `addinv_core1`, so their new burden
+can already be displayed during that pause; the accepted-gold oracle and a
+separate ordinary-object test cover that distinction.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
