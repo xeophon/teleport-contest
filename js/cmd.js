@@ -28290,13 +28290,15 @@ function heroExplicitWeaponSkillLevel(skill, skillName) {
 
 function heroWeaponSkillBonuses(obj) {
     return weaponSkillBonuses(obj, skill => heroExplicitWeaponSkillLevel(skill, SKILL_NAMES[skill])
-        ?? (skill === P_RIDING ? heroRidingSkillLevel() : P_BASIC));
+        ?? (skill === P_RIDING ? heroRidingSkillLevel()
+            : skill === P_BARE_HANDED_COMBAT && !['Monk', 'Samurai', 'Barbarian', 'Caveman'].includes(heroRoleName())
+                ? P_UNSKILLED : P_BASIC));
 }
 
-function heroWeaponPracticeMessages(obj, rawDamage, launcherAmmo = false) {
+function heroWeaponPracticeMessages(obj, rawDamage, launcherAmmo = false, type = Math.abs(objectWeaponSkill(obj))) {
     // C hmon records this threshold before adding strength or skill damage.
     if (rawDamage <= (launcherAmmo ? 0 : 1)) return [];
-    const message = useSkill(Math.abs(objectWeaponSkill(obj)), 1);
+    const message = useSkill(type, 1);
     if (!message) return [];
     const tip = skillAdvanceTip();
     return tip ? [message, tip] : [message];
@@ -64504,46 +64506,39 @@ async function moveHeroStep(dx, dy, ridingMessages) {
             game.context.move = 1;
             return;
         }
-        const stats = game.u?.acurr?.a || [];
-        const str = stats[0] ?? 10;
-        const dex = stats[3] ?? 10;
+        const str = currentHeroAttribute(A_STR);
+        const dex = currentHeroAttribute(A_DEX);
         const role = game.urole?.name?.m || game._startup_role || '';
         const wokeFromSleep = !!mon.msleeping;
         const caitiffAttack = role === 'Knight'
             && (game.u?.ualign?.type ?? 0) > 0
             && (game.u?.ualign?.record ?? 0) > -10
             && (wokeFromSleep || mon.mcanmove === 0 || (mon.mflee && !mon.mavenge));
-        const martialArts = role === 'Monk' || role === 'Samurai';
-        const basicBareHands = martialArts || role === 'Barbarian' || role === 'Caveman';
         const inventory = game.inventory || [];
-        const actualWieldedWeapon = inventory.find(item => item.wielded)
+        const actualWieldedWeapon = game.u.uwep || inventory.find(item => item.wielded)
             || inventory.find(item =>
                 item.line?.includes('weapon in')
                 || item.line?.includes('wielded in right'));
-        const weapon = role === 'Monk' ? null : actualWieldedWeapon;
-        const secondWeapon = game._twoweapon
-            ? inventory.find(item => item !== actualWieldedWeapon
-                && /\b(?:wielded|weapon) in left hand\b/.test(item.line || ''))
+        const weapon = actualWieldedWeapon || null;
+        const secondWeapon = game.u.twoweap || game._twoweapon
+            ? game.u.uswapwep || inventory.find(item => item !== actualWieldedWeapon
+                && (item.alternate
+                || /\b(?:wielded|weapon) in left hand\b/.test(item.line || '')))
             : null;
-        const twoWeaponActive = game._twoweapon && !!secondWeapon
-            && (secondWeapon.cls === 'weapon' || secondWeapon.glyph === ')');
+        const twoWeaponActive = !!((game.u.twoweap || game._twoweapon) && weapon && secondWeapon);
+        if (twoWeaponActive) {
+            game.u.twoweap = true; game.u.uwep = weapon; game.u.uswapwep = secondWeapon;
+        }
 
         let strengthHitBonus = str < 6 ? -2 : str < 8 ? -1 : str < 17 ? 0 : str < 68 ? 1 : str < 118 ? 2 : 3;
         if ((game.u?.ulevel || 1) < 3) strengthHitBonus++;
         const dexHitBonus = dex < 4 ? -3 : dex < 6 ? -2 : dex < 8 ? -1 : dex < 14 ? 0 : dex - 14;
         const luck = (game.u?.uluck || 0) + (game.u?.moreluck || 0);
         const luckHitBonus = Math.sign(luck) * Math.trunc((Math.abs(luck) + 2) / 3);
-        const bareHandSkill = basicBareHands ? 2 : 1;
-        const bareHandHitBonus = !weapon
-            ? Math.trunc(((Math.max(bareHandSkill, 1) - 1 + 2) * (martialArts ? 2 : 1)) / 2)
-            : 0;
-        const bareHandDamageBonus = !weapon
-            ? Math.trunc(((Math.max(bareHandSkill, 1) - 1 + 1) * (martialArts ? 3 : 1)) / 2)
-            : 0;
         const targetAc = data.mac ?? 10;
         const trappedPenalty = game.u?.utrap ? -3 : 0;
         const baseToHit = 1 + strengthHitBonus + dexHitBonus + targetAc + (game.u?.uhitinc || 0)
-            + luckHitBonus + (game.u?.ulevel || 1) + bareHandHitBonus
+            + luckHitBonus + (game.u?.ulevel || 1)
             + trappedPenalty;
         let wokeByHit = false;
         const directMeleePreHitState = {
@@ -64603,7 +64598,10 @@ async function moveHeroStep(dx, dy, ridingMessages) {
             game.context.move = 1;
             return;
         }
-        const attackWeapons = twoWeaponActive ? [weapon, secondWeapon] : [weapon];
+        const bareSkill = heroExplicitWeaponSkillLevel(P_BARE_HANDED_COMBAT, 'bare handed combat') || P_UNSKILLED;
+        const doublePunch = !weapon && !wornArmorInSlot('shield') && bareSkill > P_BASIC && bareSkill - P_BASIC > rn2(5);
+        const twoHits = twoWeaponActive || doublePunch;
+        const attackWeapons = twoHits ? [weapon, twoWeaponActive ? secondWeapon : null] : [weapon];
         let deferSleepingWakeTail = false;
         let deferredSleepingWakePreHitState = null;
         let killed = false;
@@ -64635,9 +64633,9 @@ async function moveHeroStep(dx, dy, ridingMessages) {
                 + (mon.mcanmove === 0 ? 4 : 0);
             const attackToHit = baseToHit + attackTargetHitBonus + artifactHitBonus + (attackWeapon?.spe || 0)
                 + weaponHitBonus
-                + (twoWeaponActive && attackWeapon ? -9 : 0);
+                + heroWeaponSkillBonuses(attackWeapon).hit;
             const attackRoll = rnd(20);
-            if (attackToHit <= attackRoll) {
+            if (attackToHit <= attackRoll && !swallowedMove) {
                 if (hiddenTarget && !attackWeapon && !game._bare_hands_bashing_started) {
                     game._bare_hands_bashing_started = 1;
                     messages.push('You begin bashing monsters with your bare hands.  You miss it.');
@@ -64650,7 +64648,7 @@ async function moveHeroStep(dx, dy, ridingMessages) {
                 continue;
             }
 
-            if (attackIndex === 0) exerciseAttribute(A_DEX, true);
+            if (attackIndex === 0 && attackToHit > attackRoll) exerciseAttribute(A_DEX, true);
             directMeleeHit = true;
             if (wokeFromSleep && mon.msleeping) {
                 mon.msleeping = 0;
@@ -64768,13 +64766,26 @@ async function moveHeroStep(dx, dy, ridingMessages) {
                 bullwhip: [1, data.big ? 1 : 2],
                 wakizashi: [1, 6],
             }[weaponBaseName] || [1, attackWeapon ? 6 : (role === 'Monk' || role === 'Samurai') ? 4 : 2];
-            let baseDamage = attackWeapon
+            const skillType = objectWeaponSkill(attackWeapon);
+            const improperWeapon = attackWeapon && skillType !== P_NONE && (skillType < 0
+                || skillType >= P_BOW && skillType <= P_CROSSBOW
+                || !game.u.usteed && [P_POLEARMS, P_LANCE].includes(skillType)
+                    && attackWeapon.artifact !== 'Snickersnee');
+            let baseDamage = improperWeapon ? rnd(2) : attackWeapon
                 ? (weaponDamage[0] === 1 ? rnd(weaponDamage[1]) : d(weaponDamage[0], weaponDamage[1])) + (attackWeapon.spe || 0)
                 : rnd(weaponDamage[1]);
+            const rawDamage = baseDamage;
             if (grayswandirHit) baseDamage += Math.max(baseDamage, 1);
-            const weaponSkillDamageBonus = grayswandirHit ? -2 : 0;
-            const damage = Math.max(0, baseDamage + strengthDamageBonus + bareHandDamageBonus
-                + weaponSkillDamageBonus + (game.u?.udaminc || 0));
+            const usesSkill = !improperWeapon && skillType !== P_NONE;
+            const weaponSkillDamageBonus = usesSkill ? heroWeaponSkillBonuses(attackWeapon).damage : 0;
+            let strBonus = polyselfForm() ? 0 : strengthDamageBonus;
+            if (twoHits) strBonus = Math.sign(strBonus) * Math.trunc((3 * Math.abs(strBonus) + 2) / 4);
+            else if (weapon && isTwoHandedWieldItem(weapon))
+                strBonus = Math.sign(strBonus) * Math.trunc((3 * Math.abs(strBonus) + 1) / 2);
+            if (usesSkill) messages.push(...heroWeaponPracticeMessages(attackWeapon, rawDamage, false,
+                twoWeaponActive ? P_TWO_WEAPON_COMBAT : Math.abs(skillType)));
+            const damage = Math.max(1, baseDamage > 0
+                ? baseDamage + strBonus + weaponSkillDamageBonus + (game.u?.udaminc || 0) : 0);
             if (!attackWeapon && damage > 1) rnd(100);
             mon.mhp = (mon.mhp || 1) - damage;
             killed = mon.mhp <= 0;

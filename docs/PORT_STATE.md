@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,257 passing tests**, with no
+The latest source-driven checkpoint has **6,280 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -157,8 +157,11 @@ Normal spells train once after their effects and saved prompts finish, while
 forced wizard/artifact casts skip training. Forty-nine tests cover this work.
 Projectile and polearm callers now use canonical weapon/dual-wield/riding bonuses and
 source practice eligibility. Riding exercises after 100 eligible movement attempts,
-including refused pet displacement after tentative movement. Ordinary melee,
-gifts, amnesia and drain callers still need their source integration.
+including refused pet displacement after tentative movement. Ordinary melee now uses actual weapon identity, trained hit/damage bonuses, raw-damage
+practice gates, dual-wield skill, double punches and rounded Strength scaling.
+Twenty-three new tests cover this slice (21 failed on the preceding commit).
+The full melee effect/continuation pipeline, gifts, amnesia and drain callers
+still need their source integration.
 
 The role `#turn` ability now follows C's conduct, chanting/divine rejection,
 confusion, monster ordering, resistance, thresholds, fleeing, pacification,
@@ -255,7 +258,7 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at commit 496ea59, passed 51/53 public
+The last complete recording run, at commit d8f0e9c, passed 51/53 public
 sessions (12,545/12,712 screens, 830,380/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
 zero worker errors. These denominators precede the current checkpoint and do

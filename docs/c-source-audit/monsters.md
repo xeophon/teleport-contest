@@ -588,3 +588,18 @@ and riding. Projectile and polearm practice uses the source raw-damage gate;
 steed.c exercise counts 100 eligible tentative movement steps, including failed
 pet displacement after tentative positioning. Ordinary melee practice and full
 hmon execution remain separate source work.
+
+## Ordinary melee skill integration
+
+The move-command melee caller now follows weapon.c:weapon_hit_bonus and
+weapon_dam_bonus, uhitm.c:double_punch/hitum and hmon_hitmon_dmg_recalc for
+actual weapon identity, trained bonuses, minimal-hit practice eligibility,
+dual-wield practice, extra bare-hand attacks and rounded Strength bonuses.
+Monks retain their wielded weapons. Improper melee use of a launcher, missile,
+ammunition or unmounted pole does not use or train its damage skill.
+Twenty-one of 23 new command-level tests failed at d8f0e9c and all 23 now pass.
+The full suite passes 6,280 tests. Existing Knight recording skill displays now
+match through the earlier mismatch at input 631; its first screen difference
+is later at input 985. This is not a complete melee port: full dmgval,
+artifact/poison/backstab/jousting, polymorph attacks, source hit-role gates,
+and feedback/death/passive continuations still need their own source passes.
