@@ -1,4 +1,5 @@
 import { game } from './gstate.js';
+import { endBurn } from './burn.js';
 import {
     BEAR_TRAP, BLCORNER, BRCORNER, COLNO, CROSSWALL, DB_FLOOR, DB_ICE,
     DB_LAVA, DB_MOAT, DB_UNDER, DBWALL, DOOR, DRAWBRIDGE_DOWN, D_CLOSED,
@@ -675,10 +676,7 @@ function maybeStartBuriedOrganicRot(obj, underIce) {
 
 function stopObjectBurningForBurial(obj) {
     if (!(obj?.lamplit || obj?.burning) || isPotionOfOilObject(obj)) return;
-    obj.lamplit = false;
-    obj.burning = false;
-    delete obj._burnTimer;
-    delete obj.litRadius;
+    endBurn(obj);
 }
 
 function unleashObjectForBurial(obj) {

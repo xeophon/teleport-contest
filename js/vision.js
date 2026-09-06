@@ -6,10 +6,11 @@ import {
     COLNO, ROWNO, DOOR, SDOOR, POOL, WATER, LAVAWALL, TREE, CLOUD,
     D_CLOSED, D_LOCKED, D_TRAPPED,
     SV0, SV1, SV2, SV3, SV4, SV5, SV6, SV7,
-    IS_WALL, TEMP_LIT, W_ARM,
+    IS_WALL, TEMP_LIT,
 } from './const.js';
 import { S_LIGHT } from './permonst.js';
 import { newsym } from './display.js';
+import { artifactLight } from './burn.js';
 
 const COULD_SEE = 0x1;
 const IN_SIGHT = 0x2;
@@ -71,9 +72,7 @@ function objectLightRadius(obj) {
     if (obj.otyp === 10076 || name === 'candelabrum of invocation')
         return obj.spe < 4 ? 2 : obj.spe < 7 ? 3 : 4;
     const goldMail = obj.otyp === 10140 || name === 'gold dragon scale mail';
-    const goldScales = obj.otyp === 10149 || name === 'gold dragon scales';
-    const sunsword = String(obj.artifact || obj.oartifact || '').toLowerCase() === 'sunsword';
-    if (sunsword || ((goldMail || goldScales) && ((obj.owornmask & W_ARM) || obj.worn))) {
+    if (artifactLight(obj)) {
         if (obj === game.u?.uskin || obj.embedded) return 1;
         return (obj.blessed ? 3 : obj.cursed ? 1 : 2) + (goldMail ? 1 : 0);
     }

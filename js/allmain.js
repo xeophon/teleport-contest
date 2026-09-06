@@ -52,6 +52,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 import { processBuriedOrganicRot, processMeltIceTimers, removedFromIcebox } from './ice.js';
+import { processObjectBurnTimers } from './cmd.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
 import { eggHatchMonsterData, eggHasHatchTimer, isEggObject, killEggHatchTimer } from './egg_timers.js';
@@ -4280,6 +4281,7 @@ async function processFigurineTransformTimeouts(g) {
 }
 
 async function afterMoveTurn(g, includeHeroTime = true) {
+    for (const msg of await processObjectBurnTimers(g)) addToplineMessage(msg);
     for (const msg of processMeltIceTimers(g, {
         afterMelt: (x, y, result) => result.becameLiquid
             ? applyMeltedIceMonsterLiquidEffects(x, y, { recordKill: recordVanquished })
@@ -4413,7 +4415,7 @@ export async function processMonsterTurns() {
             monsterDisplayName(mon, true);
         }
     }
-    const conflictActive = (game.inventory || []).some(item => item.cls === 'ring' && item.worn
+    const conflictActive = !!game.u?.conflict || (game.inventory || []).some(item => item.cls === 'ring' && item.worn
         && ((item.ringRoll || item.roll) === 14 || item.actualKind === 'ring of conflict'));
     let somebodyCanMove = game._monster_resume_somebody_can_move || false;
     let startIndex = adjustedMonsterResumeIndexForRecordedRemovals(game._monster_resume_index || 0);
@@ -13518,7 +13520,7 @@ function ensureMonsterTrack(mon) {
     return mon.mtrack;
 }
 
-function migrateMonsterToLevelRandom(mon, targetLevel, sourceX, sourceY, { skipPetPostMoveRoll = false } = {}) {
+export function migrateMonsterToLevelRandom(mon, targetLevel, sourceX, sourceY, { skipPetPostMoveRoll = false } = {}) {
     if (!mon || !targetLevel) return false;
     const current = game.u?.uz || { dnum: 0, dlevel: 1 };
     const fromLevel = { dnum: current.dnum ?? 0, dlevel: current.dlevel ?? 1 };
@@ -19331,8 +19333,8 @@ setMonsterMonsterCombatHooks({
     newsym,
     /* mdamagem() -> grow_up(magr, mdef): cmd.js growth bookkeeping */
     growUp: (agr, def) => monsterGrowUp(agr, def),
-    /* youprop Conflict intrinsic: hero wearing a ring of conflict. */
-    isConflict: () => (game.inventory || []).some(item => item.cls === 'ring' && item.worn
+    /* Invoked and intrinsic conflict apply alongside worn rings. */
+    isConflict: () => !!game.u?.conflict || (game.inventory || []).some(item => item.cls === 'ring' && item.worn
         && ((item.ringRoll || item.roll) === 14 || item.actualKind === 'ring of conflict')),
     /* objnam.c doname() for a monster-wielded weapon as perceived by the
      * hero: unidentified types show their appearance ("a curved sword"). */

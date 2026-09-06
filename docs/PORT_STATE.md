@@ -4,7 +4,7 @@ Source audit: 2026-09-06. Reference: NetHack 5.0.0, submodule commit
 `16ff59115315917b93185d026aeefea06db9b0f4`.
 
 Upstream `davidbau/teleport-contest` main at `364e9d6` was merged first in
-`995c7f0`. The conversion work described here remains in the working tree.
+`995c7f0`. Verified conversion work is being committed in successive checkpoints.
 
 ## Audit scope
 
@@ -23,7 +23,33 @@ Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
 interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 `permonst.js` supplies canonical monster data.
 
-## Measured progress
+## Latest continuation checkpoint
+
+The next source-driven checkpoint has **4,520 passing tests**, with no failures,
+skips or TODOs, up from 4,309 at the previous checkpoint. Public recordings
+remain 53/53 with 12,712/12,712 screens and 832,102/832,102 RNG calls.
+Supplemental recordings remain 12/19 with 3,070/3,346 screens and
+137,929/141,728 RNG calls; both corpora have zero worker errors. These are
+separate measures, not evidence that the whole C port is complete.
+
+This checkpoint adds source-ordered timer queue primitives and live burn
+callbacks; lamp/candle/oil thresholds, ownership, save identity and off-level
+catch-up; shared object hiding checks; fireball and skilled fire/cold bursts;
+and artifact invocation cooldown, healing, energy, ammunition, charging,
+untrap, property toggles, banishment and dungeon portals. It also adds ten
+named quest maps: Barbarian/Caveman/Healer/Ranger goals and
+Caveman/Healer/Knight/Ranger/Rogue/Valkyrie locates. All 26 fillers and 21 of
+39 named stages now dispatch, leaving 18 named maps.
+
+Still open in these slices: migrating the other eight timer callbacks into
+the shared queue, candle/Candelabrum application and stack lifecycle,
+automatic artifact light activation, remaining artifact powers and property
+loss, and broader explosion/hero-death branches. The independent reviews
+found and fixed bulk timer cancellation, inactive level ownership, numeric
+artifact lights, container weight and hiding state. Source quirks are retained,
+including the missing on-time oil hiding recheck in this C revision.
+
+## Previous checkpoint measurements
 
 | Check | Before this continuation | Current result |
 | --- | ---: | ---: |
@@ -56,7 +82,7 @@ recordings. Animation matching remains a separate incomplete metric. These
 results establish progress on available checks, not hidden-test success or
 a percentage of the C game implemented.
 
-## Implemented in this continuation
+## Previous checkpoint implementations
 
 | Area | Source behavior added or corrected |
 | --- | --- |
@@ -89,13 +115,13 @@ regressions rather than sample-specific outcomes.
 The subsystem reports contain source locations, JavaScript owners and limits
 for each finding. Major unfinished areas include:
 
-1. **Spells and combat:** fireball/skilled cold explosions, remaining ray
+1. **Spells and combat:** remaining ray
    callbacks, directed cleric spells, wizard death-touch/weakening effects,
    and broader attack/damage dispatch.
-2. **Timers and arrival:** corpse, egg and figurine timers, light activation
-   and fuel lifecycle, and the complete terrain/region/spot-effects arrival
+2. **Timers and arrival:** shared ordering across corpse, egg, figurine and terrain timers, automatic
+   light activation and candle application, and the complete terrain/region/spot-effects arrival
    pipeline.
-3. **Quest and artifacts:** 28 named quest maps and artifact invocation.
+3. **Quest and artifacts:** 18 named quest maps and remaining artifact invocation branches.
    Existing builder dispatch does not itself prove map parity.
 4. **Regions and movement:** region callbacks, broader level scripting and
    remaining movement/trap ordering beyond the tested pit paths.

@@ -1656,7 +1656,7 @@ const ARMOR_AC_BONUS = new Map([
     [GREEN_DRAGON_SCALES, 3], [YELLOW_DRAGON_SCALES, 3],
     [HAWAIIAN_SHIRT, 0], [T_SHIRT, 0],
 ]);
-const ARTIFACT_DEFS = Object.freeze([
+export const ARTIFACT_DEFS = Object.freeze([
     { name: 'Excalibur', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
     { name: 'Stormbringer', otyp: RUNESWORD, cls: 'weapon', glyph: ')', base: 'runesword', questArtifact: false },
     { name: 'Mjollnir', otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
@@ -4032,6 +4032,7 @@ function maybeMkArtifact(otmp, artifactKey, chanceBase) {
 }
 
 export function artifactDefinitionForName(name) {
+    if (typeof name === 'number') return ARTIFACT_DEFS[name - 1] || null;
     return ARTIFACTS_BY_KEY.get(artifactKey(name)) || null;
 }
 
@@ -9333,6 +9334,11 @@ async function questFillerMonster(spec, area, croom, coord = null) {
     const gender = !named ? 0 : is_female(pm) ? 1 : is_male(pm) ? 0 : rn2(2);
     // sp_lev.c:find_montype precedes create_monster's alignment and class rolls.
     inducedAlign80();
+    if (named && (pm?.geno & questSpecies.G_UNIQ) && monsterNameExtinct(name)) return null;
+    if (named && (monsterNameGenocided(name) || monsterNameExtinct(name))) {
+        ptr = null;
+        pm = null;
+    }
     if (!named) {
         ptr = mkclassAligned(name, false, null, true);
         pm = QUEST_MONSTERS.find(mon => mon.name === ptr?.name);
@@ -9370,10 +9376,32 @@ async function make_quest_filler_level(program) {
     oinit();
     clear_level_structures();
     l_nhcore_init();
-    const state = { area: { lx: 1, ly: 0, hx: COLNO - 1, hy: ROWNO - 1 }, noflip: false, icedpools: false };
+    const state = { area: { lx: 1, ly: 0, hx: COLNO - 1, hy: ROWNO - 1 },
+        map: new Set(), noflip: false, icedpools: false };
     await questFillerOperations(program.operations, state);
+    // sp_lev.c removes temporary room boundaries and objects/traps on liquid
+    // after the Lua program has finished, before wallification and flipping.
+    for (const key of state.map) {
+        const [x, y] = key.split(',').map(Number);
+        if (x >= COLNO - 1 || y >= ROWNO - 1) continue;
+        if (game.level.at(x, y).typ === CROSSWALL) game.level.at(x, y).typ = ROOM;
+    }
+    const liquid = (x, y) => IS_POOL(game.level.at(x, y)?.typ) || IS_LAVA(game.level.at(x, y)?.typ);
+    game.level.objects = game.level.objects.filter(obj => obj.otyp !== BOULDER || !liquid(obj.ox, obj.oy));
+    game.level.traps = game.level.traps.filter(trap => undestroyable_trap(trap.ttyp) || !liquid(trap.tx, trap.ty));
+    game.level.engravings = (game.level.engravings || []).filter(engr => !liquid(engr.x, engr.y));
     wallification(1, 0, COLNO - 1, ROWNO - 1);
     if (!state.noflip) flipSpecialLevelRnd();
+    for (const room of game.level.rooms) {
+        await fill_special_room(room);
+        // FILL_SPECIAL requests level flags without adding inhabitants.
+        if (room.needfill) {
+            const flag = ({ [TEMPLE]: 'has_temple', [COURT]: 'has_court', [MORGUE]: 'has_morgue',
+                [BARRACKS]: 'has_barracks', [ZOO]: 'has_zoo', [SWAMP]: 'has_swamp',
+                [VAULT]: 'has_vault', [BEEHIVE]: 'has_beehive' })[room.rtype];
+            if (flag) game.level.flags[flag] = true;
+        }
+    }
     recount_level_features();
     level_finalize_topology();
 }
@@ -9417,6 +9445,7 @@ async function questFillerOperations(operations, state, croom = null) {
                     const ch = rows[y][x] || ' ';
                     if (ch === 'x') continue;
                     const loc = game.level.at(lx + x, ly + y);
+                    state.map.add(`${lx + x},${ly + y}`);
                     Object.assign(loc, {
                         typ: splevMapCharToTyp(ch),
                         doormask: ch === 'S' ? D_CLOSED : D_NODOOR, lit: ch === 'L', flags: 0,
@@ -9430,9 +9459,19 @@ async function questFillerOperations(operations, state, croom = null) {
             break;
         }
         case 'region': {
-            const bounds = arg.selection === 'area' ? arg.args : arg;
-            spDesSelectionLit(state.area.lx + bounds[0], state.area.ly + bounds[1],
-                state.area.lx + bounds[2], state.area.ly + bounds[3], rest[0] === 'lit');
+            const bounds = arg.selection === 'area' ? arg.args : arg.region || arg;
+            const [lx, ly, hx, hy] = [bounds[0] + state.area.lx, bounds[1] + state.area.ly,
+                bounds[2] + state.area.lx, bounds[3] + state.area.ly];
+            if (!arg.region) spDesSelectionLit(lx, ly, hx, hy, rest[0] === 'lit');
+            else {
+                const lit = litstate_rnd(arg.lit ?? -1);
+                const rtype = ({ ordinary: OROOM, temple: TEMPLE, throne: COURT, morgue: MORGUE,
+                    barracks: BARRACKS, zoo: ZOO, shop: SHOPBASE })[arg.type || 'ordinary'];
+                if (rtype == null) throw new Error(`Unsupported quest room ${arg.type}`);
+                if (rtype === OROOM && !arg.irregular && !arg.arrival_room) spDesLightRegion(lx, ly, hx, hy, lit);
+                else if (arg.irregular) spDesIrregularRoom(lx, ly, rtype, lit, arg.filled || 0);
+                else spDesRectRoom(lx, ly, hx, hy, rtype, lit, arg.filled || 0);
+            }
             break;
         }
         case 'non_diggable':
@@ -9443,7 +9482,7 @@ async function questFillerOperations(operations, state, croom = null) {
             break;
         }
         case 'wallify':
-            wallification(state.area.lx, state.area.ly, state.area.hx, state.area.hy);
+            wallify_map(state.area.lx - 1, state.area.ly - 1, state.area.hx + 2, state.area.hy + 2);
             break;
         case 'door': {
             const doorState = arg === 'random' ? ['nodoor', 'broken', 'open', 'closed', 'locked'][rn2(5)] : arg;
@@ -9464,13 +9503,14 @@ async function questFillerOperations(operations, state, croom = null) {
             const pos = questFillerLocation(state.area, croom, DRY, false, coord);
             if (!pos) break;
             const def = artifactDefinitionForName(spec.name);
-            const types = { chest: CHEST, 'wand of lightning': WAN_LIGHTNING };
+            const types = { chest: CHEST, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
             const otyp = def?.otyp ?? types[spec.id];
             if (spec.id && otyp == null) throw new Error(`Unsupported quest object ${spec.id}`);
             const obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
                 : mkobj_at(RANDOM_CLASS, pos.x, pos.y, !spec.name);
             if (otyp === WAN_LIGHTNING) Object.assign(obj, { kind: 'lightning', cls: 'wand', wandIndex: 24,
                 glyph: '/', color: game._object_descriptions?.wands?.[24]?.color ?? CLR_BROWN });
+            if (otyp === SCR_TELEPORTATION) Object.assign(obj, { kind: 'scroll of teleportation', cls: 'scroll', scrollIndex: 10 });
             if (spec.spe != null) obj.spe = spec.spe;
             if (spec.buc === 'blessed') bless(obj);
             else if (spec.buc === 'cursed') curse(obj);
@@ -9494,12 +9534,30 @@ async function questFillerOperations(operations, state, croom = null) {
             }
             const mask = align == null ? inducedAlign80() : Align2amask(align);
             Object.assign(game.level.at(pos.x, pos.y), { typ: ALTAR, flags: mask });
+            const roomno = game.level.at(pos.x, pos.y).roomno - ROOMOFFSET;
+            const temple = game.level.rooms[roomno];
+            if (arg.type === 'shrine' && temple?.rtype === TEMPLE)
+                await splevAltarShrine(temple, pos.x - temple.lx, pos.y - temple.ly, Amask2align(mask));
             break;
         }
-        case 'trap':
-            if (croom) await oracleRoomTrap(croom);
-            else await barFillTrap(arg === 'fire' ? FIRE_TRAP : null, () => questFillerLocation(state.area));
+        case 'trap': {
+            const kinds = { arrow: ARROW_TRAP, dart: DART_TRAP, 'falling rock': ROCKTRAP,
+                board: SQKY_BOARD, bear: BEAR_TRAP, 'land mine': LANDMINE,
+                'rolling boulder': ROLLING_BOULDER_TRAP, 'sleep gas': SLP_GAS_TRAP,
+                rust: RUST_TRAP, fire: FIRE_TRAP, pit: PIT, 'spiked pit': SPIKED_PIT,
+                hole: HOLE, 'trap door': TRAPDOOR, teleport: TELEP_TRAP, 'level teleport': LEVEL_TELEP,
+                'magic portal': MAGIC_PORTAL, web: WEB, statue: STATUE_TRAP,
+                magic: MAGIC_TRAP, 'anti magic': ANTI_MAGIC, polymorph: POLY_TRAP,
+                'vibrating square': VIBRATING_SQUARE };
+            if (arg != null && kinds[arg] == null) throw new Error(`Unsupported quest trap ${arg}`);
+            if (rest.length) {
+                const pos = questFillerLocation(state.area, croom, DRY, false, rest);
+                await spDesFixedTrap(kinds[arg], pos.x, pos.y);
+            }
+            else if (croom) await oracleRoomTrap(croom);
+            else await barFillTrap(kinds[arg] ?? null, () => questFillerLocation(state.area));
             break;
+        }
         case 'monster':
             await questFillerMonster(arg, state.area, croom, rest.length ? rest : null);
             break;
@@ -17880,11 +17938,10 @@ async function splevMonster(croom, name, peaceful = null) {
     return mon;
 }
 
-async function splevAltarShrine(croom, x, y) {
+async function splevAltarShrine(croom, x, y, align = game.splev_align?.[0] ?? A_NEUTRAL) {
     const pos = splevSpecificLocation(croom, x, y);
     const loc = game.level.at(pos.x, pos.y);
     if (!loc) return;
-    const align = game.splev_align?.[0] ?? A_NEUTRAL;
     loc.typ = ALTAR;
     loc.flags = Align2amask(align);
     const si = rn2(8);

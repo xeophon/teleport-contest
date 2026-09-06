@@ -10,7 +10,7 @@ import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { ALTAR, AM_SHRINE, D_LOCKED, DOOR, SDOOR, ROOM, STAIRS, POOL, THRONE, IS_POOL, W_NONDIGGABLE } from '../js/const.js';
 import { parseQuestLua } from '../tools/quest-lua-parser.mjs';
 
-async function buildQuest(role, stage, seed = 1) {
+async function buildQuest(role, stage, seed = 1, changes = {}) {
     const g = resetGame();
     initRng(seed);
     enableRngLog();
@@ -26,6 +26,7 @@ async function buildQuest(role, stage, seed = 1) {
     g.u = { ux: 40, uy: 10, ulevel: 20, uhave: {},
         uz: { dnum: 0, dlevel }, ualign: { type: 0, record: 10 }, ualignbase: [0, 0] };
     g.level = new GameMap();
+    Object.assign(g, changes);
     await mklev();
     return g;
 }
@@ -139,3 +140,19 @@ test('quest compiler preserves ordered nested tables and rejects unsupported exe
     assert.throws(() => parseQuestLua('des.object(); os.execute("true")'), /Expected des/);
     assert.throws(() => parseQuestLua('des.object({quan=nh.rn2(4)})'), /Unsupported quest value/);
 });
+
+test('an extinct unique nemesis is omitted while its source artifact remains', async () => {
+    const g = await buildQuest('Caveman', 'goal', 1, { _extinct_monsters: ['Chromatic Dragon'] });
+    assert.equal(g.level.monsters.some(mon => mon.data.name === 'Chromatic Dragon'), false);
+    assert.equal(g.level.monsters.filter(mon => mon.data.name === 'shrieker').length, 3);
+    assert.ok(g.level.objects.some(obj => obj.artifact === 'The Sceptre of Might'));
+    assert.equal(g.level.monsters.some(mon => mon.minvent?.some(obj => obj.kind === 'Bell of Opening')), false);
+});
+
+for (const field of ['_genocided_monsters', '_extinct_monsters']) {
+    test(`des.monster substitutes random monsters for nonunique species in ${field}`, async () => {
+        const g = await buildQuest('Caveman', 'goal', 19, { [field]: ['shrieker'] });
+        assert.equal(g.level.monsters.some(mon => mon.data.name === 'shrieker'), false);
+        assert.ok(g.level.monsters.length >= 4, 'three source shrieker declarations still create replacement monsters');
+    });
+}

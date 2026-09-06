@@ -1,9 +1,12 @@
-import { monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations } from './allmain.js';
+import { monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
 import { monCatchupElapsedTime } from './dog.js';
-import { M_SEEN_MAGR, MFAST, MSLOW } from './const.js';
-import { AD_BLND, AT_ENGL, perceives } from './permonst.js';
-import { pmOf } from './mhitm.js';
+import { beginBurn, endBurn, processBurnTimers } from './burn.js';
+import { maybeUnhideAt } from './monster_hiding.js';
+import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL } from './const.js';
+import { AD_BLND, AD_STCK, AT_HUGS, AT_ENGL, perceives } from './permonst.js';
+import { pmOf, resistsFire } from './mhitm.js';
+import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal } from './artifact.js';
 
 // mondata.c:1558-1583 and vision.h:m_canseeu: this observation is shared by
 // every monster in line of sight, including one other than the caster.
@@ -183,7 +186,7 @@ import { prepareVaultGuardEscort } from './vault.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
 import { datFileLines as bundledDatFileLines } from './dat_files.js';
 import { TRIBUTE_DEATH_QUOTES, TRIBUTE_NOVEL_TITLES } from './tribute.js';
-import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
+import { advanceFireBreathRay, applyFireRayFountainTerrain, applyFireRayIceTerrain, applyFireRayWaterTerrain, burnFireRayWebTrap, burnMonsterArmorFromFire, finishHeroTargetedBreath, fireBreathDamageHero, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { dryupFountainAt, dryupFountainResultAt, performFountainDryup } from './fountain.js';
 import { DIGTYP_STATUE, beginDigOccupation, clearConjoinedPits, conjoinedPits, digActionMessage, digDbon, digSurfaceText, digUpGrave, digVerbing, downDigStartBlock, fillHoleType, pickDigDirectionPrompt, planHorizontalDig, shopWallDamageCost } from './dig.js';
 import {
@@ -199,7 +202,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, spellCastNeedsDirection } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection } from './spell.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
@@ -919,7 +922,7 @@ function heroHasMasterKeyOfThievery() {
 }
 
 function untrapForce() {
-    return heroHasMasterKeyOfThievery();
+    return !!game._artifact_untrap || heroHasMasterKeyOfThievery();
 }
 
 async function beginUntrapBoxPrompt(boxes, { trapSkipped = false, force = false, x = null, y = null } = {}) {
@@ -13357,10 +13360,7 @@ function waterDamageFloorLitObject(obj, messages, visible) {
         const subject = floorObjectSubject(obj);
         messages.push(`${subject} ${floorObjectVerb(obj, 'goes', 'go')} out!`);
     }
-    obj.lamplit = false;
-    obj.burning = false;
-    delete obj._burnTimer;
-    delete obj.litRadius;
+    endBurn(obj);
     return true;
 }
 
@@ -13816,6 +13816,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
     updateArmorInventory = true,
     preburnedArmor = null,
     allowLifeSaving = false,
+    igniteBeforeDestroy = false,
 } = {}) {
     const messages = [];
     const events = [];
@@ -13842,6 +13843,12 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
 
     let damage = 0;
     let deathCause = '';
+    // explode.c burns armor, ignites inventory, then selects items to destroy.
+    // Other fire callers ignite after destruction and retain that ordering.
+    if (igniteBeforeDestroy && igniteItems) {
+        igniteFireInventoryItems(messages, events, armor, joinState);
+        igniteItems = false;
+    }
     if (!destroyItems) {
         if (igniteItems) igniteFireInventoryItems(messages, events, armor, joinState);
         return fireInventoryDamageResult(messages, events, damage, deathCause);
@@ -18344,45 +18351,29 @@ function candleDefaultAge(item) {
     return item?.otyp === WAX_CANDLE || objectKindKey(item) === 'wax candle' ? 400 : 200;
 }
 
-function applyBurnAgeThreshold(item, thresholds) {
-    const age = item.age ?? thresholds[0];
-    for (const threshold of thresholds) {
-        if (age > threshold) {
-            item._burnTimer = age - threshold;
-            item.age = threshold;
-            return;
-        }
-    }
-    if (age > 0) {
-        item._burnTimer = age;
-        item.age = 0;
-    }
-}
-
 function beginWishedBurn(item) {
-    item.lamplit = true;
-    item.burning = true;
-    if (isPotionOfOil(item)) {
-        const age = item.age ?? 400;
-        item._burnTimer = item.odiluted ? Math.trunc(age * 3 / 4) : age;
-        item.age = 0;
-        item.litRadius = 1;
-    } else if (item.otyp === MAGIC_LAMP || objectKindKey(item) === 'magic lamp') {
-        delete item._burnTimer;
-    } else if (isCandleObject(item)) {
-        if (item.age == null) item.age = candleDefaultAge(item);
-        applyBurnAgeThreshold(item, [75, 15, 0]);
-    } else {
-        if (item.age == null) item.age = 1500;
-        applyBurnAgeThreshold(item, [150, 100, 50, 25, 0]);
-    }
+    if (item.age == null) item.age = isPotionOfOil(item) ? 400
+        : isCandleObject(item) ? candleDefaultAge(item) : 1500;
+    beginBurn(item);
 }
 
-function endWishedBurn(item) {
-    item.lamplit = false;
-    item.burning = false;
-    delete item._burnTimer;
-    delete item.litRadius;
+const endWishedBurn = endBurn;
+
+export async function processObjectBurnTimers(g = game) {
+    return processBurnTimers(g, {
+        unhide: (x, y) => maybeUnhideAt(x, y, {}, g),
+        name: obj => pickupObjectName({ ...obj, line: '' }),
+        monsterName: mon => mon.givenName || `The ${mon.data?.name || mon.name || 'monster'}`,
+        remove(obj, entry) {
+            if (entry.parent) removeCorpseTimerObject(entry);
+            else if (entry.source === 'inventory')
+                useUpInventoryItem(obj, obj.quan || 1);
+            else if (entry.source === 'migrating') {
+                rememberUsedUpShopBill(obj);
+                entry.list.splice(entry.list.indexOf(obj), 1);
+            } else removeCorpseTimerObject({ ...entry, source: entry.buried ? 'buried' : entry.source });
+        },
+    });
 }
 
 function applyWishedLightState(item, state) {
@@ -23058,10 +23049,7 @@ function burnFloorObjectsFromBurningOilExplosion(x, y, messages) {
 
 function explodeBurningOilPotion(potion, x, y, messages) {
     const damage = d(potion?.odiluted ? 3 : 4, 4);
-    potion.lamplit = false;
-    potion.burning = false;
-    delete potion._burnTimer;
-    delete potion.litRadius;
+    endBurn(potion);
 
     if (!heroIsDeaf())
         messages.push(burningOilExplosionVisible(x, y) ? 'Boom!' : 'You hear a blast.');
@@ -27710,9 +27698,10 @@ function resolveFatalGasSporeHeroExplosionSync(mon, explosion, messages) {
     return true;
 }
 
-async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true } = {}) {
+async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { killMessage = true, noCorpse = false } = {}) {
     if (!mon || mon.dead) return;
     const data = mon.data || {};
+    const wasInside = !!game.u?.uswallow && game.u.ustuck === mon;
     const nonliving = monsterIsNonlivingForLifeSaving(mon);
     mon.dead = true;
     mon.mhp = 0;
@@ -27722,6 +27711,33 @@ async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { kil
     markHeroKilledTameMonster(mon);
     if (applyHeroProjectileMonsterLifeSaving(mon, messages)) return;
     if (reviveVampshifterFromHeroProjectileKill(mon, messages, targetName, { killMessage: false })) return;
+    // mon.c:m_detach -> mon_leaving_level -> unstuck. A death releases
+    // the hero at this square; expels() would relocate the living monster.
+    if (game.u?.ustuck === mon) {
+        const swallowed = game.u.uswallow;
+        game.u.ustuck = null;
+        game.u.uswallow = game.u.uswldtim = 0;
+        if (swallowed) {
+            game.u.ux = mon.mx;
+            game.u.uy = mon.my;
+            game._swallow_overlay_active = 0;
+            game._swallow_overlay_before_command = null;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._overlay_hide_status_only = 0;
+            for (const obj of [game.u.uball, game.u.uchain]) {
+                if (!obj || (game.level.objects || []).includes(obj)) continue;
+                obj.ox = mon.mx; obj.oy = mon.my; obj.where = OBJ_FLOOR;
+                game.inventory = (game.inventory || []).filter(item => item !== obj);
+                game.level.objects.push(obj);
+            }
+            vision_recalc(0);
+            await docrt();
+        }
+        const attacks = (pmOf(mon) || data).attacks || [];
+        if (!mon.mspec_used && attacks.some(attack => attack.adtyp === AD_STCK
+            || attack.aatyp === AT_ENGL || attack.aatyp === AT_HUGS)) mon.mspec_used = rnd(2);
+    }
     recordVanquished(mon, true);
     dropMonsterInventory(mon, messages);
 
@@ -27734,15 +27750,15 @@ async function killMonsterFromHeroProjectileHit(mon, messages, targetName, { kil
         loc.remembered_glyph = null;
     }
     const killAccessible = loc && (ACCESSIBLE(loc.typ) || IS_POOL(loc.typ));
-    const treasureDrop = killAccessible ? !rn2(6) : false;
+    const treasureDrop = killAccessible && !noCorpse ? !rn2(6) : false;
     let gasSporeExplosion = null;
-    if (killAccessible && data.name === 'gas spore') {
+    if (killAccessible && !noCorpse && data.name === 'gas spore') {
         gasSporeExplosion = queueGasSporeDeathExplosion(mon, { messages });
     }
     maybeDropHeroProjectileKillRandomTreasure(mon, data, corpseData, killAccessible, treasureDrop);
     if (gasSporeExplosion) {
         messages.more = true;
-    } else if (killAccessible
+    } else if (killAccessible && !noCorpse && !wasInside
         && !mon.mcloned && monsterCorpseDropSucceeds(mon, data)
         && monsterLeavesCorpseLikeDrop(corpseData)) {
         createMonsterCorpseOrGlob(mon, corpseData, mon.mx, mon.my, { messages });
@@ -36399,10 +36415,7 @@ function applyLightScrollArea(on, item) {
 function snuffCarriedLightsForScroll(messages) {
     for (const obj of game.inventory || []) {
         if (!(obj.lamplit || obj.burning)) continue;
-        obj.lamplit = false;
-        obj.burning = false;
-        delete obj._burnTimer;
-        delete obj.litRadius;
+        endBurn(obj);
         updateChargedItemLine(obj);
         if (!game.u?.blind) messages.push(`${chargingObjectSubject(obj)} goes out!`);
     }
@@ -37139,10 +37152,7 @@ function rechargeLamp(item, curseBless) {
     if (curseBless < 0) {
         messages.push(...stripCharges(item));
         if (item.lamplit || item.burning) {
-            item.lamplit = false;
-            item.burning = false;
-            delete item._burnTimer;
-            delete item.litRadius;
+            endBurn(item);
             if (!game.u?.blind) messages.push(`${chargingObjectSubject(item)} goes out!`);
         }
         updateChargedItemLine(item);
@@ -37465,7 +37475,7 @@ export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
     let damage = 0;
     const owner = fireScrollMonsterName(mon).replace(/^The /, 'the ');
     const possessive = owner.endsWith('s') ? `${owner}'` : `${owner}'s`;
-    const resistsFire = !!(mon?.fireResistance || mon?.data?.resistsFire);
+    const fireResistant = resistsFire(mon) || monsterResistsFire(mon);
     for (const item of selected.filter(Boolean)) {
         const cls = fireDestroyableInventoryClass(item);
         if (cls === 'spellbook' && isBookOfTheDeadItem(item)) {
@@ -37475,7 +37485,7 @@ export function monsterFireInventoryDamage(mon, origDamage, messages, visible) {
         const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
         const itemDamage = cls === 'potion' ? rnd(6)
             : cls === 'slime' ? Math.trunc(((item.owt || 20) + 19) / 20)
-                : resistsFire ? 0 : 1;
+                : fireResistant ? 0 : 1;
         let destroyed = 0;
         for (let i = 0; i < quan; i++)
             if (!rn2(3)) destroyed++;
@@ -44500,10 +44510,7 @@ export function stoneMonster(mon, messages = null, { awardExperience = false } =
             continue;
         }
         if (obj.lamplit || obj.burning) {
-            obj.lamplit = false;
-            obj.burning = false;
-            delete obj._burnTimer;
-            delete obj.litRadius;
+            endBurn(obj);
         }
         obj.contained = false;
         obj.worn = false;
@@ -45593,10 +45600,7 @@ function disintegrateArm(target, messages) {
     if (!armor) return false;
 
     if (armor.lamplit || armor.burning) {
-        armor.lamplit = false;
-        armor.burning = false;
-        delete armor._burnTimer;
-        delete armor.litRadius;
+        endBurn(armor);
     }
     messages.push(disintegrateArmorMessage(armor));
     destroyWornArmorItem(armor, messages);
@@ -57019,10 +57023,7 @@ function rustTrapSplashLitItem(item, messages) {
             messages.push(`Your ${name} ${heard ? 'crackles' : ''}${heard && seen ? ' and ' : ''}${seen ? 'flickers' : ''}.`);
         return false;
     }
-    item.lamplit = false;
-    item.burning = false;
-    delete item._burnTimer;
-    delete item.litRadius;
+    endBurn(item);
     updateRustTrapItemLine(item);
     messages.push(`Your ${name} ${rustTrapNameVerb(name, 'goes', 'go')} out!`);
     return true;
@@ -62498,6 +62499,17 @@ async function finishOfferObject(obj, { floor = false } = {}) {
 }
 
 export async function rhack(_cmd) {
+    await rhackInternal(_cmd);
+    const invocation = game._artifact_untrap;
+    if (!invocation) return;
+    invocation.spent ||= !!game.context?.move;
+    if (game._command_mode || game._message_more || game._queued_message_after_more
+        || game._queued_messages_after_more?.length) return;
+    if (!invocation.spent) invocation.item.age = 0;
+    game._artifact_untrap = null;
+}
+
+async function rhackInternal(_cmd) {
     game.context = game.context || {};
     game.context.move = 0;
     game.u.umoved = false;
@@ -70213,9 +70225,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     // C ref: src/spell.c:spelleffects()/spelleffects_check(); effect bodies
     // live in js/spell.js and receive these cmd.js internals via deps.
     function spellRoleSkillLevel(spell) {
+        if (spell?.skillLevel != null) return spell.skillLevel;
         const roleName = game.urole?.name?.m || game._startup_role || '';
         const skillName = spell?.category || spell?.skill || SPELL_CATEGORIES[spell?.name] || 'enchantment';
-        return ROLE_INITIAL_SPELL_SKILLS[roleName]?.[skillName] || P_UNSKILLED;
+        const index = P_ATTACK_SPELL + ['attack', 'healing', 'divination', 'enchantment', 'cleric', 'escape', 'matter'].indexOf(skillName);
+        return heroExplicitWeaponSkillLevel(index, `${skillName} spells`)
+            ?? ROLE_INITIAL_SPELL_SKILLS[roleName]?.[skillName] ?? P_UNSKILLED;
     }
 
     function spellLoseHeroHp(damage, cause) {
@@ -70559,6 +70574,110 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return 0; // C unfixable_trouble_count(FALSE): no modeled unfixable troubles
     }
 
+    async function spellRestoreLifeSavedHero() {
+        // end.c:savelife is synchronous with respect to the continuing
+        // spell. Keep its final HP for the later life-saving message.
+        clearLifeSavedDeathState();
+        applyLifeSavingConLoss();
+        restoreHeroHpAfterLifeSaving();
+        const hp = heroPolyselfFireHpState();
+        const con = game.u.acurr?.a?.[A_CON] ?? 10;
+        if (hp) game.u[hp.hpKey] = Math.min(game.u[hp.maxKey], 50 + 10 * Math.trunc(con / 2));
+        if (game.u.uhunger < 500) { game.u.uhunger = 900; game.u.uhs = 1; }
+        if ((game.u._sickTimeout || game.u._sicknessTimeout) === 1) clearHeroSickness();
+        if (game.u.utraptype === TT_LAVA) { game.u.utrap = 0; game.u.utraptype = null; }
+        if (game.u.uswallow && game.u.ustuck) await finishSwallowExpel(game.u.ustuck);
+        else if (game.u.ustuck) {
+            const mon = game.u.ustuck;
+            game.u.ustuck = null;
+            const attacks = (pmOf(mon) || mon.data).attacks || [];
+            if (!mon.mspec_used && attacks.some(attack => attack.adtyp === AD_STCK
+                || attack.aatyp === AT_ENGL || attack.aatyp === AT_HUGS)) mon.mspec_used = rnd(2);
+        }
+    }
+
+    async function spellElementalHeroDamage(element, original, damage, cause, messages, { golemDamage = original } = {}) {
+        if (element === 'fire') burnAwayHeroSlime(messages);
+        if (game.u?.uinvulnerable) {
+            damage = golemDamage = 0;
+            messages.push('You are unharmed!');
+        }
+        const inventory = element === 'fire'
+            ? fireDamageInventory(original, true, false, { allowLifeSaving: true, igniteBeforeDestroy: true })
+            : coldDamageInventory(original);
+        messages.push(...inventory.messages);
+        if (inventory.fatal) return { fatal: true, more: true };
+        if (inventory.lifeSaving) await spellRestoreLifeSavedHero();
+        const itemResult = applyChestTrapFireDamage(messages, inventory.damage, inventory.deathCause || cause);
+        if (itemResult.fatal) return itemResult;
+        if (itemResult.lifeSaving) await spellRestoreLifeSavedHero();
+        // C ugolemeffects precedes direct explosion damage and uses the
+        // role-adjusted damage, even when elemental resistance shields HP.
+        const form = pmOf({ data: game.u?._polyself_form }) || game.u?._polyself_form;
+        const hp = heroPolyselfFireHpState();
+        if (element === 'fire' && form?.name === 'iron golem' && hp
+            && game.u[hp.hpKey] < game.u[hp.maxKey]) {
+            game.u[hp.hpKey] = Math.min(game.u[hp.maxKey], game.u[hp.hpKey] + golemDamage);
+            messages.push('Strangely, you feel better than before.');
+            exerciseAttribute(A_STR, true);
+        }
+        const result = applyChestTrapFireDamage(messages, damage, cause);
+        if (result.lifeSaving) await spellRestoreLifeSavedHero();
+        return { ...result, lifeSaving: !result.fatal && (!!result.lifeSaving || !!itemResult.lifeSaving || !!inventory.lifeSaving) };
+    }
+
+    function spellExplosionFloor(x, y, element, messages) {
+        const loc = game.level?.at(x, y);
+        if (!loc) return false;
+        const closed = loc.typ === SDOOR || (loc.typ === DOOR && loc.doormask & (D_CLOSED | D_LOCKED));
+        let shopDamage = false;
+        if (closed) shopDamage = addShopTerrainDamage(x, y, SHOP_DOOR_COST);
+        if (element === 'cold') {
+            messages.push(...applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }).messages);
+        } else {
+            messages.push(...burnFireRayWebTrap(x, y, { previousMessage: messages.at(-1) || '' }));
+            const ice = applyFireRayIceTerrain(x, y, { heroRay: true, recordKill: recordVanquished, buriedMerchandiseDebtMessage });
+            messages.push(...ice.messages);
+            if (!ice.handled) {
+                messages.push(...applyFireRayWaterTerrain(x, y, { heroRay: true, previousMessage: messages.at(-1) || '' }).messages);
+                messages.push(...applyFireRayFountainTerrain(x, y, { heroRay: true }).messages);
+            }
+            if (loc.typ === SDOOR) {
+                loc.typ = DOOR;
+                loc.doormask = Is_rogue_level(game.u?.uz) ? D_NODOOR
+                    : loc.doormask & D_LOCKED ? loc.doormask : (loc.doormask || 0) | D_CLOSED;
+                if (cansee(x, y)) messages.push('Your spell reveals a secret door.');
+            }
+            if (loc.typ === DOOR && loc.doormask & (D_CLOSED | D_LOCKED)) {
+                loc.doormask = D_NODOOR;
+                loc.flags = 0;
+                messages.push(cansee(x, y) ? 'The door is consumed in flames!' : 'You smell smoke.');
+            }
+            messages.push(...burnRayFloorObjectsByFire(x, y));
+        }
+        if (closed) { vision_reset(); vision_recalc(0); newsym(x, y); }
+        const mon = (game.level?.monsters || []).find(candidate => !candidate.dead && candidate.mx === x && candidate.my === y);
+        if (mon) {
+            mon.msleeping = 0;
+            mon.meating = 0;
+            revealHeroProjectileHitMimicAppearance(mon);
+            directMeleeSetmangryElberethHypocrisy(mon, messages);
+            clearDirectMeleeWaitStrategyMask(mon);
+            directMeleeAngerPeacefulMonster(mon, messages, { visible: visibleMonsterForScroll(mon) });
+        }
+        return shopDamage;
+    }
+
+    function observeHeroElementResistance(element, resisted) {
+        if (game.u?.uswallow || game.u?.underwater || game.u?.uinwater) return;
+        const bit = element === 'fire' ? M_SEEN_FIRE : M_SEEN_COLD;
+        for (const mon of game.level?.monsters || []) {
+            if (mon.dead || mon.mhp <= 0 || !couldsee(mon.mx, mon.my)) continue;
+            if (game.u?.invisible && !perceives(pmOf(mon) || mon.data || {})) continue;
+            mon.m_seenres = resisted ? (mon.m_seenres || 0) | bit : (mon.m_seenres || 0) & ~bit;
+        }
+    }
+
     const SPELL_EFFECT_DEPS = {
         spellRoleSkillLevel,
         loseHeroHp: spellLoseHeroHp,
@@ -70625,6 +70744,20 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         monsterColdInventoryDamage,
         coldDamageInventory,
         heroHasColdResistance,
+        heroHasFireResistance: () => heroHasFireResistance() || resistsFire({ data: game.u?._polyself_form }),
+        spellElementalHeroDamage,
+        observeHeroElementResistance,
+        spellExplosionFloor,
+        burnMonsterArmorFromFire,
+        monsterFireInventoryDamage,
+        igniteMonsterFireInventoryItems,
+        wakeNearbyMonstersAt,
+        payForCurrentShopTerrainDamage,
+        explosionAngerMonster: (mon, messages) => {
+            directMeleeSetmangryElberethHypocrisy(mon, messages);
+            clearDirectMeleeWaitStrategyMask(mon);
+            directMeleeAngerPeacefulMonster(mon, messages, { visible: visibleMonsterForScroll(mon) });
+        },
         applyColdRayTerrain: (x, y) => applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }),
         applyMonsterPolymorphTarget,
         levelDifficulty: () => level_difficulty(game.u?.uz),
@@ -70683,6 +70816,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     async function finishSpellEffectResult(spell, result) {
         game._command_mode = null;
         game.context.move = 1;
+        if (result?.lifeSaving && !result?.fatal && (game.u?.uhp || 0) > 0)
+            game._life_saving_post_continue_hp = game.u.uhp;
         const messages = [...(result?.messages || [])];
         if (result?.invalidDirection) messages.unshift('What a strange direction!', 'The magical energy is released!');
         else if (result?.released) messages.unshift('The magical energy is released!');
@@ -70747,6 +70882,35 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         if (result?.polyResult) applyLifeSavingOrFatalCommandMode(result.polyResult);
         else if (result?.fatal || result?.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
+    }
+
+    async function beginSpellEffect(spell, prefix = '') {
+        game._casting_spell = spell;
+        if (['fireball', 'cone of cold'].includes(spell.name) && spellRoleSkillLevel(spell) >= P_SKILLED) {
+            if (game.u?.uinwater || Is_waterlevel(game.u?.uz)) {
+                await finishSpellEffectResult(spell, { messages: [game.u?.uinwater
+                    ? "You're joking!  In this weather?" : 'You had better wait for the sun to come out.'] });
+                return;
+            }
+            game._spell_explosion_target = { x: game.u.ux, y: game.u.uy };
+            game._cursor_override = [game.u.ux - 1, game.u.uy + 1];
+            await setMessage(`${prefix}Where do you want to cast the spell?`);
+            game._command_mode = 'spellExplosionTarget';
+            game.context.move = 0;
+        } else if (spellCastNeedsDirection(spell)) {
+            await setMessage(`${prefix}In what direction?`);
+            game._command_mode = 'spellDirection';
+        } else {
+            const result = await castSpellNodirEffect(spell, SPELL_EFFECT_DEPS);
+            if (prefix && result.messages?.length) result.messages.unshift(prefix.trim());
+            await finishSpellEffectResult(spell, result);
+        }
+    }
+
+    async function beginArtifactStormSpell(name) {
+        exerciseAttribute(A_WIS, true);
+        mksobj(SPE_HEALING, false, false);
+        await beginSpellEffect({ name, category: 'attack', skillLevel: P_EXPERT });
     }
 
     if (game._command_mode === 'castSpell') {
@@ -70816,16 +70980,31 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         mksobj(SPE_HEALING, false, false); // C pseudo spell object; init=false only consumes next_ident().
         game._overlay_lines = null;
         game._overlay_hide_status = 0;
-        // C spell.c:spelleffects(): only oc_dir != NODIR spells get getdir().
-        if (spellCastNeedsDirection(spell)) {
-            if (drainPrefix) game._pending_message_prefix = drainPrefix.trim();
-            await setMessage(`${drainPrefix}In what direction?`);
-            game._command_mode = 'spellDirection';
-            return;
+        if (drainPrefix) game._pending_message_prefix = drainPrefix.trim();
+        await beginSpellEffect(spell, drainPrefix);
+        return;
+    }
+
+    if (game._command_mode === 'spellExplosionTarget') {
+        const target = game._spell_explosion_target;
+        if (ch === '\x1b' || ['.', ',', ';', ':', '\r', '\n'].includes(ch)) {
+            const spell = game._casting_spell;
+            game._casting_spell = null;
+            game._spell_explosion_target = null;
+            game._cursor_override = null;
+            const result = await castSpellExplosionEffect(spell, ch === '\x1b' ? null : target, SPELL_EFFECT_DEPS);
+            await finishSpellEffectResult(spell, result);
+        } else {
+            const dir = movementDirection(ch.toLowerCase());
+            if (dir) {
+                const steps = ch !== ch.toLowerCase() ? 8 : 1;
+                target.x = Math.max(1, Math.min(COLNO - 1, target.x + dir.dx * steps));
+                target.y = Math.max(0, Math.min(ROWNO - 1, target.y + dir.dy * steps));
+            }
+            game._cursor_override = [target.x - 1, target.y + 1];
+            game._keep_pending_message = 1;
+            game.context.move = 0;
         }
-        const result = await castSpellNodirEffect(spell, SPELL_EFFECT_DEPS);
-        if (drainPrefix && (result?.messages || []).length) result.messages.unshift(drainPrefix.trim());
-        await finishSpellEffectResult(spell, result);
         return;
     }
 
@@ -75523,14 +75702,204 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
-    if (game._command_mode === 'invokeObject') {
-        if (ch === 'p') {
-            await setMessage('Nothing happens.');
+    if (game._command_mode === 'invokePortal') {
+        const choices = game._artifact_portal_choices;
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._artifact_portal_choices = null;
+            game._overlay_lines = null;
             game._command_mode = null;
             game.context.move = 1;
+            await setMessage('You feel a surge of power, but nothing seems to happen.');
+            return;
+        }
+        const choice = choices.find(entry => entry.letter === ch);
+        if (!choice) return;
+        game._artifact_portal_choices = null;
+        game._overlay_lines = null;
+        game._command_mode = null;
+        const messages = await openArtifactPortal(choice.dnum, {
+            depth: depth_of_level, hasAmulet: heroHasAmuletOfYendor, heroIsBlind, newsym,
+            monsterHasAmulet: monsterHasAmuletOfYendor,
+            gotoLevel: target => scheduleSitLevelChange(target, { suppressMaterialize: true }),
+        });
+        game.context.move = 1;
+        await setMessage(messages.join('  '));
+        return;
+    }
+    if (game._command_mode === 'invokeUntrapDirection') {
+        game._command_mode = 'untrapDirection';
+    }
+    if (game._command_mode === 'invokeChargeInventory') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        game._command_mode = 'invokeCharge';
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(chargePromptText());
+            return;
+        }
+    }
+    if (game._command_mode === 'invokeCharge') {
+        const source = game._invoking_artifact;
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            source.age = 0;
+            game._invoking_artifact = null;
+            game._command_mode = null;
+            game.context.move = 0;
+            await setMessage('Never mind.');
+            return;
+        }
+        if (ch === '?' || ch === '*') {
+            showInventoryOverlay();
+            game._command_mode = 'invokeChargeInventory';
+            return;
+        }
+        const target = (game.inventory || []).find(obj => obj.letter === ch);
+        if (!target) {
+            await setMessage("You don't have that object.");
+            return;
+        }
+        const definition = artifactInvocation(source).definition;
+        const role = game._startup_role || game.urole?.name?.m;
+        const blessed = source.blessed && (!definition.questRole || definition.questRole === role);
+        const result = rechargeItem(target, blessed ? 1 : source.cursed ? -1 : 0);
+        if (result.messages.length) await setMessage(result.messages.join('  '), !!result.more);
+        if (result.retry) return;
+        game._invoking_artifact = null;
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+    if (game._command_mode === 'invokeInventory') {
+        game._overlay_lines = null;
+        game._overlay_hide_status = 0;
+        game._command_mode = 'invokeObject';
+        if (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n') {
+            await setMessage(`What do you want to invoke? [${inventoryLetters(canInvokeItem) || '*'} or ?*]`);
+            return;
+        }
+    }
+    if (game._command_mode === 'invokeObject') {
+        if (ch === '?' || ch === '*') {
+            showInventoryOverlay(0, false, ch === '?' ? canInvokeItem : null);
+            game._command_mode = 'invokeInventory';
+            return;
+        }
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            game._command_mode = null;
+            await setMessage('Never mind.');
+            return;
+        }
+        const item = (game.inventory || []).find(obj => obj.letter === ch);
+        if (!item) {
+            await setMessage("You don't have that object.");
             return;
         }
         game._command_mode = null;
+        const result = await invokeArtifact(item, {
+            retouch: (obj, definition) => containerTakeoutArtifactTouch(definition && !obj.artifact
+                ? { ...obj, artifact: definition.name } : obj),
+            isCrystalBallObject, clearHeroSickness, removeHeroStatusSuffix,
+            heroHasBlindfold: () => (game.inventory || []).some(obj => isWornInventoryItem(obj)
+                && ['blindfold', 'towel'].includes(objectKindKey(obj))),
+            heroIsBlind, heroIsHallucinating,
+            refreshHero: () => newsym(game.u.ux, game.u.uy),
+            propertySources: power => (game.inventory || []).some(obj => isWornInventoryItem(obj)
+                && (power === 'CONFLICT' ? objectKindKey(obj) === 'ring of conflict'
+                    : power === 'INVIS' ? ['ring of invisibility', 'cloak of invisibility'].includes(objectKindKey(obj))
+                        : ['ring of levitation', 'levitation boots'].includes(objectKindKey(obj)))),
+            floatArtifact: async (on, messages) => {
+                const u = game.u;
+                if (on) {
+                    if (u.utrap && u.utraptype === TT_PIT) {
+                        u.utrap = 0;
+                        u.utraptype = 0;
+                        messages.push('You float up, out of the pit!');
+                        const boulder = (game.level?.objects || []).find(obj => obj.ox === u.ux && obj.oy === u.uy
+                            && (obj.otyp === BOULDER || obj.kind === 'boulder'));
+                        if (boulder) earthBoulderPitHoleEffects(boulder, u.ux, u.uy, messages, 'settle');
+                    } else if (u.utrap) {
+                        messages.push('You float up slightly, but your leg is still stuck.');
+                    } else if (heroIsHallucinating()) messages.push("Up, up, and awaaaay!  You're walking on air!");
+                    else if (Is_airlevel(u.uz)) messages.push('You gain control over your movements.');
+                    else messages.push('You start to float in the air!');
+                } else {
+                    u._levitationTimeout = 0;
+                    u.levitation = u.Levitation = false;
+                    if (u.flying || u.Flying) messages.push('You have stopped levitating and are now flying.');
+                    else {
+                        messages.push(Is_airlevel(u.uz) ? 'You begin to tumble in place.'
+                            : Is_waterlevel(u.uz) ? 'You feel heavier.'
+                                : `You float gently to the ${polyselfFalloffSurfaceName(u.ux, u.uy)}.`);
+                        const result = await heroLandingTrapEffectAt(u.ux, u.uy, messages);
+                        if (result?.fatal) applyLifeSavingOrFatalCommandMode(result);
+                    }
+                }
+                vision_recalc(0);
+            },
+            refreshVision: () => { vision_recalc(0); game._redraw_level_after_more = 1; },
+            createArrows: () => mksobj(ARROW, true, false),
+            holdArrows: addAppliedHornObjectToInventory,
+            migrateMonster: migrateMonsterToLevelRandom,
+        });
+        game.context.move = result.time ? 1 : 0;
+        if (result.action === 'CRYSTAL_BALL') {
+            await beginCrystalBallUse(item);
+            return;
+        }
+        if (result.action === 'ENLIGHTENING') {
+            const page1 = genericAttributesPage1();
+            game._attributes_page_2 = genericAttributesPage2();
+            setOverlay(page1, 24, true);
+            game._command_mode = 'attributes';
+            return;
+        }
+        if (result.action === 'CHARGE_OBJ') {
+            game._invoking_artifact = item;
+            game.context.move = 0;
+            await setMessage(chargePromptText());
+            game._command_mode = 'invokeCharge';
+            return;
+        }
+        if (result.action === 'UNTRAP') {
+            game._artifact_untrap = { item, spent: false };
+            game.context.move = 0;
+            await setMessage('In what direction?');
+            game._command_mode = 'invokeUntrapDirection';
+            return;
+        }
+        if (result.action === 'LEV_TELE') {
+            const messages = result.messages;
+            const teleport = teleportationScrollEffect({ cursed: true }, messages);
+            if (teleport.promptLevel) {
+                game._level_teleport_confused_scroll = heroIsConfused() ? 1 : 0;
+                await beginLevelTeleportTextPrompt();
+            } else if (messages.length) await setMessage(messages.join('  '));
+            return;
+        }
+        if (result.action === 'SNOWSTORM' || result.action === 'FIRESTORM') {
+            await beginArtifactStormSpell(result.action === 'SNOWSTORM' ? 'cone of cold' : 'fireball');
+            return;
+        }
+        if (result.action === 'CREATE_PORTAL') {
+            const choices = (game.dungeons || []).map((dungeon, dnum) => ({ dungeon, dnum }))
+                .filter(entry => entry.dungeon.dunlev_ureached && entry.dnum !== game.tutorial_dnum)
+                .map((entry, index) => ({ ...entry, letter: String.fromCharCode(97 + index) }));
+            if (choices.length > 1) {
+                game._artifact_portal_choices = choices;
+                setOverlay([[0, 0, 'Open a portal to which dungeon?'],
+                    ...choices.map((entry, i) => [i + 2, 0, `${entry.letter} - ${entry.dungeon.dname || entry.dungeon.name}`])], 24, true);
+                game._command_mode = 'invokePortal';
+                game.context.move = 0;
+            } else {
+                result.messages.push(...await openArtifactPortal(choices[0]?.dnum ?? 0, {
+                    depth: depth_of_level, hasAmulet: heroHasAmuletOfYendor, heroIsBlind, newsym,
+                    monsterHasAmulet: monsterHasAmuletOfYendor,
+                    gotoLevel: target => scheduleSitLevelChange(target, { suppressMaterialize: true }),
+                }));
+            }
+        }
+        if (result.messages.length) await setMessage(result.messages.join('  '));
+        if (result.fatal) applyLifeSavingOrFatalCommandMode(result);
         return;
     }
 
@@ -77703,7 +78072,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (command === 'invoke') {
-                await setMessage('What do you want to invoke? [p or ?*]');
+                const letters = inventoryLetters(canInvokeItem);
+                await setMessage(`What do you want to invoke? [${letters ? `${getobjPromptLetters(letters)} or ?*` : '*'}]`);
                 game._command_mode = 'invokeObject';
                 return;
             }
