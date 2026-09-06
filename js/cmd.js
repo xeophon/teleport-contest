@@ -47,7 +47,7 @@ import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, ANTIMAGIC, SHOCK_
     FIRE_RES, SLEEP_RES, DISINT_RES, TELEPORT_CONTROL, STEALTH, FAST, INVIS,
     W_ARMOR, W_ACCESSORY, LOST_NONE, LOST_THROWN } from './const.js';
 import { S_MIMIC, S_NYMPH, PM_AMOROUS_DEMON, PM_ARCHON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
-import { pmOf, resistsFire, resistsCold, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
+import { pmOf, findMac, resistsFire, resistsCold, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, touchArtifactObject, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, flashResistance, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
@@ -73745,6 +73745,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 // roll (zap.c:4823); a wand of cold passes a fixed 6
                 // (zap.c:3464-3465).
                 const hornDamageDice = hornElement ? rn1(6, 6) : 6;
+                const beamColor = heroIsHallucinating() ? [12, 9, 15, 12, 8, 15][rn2(6)] : CLR_WHITE;
                 const beamCells = [];
                 const blast = hornBlastMessage(item);
                 const messages = [...preludeMessages];
@@ -73793,7 +73794,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     let bounceNow = !inBounds || typ === STONE;
 
                     if (!bounceNow) {
-                        beamCells.push({ x: sx, y: sy, ch: zapBeamGlyph(dx, dy), color: CLR_WHITE }); // C: coloring of ZT_COLD zap glyph is white (drawing.c zap glyph tables)
+                        beamCells.push({ x: sx, y: sy, ch: zapBeamGlyph(dx, dy), color: beamColor });
 
                         const terrain = applyColdRayTerrain(sx, sy, { buriedMerchandiseDebtMessage });
                         pushBoltMessage(terrain.messages);
@@ -73808,7 +73809,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                         if (target) {
                             const visible = !game.u?.blind && !target.minvis && !target.mundetected
                                 && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT);
-                            const armorClass = target.mac ?? target.data?.mac ?? target.data?.ac ?? 10;
+                            const armorClass = findMac(target);
                             if (zapRayHitsArmorClass(armorClass)) {
                                 range -= 2;
                                 const reflection = monsterReflectionSource(target);
@@ -73822,11 +73823,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                     dy = -dy;
                                 } else {
                                     let damage = 0;
-                                    const resistsCold = !!(target.coldResistance || target.data?.resistsCold || target.data?.coldResistance);
-                                    if (!resistsCold) {
+                                    if (!resistsCold(target) && !monsterResistsCold(target)) {
                                         const origDamage = d(hornDamageDice, 6);
                                         damage = origDamage;
-                                        if (target.fireResistance || target.data?.resistsFire) damage += d(6, 3);
+                                        if (resistsFire(target) || monsterResistsFire(target)) damage += d(hornDamageDice, 3);
                                         if (!rn2(3))
                                             damage += monsterColdInventoryDamage(target, origDamage, messages, visible);
                                         if (damage > 0 && monsterResistsEffect(target, 12))
@@ -73844,7 +73844,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                                         recordVanquished(target, true);
                                         newsym(target.mx, target.my);
                                         pushBoltMessage(`You kill the ${target.data?.name || 'monster'}!`);
-                                        break;
                                     } else if (visible) {
                                         pushBoltMessage(`The bolt of cold hits the ${target.data?.name || 'monster'}!`);
                                     }
@@ -73922,7 +73921,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                     const bchance = (!inBounds || typ === STONE) ? 10
                         : (IS_WALL(typ) && game.u?.uz?.dnum === game.mines_dnum) ? 20
                             : 75;
-                    if (--range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && couldsee(lsx, lsy))
+                    if (--range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && cansee(lsx, lsy))
                         pushBoltMessage('The bolt of cold bounces!');
                     if (!dx || !dy || (bchance > 0 && !rn2(bchance))) {
                         dx = -dx;
@@ -74023,11 +74022,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game._transient_beam_cells = messageMore
                     ? beamStopIndex == null ? beamCells : beamCells.slice(0, beamStopIndex)
                     : null;
-                identifyZapToolOrWand(item, 'cold');
-                rn2(10);
-                rn2(10);
-                rn2(10);
-                rn2(19);
+                setKnownWandLine(item, 'cold', { experience: true });
                 await setMessage(messages.join('  '), messageMore);
                 game._command_mode = null;
                 game.context.move = 1;

@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,204 passing tests**, with no
+The latest source-driven checkpoint has **7,229 passing tests**, with no
 failures, skips or TODOs. All ten generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -36,6 +36,14 @@ new tests also cover Japanese explanations and discovery buffer truncation.
 The endgame prerequisite Amulet now uses ordinary observation, removing its
 duplicate discovery; all 124 screens/cursors and 35,386 random calls match C.
 Full discovery collection, encounter ordering and forgetting remain source work.
+
+Cold rays now continue after kills and consume actual bounce draws; wand type
+learning replaces the fixed tail draws without revealing charges. Canonical
+monster armor and resistance fields govern hits and damage, frost horns use
+their rolled dice count for fire vulnerability, and hallucination rolls the
+beam color. Twenty-five new tests cover these branches; seed 0014 again
+matches all 714 screens/cursors and 59,178 random calls. Shared ray effects,
+serial message completion and full monster/hero effect branches remain open.
 
 Full inventory naming now shares the C base-name owner for wizard override and
 permanent identification feedback. Qualifiers cover container knowledge, traps,
@@ -470,13 +478,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The complete recording run after the type-name follow-up passes 49/53 public
-sessions (11,889/12,712 screens, 12,286/12,712 cursors and 809,621/832,102 RNG
+The complete recording run after the cold-ray follow-up passes 50/53 public
+sessions (11,895/12,712 screens, 12,286/12,712 cursors and 809,621/832,102 RNG
 calls) and 12/19 supplemental sessions (3,069/3,346 screens, 3,222/3,346 cursors
 and 137,889/141,728 RNG calls), with zero worker errors. Public failures are
-seeds 0002, 0014, 0116 and 4500. The shared naming switch initially reduced
-public passes to 32/53 at 40caf6c; source-state fixes restored 17 recordings.
-Sleep/cold ray learning still differs in 0002/0014; 0116 has a preexisting
+seeds 0002, 0116 and 4500. The shared naming switch initially reduced
+public passes to 32/53 at 40caf6c; source-state fixes restored 18 recordings.
+Sleep ray learning still differs in 0002; 0116 has a preexisting
 extra experience-source enlightenment row. These measurements do not
 establish full C behavior.
 

@@ -1,5 +1,17 @@
 # Objects, player magic, and attributes
 
+## Cold ray control follow-up (2026-09-06)
+
+`zap.c:dobuzz` now continues after `xkilled`; actual geometry drives bounce
+draws instead of a fixed three-draw tail. `weffects/learnwand` performs type
+discovery after the ray without identifying charges. `find_mac` and species,
+intrinsic and extrinsic resistance bits govern monster hits; `zhitm` uses the
+frost horn's rolled dice count for fire vulnerability. Twenty-five new tests
+cover repeated zaps, sight/hallucination gates, two kills, armor, resistance
+sources and bounce visibility. The affected 714-screen recording fully matches.
+The cold loop still has duplicated hero damage and message handling; this
+checkpoint does not certify all of `dobuzz/zhitm/zhitu` or monster death effects.
+
 ## Discovery type-name follow-up (2026-09-06)
 
 `objnam.c:obj_typename/xcalled/Japanese_item_name` now share a type-name owner

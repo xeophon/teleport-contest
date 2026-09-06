@@ -44,9 +44,9 @@ for (const symbol of ['FROST_HORN', 'SPE_POLYMORPH', 'GENERIC_WAND']) test(`lear
     assert.equal(item.known, false);
 });
 
-for (const known of [false, true]) for (const seen of [false, true])
+for (const kind of ['digging', 'cold']) for (const known of [false, true]) for (const seen of [false, true])
     for (const blind of [false, true]) for (const hallucinating of [false, true])
-        test(`live digging learning: known=${known} seen=${seen} blind=${blind} hallucinating=${hallucinating}`, async () => {
+        test(`live ${kind} learning: known=${known} seen=${seen} blind=${blind} hallucinating=${hallucinating}`, async () => {
             resetGame(); initRng(17); game.flags = {}; game.context = {};
             game.u = { ux: 10, uy: 10, uz: { dnum: 0, dlevel: 1 }, ulevel: 1,
                 uhp: 20, uhpmax: 20, uhunger: 900, blind, hallucinating,
@@ -55,8 +55,8 @@ for (const known of [false, true]) for (const seen of [false, true])
             for (let x = 1; x < 79; x++) for (let y = 0; y < 21; y++)
                 Object.assign(game.level.at(x, y), { typ: ROOM, lit: true });
             vision_reset(); enableRngLog({ reset: true });
-            const type = OBJECT_DATA.find(type => type.symbol === 'WAN_DIGGING');
-            const item = { _c_otyp: type.id, kind: 'digging', cls: 'wand', glyph: '/',
+            const type = OBJECT_DATA.find(type => type.symbol === `WAN_${kind.toUpperCase()}`);
+            const item = { _c_otyp: type.id, kind, cls: 'wand', glyph: '/',
                 letter: 'a', spe: 4, known: false, bknown: false, dknown: seen };
             game.inventory = [item];
             if (known) game._known_object_types = [type.id];
@@ -72,5 +72,9 @@ for (const known of [false, true]) for (const seen of [false, true])
                 assert.equal(game.context.move, 1);
             }
             assert.equal(getRngLog().filter(line => line.startsWith('rn2(19)')).length, 2 + Number(learned));
-            assert.equal(getRngLog().filter(line => line.startsWith('rn2(18)')).length, 2);
+            assert.equal(getRngLog().filter(line => line.startsWith(kind === 'digging' ? 'rn2(18)' : 'rn2(7)')).length, 2);
+            if (kind === 'cold') {
+                assert.equal(getRngLog().some(line => line.startsWith('rn2(10)')), false, 'open-room rays do not roll wall bounces');
+                assert.equal(getRngLog().filter(line => line.startsWith('rn2(6)')).length, hallucinating ? 2 : 0);
+            }
         });
