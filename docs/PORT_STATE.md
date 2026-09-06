@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 83 JavaScript modules and approximately 176,000 lines;
+The port now has 84 JavaScript modules and approximately 176,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,9 +25,17 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,185 passing tests**, with no
-failures, skips or TODOs. All nine generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **7,204 passing tests**, with no
+failures, skips or TODOs. All ten generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
+
+Discovery names now use C's object-type formatter and global appearance,
+knowledge and called-name state. The formatter matches 5,772 compiled C cases,
+including Samurai names, unique books, gems and long called names. Nineteen
+new tests also cover Japanese explanations and discovery buffer truncation.
+The endgame prerequisite Amulet now uses ordinary observation, removing its
+duplicate discovery; all 124 screens/cursors and 35,386 random calls match C.
+Full discovery collection, encounter ordering and forgetting remain source work.
 
 Full inventory naming now shares the C base-name owner for wizard override and
 permanent identification feedback. Qualifiers cover container knowledge, traps,
@@ -462,15 +470,15 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The complete recording run after the type-state follow-up passes 47/53 public
-sessions (11,877/12,712 screens, 809,621/832,102 RNG calls) and 12/19
-supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
-zero worker errors. Public failures are seeds 0002, 0014, 0116, 0373, 0383 and
-4500. The shared naming switch initially reduced public passes to 32/53 at
-40caf6c; source-state fixes restored 15 recordings. Four regressions relative
-to the earlier 51/53 checkpoint remain under investigation: reflection type
-knowledge, ray-wand learning, the granted amulet discovery, and interrupted
-armor completion. These measurements do not establish full C behavior.
+The complete recording run after the type-name follow-up passes 49/53 public
+sessions (11,889/12,712 screens, 12,286/12,712 cursors and 809,621/832,102 RNG
+calls) and 12/19 supplemental sessions (3,069/3,346 screens, 3,222/3,346 cursors
+and 137,889/141,728 RNG calls), with zero worker errors. Public failures are
+seeds 0002, 0014, 0116 and 4500. The shared naming switch initially reduced
+public passes to 32/53 at 40caf6c; source-state fixes restored 17 recordings.
+Sleep/cold ray learning still differs in 0002/0014; 0116 has a preexisting
+extra experience-source enlightenment row. These measurements do not
+establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

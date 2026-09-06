@@ -1,5 +1,19 @@
 # Objects, player magic, and attributes
 
+## Discovery type-name follow-up (2026-09-06)
+
+`objnam.c:obj_typename/xcalled/Japanese_item_name` now share a type-name owner
+in `objnam.js`; 5,772 answers compiled from the unchanged C functions cover
+every type, known/unknown state, Samurai names and called-name buffer limits.
+`o_init.c:disco_typename/disco_append_typename` supplies English explanations
+and preserves parenthesized descriptions when discovery lines are truncated.
+Nineteen new tests include actual discovery commands with global shuffled
+appearances and long called names. The endgame prerequisite uses ordinary
+object observation (`teleport.c:1244`), retaining unknown type state without
+adding a second legacy discovery. Its 124-screen recording fully matches.
+This formatter work does not complete discovery collection, encounter order,
+preknown markers or forgetting.
+
 ## Swallowed armor callback follow-up (2026-09-06)
 
 The existing swallowed-cold completion branch now retains the armor-on callback
@@ -46,9 +60,9 @@ rustproofing to the shared name owner. Canonical lookup resolves the generator's
 class tags and localized names before inventory classification. Discovery
 lookup keeps the C class when resolving ambiguous names such as protection.
 The 39 added state tests and two fresh C recordings cover these integrations.
-The complete 72-recording run reports 47/53 public and 12/19 supplemental
-passes, with no worker errors. Four naming/state regressions remain relative
-to the earlier checkpoint and are listed in `../PORT_STATE.md`. A separate
+At that checkpoint, the complete 72-recording run reported 47/53 public and
+12/19 supplemental passes, with no worker errors. Current measurements and
+remaining differences are listed in `../PORT_STATE.md`. A separate
 Samurai swap probe (`/tmp/samurai-swap-time.recipe.json`) exposes missing swap
 turn timing; completion and C artifact/contact gates still need a wield pass.
 

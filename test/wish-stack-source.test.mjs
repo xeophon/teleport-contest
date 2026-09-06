@@ -8,6 +8,7 @@ import { vision_reset } from '../js/vision.js';
 import { ROOM, W_QUIVER, W_WEP } from '../js/const.js';
 import { ROT_CORPSE, peekTimer } from '../js/timeout.js';
 import { recordObservedObjectDiscovery } from '../js/display.js';
+import { IDENTIFIED_AMULET_NAMES } from '../js/o_init.js';
 
 function setup() {
     resetGame();initRng(41);
@@ -163,6 +164,8 @@ test('distinct unknown amulet types retain separate discovery entries',()=>{
 test('the worn-amulet discovery path uses the same type identity as observation',async()=>{
     setup();const item={letter:'a',cls:'amulet',kind:'amulet of reflection',actualKind:'amulet of reflection',
         appearance:'circular',worn:true,known:false,quan:1};
+    game._object_descriptions = { amulets: [] };
+    game._object_descriptions.amulets[IDENTIFIED_AMULET_NAMES.indexOf(item.kind)] = 'circular';
     game.inventory=[item];recordObservedObjectDiscovery(item);await rhack('\\');
     assert.equal(game._overlay_lines.filter(row=>row[2].includes('amulet (circular)')).length,1);
 });

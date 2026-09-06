@@ -119,6 +119,9 @@ for (const contained of [false, true]) test(`C quotes partly eaten shop food but
 
 test('discovery listings include known-type quotes even with price_quotes disabled', async () => {
     setup(); const item = potion();
+    const index = item._c_otyp - OBJECT_DATA.find(type => type.id >= 18 && type.class === 8).id;
+    game._object_descriptions = { potions: [] };
+    game._object_descriptions.potions[index] = { description: 'ruby' };
     game._discoveries = [{ section: 'Potions', name: 'potion of healing', text: 'potion of healing (ruby)', known: true }];
     recordPriceQuote(item._c_otyp, 40, true);
     recordPriceQuote(item._c_otyp, 10, false);

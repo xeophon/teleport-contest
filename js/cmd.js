@@ -1,5 +1,5 @@
 import { tinVariety, TIN_VARIETY_TEXTS } from './eat.js';
-import { makePlural as pluralizeMonsterName, xname, doname } from './objnam.js';
+import { makePlural as pluralizeMonsterName, xname, doname, discoveryTypeName } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject, learnWandType } from './object_knowledge.js';
 import { recordPriceQuote, appendPriceQuote, shopObjectPrice } from './shk.js';
@@ -5654,18 +5654,6 @@ function carriedRealAmuletOfYendor() {
     }) || null;
 }
 
-function recordKnownAmuletOfYendorDiscovery() {
-    game._discoveries ??= [];
-    if (!game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet (Amulet of Yendor)'))
-        game._discoveries.push({
-            section: 'Amulets',
-            name: 'amulet (Amulet of Yendor)',
-            text: 'amulet (Amulet of Yendor)',
-            starred: false,
-            known: true,
-        });
-}
-
 function identifyRealAmuletOfYendorForQuest() {
     const amulet = carriedRealAmuletOfYendor();
     if (!amulet) return;
@@ -5675,7 +5663,6 @@ function identifyRealAmuletOfYendorForQuest() {
     amulet.appearance = 'Amulet of Yendor';
     amulet.dknown = true;
     identifyInventoryItem(amulet);
-    recordKnownAmuletOfYendorDiscovery();
 }
 
 function heroCarriesBellOfOpening() {
@@ -59559,25 +59546,14 @@ function grantEndgamePrerequisiteIfNeeded(targetLevel) {
         return '';
     const amulet = makeRealAmuletOfYendorWishObject();
     const letter = nextInventoryLetter();
-    Object.assign(amulet, {
-        letter,
-        line: `${letter} - the Amulet of Yendor`,
-    });
+    amulet.letter = letter;
     game.inventory ??= [];
     game.inventory.push(amulet);
     game.u ??= {};
     game.u.uhave ??= {};
     game.u.uhave.amulet = 1;
-    game._discoveries ??= [];
-    if (!game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet (Amulet of Yendor)'))
-        game._discoveries.push({
-            section: 'Amulets',
-            name: 'amulet (Amulet of Yendor)',
-            text: 'amulet (Amulet of Yendor)',
-            starred: false,
-            known: true,
-        });
-    return `Endgame prerequisite: ${letter} - the Amulet of Yendor.`;
+    amulet.line = `${letter} - ${doname(amulet, objectNameDependencies())}`;
+    return `Endgame prerequisite: ${amulet.line}.`;
 }
 
 async function captureCurrentGridSnapshot() {
@@ -63946,8 +63922,16 @@ function discoveryOverlayLines(page = 0) {
                 return (entry.text?.includes('(' + description + ')') || entry.name === description
                         || cls === 'gem' && entry.name === description + (candidate.material === 21 ? ' stone' : ' gem'));
             });
-            const text = type ? String(entry.text).replace(/ \{(?:buy|sell) [^}]*\}$/, '') : entry.text;
-            body.push([appendPriceQuote(`${entry.starred ? '*' : ' '} ${text}`, type?.id), 0]);
+            const item = type && { _c_otyp: type.id };
+            let text = type ? discoveryTypeName(type, { description: names.description(item, type),
+                called: names.called(item, type) }) : entry.text;
+            const prefix = `${entry.starred ? '*' : ' '} `;
+            if (prefix.length + text.length >= 256) {
+                const at = text.lastIndexOf('(');
+                const tail = at > 0 && text[at - 1] === ' ' && text.indexOf(')', at) >= 0 ? text.slice(at - 1) : '';
+                text = text.slice(0, 255 - prefix.length - tail.length) + tail;
+            }
+            body.push([appendPriceQuote(prefix + text, type?.id), 0]);
         }
     }
     if (!body.length) body.push(['You have discovered nothing yet.', 0]);

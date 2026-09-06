@@ -137,6 +137,56 @@ export function makeSingular(value) {
 const JAPANESE_NAMES = new Map([...JAPANESE_ITEM_ALIASES].map(([japanese, english]) => [english.replace(/^potion of /, ''), japanese]));
 const GEM_WITHOUT_STONE = new Set(['DILITHIUM_CRYSTAL', 'RUBY', 'DIAMOND', 'SAPPHIRE', 'BLACK_OPAL', 'EMERALD', 'OPAL']);
 
+// objnam.c:obj_typename describes an object type independently of any one
+// item's BUC, charges or observation state. Discovery menus use these names.
+export function objectTypeName(type, { known = objectTypeIsKnown({ _c_otyp: type.id }, type),
+    role = game._startup_role || game.urole?.name?.m, description = type.description, called = null } = {}) {
+    let actual = type.name || (type.id > 0 && type.id < 18 ? 'generic' : 'object?');
+    if (role === 'Samurai') {
+        actual = JAPANESE_NAMES.get(actual) || actual;
+        if (type.symbol === 'WOODEN_HARP' || type.symbol === 'MAGIC_HARP') description = 'koto';
+    }
+    if (type.class === 12) return actual;
+    let name = ({ 8: 'potion', 9: 'scroll', 10: 'spellbook', 11: 'wand', 4: 'ring' })[type.class];
+    if (name) {
+        if (type.symbol === 'SPE_NOVEL') { name = known ? 'novel' : 'book'; known = false; }
+        if (known) name = type.unique ? actual : name + ' of ' + actual;
+    } else if (type.class === 5) name = known ? actual : 'amulet';
+    else {
+        name = type.class === 3 ? [3, 4].includes(type.subtype) ? 'pair of '
+            : /_DRAGON_SCALES$/.test(type.symbol) ? 'set of ' : '' : '';
+        if (known) {
+            name += actual;
+            if (type.symbol === 'FLINT' || type.material === 20 && !GEM_WITHOUT_STONE.has(type.symbol)) name += ' stone';
+        } else {
+            name += description ?? actual;
+            if (type.class === 13) name += type.material === 21 ? ' stone' : ' gem';
+            description = null;
+        }
+    }
+    // xcalled reserves the parenthesized appearance before truncating the
+    // user-supplied name, keeping that appearance intact at the buffer limit.
+    if (called != null) name += ' called ' + String(called).slice(0,
+        255 - name.length - 8 - (description != null ? description.length + 3 : 0));
+    if (description != null) name += ' (' + description + ')';
+    return name;
+}
+
+// o_init.c:disco_typename inserts the English explanation before the called
+// name or appearance, keeping Japanese object names useful in discoveries.
+export function discoveryTypeName(type, options = {}) {
+    let name = objectTypeName(type, options);
+    const role = options.role || game._startup_role || game.urole?.name?.m;
+    if (role === 'Samurai' && JAPANESE_NAMES.has(type.name)) {
+        const known = options.known ?? objectTypeIsKnown({ _c_otyp: type.id }, type);
+        const actual = ['MAGIC_HARP', 'WOODEN_HARP'].includes(type.symbol) && !known ? 'harp' : type.name;
+        const insertion = / called/i.test(name) ? / called/i : / \(/;
+        name = insertion.test(name) ? name.replace(insertion, text => ' [' + actual + ']' + text)
+            : name + ' [' + actual + ']';
+    }
+    return name;
+}
+
 export function indefiniteArticle(text) {
     const word = String(text).toLowerCase();
     if (!word[1] || word[1] === ' ') return 'aefhilmnosx'.includes(word[0]) ? 'an ' : 'a ';
