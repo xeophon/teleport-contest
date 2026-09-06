@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 74 JavaScript modules and approximately 172,000 lines;
+The port now has 75 JavaScript modules and approximately 172,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,805 passing tests**, with no
+The latest source-driven checkpoint has **5,887 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -144,8 +144,11 @@ using it up (35 new tests). Shared AC recomputation now uses current-form
 base AC, seven armor slots, erosion, protection rings, guarding, intrinsic and
 spell protection before C's ±99 clamp (47 new tests). Wear/removal, equipment
 changes and polymorphs use this owner; spell protection decays on C's clock.
-Startup and per-input recalculation, sink/shapechanger/mimic callbacks and
-older aggregate electrical consumers remain separate work.
+Startup and per-input recalculation now follow C's cached display boundary.
+Dressing retains immediate extrinsics while delaying armor discovery, and
+polymorph AC waits for weapon/tool fallout (26 further tests and two fresh C
+recordings). Sink/shapechanger/mimic callbacks and older aggregate electrical
+consumers remain separate work.
 
 The role `#turn` ability now follows C's conduct, chanting/divine rejection,
 confusion, monster ordering, resistance, thresholds, fleeing, pacification,
@@ -153,6 +156,11 @@ killing and paralysis. Fifty new tests include known-spell fallback for other
 roles, saved messages, expulsion, drowning, life saving and pickup. Shared
 monster resistance uses canonical species data; synthetic per-instance MR
 overrides in older tests were replaced with source-valid species and draws.
+Chain lightning now follows the source breadth-first queue, terrain and
+peaceful-target gates, strength and energy rules, electrical inventory
+destruction, resistance, killing and wakeups. Fifty independent tests
+include saved message, item-destruction and life-saving continuations. The
+upstream swallowed-casting TODO is deliberately retained.
 
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
@@ -170,8 +178,9 @@ Twenty more tests cover live attack/death turn resumption and shared sleep
 state. The main loop parks a suspended attack pass and resumes its remaining
 sweep without taking a second movement debit; death messages get C's separate
 line. Genuine sleep sets the combat-wakeup timestamp while rotten-food
-unconsciousness remains separate. The arch-lich recording's worker hang is
-fixed; its later counted-search timing mismatch remains next work.
+unconsciousness remains separate. Six further tests cover counted-search and
+mixed-actor revival ownership; the arch-lich recording now matches every
+screen and all 2,391 RNG calls.
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
 Knight, Ranger and Rogue starts now execute their source operations, including
@@ -186,12 +195,12 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit 42444fa, passed 49/53
-public sessions (12,597/12,712 screens, 830,380/832,102 RNG calls) and 12/19
+The last complete recording run, at preceding commit 84060cb, passed 49/53
+public sessions (12,598/12,712 screens, 830,372/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,078/141,728 RNG calls), with
-zero worker errors. That snapshot removes the Sanctum script. Current spell
-feedback corrections restore full screens/RNG in the arch-lich and world-tour
-recordings; full corpora will be rerun from the committed checkpoint. These
+zero worker errors. That snapshot removes the Sanctum script. Current AC and
+combat corrections restore the wizard wishlist and arch-lich recordings;
+full corpora will be rerun from the committed checkpoint. These
 recording results do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and

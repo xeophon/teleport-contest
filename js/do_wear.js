@@ -43,7 +43,7 @@ export function findAc(g = game) {
 }
 
 // Keep the canonical slot and the runtime inventory representation paired.
-// Callers still own dressing delay, messages and equipment property effects.
+// Callers own dressing delay, property effects and the later find_ac boundary.
 export function setArmorWorn(item, on, g = game) {
     const slot = ARMOR_SLOTS.find(([, , name]) => name === armorSlot(item));
     if (slot) {
@@ -53,5 +53,4 @@ export function setArmorWorn(item, on, g = game) {
     }
     item.worn = on;
     if (!on) item.line = String(item.line || '').replace(/ \(being worn\)/g, '');
-    findAc(g);
 }

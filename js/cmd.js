@@ -1,5 +1,6 @@
 import { M_SEEN_ELEC, M_SEEN_REFL } from './const.js';
 import { advanceMonsterAttackSlots } from './mhitu.js';
+import { resumeChainLightning } from './chain_lightning.js';
 import { AD_COLD, AD_PHYS, AT_WEAP, is_undead } from './permonst.js';
 import { monWieldItem, mhitmKnockback, monsterMagicNegation } from './mhitm.js';
 import { addToplineMessage, monsterSwingMessage, stopHeroOccupation } from './allmain.js';
@@ -24,7 +25,7 @@ import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_
 import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, SHOCK_RES,
     FIRE_RES, SLEEP_RES, DISINT_RES, TELEPORT_CONTROL, STEALTH, FAST, INVIS,
     W_ARMOR, W_ACCESSORY, LOST_NONE, LOST_THROWN } from './const.js';
-import { S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
+import { S_MIMIC, S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
@@ -272,7 +273,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus } from './spell.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
@@ -7908,6 +7909,7 @@ function applyPrayerZapArmorDestruction() {
     game._prayer_zap_destroyed = null;
     for (const item of destroyed) {
         setArmorWorn(item, false);
+        findAc();
         item.line = String(item.line || '').replace(' (being worn)', '');
         const idx = (game.inventory || []).indexOf(item);
         if (idx >= 0) game.inventory.splice(idx, 1);
@@ -9864,6 +9866,714 @@ function closeSpellMenu() {
     game._spell_menu_pages = 0;
     game._spell_menu_count = '';
     game._spell_traditional_tries = 0;
+}
+
+function spellMonsterTheName(mon, capitalized = false) {
+    const name = (mon?.isshk && mon?.shknam) || mon?.givenName || null;
+    const base = name || `the ${mon?.data?.name || 'monster'}`;
+    return capitalized ? base.charAt(0).toUpperCase() + base.slice(1) : base;
+}
+
+async function spellRestoreLifeSavedHero() {
+    // end.c:savelife is synchronous with respect to the continuing
+    // spell. Keep its final HP for the later life-saving message.
+    clearLifeSavedDeathState();
+    applyLifeSavingConLoss();
+    restoreLifeSavedBody();
+    if (game.u.uhunger < 500) { game.u.uhunger = 900; game.u.uhs = 1; }
+    if ((game.u._sickTimeout || game.u._sicknessTimeout) === 1) clearHeroSickness();
+    if (game.u.utraptype === TT_LAVA) { game.u.utrap = 0; game.u.utraptype = null; }
+    if (game.u.uswallow && game.u.ustuck) await finishSwallowExpel(game.u.ustuck);
+    else if (game.u.ustuck) {
+        const mon = game.u.ustuck;
+        game.u.ustuck = null;
+        const attacks = (pmOf(mon) || mon.data).attacks || [];
+        if (!mon.mspec_used && attacks.some(attack => attack.adtyp === AD_STCK
+            || attack.aatyp === AT_ENGL || attack.aatyp === AT_HUGS)) mon.mspec_used = rnd(2);
+    }
+}
+
+function playerSpellEffectDependencies() {
+    // --- Player spell effect plumbing -------------------------------------
+    // C ref: src/spell.c:spelleffects()/spelleffects_check(); effect bodies
+    // live in js/spell.js and receive these cmd.js internals via deps.
+    function spellLoseHeroHp(damage, cause) {
+        if (!game.u || !damage) return false;
+        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
+        if ((game.u.uhp || 0) > 0) return false;
+        game._death_cause = cause;
+        return true;
+    }
+
+    // C ref: lock.c:boxlock() over the hero's inventory (boxlock_invent()).
+    function spellBoxlockInventory(lock) {
+        const messages = [];
+        const wizard = (game.urole?.name?.m || game._startup_role || '') === 'Wizard';
+        for (const item of game.inventory || []) {
+            const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
+            if (!/(?:large box|chest|ice box)\b/.test(kind) && item?.cls !== 'box') continue;
+            if (lock && !(item.olocked || item.locked)) {
+                item.olocked = 1;
+                item.locked = true;
+                item.obroken = 0;
+                item.lknown = wizard ? 1 : 0;
+                messages.push('Klunk!');
+            } else if (!lock && (item.olocked || item.locked)) {
+                item.olocked = 0;
+                item.locked = false;
+                item.lknown = wizard ? 1 : 0;
+                messages.push('Klick!');
+            } else if (!lock) {
+                item.obroken = 0; // C: silently fix if broken
+            }
+        }
+        return messages;
+    }
+
+    // C ref: hack.c:release_hold() (message-free common case).
+    function spellReleaseHeroHold() {
+        if (!game.u?.ustuck) return;
+        game.u.ustuck = null;
+    }
+
+    function spellHeroIsPunished() {
+        return !!(game.u?.uball || game.u?.uchain || game.u?.upunished || game._punished);
+    }
+
+    // C ref: zap.c:openholdingtrap()/closeholdingtrap()/openfallingtrap()
+    // hero and monster cases — trap release is only partially modeled.
+    function spellOpenHeroHoldingTrap() {
+        if (!game.u?.utrap) return false;
+        game.u.utrap = 0;
+        game.u.utraptype = null;
+        return true;
+    }
+
+    function spellCloseHeroHoldingTrap() {
+        return false;
+    }
+
+    function spellOpenHeroFallingTrap() {
+        return false;
+    }
+
+    function spellOpenMonsterHoldingTrap() {
+        return false;
+    }
+
+    function spellCloseMonsterHoldingTrap() {
+        return false;
+    }
+
+
+    function spellMonsterIsUndead(mon) {
+        const data = mon?.data || {};
+        const mlet = String(mon?.mlet || data.mlet || '');
+        return !!(mon?.undead || data.undead || mon?.vampshifter || data.vampshifter
+            || /^[ZMVWL']$/.test(mlet)
+            || /zombie|mummy|vampire|ghost|lich|skeleton|wraith|ghoul/i.test(String(data.name || '')));
+    }
+
+    function spellMonsterIsRider(mon) {
+        return !!(mon?.rider || mon?.data?.rider
+            || ['death', 'pestilence', 'famine'].includes(String(mon?.data?.name || '').toLowerCase()));
+    }
+
+    // C ref: zap.c:cancel_monst() hero branch (subset: form + item buc/spe).
+    function spellCancelHeroSelf() {
+        for (const item of game.inventory || []) {
+            if (!item) continue;
+            if (item.blessed) item.blessed = false;
+            if (item.cursed) item.cursed = false;
+            if (item.cls === 'wand' || item.wandIndex != null) {
+                if ((item.spe ?? 0) >= 0 && item.kind !== 'cancellation') item.spe = -1;
+            } else if (item.cls === 'scroll' && item.kind !== 'cancellation') {
+                item.kind = 'blank paper';
+                item.actualKind = 'scroll of blank paper';
+                item.spe = 0;
+            } else if (item.cls === 'spellbook' && item.otyp !== SPE_HEALING) {
+                item.kind = 'spellbook of blank paper';
+                item.spellName = '';
+                item.spe = 0;
+            } else if (item.cls === 'potion') {
+                item.actualKind = 'potion of water';
+                item.kind = 'water';
+                item.spe = 0;
+            } else if (item.spe) {
+                item.spe = 0;
+            }
+            refreshInventoryLineAfterBucChange(item);
+        }
+    }
+
+    // C ref: zap.c:mhurtle() (simplified: slide through free squares).
+    function spellMonsterHurtle(mon, dx, dy, dist) {
+        for (let i = 0; i < (dist || 0); i++) {
+            const nx = mon.mx + dx;
+            const ny = mon.my + dy;
+            if (nx < 1 || nx >= COLNO || ny < 0 || ny >= ROWNO) break;
+            const loc = game.level?.at(nx, ny);
+            if (!loc || IS_OBSTRUCTED(loc.typ)) break;
+            if ((game.level?.monsters || []).some(other => other !== mon && !other.dead && other.mx === nx && other.my === ny)) break;
+            if (game.u?.ux === nx && game.u?.uy === ny) break;
+            mon.mx = nx;
+            mon.my = ny;
+        }
+        newsym(mon.mx, mon.my);
+    }
+
+    // C ref: mon.c:wakeup() (simplified).
+    function spellWakeupMonster(mon) {
+        mon.msleeping = 0;
+    }
+
+    // C ref: dog.c:abuse_dog() (tameness loss and yelp roll; sounds omitted).
+    function spellAbuseDog(mon) {
+        if (!(mon?.mtame || 0)) return;
+        mon.mtame--;
+        if (mon.mtame && rn2(mon.mtame)) {
+            // C yelp() — sound only
+        } else {
+            // C growl() — sound only
+        }
+    }
+
+    // C ref: mhitm.c:slept_monst() — a sleeping holder releases its grip.
+    function spellSleptMonster(mon) {
+        if (mon === game.u?.ustuck && !game.u?.uswallow) {
+            game.u.ustuck = null;
+        }
+    }
+
+    // C ref: lock.c:doorlock() — knock/wizard lock/force bolt vs (secret) doors.
+    function spellDoorlock(spellName, x, y) {
+        const loc = game.level?.at(x, y);
+        if (!loc) return '';
+        const blind = heroIsBlind();
+        const visible = !blind && couldsee(x, y);
+        if (loc.typ === SDOOR) {
+            if (spellName === 'wizard lock') return '';
+            loc.typ = DOOR;
+            loc.doormask = D_CLOSED | (loc.doormask & D_TRAPPED);
+            newsym(x, y);
+            if (spellName === 'knock') return visible ? 'A door appears in the wall!' : '';
+            // force bolt continues to door handling below
+        }
+        if (loc.typ !== DOOR) return '';
+        if (spellName === 'wizard lock') {
+            let message = '';
+            switch (loc.doormask & ~D_TRAPPED) {
+            case D_CLOSED: message = 'The door locks!'; break;
+            case D_ISOPEN: message = 'The door swings shut, and locks!'; break;
+            case D_BROKEN: message = 'The broken door reassembles and locks!'; break;
+            case D_NODOOR: message = 'A cloud of dust springs up and assembles itself into a door!'; break;
+            default: return '';
+            }
+            loc.doormask = D_LOCKED | (loc.doormask & D_TRAPPED);
+            newsym(x, y);
+            return message;
+        }
+        if (spellName === 'knock') {
+            if (loc.doormask & D_LOCKED) {
+                loc.doormask = D_CLOSED | (loc.doormask & D_TRAPPED);
+                return 'The door unlocks!';
+            }
+            return '';
+        }
+        // C: force bolt smashes closed/locked doors.
+        if (loc.doormask & (D_LOCKED | D_CLOSED)) {
+            loc.doormask = D_BROKEN;
+            newsym(x, y);
+            if (visible) return 'The door crashes open!';
+            if (!heroIsDeaf()) return 'You hear a crashing sound.';
+        }
+        return '';
+    }
+
+    function spellHeroWearsHardHelmet() {
+        const helmet = wornEarthHelmet();
+        return !!(helmet && hardEarthHelmet(helmet));
+    }
+
+    // C ref: teleport.c teleok/uhave checks are upstream; dbldam for Knight.
+    function spellHeroIsKnightWithQuestArtifact() {
+        return (game.urole?.name?.m || game._startup_role || '') === 'Knight' && !!game.u?.uhave?.questart;
+    }
+
+    function spellHeroHasDrainResistance() {
+        const form = game.u?._polyself_form;
+        return !!(game.u?.drainResistance || game.u?.Drain_resistance
+            || form?.drainResistance || form?.resistsDrain);
+    }
+
+    function spellHeroBlockedInvisByMummyWrapping() {
+        return !!mummyWrappingWorn();
+    }
+
+    function mummyWrappingWorn() {
+        return (game.inventory || []).find(item =>
+            (item.worn || item.line?.includes('being worn'))
+            && String(item.kind || item.actualKind || '').toLowerCase() === 'mummy wrapping') || null;
+    }
+
+    function spellHeroIsSlimed() {
+        return !!(game.u?.slimed || (game.u?._slimedTimeout || 0) > 0
+            || (game.u?._statusSuffix || '').includes('Slime'));
+    }
+
+    function spellClearHeroSlime() {
+        if (!game.u) return;
+        game.u.slimed = false;
+        game.u._slimedTimeout = 0;
+        removeHeroStatusSuffix('Slime');
+    }
+
+    // C ref: dog.c:pet_type() — role pet, else preference, else coin flip.
+    function spellRolePetTypeName() {
+        const roleName = game.urole?.name?.m || game._startup_role || '';
+        if (roleName === 'Knight') return 'pony';
+        if (game.preferred_pet === 'c') return 'kitten';
+        if (game.preferred_pet === 'd') return 'little dog';
+        return rn2(2) ? 'kitten' : 'little dog';
+    }
+
+    // C ref: makemon.c:rndmonst_adj() (simplified to common candidates).
+    function spellRndmonstAdj(minAdj, maxAdj) {
+        const base = level_difficulty(game.u?.uz || { dnum: 0, dlevel: 1 });
+        const min = Math.max(0, base - 2 + minAdj);
+        const max = base + 2 + maxAdj;
+        const candidates = RNDMONST_COMMON_MONSTERS
+            .filter(([, , mlevel]) => (mlevel ?? 0) >= min && (mlevel ?? 0) <= max)
+            .map(([name]) => name);
+        if (!candidates.length) return null;
+        return monsterByRndName(candidates[rn2(candidates.length)]);
+    }
+
+    function spellHeroBlocksClairvoyance() {
+        const roleName = game.urole?.name?.m || game._startup_role || '';
+        if (roleName === 'Wizard') return false;
+        return (game.inventory || []).some(item =>
+            (item.worn || item.line?.includes('being worn'))
+            && String(item.kind || item.actualKind || '').toLowerCase() === 'cornuthaum');
+    }
+
+    // C ref: detect.c:do_vicinity_map() — reveal the 19x11 area around hero.
+    function spellClairvoyanceMapEffect(blessed) {
+        const ux = game.u?.ux || 0;
+        const uy = game.u?.uy || 0;
+        for (let x = Math.max(1, ux - 9); x <= Math.min(COLNO - 1, ux + 10); x++) {
+            for (let y = Math.max(0, uy - 5); y <= Math.min(ROWNO - 1, uy + 6); y++) {
+                const loc = game.level?.at(x, y);
+                if (!loc) continue;
+                loc.seenv = true;
+                if (blessed) {
+                    for (const obj of game.level?.objects || []) {
+                        if (obj.ox === x && obj.oy === y && !obj.hidden) obj.seen = true;
+                    }
+                }
+                newsym(x, y);
+            }
+        }
+    }
+
+    // C ref: spell.c:cast_protection() atmosphere word.
+    function spellHeroProtectionAtmosphere() {
+        if (game.u?.uinwater) return 'water';
+        const loc = game.level?.at(game.u?.ux || 0, game.u?.uy || 0);
+        if (loc?.typ === CLOUD) return 'cloud';
+        if (IS_TREE(loc?.typ)) return 'vegetation';
+        if (IS_STWALL(loc?.typ)) return 'stone';
+        return 'air';
+    }
+
+    // C ref: read.c:seffect_magic_mapping() spell branch (never cursed).
+    function spellMagicMappingSpellEffect() {
+        if (game.level?.flags?.nommap) {
+            addHeroConfusion(rnd(30));
+            return { messages: ['Your head spins as something blocks the spell!'] };
+        }
+        revealLevelMap({});
+        return { messages: ['A map coalesces in your mind!'] };
+    }
+
+    function spellUnfixableTroubleCount() {
+        return 0; // C unfixable_trouble_count(FALSE): no modeled unfixable troubles
+    }
+
+
+    async function spellElementalHeroDamage(element, original, damage, cause, messages, { golemDamage = original } = {}) {
+        if (element === 'fire') burnAwayHeroSlime(messages);
+        if (game.u?.uinvulnerable) {
+            damage = golemDamage = 0;
+            messages.push('You are unharmed!');
+        }
+        const inventory = element === 'fire'
+            ? fireDamageInventory(original, true, false, { allowLifeSaving: true, igniteBeforeDestroy: true })
+            : coldDamageInventory(original);
+        messages.push(...inventory.messages);
+        if (inventory.fatal) return { fatal: true, more: true };
+        if (inventory.lifeSaving) await spellRestoreLifeSavedHero();
+        const itemResult = applyChestTrapFireDamage(messages, inventory.damage, inventory.deathCause || cause);
+        if (itemResult.fatal) return itemResult;
+        if (itemResult.lifeSaving) await spellRestoreLifeSavedHero();
+        // C ugolemeffects precedes direct explosion damage and uses the
+        // role-adjusted damage, even when elemental resistance shields HP.
+        const form = pmOf({ data: game.u?._polyself_form }) || game.u?._polyself_form;
+        const hp = heroPolyselfFireHpState();
+        if (element === 'fire' && form?.name === 'iron golem' && hp
+            && game.u[hp.hpKey] < game.u[hp.maxKey]) {
+            game.u[hp.hpKey] = Math.min(game.u[hp.maxKey], game.u[hp.hpKey] + golemDamage);
+            messages.push('Strangely, you feel better than before.');
+            exerciseAttribute(A_STR, true);
+        }
+        const result = applyChestTrapFireDamage(messages, damage, cause);
+        if (result.lifeSaving) await spellRestoreLifeSavedHero();
+        return { ...result, lifeSaving: !result.fatal && (!!result.lifeSaving || !!itemResult.lifeSaving || !!inventory.lifeSaving) };
+    }
+
+    function spellExplosionFloor(x, y, element, messages) {
+        const loc = game.level?.at(x, y);
+        if (!loc) return false;
+        const closed = loc.typ === SDOOR || (loc.typ === DOOR && loc.doormask & (D_CLOSED | D_LOCKED));
+        let shopDamage = false;
+        if (closed) shopDamage = addShopTerrainDamage(x, y, SHOP_DOOR_COST);
+        if (element === 'cold') {
+            messages.push(...applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }).messages);
+        } else {
+            messages.push(...burnFireRayWebTrap(x, y, { previousMessage: messages.at(-1) || '' }));
+            const ice = applyFireRayIceTerrain(x, y, { heroRay: true, recordKill: recordVanquished, buriedMerchandiseDebtMessage });
+            messages.push(...ice.messages);
+            if (!ice.handled) {
+                messages.push(...applyFireRayWaterTerrain(x, y, { heroRay: true, previousMessage: messages.at(-1) || '' }).messages);
+                messages.push(...applyFireRayFountainTerrain(x, y, { heroRay: true }).messages);
+            }
+            if (loc.typ === SDOOR) {
+                loc.typ = DOOR;
+                loc.doormask = Is_rogue_level(game.u?.uz) ? D_NODOOR
+                    : loc.doormask & D_LOCKED ? loc.doormask : (loc.doormask || 0) | D_CLOSED;
+                if (cansee(x, y)) messages.push('Your spell reveals a secret door.');
+            }
+            if (loc.typ === DOOR && loc.doormask & (D_CLOSED | D_LOCKED)) {
+                loc.doormask = D_NODOOR;
+                loc.flags = 0;
+                messages.push(cansee(x, y) ? 'The door is consumed in flames!' : 'You smell smoke.');
+            }
+            messages.push(...burnRayFloorObjectsByFire(x, y));
+        }
+        if (closed) { vision_reset(); vision_recalc(0); newsym(x, y); }
+        const mon = (game.level?.monsters || []).find(candidate => !candidate.dead && candidate.mx === x && candidate.my === y);
+        if (mon) {
+            mon.msleeping = 0;
+            mon.meating = 0;
+            revealHeroProjectileHitMimicAppearance(mon);
+            directMeleeSetmangryElberethHypocrisy(mon, messages);
+            clearDirectMeleeWaitStrategyMask(mon);
+            directMeleeAngerPeacefulMonster(mon, messages, { visible: visibleMonsterForScroll(mon) });
+        }
+        return shopDamage;
+    }
+
+    function observeHeroElementResistance(element, resisted) {
+        if (game.u?.uswallow || game.u?.underwater || game.u?.uinwater) return;
+        const bit = element === 'fire' ? M_SEEN_FIRE : M_SEEN_COLD;
+        for (const mon of game.level?.monsters || []) {
+            if (mon.dead || mon.mhp <= 0 || !couldsee(mon.mx, mon.my)) continue;
+            if (game.u?.invisible && !perceives(pmOf(mon) || mon.data || {})) continue;
+            mon.m_seenres = resisted ? (mon.m_seenres || 0) | bit : (mon.m_seenres || 0) & ~bit;
+        }
+    }
+
+    return {
+        spellRoleSkillLevel,
+        stopHeroOccupation,
+        loseHeroHp: spellLoseHeroHp,
+        healHero,
+        damageHero: applyHeroHitPointDamage,
+        boxlockInventory: spellBoxlockInventory,
+        releaseHeroHold: spellReleaseHeroHold,
+        heroIsPunished: spellHeroIsPunished,
+        openHeroHoldingTrap: spellOpenHeroHoldingTrap,
+        closeHeroHoldingTrap: spellCloseHeroHoldingTrap,
+        openHeroFallingTrap: spellOpenHeroFallingTrap,
+        openMonsterHoldingTrap: spellOpenMonsterHoldingTrap,
+        closeMonsterHoldingTrap: spellCloseMonsterHoldingTrap,
+        monsterResistsMagm: monsterResistsMagic,
+        monsterTheName: spellMonsterTheName,
+        monsterIsUndead: spellMonsterIsUndead,
+        monsterIsRider: spellMonsterIsRider,
+        cancelHeroSelf: spellCancelHeroSelf,
+        monsterHurtle: spellMonsterHurtle,
+        wakeupMonster: spellWakeupMonster,
+        abuseDog: spellAbuseDog,
+        sleptMonster: spellSleptMonster,
+        spellDoorlock,
+        heroWearsHardHelmet: spellHeroWearsHardHelmet,
+        heroIsKnightWithQuestArtifact: spellHeroIsKnightWithQuestArtifact,
+        heroHasDrainResistance: spellHeroHasDrainResistance,
+        heroBlockedInvisByMummyWrapping: spellHeroBlockedInvisByMummyWrapping,
+        mummyWrappingName: () => pickupObjectName(mummyWrappingWorn() || { kind: 'mummy wrapping' }),
+        heroBlocksInvis: () => !!mummyWrappingWorn(),
+        heroIsSlimed: spellHeroIsSlimed,
+        clearHeroSlime: spellClearHeroSlime,
+        rolePetTypeName: spellRolePetTypeName,
+        rndmonstAdj: spellRndmonstAdj,
+        heroBlocksClairvoyance: spellHeroBlocksClairvoyance,
+        clairvoyanceMapEffect: spellClairvoyanceMapEffect,
+        heroProtectionAtmosphere: spellHeroProtectionAtmosphere,
+        magicMappingSpellEffect: spellMagicMappingSpellEffect,
+        unfixableTroubleCount: spellUnfixableTroubleCount,
+        // Pre-existing helpers handed through unchanged.
+        movementDirection,
+        heroIsStunned,
+        heroIsConfused,
+        heroIsHallucinating,
+        heroIsBlind,
+        heroIsDeaf,
+        heroHasAntimagic,
+        heroHasSleepResistance,
+        maybeHalfPhysicalDamage,
+        exerciseAttribute,
+        syncHeroSpeedState,
+        unpunishHero,
+        breakBuriedBallChain,
+        polymorphSelfZapResult,
+        polymorphSpellDirection,
+        stoneToFleshInventoryEffect,
+        stoneToFleshFloorEffect,
+        zapDigDownwardResult,
+        zapDigFallingRockMessage,
+        placeRockAtHero,
+        visibleMonsterForScroll,
+        heroCanSpotMonster,
+        monsterResistsEffect,
+        spellDamageBonus,
+        monsterResistsElectricity,
+        monsterElectricInventoryDamage,
+        say: addToplineMessage,
+        waiting: monsterAttackWaiting,
+        chainMonsterName: (mon, capitalized = false) => heroCanSpotMonster(mon)
+            ? fireScrollMonsterName(mon).replace(/^The /, capitalized ? 'The ' : 'the ')
+            : capitalized ? 'It' : 'it',
+        chainKillMessage: mon => {
+            mon.mhp = 0; mon.dead = true; recordHeroKillConduct();
+            const name = heroCanSpotMonster(mon) ? heroProjectileKillMessageTargetName(mon) : 'it';
+            return `You ${monsterIsNonlivingForLifeSaving(mon) ? 'destroy' : 'kill'} ${name}!`;
+        },
+        chainWakeup: mon => {
+            mon.msleeping = 0;
+            directMeleeWakeupReveal(mon, { forcefight: true });
+            mon.meating = 0;
+            if (M_AP_TYPE(mon) && (pmOf(mon) || mon.data)?.mlet !== S_MIMIC) {
+                mon.m_ap_type = 0; mon.mappearance = 0;
+                mon.appearObj = mon.appearGlyph = mon.appearColor = null;
+                newsym(mon.mx, mon.my);
+            }
+        },
+        monsterResistsCold,
+        monsterResistsFire,
+        monsterColdInventoryDamage,
+        coldDamageInventory,
+        heroHasColdResistance,
+        heroHasFireResistance: () => heroHasFireResistance() || resistsFire({ data: game.u?._polyself_form }),
+        spellElementalHeroDamage,
+        observeHeroElementResistance,
+        spellExplosionFloor,
+        burnMonsterArmorFromFire,
+        monsterFireInventoryDamage,
+        igniteMonsterFireInventoryItems,
+        wakeNearbyMonstersAt,
+        payForCurrentShopTerrainDamage,
+        explosionAngerMonster: (mon, messages) => {
+            directMeleeSetmangryElberethHypocrisy(mon, messages);
+            clearDirectMeleeWaitStrategyMask(mon);
+            directMeleeAngerPeacefulMonster(mon, messages, { visible: visibleMonsterForScroll(mon) });
+        },
+        applyColdRayTerrain: (x, y) => applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }),
+        applyMonsterPolymorphTarget,
+        levelDifficulty: () => level_difficulty(game.u?.uz),
+        heroIsUnaware,
+        heroZapReflectSourceWord,
+        heroPolyselfResistsStoning,
+        maybeTurnPolyselfIntoStoneGolem,
+        consumeLifeSavingAmulet,
+        applyHeroProjectileMonsterLifeSaving,
+        stoneMonster,
+        drainItem,
+        drainItemProtectedByDrainResistance,
+        dragonArmorSpecForItem,
+        BLACK_DRAGON_SCALES,
+        BLACK_DRAGON_SCALE_MAIL,
+        monsterIsVampireShifterForLifeSaving,
+        revealHeroProjectileHitMimicAppearance,
+        directMeleeNonlethalWakeupTail,
+        killMonsterFromHeroProjectileHit,
+        monsterResistsSleepEffect,
+        monsterReflectionSource,
+        recordMonsterReflectionDiscovery,
+        monsterPossessiveName,
+        clearMonsterTrack,
+        floorStatueAt,
+        breakStatueObject,
+        activateStatueTrap,
+        statueStrikeBreakResult,
+        lightScrollLitroom,
+        foodDetectionScrollEffect,
+        collectDetectedObjects,
+        markDetectedObjects,
+        isGoldObject,
+        removeCurseFeelingMessage,
+        removeCurseActiveTarget,
+        normalizeUncursedWaterPotion,
+        costlyUncurseWater,
+        refreshInventoryLineAfterBucChange,
+        tameMonsterWithScroll,
+        addHeroConfusion,
+        clearHeroConfusion,
+        addHeroStatusSuffix,
+        heroIsSick,
+        heroIsVomiting,
+        clearHeroSickness,
+        clearHeroVomiting,
+        unidentifiedInventoryItems,
+        identifyInventoryItem,
+        unturnDeadHeroInventory: unturnDeadHeroInventoryFromBook,
+        addHeroStun,
+        loseExperienceLevel,
+        dropRockAt: placeRockAtHero,
+    };
+
+}
+
+// Shared tail for castSpell/spellDirection results (js/spell.js).
+async function finishSpellEffectResult(spell, result) {
+    if (result?.afterHeroDamage) game._player_spell_continuation = { spell, ...result.afterHeroDamage };
+    if (result?.published) {
+        game.context.move = result.pending ? 0 : 1;
+        if (result.pending) {
+            game._pending_time_passed = 0;
+            game._process_command_time_now = 0;
+        }
+        return;
+    }
+    game._command_mode = null;
+    game.context.move = 1;
+    if (result?.lifeSaving && !result?.fatal && (game.u?.uhp || 0) > 0)
+        game._life_saving_post_continue_hp = game.u.uhp;
+    const messages = [...(result?.messages || [])];
+    if (result?.invalidDirection) messages.unshift('What a strange direction!', 'The magical energy is released!');
+    else if (result?.released) messages.unshift('The magical energy is released!');
+
+    if (result?.castFallback) {
+        await setMessage(`You cast ${spell?.name || 'a spell'}.`);
+        return;
+    }
+    if (result?.startJump) {
+        // C ref: apply.c:jump() — position prompt, then the jump itself.
+        game._jump_magic = result.startJump;
+        if (!game._jump_tip_seen) {
+            await setMessage('Where do you want to jump?', true);
+            game._command_mode = 'jumpIntroMore';
+        } else {
+            await setMessage('Where do you want to jump?');
+            game._farlook_x = game.u?.ux || 0;
+            game._farlook_y = game.u?.uy || 0;
+            game._getpos_prompt_cursor = initialJumpPromptCursor();
+            game._command_mode = 'jumpCursor';
+        }
+        game.context.move = 0;
+        return;
+    }
+    if (result?.teleportSelf) {
+        // C ref: teleport.c:scrolltele(NULL) — tele() for the spell.
+        if (heroNoTeleportLevel() && !game.flags?.debug) {
+            await setMessage('A mysterious force prevents you from teleporting!');
+            return;
+        }
+        if ((heroHasAmuletOfYendor() || heroOnWizardTowerLevel()) && !rn2(3)) {
+            await setMessage('You feel disoriented for a moment.');
+            return;
+        }
+        if ((heroHasTeleportControl() && !heroIsStunned()) || game.flags?.debug) {
+            startControlledTeleportPrompt();
+            await setMessage('Where do you want to be teleported?');
+            game.context.move = 0;
+            return;
+        }
+        const materialize = safeTeleportHeroSameLevel();
+        await setMessage(materialize || '');
+        return;
+    }
+    if (result?.identifiedItems) {
+        const identified = result.identifiedItems || [];
+        if (identified.length) messages.push(...identified.map(invItem => `${invItem.line}.`));
+        else messages.push('You have already identified all of your possessions.');
+    }
+    if (result?.detectMonstersMore) {
+        await setMessage(messages.join('  '), true);
+        game._command_mode = 'spellDetectMonstersMore';
+        game.context.move = 0;
+        return;
+    }
+    if (result?.sleepTurns) game.context.move = result.sleepTurns;
+    const deathIndex = messages.findIndex(text => text.startsWith('You die...'));
+    if ((result?.fatal || result?.lifeSaving) && deathIndex > 0) {
+        // C done flushes the existing effect message before announcing
+        // death. The queued death line owns the recovery prompt.
+        const lines = packToplineMessages(messages.slice(0, deathIndex));
+        await setMessage(lines[0], true);
+        (game._queued_messages_after_more ??= []).push(
+            ...lines.slice(1).map(text => ({ text, more: true })),
+            { text: messages.slice(deathIndex).join('  '), more: true, ...result });
+        game.context.move = 0;
+        game._pending_time_passed = 0;
+        return;
+    }
+    if (messages.length) await setMessage(messages.join('  '), result?.more || messages.length > 1);
+    else {
+        game._pending_message = '';
+        game._message_more = 0;
+        game._keep_pending_message = 1;
+    }
+    if (result?.polyResult) applyLifeSavingOrFatalCommandMode(result.polyResult);
+    else if (result?.fatal || result?.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
+}
+
+async function beginSpellEffect(spell, prefix = '') {
+    game._casting_spell = spell;
+    game._command_mode = null;
+    if (['fireball', 'cone of cold'].includes(spell.name) && spellRoleSkillLevel(spell) >= P_SKILLED) {
+        if (game.u?.uinwater || Is_waterlevel(game.u?.uz)) {
+            await finishSpellEffectResult(spell, { messages: [game.u?.uinwater
+                ? "You're joking!  In this weather?" : 'You had better wait for the sun to come out.'] });
+            return;
+        }
+        game._spell_explosion_target = { x: game.u.ux, y: game.u.uy };
+        game._cursor_override = [game.u.ux - 1, game.u.uy + 1];
+        await setMessage(`${prefix}Where do you want to cast the spell?`);
+        game._command_mode = 'spellExplosionTarget';
+        game.context.move = 0;
+    } else if (spellCastNeedsDirection(spell)) {
+        await setMessage(`${prefix}In what direction?`);
+        game._command_mode = 'spellDirection';
+    } else {
+        const result = await castSpellNodirEffect(spell, playerSpellEffectDependencies());
+        if (prefix && result.messages?.length) result.messages.unshift(prefix.trim());
+        await finishSpellEffectResult(spell, result);
+    }
+}
+
+async function resumePlayerSpellEffect() {
+    const state = game._player_spell_continuation;
+    game._player_spell_continuation = null;
+    game._pending_time_passed = 0;
+    game._process_command_time_now = 0;
+    if (state.kind === 'fallingRock') {
+        placeRockAtHero(state.x, state.y);
+        game.context.move = 1;
+    } else if (state.kind === 'chainLightning') {
+        const result = await resumeChainLightning(state.state, playerSpellEffectDependencies());
+        await finishSpellEffectResult(state.spell, result);
+    }
 }
 
 function currentSkillLines() {
@@ -12633,6 +13343,11 @@ export async function resumeMonsterSpellCommand(messages = []) {
 // Keep the monster reference and source phase in the saveable game graph.
 export async function runMonsterAttackTurn(mon, options = {}) {
     const resumed = !!game._monster_attack_continuation;
+    // Older combat handlers defer savelife's nomovemsg in the message queue.
+    // It belongs to the coming unmul, not a pline blocking this monster.
+    if (!resumed && game._queued_explore_lifesaving_message
+        && game._survivor_emit_after_moves > game.moves)
+        scheduleLifeSavingRecovery();
     const state = game._monster_attack_continuation ??= { mon, ...options };
     const complete = await advanceMonsterAttackSlots(state, {
         invisible: () => !!game.u.invisible,
@@ -12910,6 +13625,75 @@ function electricDestroyInventorySelection(items, origDamage) {
         if (i < limit) selected[i] = item;
     }
     return selected.filter(Boolean);
+}
+
+// mondata.c:Resists_Elem and defended. This source has no artifact with
+// electrical defense; worn blue dragon armor and shock rings grant it.
+export function monsterResistsElectricity(mon) {
+    if (resistsElec(mon)) return true;
+    return (mon.minvent || []).some(item => {
+        const worn = item.owornmask != null ? item.owornmask & (W_ARMOR | W_ACCESSORY | W_WEP) : item.worn;
+        return worn && (dragonArmorSpecForItem(item)?.colorName === 'blue'
+            || ringNutritionName(item) === 'shock resistance');
+    });
+}
+
+// zap.c:destroy_items/maybe_destroy_item for a monster. Message overflow
+// suspends before m_useup, retaining the selected object identities in saves.
+function monsterElectricInventoryDamage(mon, state) {
+    if (!state.items) {
+        for (const item of mon.minvent || []) item.bypass = false;
+        state.items = electricDestroyInventorySelection(mon.minvent, state.original);
+        state.index = 0; state.damage = 0;
+    }
+    while (state.index < state.items.length || state.impact) {
+        if (!state.impact) {
+            const item = state.items[state.index++];
+            if (!(mon.minvent || []).includes(item)) continue;
+            const cls = electricDestroyableInventoryClass(item);
+            // The upstream ring branch checks the hero's gloves, even when
+            // it is a monster's ring. Monster ring recharging remains a TODO.
+            const gloves = wornGlovesItem();
+            const worn = item.owornmask != null ? item.owornmask & (W_RINGL | W_RINGR) : item.worn;
+            if (cls === 'ring' && worn && gloves && !METALLIC_MATERIALS.has(objectMaterialForMetallivore(gloves))) continue;
+            if (cls === 'ring' && isChargeableRing(item) && rn2(3)) continue;
+            const resisted = cls !== 'ring' && monsterResistsElectricity(mon);
+            const damage = cls === 'wand' ? rnd(10) : 0;
+            const quan = Math.max(0, (item.quan || 1) - (item.in_use ? 1 : 0));
+            let destroyed = 0;
+            for (let i = 0; i < quan; i++) if (!rn2(3)) destroyed++;
+            if (!destroyed) continue;
+            state.impact = { item, destroyed, damage: resisted ? 0 : damage };
+            if (visibleMonsterForScroll(mon)) {
+                const owner = monsterPossessiveName(mon), plural = destroyed > 1;
+                const name = pickupObjectName({ ...item, line: '', quan: plural ? Math.max(2, quan) : 1 });
+                const subject = destroyed === 1 && quan === 1 ? `${sentenceCase(owner)} ${name}`
+                    : destroyed === 1 ? `One of ${owner} ${name}` : destroyed < quan ? `Some of ${owner} ${name}`
+                        : quan === 2 ? `Both of ${owner} ${name}` : `All of ${owner} ${name}`;
+                const verb = cls === 'ring' ? 'turns to dust and vanishes' : 'breaks apart and explodes';
+                if (!addToplineMessage(`${subject} ${verb}!`)) return false;
+            }
+        }
+        const { item, destroyed, damage } = state.impact;
+        if ((mon.minvent || []).includes(item)) {
+            item.quan = (item.quan || 1) - destroyed;
+            if (item.quan > 0) item.owt = globObjectWeight(item);
+            else {
+                mon.minvent.splice(mon.minvent.indexOf(item), 1);
+                mon.misc_worn_check = (mon.misc_worn_check || 0) & ~(item.owornmask || 0);
+                if (mon.mw === item || mon.weapon === item) {
+                    mon.mw = mon.weapon = null; mon.weapon_check = NEED_WEAPON;
+                }
+                item.owornmask = 0; item.worn = item.wielded = false;
+                item.where = 0; delete item.ocarry;
+                stopDestroyedObjectTreeTimers(item);
+            }
+            state.damage += damage;
+        }
+        state.impact = null;
+    }
+    for (const item of mon.minvent || []) item.bypass = false;
+    return true;
 }
 
 function electricInventoryItemImpact(item, { deferRingDamage = false, deferRemoval = false } = {}) {
@@ -16155,6 +16939,7 @@ function mergePolyselfDragonArmorWithSkin(armor, spec) {
     armor._display_color = spec.color;
     armor._polyselfSkin = true;
     setArmorWorn(armor, false);
+    findAc();
     armor.line = polyselfEmbeddedDragonSkinLine(armor);
     return wasMail
         ? `Your ${spec.colorName} scale mail reverts to scales as you merge with them.`
@@ -16167,6 +16952,7 @@ function polyselfSkinbackMessages(silently = false) {
         if (!item?._polyselfSkin) continue;
         delete item._polyselfSkin;
         setArmorWorn(item, true);
+        findAc();
         item.line = normalInventoryLine({ ...item, line: '' });
         if (!silently) messages.push('Your skin returns to its original form.');
     }
@@ -17256,7 +18042,6 @@ function becomeMonster(name) {
     game.u._monsterHd = form.mlevel ?? 0;
     game.u._monsterMove = form.mmove ?? NORMAL_SPEED;
     game.u._polyself_form = { ...form };
-    findAc();
     game.u.umovement = NORMAL_SPEED;
     game.u._statusSuffix = form.inAir ? ' Fly' : '';
     if (form.noeyes) {
@@ -17356,9 +18141,10 @@ function becomeMonster(name) {
         game._topline_after_more = 'Your movements are now unencumbered.';
         game._topline_more_after_more = 1;
         game._queued_message_after_more = 'Use the command #monster to use your breath weapon.';
-        if (form.name.includes('dragon')) game._polyself_after_more_ac = -1;
         return { message, more: true };
     }
+    // polymon calls find_ac after break_armor and drop_weapon have returned.
+    findAc();
     return { message };
 }
 
@@ -19390,6 +20176,7 @@ async function takeOffEquipment(item, options = {}) {
         game._status_uac_before_more = game.u.uac ?? 10;
         game._status_uac_before_more_seen = 0;
         setArmorWorn(item, false);
+        if (options.force) findAc();
     }
     if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
         syncHeroSpeedState();
@@ -25588,6 +26375,7 @@ function removeSinkFallLevitationBoots(boots) {
     if (!boots || !game.u) return '';
     const baseName = equipmentBaseName(boots);
     setArmorWorn(boots, false);
+    findAc();
     boots.line = `${boots.letter || '?'} - ${baseName}`;
     recordKnownArmorDiscovery('levitation boots', false);
     updateWornDisplacement();
@@ -26072,7 +26860,7 @@ const HERO_WATER_DEPS = {
     dropObject: async obj => {
         const slot = takeOffAllSlot(obj);
         if (slot === 'helm') addPolyselfHelmetOffSideEffects(obj);
-        if (['helm', 'shield'].includes(slot)) setArmorWorn(obj, false);
+        if (['helm', 'shield'].includes(slot)) { setArmorWorn(obj, false); findAc(); }
         obj.worn = obj.wielded = obj.alternate = obj.quivered = false;
         obj.owornmask = 0;
         dropCarriedObjectAtHero(obj);
@@ -47188,6 +47976,7 @@ function destroyWornArmorItem(armor, messages = null) {
     const kind = armorKind(armor);
     if (wasWorn) {
         setArmorWorn(armor, false);
+        findAc();
         armor.line = normalInventoryLine({ ...armor, line: '' });
         const lightMessage = setArtifactEquipmentLight(armor, false);
         if (lightMessage && messages) messages.push(lightMessage);
@@ -64728,14 +65517,14 @@ export async function rhack(_cmd) {
         game.u.usleep = 0;
         game.multi_reason = null;
     }
-    if (game._player_spell_continuation?.ready && !game._command_mode) {
-        const state = game._player_spell_continuation;
-        game._player_spell_continuation = null;
-        if (state.kind === 'fallingRock') {
-            placeRockAtHero(state.x, state.y);
-            game.context.move = 1;
-        }
+    if (game._armor_don_knowledge_after_more
+        && (game._pending_message || '').includes('You finish your dressing maneuver.')) {
+        game._armor_don_knowledge_after_more.known = true;
+        game._armor_don_knowledge_after_more = null;
     }
+    if (game._player_spell_continuation && !game._command_mode
+        && (game._player_spell_continuation.ready || !monsterAttackWaiting()))
+        await resumePlayerSpellEffect();
     if (game._turn_undead && !monsterAttackWaiting()) await resumeTurnUndeadCommand();
     if (game._monster_spell_continuation && !monsterAttackWaiting())
         await resumeMonsterSpellCommand();
@@ -64834,7 +65623,6 @@ async function rhackInternal(_cmd) {
 
     if (game._intro_lines && (ch === ' ' || ch === '\x1b' || ch === '\r' || ch === '\n')) {
         game._intro_lines = null;
-        if (game._post_intro_ac !== undefined) game.u.uac = game._post_intro_ac;
         if (game._post_intro_energy !== undefined) {
             game.u.uen = game._post_intro_energy;
             game.u.uenmax = game._post_intro_energy;
@@ -67521,10 +68309,7 @@ function tutorialEnterStash() {
                         appendToplineAfterMoreMessages(floorMessages);
                         if ((game._queued_messages_after_more?.length || 0) > queuedBefore) keepMore = true;
                     }
-	                if (game._polyself_after_more_ac != null) {
-	                    findAc();
-	                    game._polyself_after_more_ac = null;
-	                }
+                    findAc();
 	                game._polyself_tool_after_more_letter = '';
 	            }
 	            if (game._unburden_after_topline_more) {
@@ -70854,7 +71639,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 item.known = true;
                 recordKnownArmorDiscovery(kind, false);
                 if (game.u) {
-                    game._status_uac_before_more = (game.u.uac ?? 10) + acBonus;
+                    game._status_uac_before_more = game.u.uac ?? 10;
                     game._status_uac_before_more_seen = 0;
                 }
                 game._queued_message_after_more = 'You are now wearing a cloak of displacement.';
@@ -72543,662 +73328,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
-    // --- Player spell effect plumbing -------------------------------------
-    // C ref: src/spell.c:spelleffects()/spelleffects_check(); effect bodies
-    // live in js/spell.js and receive these cmd.js internals via deps.
-    function spellLoseHeroHp(damage, cause) {
-        if (!game.u || !damage) return false;
-        game.u.uhp = Math.max(0, (game.u.uhp || 1) - damage);
-        if ((game.u.uhp || 0) > 0) return false;
-        game._death_cause = cause;
-        return true;
-    }
-
-    // C ref: lock.c:boxlock() over the hero's inventory (boxlock_invent()).
-    function spellBoxlockInventory(lock) {
-        const messages = [];
-        const wizard = (game.urole?.name?.m || game._startup_role || '') === 'Wizard';
-        for (const item of game.inventory || []) {
-            const kind = String(item?.kind || item?.actualKind || '').toLowerCase();
-            if (!/(?:large box|chest|ice box)\b/.test(kind) && item?.cls !== 'box') continue;
-            if (lock && !(item.olocked || item.locked)) {
-                item.olocked = 1;
-                item.locked = true;
-                item.obroken = 0;
-                item.lknown = wizard ? 1 : 0;
-                messages.push('Klunk!');
-            } else if (!lock && (item.olocked || item.locked)) {
-                item.olocked = 0;
-                item.locked = false;
-                item.lknown = wizard ? 1 : 0;
-                messages.push('Klick!');
-            } else if (!lock) {
-                item.obroken = 0; // C: silently fix if broken
-            }
-        }
-        return messages;
-    }
-
-    // C ref: hack.c:release_hold() (message-free common case).
-    function spellReleaseHeroHold() {
-        if (!game.u?.ustuck) return;
-        game.u.ustuck = null;
-    }
-
-    function spellHeroIsPunished() {
-        return !!(game.u?.uball || game.u?.uchain || game.u?.upunished || game._punished);
-    }
-
-    // C ref: zap.c:openholdingtrap()/closeholdingtrap()/openfallingtrap()
-    // hero and monster cases — trap release is only partially modeled.
-    function spellOpenHeroHoldingTrap() {
-        if (!game.u?.utrap) return false;
-        game.u.utrap = 0;
-        game.u.utraptype = null;
-        return true;
-    }
-
-    function spellCloseHeroHoldingTrap() {
-        return false;
-    }
-
-    function spellOpenHeroFallingTrap() {
-        return false;
-    }
-
-    function spellOpenMonsterHoldingTrap() {
-        return false;
-    }
-
-    function spellCloseMonsterHoldingTrap() {
-        return false;
-    }
-
-    function spellMonsterTheName(mon, capitalized = false) {
-        const name = (mon?.isshk && mon?.shknam) || mon?.givenName || null;
-        const base = name || `the ${mon?.data?.name || 'monster'}`;
-        return capitalized ? base.charAt(0).toUpperCase() + base.slice(1) : base;
-    }
-
-    function spellMonsterIsUndead(mon) {
-        const data = mon?.data || {};
-        const mlet = String(mon?.mlet || data.mlet || '');
-        return !!(mon?.undead || data.undead || mon?.vampshifter || data.vampshifter
-            || /^[ZMVWL']$/.test(mlet)
-            || /zombie|mummy|vampire|ghost|lich|skeleton|wraith|ghoul/i.test(String(data.name || '')));
-    }
-
-    function spellMonsterIsRider(mon) {
-        return !!(mon?.rider || mon?.data?.rider
-            || ['death', 'pestilence', 'famine'].includes(String(mon?.data?.name || '').toLowerCase()));
-    }
-
-    // C ref: zap.c:cancel_monst() hero branch (subset: form + item buc/spe).
-    function spellCancelHeroSelf() {
-        for (const item of game.inventory || []) {
-            if (!item) continue;
-            if (item.blessed) item.blessed = false;
-            if (item.cursed) item.cursed = false;
-            if (item.cls === 'wand' || item.wandIndex != null) {
-                if ((item.spe ?? 0) >= 0 && item.kind !== 'cancellation') item.spe = -1;
-            } else if (item.cls === 'scroll' && item.kind !== 'cancellation') {
-                item.kind = 'blank paper';
-                item.actualKind = 'scroll of blank paper';
-                item.spe = 0;
-            } else if (item.cls === 'spellbook' && item.otyp !== SPE_HEALING) {
-                item.kind = 'spellbook of blank paper';
-                item.spellName = '';
-                item.spe = 0;
-            } else if (item.cls === 'potion') {
-                item.actualKind = 'potion of water';
-                item.kind = 'water';
-                item.spe = 0;
-            } else if (item.spe) {
-                item.spe = 0;
-            }
-            refreshInventoryLineAfterBucChange(item);
-        }
-    }
-
-    // C ref: zap.c:mhurtle() (simplified: slide through free squares).
-    function spellMonsterHurtle(mon, dx, dy, dist) {
-        for (let i = 0; i < (dist || 0); i++) {
-            const nx = mon.mx + dx;
-            const ny = mon.my + dy;
-            if (nx < 1 || nx >= COLNO || ny < 0 || ny >= ROWNO) break;
-            const loc = game.level?.at(nx, ny);
-            if (!loc || IS_OBSTRUCTED(loc.typ)) break;
-            if ((game.level?.monsters || []).some(other => other !== mon && !other.dead && other.mx === nx && other.my === ny)) break;
-            if (game.u?.ux === nx && game.u?.uy === ny) break;
-            mon.mx = nx;
-            mon.my = ny;
-        }
-        newsym(mon.mx, mon.my);
-    }
-
-    // C ref: mon.c:wakeup() (simplified).
-    function spellWakeupMonster(mon) {
-        mon.msleeping = 0;
-    }
-
-    // C ref: dog.c:abuse_dog() (tameness loss and yelp roll; sounds omitted).
-    function spellAbuseDog(mon) {
-        if (!(mon?.mtame || 0)) return;
-        mon.mtame--;
-        if (mon.mtame && rn2(mon.mtame)) {
-            // C yelp() — sound only
-        } else {
-            // C growl() — sound only
-        }
-    }
-
-    // C ref: mhitm.c:slept_monst() — a sleeping holder releases its grip.
-    function spellSleptMonster(mon) {
-        if (mon === game.u?.ustuck && !game.u?.uswallow) {
-            game.u.ustuck = null;
-        }
-    }
-
-    // C ref: lock.c:doorlock() — knock/wizard lock/force bolt vs (secret) doors.
-    function spellDoorlock(spellName, x, y) {
-        const loc = game.level?.at(x, y);
-        if (!loc) return '';
-        const blind = heroIsBlind();
-        const visible = !blind && couldsee(x, y);
-        if (loc.typ === SDOOR) {
-            if (spellName === 'wizard lock') return '';
-            loc.typ = DOOR;
-            loc.doormask = D_CLOSED | (loc.doormask & D_TRAPPED);
-            newsym(x, y);
-            if (spellName === 'knock') return visible ? 'A door appears in the wall!' : '';
-            // force bolt continues to door handling below
-        }
-        if (loc.typ !== DOOR) return '';
-        if (spellName === 'wizard lock') {
-            let message = '';
-            switch (loc.doormask & ~D_TRAPPED) {
-            case D_CLOSED: message = 'The door locks!'; break;
-            case D_ISOPEN: message = 'The door swings shut, and locks!'; break;
-            case D_BROKEN: message = 'The broken door reassembles and locks!'; break;
-            case D_NODOOR: message = 'A cloud of dust springs up and assembles itself into a door!'; break;
-            default: return '';
-            }
-            loc.doormask = D_LOCKED | (loc.doormask & D_TRAPPED);
-            newsym(x, y);
-            return message;
-        }
-        if (spellName === 'knock') {
-            if (loc.doormask & D_LOCKED) {
-                loc.doormask = D_CLOSED | (loc.doormask & D_TRAPPED);
-                return 'The door unlocks!';
-            }
-            return '';
-        }
-        // C: force bolt smashes closed/locked doors.
-        if (loc.doormask & (D_LOCKED | D_CLOSED)) {
-            loc.doormask = D_BROKEN;
-            newsym(x, y);
-            if (visible) return 'The door crashes open!';
-            if (!heroIsDeaf()) return 'You hear a crashing sound.';
-        }
-        return '';
-    }
-
-    function spellHeroWearsHardHelmet() {
-        const helmet = wornEarthHelmet();
-        return !!(helmet && hardEarthHelmet(helmet));
-    }
-
-    // C ref: teleport.c teleok/uhave checks are upstream; dbldam for Knight.
-    function spellHeroIsKnightWithQuestArtifact() {
-        return (game.urole?.name?.m || game._startup_role || '') === 'Knight' && !!game.u?.uhave?.questart;
-    }
-
-    function spellHeroHasDrainResistance() {
-        const form = game.u?._polyself_form;
-        return !!(game.u?.drainResistance || game.u?.Drain_resistance
-            || form?.drainResistance || form?.resistsDrain);
-    }
-
-    function spellHeroBlockedInvisByMummyWrapping() {
-        return !!mummyWrappingWorn();
-    }
-
-    function mummyWrappingWorn() {
-        return (game.inventory || []).find(item =>
-            (item.worn || item.line?.includes('being worn'))
-            && String(item.kind || item.actualKind || '').toLowerCase() === 'mummy wrapping') || null;
-    }
-
-    function spellHeroIsSlimed() {
-        return !!(game.u?.slimed || (game.u?._slimedTimeout || 0) > 0
-            || (game.u?._statusSuffix || '').includes('Slime'));
-    }
-
-    function spellClearHeroSlime() {
-        if (!game.u) return;
-        game.u.slimed = false;
-        game.u._slimedTimeout = 0;
-        removeHeroStatusSuffix('Slime');
-    }
-
-    // C ref: dog.c:pet_type() — role pet, else preference, else coin flip.
-    function spellRolePetTypeName() {
-        const roleName = game.urole?.name?.m || game._startup_role || '';
-        if (roleName === 'Knight') return 'pony';
-        if (game.preferred_pet === 'c') return 'kitten';
-        if (game.preferred_pet === 'd') return 'little dog';
-        return rn2(2) ? 'kitten' : 'little dog';
-    }
-
-    // C ref: makemon.c:rndmonst_adj() (simplified to common candidates).
-    function spellRndmonstAdj(minAdj, maxAdj) {
-        const base = level_difficulty(game.u?.uz || { dnum: 0, dlevel: 1 });
-        const min = Math.max(0, base - 2 + minAdj);
-        const max = base + 2 + maxAdj;
-        const candidates = RNDMONST_COMMON_MONSTERS
-            .filter(([, , mlevel]) => (mlevel ?? 0) >= min && (mlevel ?? 0) <= max)
-            .map(([name]) => name);
-        if (!candidates.length) return null;
-        return monsterByRndName(candidates[rn2(candidates.length)]);
-    }
-
-    function spellHeroBlocksClairvoyance() {
-        const roleName = game.urole?.name?.m || game._startup_role || '';
-        if (roleName === 'Wizard') return false;
-        return (game.inventory || []).some(item =>
-            (item.worn || item.line?.includes('being worn'))
-            && String(item.kind || item.actualKind || '').toLowerCase() === 'cornuthaum');
-    }
-
-    // C ref: detect.c:do_vicinity_map() — reveal the 19x11 area around hero.
-    function spellClairvoyanceMapEffect(blessed) {
-        const ux = game.u?.ux || 0;
-        const uy = game.u?.uy || 0;
-        for (let x = Math.max(1, ux - 9); x <= Math.min(COLNO - 1, ux + 10); x++) {
-            for (let y = Math.max(0, uy - 5); y <= Math.min(ROWNO - 1, uy + 6); y++) {
-                const loc = game.level?.at(x, y);
-                if (!loc) continue;
-                loc.seenv = true;
-                if (blessed) {
-                    for (const obj of game.level?.objects || []) {
-                        if (obj.ox === x && obj.oy === y && !obj.hidden) obj.seen = true;
-                    }
-                }
-                newsym(x, y);
-            }
-        }
-    }
-
-    // C ref: spell.c:cast_protection() atmosphere word.
-    function spellHeroProtectionAtmosphere() {
-        if (game.u?.uinwater) return 'water';
-        const loc = game.level?.at(game.u?.ux || 0, game.u?.uy || 0);
-        if (loc?.typ === CLOUD) return 'cloud';
-        if (IS_TREE(loc?.typ)) return 'vegetation';
-        if (IS_STWALL(loc?.typ)) return 'stone';
-        return 'air';
-    }
-
-    // C ref: read.c:seffect_magic_mapping() spell branch (never cursed).
-    function spellMagicMappingSpellEffect() {
-        if (game.level?.flags?.nommap) {
-            addHeroConfusion(rnd(30));
-            return { messages: ['Your head spins as something blocks the spell!'] };
-        }
-        revealLevelMap({});
-        return { messages: ['A map coalesces in your mind!'] };
-    }
-
-    function spellUnfixableTroubleCount() {
-        return 0; // C unfixable_trouble_count(FALSE): no modeled unfixable troubles
-    }
-
-    async function spellRestoreLifeSavedHero() {
-        // end.c:savelife is synchronous with respect to the continuing
-        // spell. Keep its final HP for the later life-saving message.
-        clearLifeSavedDeathState();
-        applyLifeSavingConLoss();
-        restoreLifeSavedBody();
-        if (game.u.uhunger < 500) { game.u.uhunger = 900; game.u.uhs = 1; }
-        if ((game.u._sickTimeout || game.u._sicknessTimeout) === 1) clearHeroSickness();
-        if (game.u.utraptype === TT_LAVA) { game.u.utrap = 0; game.u.utraptype = null; }
-        if (game.u.uswallow && game.u.ustuck) await finishSwallowExpel(game.u.ustuck);
-        else if (game.u.ustuck) {
-            const mon = game.u.ustuck;
-            game.u.ustuck = null;
-            const attacks = (pmOf(mon) || mon.data).attacks || [];
-            if (!mon.mspec_used && attacks.some(attack => attack.adtyp === AD_STCK
-                || attack.aatyp === AT_ENGL || attack.aatyp === AT_HUGS)) mon.mspec_used = rnd(2);
-        }
-    }
-
-    async function spellElementalHeroDamage(element, original, damage, cause, messages, { golemDamage = original } = {}) {
-        if (element === 'fire') burnAwayHeroSlime(messages);
-        if (game.u?.uinvulnerable) {
-            damage = golemDamage = 0;
-            messages.push('You are unharmed!');
-        }
-        const inventory = element === 'fire'
-            ? fireDamageInventory(original, true, false, { allowLifeSaving: true, igniteBeforeDestroy: true })
-            : coldDamageInventory(original);
-        messages.push(...inventory.messages);
-        if (inventory.fatal) return { fatal: true, more: true };
-        if (inventory.lifeSaving) await spellRestoreLifeSavedHero();
-        const itemResult = applyChestTrapFireDamage(messages, inventory.damage, inventory.deathCause || cause);
-        if (itemResult.fatal) return itemResult;
-        if (itemResult.lifeSaving) await spellRestoreLifeSavedHero();
-        // C ugolemeffects precedes direct explosion damage and uses the
-        // role-adjusted damage, even when elemental resistance shields HP.
-        const form = pmOf({ data: game.u?._polyself_form }) || game.u?._polyself_form;
-        const hp = heroPolyselfFireHpState();
-        if (element === 'fire' && form?.name === 'iron golem' && hp
-            && game.u[hp.hpKey] < game.u[hp.maxKey]) {
-            game.u[hp.hpKey] = Math.min(game.u[hp.maxKey], game.u[hp.hpKey] + golemDamage);
-            messages.push('Strangely, you feel better than before.');
-            exerciseAttribute(A_STR, true);
-        }
-        const result = applyChestTrapFireDamage(messages, damage, cause);
-        if (result.lifeSaving) await spellRestoreLifeSavedHero();
-        return { ...result, lifeSaving: !result.fatal && (!!result.lifeSaving || !!itemResult.lifeSaving || !!inventory.lifeSaving) };
-    }
-
-    function spellExplosionFloor(x, y, element, messages) {
-        const loc = game.level?.at(x, y);
-        if (!loc) return false;
-        const closed = loc.typ === SDOOR || (loc.typ === DOOR && loc.doormask & (D_CLOSED | D_LOCKED));
-        let shopDamage = false;
-        if (closed) shopDamage = addShopTerrainDamage(x, y, SHOP_DOOR_COST);
-        if (element === 'cold') {
-            messages.push(...applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }).messages);
-        } else {
-            messages.push(...burnFireRayWebTrap(x, y, { previousMessage: messages.at(-1) || '' }));
-            const ice = applyFireRayIceTerrain(x, y, { heroRay: true, recordKill: recordVanquished, buriedMerchandiseDebtMessage });
-            messages.push(...ice.messages);
-            if (!ice.handled) {
-                messages.push(...applyFireRayWaterTerrain(x, y, { heroRay: true, previousMessage: messages.at(-1) || '' }).messages);
-                messages.push(...applyFireRayFountainTerrain(x, y, { heroRay: true }).messages);
-            }
-            if (loc.typ === SDOOR) {
-                loc.typ = DOOR;
-                loc.doormask = Is_rogue_level(game.u?.uz) ? D_NODOOR
-                    : loc.doormask & D_LOCKED ? loc.doormask : (loc.doormask || 0) | D_CLOSED;
-                if (cansee(x, y)) messages.push('Your spell reveals a secret door.');
-            }
-            if (loc.typ === DOOR && loc.doormask & (D_CLOSED | D_LOCKED)) {
-                loc.doormask = D_NODOOR;
-                loc.flags = 0;
-                messages.push(cansee(x, y) ? 'The door is consumed in flames!' : 'You smell smoke.');
-            }
-            messages.push(...burnRayFloorObjectsByFire(x, y));
-        }
-        if (closed) { vision_reset(); vision_recalc(0); newsym(x, y); }
-        const mon = (game.level?.monsters || []).find(candidate => !candidate.dead && candidate.mx === x && candidate.my === y);
-        if (mon) {
-            mon.msleeping = 0;
-            mon.meating = 0;
-            revealHeroProjectileHitMimicAppearance(mon);
-            directMeleeSetmangryElberethHypocrisy(mon, messages);
-            clearDirectMeleeWaitStrategyMask(mon);
-            directMeleeAngerPeacefulMonster(mon, messages, { visible: visibleMonsterForScroll(mon) });
-        }
-        return shopDamage;
-    }
-
-    function observeHeroElementResistance(element, resisted) {
-        if (game.u?.uswallow || game.u?.underwater || game.u?.uinwater) return;
-        const bit = element === 'fire' ? M_SEEN_FIRE : M_SEEN_COLD;
-        for (const mon of game.level?.monsters || []) {
-            if (mon.dead || mon.mhp <= 0 || !couldsee(mon.mx, mon.my)) continue;
-            if (game.u?.invisible && !perceives(pmOf(mon) || mon.data || {})) continue;
-            mon.m_seenres = resisted ? (mon.m_seenres || 0) | bit : (mon.m_seenres || 0) & ~bit;
-        }
-    }
-
-    const SPELL_EFFECT_DEPS = {
-        spellRoleSkillLevel,
-        stopHeroOccupation,
-        loseHeroHp: spellLoseHeroHp,
-        healHero,
-        damageHero: applyHeroHitPointDamage,
-        boxlockInventory: spellBoxlockInventory,
-        releaseHeroHold: spellReleaseHeroHold,
-        heroIsPunished: spellHeroIsPunished,
-        openHeroHoldingTrap: spellOpenHeroHoldingTrap,
-        closeHeroHoldingTrap: spellCloseHeroHoldingTrap,
-        openHeroFallingTrap: spellOpenHeroFallingTrap,
-        openMonsterHoldingTrap: spellOpenMonsterHoldingTrap,
-        closeMonsterHoldingTrap: spellCloseMonsterHoldingTrap,
-        monsterResistsMagm: monsterResistsMagic,
-        monsterTheName: spellMonsterTheName,
-        monsterIsUndead: spellMonsterIsUndead,
-        monsterIsRider: spellMonsterIsRider,
-        cancelHeroSelf: spellCancelHeroSelf,
-        monsterHurtle: spellMonsterHurtle,
-        wakeupMonster: spellWakeupMonster,
-        abuseDog: spellAbuseDog,
-        sleptMonster: spellSleptMonster,
-        spellDoorlock,
-        heroWearsHardHelmet: spellHeroWearsHardHelmet,
-        heroIsKnightWithQuestArtifact: spellHeroIsKnightWithQuestArtifact,
-        heroHasDrainResistance: spellHeroHasDrainResistance,
-        heroBlockedInvisByMummyWrapping: spellHeroBlockedInvisByMummyWrapping,
-        mummyWrappingName: () => pickupObjectName(mummyWrappingWorn() || { kind: 'mummy wrapping' }),
-        heroBlocksInvis: () => !!mummyWrappingWorn(),
-        heroIsSlimed: spellHeroIsSlimed,
-        clearHeroSlime: spellClearHeroSlime,
-        rolePetTypeName: spellRolePetTypeName,
-        rndmonstAdj: spellRndmonstAdj,
-        heroBlocksClairvoyance: spellHeroBlocksClairvoyance,
-        clairvoyanceMapEffect: spellClairvoyanceMapEffect,
-        heroProtectionAtmosphere: spellHeroProtectionAtmosphere,
-        magicMappingSpellEffect: spellMagicMappingSpellEffect,
-        unfixableTroubleCount: spellUnfixableTroubleCount,
-        // Pre-existing helpers handed through unchanged.
-        movementDirection,
-        heroIsStunned,
-        heroIsConfused,
-        heroIsHallucinating,
-        heroIsBlind,
-        heroIsDeaf,
-        heroHasAntimagic,
-        heroHasSleepResistance,
-        maybeHalfPhysicalDamage,
-        exerciseAttribute,
-        syncHeroSpeedState,
-        unpunishHero,
-        breakBuriedBallChain,
-        polymorphSelfZapResult,
-        polymorphSpellDirection,
-        stoneToFleshInventoryEffect,
-        stoneToFleshFloorEffect,
-        zapDigDownwardResult,
-        zapDigFallingRockMessage,
-        placeRockAtHero,
-        visibleMonsterForScroll,
-        heroCanSpotMonster,
-        monsterResistsEffect,
-        monsterResistsCold,
-        monsterResistsFire,
-        monsterColdInventoryDamage,
-        coldDamageInventory,
-        heroHasColdResistance,
-        heroHasFireResistance: () => heroHasFireResistance() || resistsFire({ data: game.u?._polyself_form }),
-        spellElementalHeroDamage,
-        observeHeroElementResistance,
-        spellExplosionFloor,
-        burnMonsterArmorFromFire,
-        monsterFireInventoryDamage,
-        igniteMonsterFireInventoryItems,
-        wakeNearbyMonstersAt,
-        payForCurrentShopTerrainDamage,
-        explosionAngerMonster: (mon, messages) => {
-            directMeleeSetmangryElberethHypocrisy(mon, messages);
-            clearDirectMeleeWaitStrategyMask(mon);
-            directMeleeAngerPeacefulMonster(mon, messages, { visible: visibleMonsterForScroll(mon) });
-        },
-        applyColdRayTerrain: (x, y) => applyColdRayTerrain(x, y, { buriedMerchandiseDebtMessage }),
-        applyMonsterPolymorphTarget,
-        levelDifficulty: () => level_difficulty(game.u?.uz),
-        heroIsUnaware,
-        heroZapReflectSourceWord,
-        heroPolyselfResistsStoning,
-        maybeTurnPolyselfIntoStoneGolem,
-        consumeLifeSavingAmulet,
-        applyHeroProjectileMonsterLifeSaving,
-        stoneMonster,
-        drainItem,
-        drainItemProtectedByDrainResistance,
-        dragonArmorSpecForItem,
-        BLACK_DRAGON_SCALES,
-        BLACK_DRAGON_SCALE_MAIL,
-        monsterIsVampireShifterForLifeSaving,
-        revealHeroProjectileHitMimicAppearance,
-        directMeleeNonlethalWakeupTail,
-        killMonsterFromHeroProjectileHit,
-        monsterResistsSleepEffect,
-        monsterReflectionSource,
-        recordMonsterReflectionDiscovery,
-        monsterPossessiveName,
-        clearMonsterTrack,
-        floorStatueAt,
-        breakStatueObject,
-        activateStatueTrap,
-        statueStrikeBreakResult,
-        lightScrollLitroom,
-        foodDetectionScrollEffect,
-        collectDetectedObjects,
-        markDetectedObjects,
-        isGoldObject,
-        removeCurseFeelingMessage,
-        removeCurseActiveTarget,
-        normalizeUncursedWaterPotion,
-        costlyUncurseWater,
-        refreshInventoryLineAfterBucChange,
-        tameMonsterWithScroll,
-        addHeroConfusion,
-        clearHeroConfusion,
-        addHeroStatusSuffix,
-        heroIsSick,
-        heroIsVomiting,
-        clearHeroSickness,
-        clearHeroVomiting,
-        unidentifiedInventoryItems,
-        identifyInventoryItem,
-        unturnDeadHeroInventory: unturnDeadHeroInventoryFromBook,
-        addHeroStun,
-        loseExperienceLevel,
-        dropRockAt: placeRockAtHero,
-    };
-
-    // Shared tail for castSpell/spellDirection results (js/spell.js).
-    async function finishSpellEffectResult(spell, result) {
-        game._command_mode = null;
-        game.context.move = 1;
-        if (result?.lifeSaving && !result?.fatal && (game.u?.uhp || 0) > 0)
-            game._life_saving_post_continue_hp = game.u.uhp;
-        const messages = [...(result?.messages || [])];
-        if (result?.invalidDirection) messages.unshift('What a strange direction!', 'The magical energy is released!');
-        else if (result?.released) messages.unshift('The magical energy is released!');
-
-        if (result?.castFallback) {
-            await setMessage(`You cast ${spell?.name || 'a spell'}.`);
-            return;
-        }
-        if (result?.startJump) {
-            // C ref: apply.c:jump() — position prompt, then the jump itself.
-            game._jump_magic = result.startJump;
-            if (!game._jump_tip_seen) {
-                await setMessage('Where do you want to jump?', true);
-                game._command_mode = 'jumpIntroMore';
-            } else {
-                await setMessage('Where do you want to jump?');
-                game._farlook_x = game.u?.ux || 0;
-                game._farlook_y = game.u?.uy || 0;
-                game._getpos_prompt_cursor = initialJumpPromptCursor();
-                game._command_mode = 'jumpCursor';
-            }
-            game.context.move = 0;
-            return;
-        }
-        if (result?.teleportSelf) {
-            // C ref: teleport.c:scrolltele(NULL) — tele() for the spell.
-            if (heroNoTeleportLevel() && !game.flags?.debug) {
-                await setMessage('A mysterious force prevents you from teleporting!');
-                return;
-            }
-            if ((heroHasAmuletOfYendor() || heroOnWizardTowerLevel()) && !rn2(3)) {
-                await setMessage('You feel disoriented for a moment.');
-                return;
-            }
-            if ((heroHasTeleportControl() && !heroIsStunned()) || game.flags?.debug) {
-                startControlledTeleportPrompt();
-                await setMessage('Where do you want to be teleported?');
-                game.context.move = 0;
-                return;
-            }
-            const materialize = safeTeleportHeroSameLevel();
-            await setMessage(materialize || '');
-            return;
-        }
-        if (result?.identifiedItems) {
-            const identified = result.identifiedItems || [];
-            if (identified.length) messages.push(...identified.map(invItem => `${invItem.line}.`));
-            else messages.push('You have already identified all of your possessions.');
-        }
-        if (result?.detectMonstersMore) {
-            await setMessage(messages.join('  '), true);
-            game._command_mode = 'spellDetectMonstersMore';
-            game.context.move = 0;
-            return;
-        }
-        if (result?.sleepTurns) game.context.move = result.sleepTurns;
-        if (result?.afterHeroDamage) game._player_spell_continuation = { spell, ...result.afterHeroDamage };
-        const deathIndex = messages.findIndex(text => text.startsWith('You die...'));
-        if ((result?.fatal || result?.lifeSaving) && deathIndex > 0) {
-            // C done flushes the existing effect message before announcing
-            // death. The queued death line owns the recovery prompt.
-            const lines = packToplineMessages(messages.slice(0, deathIndex));
-            await setMessage(lines[0], true);
-            (game._queued_messages_after_more ??= []).push(
-                ...lines.slice(1).map(text => ({ text, more: true })),
-                { text: messages.slice(deathIndex).join('  '), more: true, ...result });
-            game.context.move = 0;
-            game._pending_time_passed = 0;
-            return;
-        }
-        if (messages.length) await setMessage(messages.join('  '), result?.more || messages.length > 1);
-        else {
-            game._pending_message = '';
-            game._message_more = 0;
-            game._keep_pending_message = 1;
-        }
-        if (result?.polyResult) applyLifeSavingOrFatalCommandMode(result.polyResult);
-        else if (result?.fatal || result?.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
-    }
-
-    async function beginSpellEffect(spell, prefix = '') {
-        game._casting_spell = spell;
-        if (['fireball', 'cone of cold'].includes(spell.name) && spellRoleSkillLevel(spell) >= P_SKILLED) {
-            if (game.u?.uinwater || Is_waterlevel(game.u?.uz)) {
-                await finishSpellEffectResult(spell, { messages: [game.u?.uinwater
-                    ? "You're joking!  In this weather?" : 'You had better wait for the sun to come out.'] });
-                return;
-            }
-            game._spell_explosion_target = { x: game.u.ux, y: game.u.uy };
-            game._cursor_override = [game.u.ux - 1, game.u.uy + 1];
-            await setMessage(`${prefix}Where do you want to cast the spell?`);
-            game._command_mode = 'spellExplosionTarget';
-            game.context.move = 0;
-        } else if (spellCastNeedsDirection(spell)) {
-            await setMessage(`${prefix}In what direction?`);
-            game._command_mode = 'spellDirection';
-        } else {
-            const result = await castSpellNodirEffect(spell, SPELL_EFFECT_DEPS);
-            if (prefix && result.messages?.length) result.messages.unshift(prefix.trim());
-            await finishSpellEffectResult(spell, result);
-        }
-    }
+    const SPELL_EFFECT_DEPS = playerSpellEffectDependencies();
 
     async function beginArtifactStormSpell(name) {
         exerciseAttribute(A_WIS, true);

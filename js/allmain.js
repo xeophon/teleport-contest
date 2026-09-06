@@ -67,19 +67,19 @@ import { attachEggHatchTimeout, eggHatchMonsterData, killEggHatchTimer } from '.
 import { metallivoreObjectResists, monsterCouldEatMetalItem as sharedMonsterCouldEatMetalItem, monsterIsMetallivore, monsterIsRustMonster } from './metallivore.js';
 
 const ROLE_STATE = {
-    Archeologist: { rank: 'Digger', hpBase: 11, enBase: 1, enRnd: 0, ac: 0, initRecord: 10, attrBase: [7, 10, 10, 7, 7, 7], attrDist: [20, 20, 20, 10, 20, 10] },
-    Barbarian: { rank: 'Plunderer', hpBase: 14, enBase: 1, enRnd: 0, ac: 0, initRecord: 10, attrBase: [16, 7, 7, 15, 16, 6], attrDist: [30, 6, 7, 20, 30, 7] },
-    Caveman: { rank: 'Troglodyte', hpBase: 14, enBase: 1, enRnd: 0, ac: 0, initRecord: 0, attrBase: [10, 7, 7, 7, 8, 6], attrDist: [30, 6, 7, 20, 30, 7] },
-    Healer: { rank: 'Rhizotomist', hpBase: 11, enBase: 1, enRnd: 4, ac: 0, initRecord: 10, attrBase: [7, 7, 13, 7, 11, 16], attrDist: [15, 20, 20, 15, 25, 5] },
-    Knight: { rank: 'Gallant', hpBase: 14, enBase: 1, enRnd: 4, ac: 0, initRecord: 10, attrBase: [13, 7, 14, 8, 10, 17], attrDist: [30, 15, 15, 10, 20, 10] },
-    Monk: { rank: 'Candidate', hpBase: 12, enBase: 2, enRnd: 2, ac: 0, initRecord: 10, attrBase: [10, 7, 8, 8, 7, 7], attrDist: [25, 10, 20, 20, 15, 10] },
-    Priest: { rank: 'Aspirant', hpBase: 12, enBase: 4, enRnd: 3, ac: 0, attrBase: [7, 7, 10, 7, 7, 7], attrDist: [15, 10, 30, 15, 20, 10] },
-    Ranger: { rank: 'Tenderfoot', hpBase: 13, enBase: 1, enRnd: 0, ac: 0, initRecord: 10, attrBase: [13, 13, 13, 9, 13, 7], attrDist: [30, 10, 10, 20, 20, 10] },
-    Rogue: { rank: 'Footpad', hpBase: 10, enBase: 1, enRnd: 0, ac: 0, initRecord: 10, attrBase: [7, 7, 7, 10, 7, 6], attrDist: [20, 10, 10, 30, 20, 10] },
-    Samurai: { rank: 'Hatamoto', hpBase: 13, enBase: 1, enRnd: 0, ac: 0, initRecord: 10, attrBase: [10, 8, 7, 10, 17, 6], attrDist: [30, 10, 8, 30, 14, 8] },
-    Tourist: { rank: 'Rambler', hpBase: 8, enBase: 1, enRnd: 0, ac: 0, attrBase: [7, 10, 6, 7, 7, 10], attrDist: [15, 10, 10, 15, 30, 20] },
-    Valkyrie: { rank: 'Stripling', hpBase: 14, enBase: 1, enRnd: 0, ac: 0, attrBase: [10, 7, 7, 7, 10, 7], attrDist: [30, 6, 7, 20, 30, 7] },
-    Wizard: { rank: 'Evoker', hpBase: 10, enBase: 4, enRnd: 3, ac: 0, attrBase: [7, 10, 7, 7, 7, 7], attrDist: [10, 30, 10, 20, 20, 10] },
+    Archeologist: { rank: 'Digger', hpBase: 11, enBase: 1, enRnd: 0, initRecord: 10, attrBase: [7, 10, 10, 7, 7, 7], attrDist: [20, 20, 20, 10, 20, 10] },
+    Barbarian: { rank: 'Plunderer', hpBase: 14, enBase: 1, enRnd: 0, initRecord: 10, attrBase: [16, 7, 7, 15, 16, 6], attrDist: [30, 6, 7, 20, 30, 7] },
+    Caveman: { rank: 'Troglodyte', hpBase: 14, enBase: 1, enRnd: 0, initRecord: 0, attrBase: [10, 7, 7, 7, 8, 6], attrDist: [30, 6, 7, 20, 30, 7] },
+    Healer: { rank: 'Rhizotomist', hpBase: 11, enBase: 1, enRnd: 4, initRecord: 10, attrBase: [7, 7, 13, 7, 11, 16], attrDist: [15, 20, 20, 15, 25, 5] },
+    Knight: { rank: 'Gallant', hpBase: 14, enBase: 1, enRnd: 4, initRecord: 10, attrBase: [13, 7, 14, 8, 10, 17], attrDist: [30, 15, 15, 10, 20, 10] },
+    Monk: { rank: 'Candidate', hpBase: 12, enBase: 2, enRnd: 2, initRecord: 10, attrBase: [10, 7, 8, 8, 7, 7], attrDist: [25, 10, 20, 20, 15, 10] },
+    Priest: { rank: 'Aspirant', hpBase: 12, enBase: 4, enRnd: 3, attrBase: [7, 7, 10, 7, 7, 7], attrDist: [15, 10, 30, 15, 20, 10] },
+    Ranger: { rank: 'Tenderfoot', hpBase: 13, enBase: 1, enRnd: 0, initRecord: 10, attrBase: [13, 13, 13, 9, 13, 7], attrDist: [30, 10, 10, 20, 20, 10] },
+    Rogue: { rank: 'Footpad', hpBase: 10, enBase: 1, enRnd: 0, initRecord: 10, attrBase: [7, 7, 7, 10, 7, 6], attrDist: [20, 10, 10, 30, 20, 10] },
+    Samurai: { rank: 'Hatamoto', hpBase: 13, enBase: 1, enRnd: 0, initRecord: 10, attrBase: [10, 8, 7, 10, 17, 6], attrDist: [30, 10, 8, 30, 14, 8] },
+    Tourist: { rank: 'Rambler', hpBase: 8, enBase: 1, enRnd: 0, attrBase: [7, 10, 6, 7, 7, 10], attrDist: [15, 10, 10, 15, 30, 20] },
+    Valkyrie: { rank: 'Stripling', hpBase: 14, enBase: 1, enRnd: 0, attrBase: [10, 7, 7, 7, 10, 7], attrDist: [30, 6, 7, 20, 30, 7] },
+    Wizard: { rank: 'Evoker', hpBase: 10, enBase: 4, enRnd: 3, attrBase: [7, 10, 7, 7, 7, 7], attrDist: [10, 30, 10, 20, 20, 10] },
 };
 
 const RACE_STATE = {
@@ -201,21 +201,6 @@ export function syncStartupIdentity(g = game) {
     return { roleName, raceName, genderName, alignName, role, race };
 }
 const AVAL = 50;
-const STARTING_AC = {
-    Archeologist: 9,
-    Barbarian: 7,
-    Caveman: 8,
-    Healer: 8,
-    Knight: 3,
-    Monk: 4,
-    Priest: 7,
-    Ranger: 7,
-    Rogue: 7,
-    Samurai: 4,
-    Tourist: 10,
-    Valkyrie: 6,
-    Wizard: 9,
-};
 const PANTHEON_ROLES = ['Archeologist', 'Barbarian', 'Caveman', 'Healer', 'Knight', 'Monk', 'Priest', 'Rogue', 'Ranger', 'Samurai', 'Tourist', 'Valkyrie', 'Wizard'];
 const RANDOM_NEMESIS_GENDER_ROLES = new Set(['Archeologist', 'Wizard']);
 const NON_MIMIC_HIDER_NAMES = new Set(['rock piercer', 'iron piercer', 'glass piercer', 'lurker above', 'trapper']);
@@ -1562,9 +1547,8 @@ function initializeHero() {
     // "level gain" HP/Pw (polyself.c:385-388, 400-401).
     game.u.uhpinc = [game._initialHp];
     game.u.ueninc = [game._initialEnergy];
-    game.u.uac = game.flags?.legacy === false ? (STARTING_AC[roleName] ?? role.ac) : role.ac;
+    findAc();
     game.u.uhunger = 900;
-    game._post_intro_ac = STARTING_AC[roleName] ?? role.ac;
     if ((game._known_spells || []).length && game.u.uenmax < 5)
         game._post_intro_energy = 5;
     game.u.uexp = 0;
@@ -11424,6 +11408,13 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             } else if (!addToplineMessage(message) && game._message_more) {
                 game._armor_finish_after_more = 1;
             }
+            if (occupation.action !== 'takeoff' && item) {
+                // unmul prints its completion message before Armor_on learns
+                // enchantment; a full preceding topline suspends that callback.
+                if (game._armor_finish_after_more && !item.known)
+                    game._armor_don_knowledge_after_more = item;
+                else item.known = true;
+            }
             if (armorFinishNeedsMore) {
                 game._message_more = 1;
                 game._process_time_with_more = 0;
@@ -18096,6 +18087,7 @@ export async function moveloop_core() {
                         g._gauntlets_power_exercise_after_turn_tail = 1;
                     }
                 }
+                if (occupation.action !== 'takeoff' && item) item.known = true;
                 if (occupation.action !== 'takeoff' && occupation.kind === 'gauntlets of power') {
                     if (item) {
                         item.known = true;
@@ -18349,6 +18341,9 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
 	                }
 	            }
         }
+        // allmain.c:453: recompute after action time, before occupations
+        // or the next command. A suspended pline has not reached this phase.
+        if (!g._message_more && !g._command_mode) findAc(g);
         if (!earlyForceLock) processForceLockOccupation();
         if (!earlyPickLock) processPickLockOccupation();
         if (!earlyPickDig) await processPickDigOccupation();
@@ -18610,7 +18605,10 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
         if (!g._pending_time_passed && g._teleport_geometric_online_once)
             g._teleport_geometric_online_once = 0;
     }
-    if (!g._pending_time_passed && !g._message_more && g._counted_repeat_interruptible)
+    // mhitu.c:1258-1266: done returns before hitmu stops the occupation.
+    // A suspended attack still owns this pass even while its prompt reads input.
+    if (!g._pending_time_passed && !g._message_more && g._counted_repeat_interruptible
+        && !g._monster_attack_continuation)
         g._counted_repeat_interruptible = 0;
     if (g._stairs_arrival_message_after_time && (g._pending_message || g._message_more))
         g._stairs_arrival_message_after_time = '';
@@ -18756,6 +18754,9 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
 	            g._clear_search_safety_message_next_flush = 0;
 	        }
 	    }
+    // A command which used no time also reaches the per-input AC update.
+    if (!g._pending_time_passed && !g._message_more && !g._command_mode
+        && !g._intro_lines && !g._overlay_lines) findAc(g);
     g._hallu_refreshed_this_command = 0;
     if (g._hallu_refresh_after_expel) {
         g._hallu_refresh_after_expel = 0;

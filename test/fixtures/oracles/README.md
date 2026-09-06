@@ -14,3 +14,8 @@ JavaScript entry point and require complete screen, cursor and RNG agreement.
 The wizard casting fixtures cover all 41 debug-menu entries and page navigation,
 then a Barbarian's two self-directed magic-missile casts, fatal damage, the
 separate death-message prompt and wizard refusal to die.
+
+The armor fixtures cover the Monk legacy story’s retained initial status and
+post-intro equipment AC, plus a Wizard wishing for ordinary plate mail, removing
+a cloak, and completing five-turn dressing/removal. They preserve full screen,
+cursor and RNG comparison; they are not branch-coverage measurements.

@@ -19220,7 +19220,8 @@ test('remove command can prompt and take off armor fallback', async () => {
     assert.equal(game.context.move, 1);
     assert.equal(armor.worn, false);
     assert.equal(armor.line, 'a - a +0 small shield');
-    assert.equal(game.u.uac, 10);
+    // C updates AC after command time, beyond this direct rhack call.
+    assert.equal(game.u.uac, 9);
     assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
 });
 
@@ -19281,7 +19282,8 @@ test('takeoffall command removes all selected items in C takeoff order', async (
 
     assert.equal(shield.worn, false);
     assert.equal(shield.line, 's - a +0 small shield');
-    assert.equal(game.u.uac, 10);
+    // C updates AC after command time, beyond this direct rhack call.
+    assert.equal(game.u.uac, 9);
     assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
 
     await rhack('.');
@@ -19808,7 +19810,8 @@ test('remove prompt suggests accessories while downplayed armor stays selectable
 
     assert.equal(game.context.move, 1);
     assert.equal(shield.worn, false);
-    assert.equal(game.u.uac, 10);
+    // C updates AC after command time, beyond this direct rhack call.
+    assert.equal(game.u.uac, 9);
     assert.equal(game._pending_message, 'You were wearing a +0 small shield.');
 });
 

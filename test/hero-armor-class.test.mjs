@@ -54,7 +54,12 @@ for (const command of ['W', 'P']) test(`${command} counts corrosion when armor i
     setup(); const armor = { id: 1, letter: 'a', cls: 'armor', kind: 'leather armor',
         spe: 3, oeroded: 1, oeroded2: 3, quan: 1 };
     game.inventory.push(armor);
-    await rhack(command); await rhack('a'); assert.equal(game.u.uac, 7);
+    await rhack(command); await rhack('a');
+    game._pending_time_passed = 1;
+    try { await moveloop_core(); }
+    catch (error) { if (!/Input queue empty/.test(error.message)) throw error; }
+    resetInputState();
+    assert.equal(game.u.uac, 7);
     await remove(armor); assert.equal(game.u.uac, 10);
 });
 

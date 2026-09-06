@@ -481,3 +481,33 @@ not every inherited helper: full `do_name.c:x_monnam` hallucinated monster
 names, shield animations and expulsion's monster-telecontrol/overcrowding
 branches remain outside this checkpoint. Other prayer/sacrifice operations
 are separate from `#turn` and are not claimed complete.
+
+### Chain lightning command and saved queue (2026-09-06)
+
+`spell.c:907-1101,1588` now routes the no-direction spell through
+`js/chain_lightning.js`. The bounded 100-square queue follows C direction,
+terrain, peaceful-target, deduplication, saved-strength and breadth-first
+ordering. Its per-monster power charges never underflow. Hallucination draws
+the displayed beam before the swallowed early return; the source TODO to
+damage the engulfer remains deliberately unimplemented.
+
+The electrical `zap.c:zhitm:4354-4405` path applies 2d6, INT adjustment,
+inventory damage, Knight doubling and the final floored MR reduction in
+order. It does not roll to hit, reflect, blind or damage floor objects.
+`zap.c:destroy_items/maybe_destroy_item:5613-6096` reuses the existing
+electrical reservoir selector and adds monster item effects, including the
+source's hero-glove check and monster ring-recharge TODO. Destruction pauses
+before removing the selected item and cancels its timers on consumption.
+
+Shared monster death and life saving precede propagation. The command-owned
+queue resumes after plain More, saved item destruction, gas-spore injury,
+hero life saving and wizard death refusal without repeating hits or power
+charges. Fifty independent tests pass, including real `moveloop_core` casting;
+the combined chain, turning and immediate-spell suite passes 129/129.
+
+Remaining inherited limitations are explicit: the stale `gb.bhitpos` quirk
+is represented by `game.bhitpos`, but the older JS beam/projectile walkers
+do not yet populate that global; full hallucinated `x_monnam`, shield
+animation and exact transient-display timing are not claimed complete.
+The existing death helper's broader explosion behavior remains a separate
+source-audit area. No recording fixtures were changed for this slice.

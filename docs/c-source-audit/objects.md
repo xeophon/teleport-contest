@@ -15,7 +15,7 @@ All C paths below are relative to `nethack-c/upstream/src/`. “No new gap estab
 | `ball.c:882` `drop_ball` trap-release branch | `cmd.js` `heroDropAttachedBallAfterThrow`, `heroDropBall…` helpers | Pit/web/lava/bear-trap release branches exist, including leg wound RNG. JS bear-trap injury writes base HP directly; full C `losehp` polymorph/life-saving equivalence remains unverified. Blind glyph ordering and full ball movement are outside this slice. |
 | `detect.c:1792` `findit`, initial aggregation and `do_clear_area` call | `spell.js` `spellDetectUnseenEffect`; `cmd.js` scroll detection helpers | **Confirmed geometric omission:** spell detect-unseen examines eight radial spokes for secret terrain, while C traverses a clear area and also invokes `findone` for concealed monsters. Non-spoke secret doors and hidden-monster discovery are not handled by this spell helper. Current generic “hidden passage” message also omits C's discovered-category counts. No direct non-spoke assertion identified. |
 | `dig.c:1548` `zap_dig`, swallowed/vertical/pit setup | `dig.js`; `cmd.js` wand/dig helpers; `spell.js` `spellDigBeam`/`spellZapUpDown` | **Spell path missing swallowed behavior:** C wounds a non-whirly engulfer and expels the hero before map digging; spell beam edits terrain. Spell up-dig also lacks C's air/water/underwater guard. `digging.test.mjs` asserts pick occupations, effort, nondiggable walls, pits, holes and flooding; `spell-effects.test.mjs` asserts horizontal spell dig-depth RNG, not those missing branches. |
-| `do_wear.c:1190–1459` `learnring`, `adjust_attrib`, `Ring_on`, `Ring_off_or_gone`; `2473` `find_ac` | `ring.js` metadata; `cmd.js` equipment and electrical destruction; `do_wear.js` shared AC calculation; `armor.js` armor bonus | Normal ring wear/removal and asynchronous electrical destruction share property masks, hand references, stat changes, discovery and awaited levitation landing; recharge pairs removal/replacement. The 35 ring tests and 47 hero AC tests are detailed below. Shared AC now includes current canonical species, all armor, both protection rings, guarding, intrinsic and spell protection, and C’s ±99 clamp. Startup/per-real-input recalculation, exact dressing timing and other equipment properties remain separate work. |
+| `do_wear.c:1190–1459` `learnring`, `adjust_attrib`, `Ring_on`, `Ring_off_or_gone`; `2473` `find_ac` | `ring.js` metadata; `cmd.js` equipment and electrical destruction; `do_wear.js` shared AC calculation; `armor.js` armor bonus | Normal ring wear/removal and asynchronous electrical destruction share property masks, hand references, stat changes, discovery and awaited levitation landing; recharge pairs removal/replacement. The 35 ring tests and 47 hero AC tests are detailed below. Shared AC now includes current canonical species, all armor, both protection rings, guarding, intrinsic and spell protection, and C’s ±99 clamp. Startup and per-action/input recalculation now share the same owner; the legacy story retains the earlier status snapshot. Further armor completion/property callbacks and other equipment properties remain separate work. |
 | `dokick.c:412` `container_impact_dmg` | `cmd.js` `projectileContainerImpactDmg`, kick/throw/drop callers | Normal-container contents breakage, stack splitting, knowledge clearing and shop-debt paths exist. C body and JS helper were compared; no new concrete omission established in this slice. `steed-kick.test.mjs` is about mounted kicking, not evidence for container impacts. |
 | `dothrow.c:1976` `should_mulch_missile` | `cmd.js` `shouldMulchHeroProjectileMissile`; monster counterpart in `allmain.js` | Hero helper has C erosion/enchantment chance, blessed `rnl(4)` rescue and hard-gem coin flip. No new gap established in this slice. Projectile death, hit, recoil, return, and delivery branches outside the reviewed slice remain unverified. |
 | `eat.c:325` `obj_nutrition`, 338 `adj_victual_nutrition` | `cmd.js` `foodObjectNutrition`, `adjustedDelayedFoodBiteHunger`; `allmain.js` eating ticks | Lembas elf/orc and cram dwarf per-bite adjustments match the inspected formulas. Corpse/glob nutrition and interrupted eating require further cross-path review. No whole-eating coverage claim. |
@@ -98,11 +98,31 @@ as pre-fix failures. Six older rehumanization assertions now expect naked
 human AC 10 instead of restoring an unsupported cached AC 7; their original
 cached input remains to test that recomputation uses current equipment.
 
-This is a bounded source-calculation port. C's startup and once-per-real-input
-`find_ac` calls, exact dressing-delay timing, and remaining legacy producers
-of intrinsic protection are the next integration work. Existing roles and
-intro paths still assign initial AC directly. Passing these formula and
-command tests does not establish every equipment property or caller.
+The startup and timing continuation now removes fixed role AC and the
+post-intro overwrite. Internal startup AC is computed from actual equipment,
+while the legacy story retains C's pre-discovery status display of AC 0.
+`allmain.c:453` recomputation runs after action time and before the next real
+input, including commands which use no time; nested prompts and unfinished
+messages retain their earlier phase. `setworn` sets armor slots before dressing,
+while recalculation follows command time. Ordinary armor enchantment becomes
+known at completion, with saved continuation when the finishing message waits
+behind More. `polyself.c:887–890` recalculates after armor and weapon fallout:
+a retained tool-drop message now keeps the earlier AC until release, then
+recomputes all current sources instead of assigning a dragon-specific value.
+
+`hero-armor-timing.test.mjs` adds 26 passing cases. Ten of the initial 20
+failed before implementation; six later live/save phase cases failed before
+their corrections. Two new C recordings preserve the existing Monk legacy
+intro and plate-mail dressing/removal behavior: all 33 screens and 5,032 RNG
+calls match. The public seed0108 regression that exposed early polymorph AC
+also now matches all 303 screens; no reference output was changed. Three old
+accessory-command assertions retain pre-time AC, and the two armor-corrosion
+command tests now advance the owning turn before asserting recalculation.
+
+This remains a bounded calculation/timing port. Complete armor-on/off callback
+ordering through every message, armor cancellation/interruption, and remaining
+legacy producers of intrinsic protection still require source work. Passing
+these tests does not establish every equipment property or caller.
 
 ## Landing automatic pickup
 

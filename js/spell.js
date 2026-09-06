@@ -27,6 +27,7 @@ import {
 import { newsym } from './display.js';
 import { cansee, couldsee } from './vision.js';
 import { explodeSpell } from './explode.js';
+import { resumeChainLightning } from './chain_lightning.js';
 import { lightDamageHero } from './flash.js';
 import { fallAsleep } from './timeout.js';
 import { findMac, resistsFire, resistsCold } from './mhitm.js';
@@ -81,7 +82,7 @@ function spellName(spell) {
 }
 
 // C ref: zap.c:spell_damage_bonus() — hero INT (and level) adjustment.
-function spellDamageBonus(dmg) {
+export function spellDamageBonus(dmg) {
     const u = game.u || {};
     const intell = u.acurr?.a?.[1] ?? 10;
     const ulevel = u.ulevel || 1;
@@ -1548,6 +1549,7 @@ export async function castSpellNodirEffect(spell, D) {
         return { messages, fatal: !!messages.fatal, lifeSaving: !!messages.lifeSaving,
             genocideDeathArmed: !!messages.genocideDeathArmed };
     }
+    case 'chain lightning': return resumeChainLightning({}, D);
     case 'detect unseen': return spellDetectUnseenEffect(D);
     case 'detect monsters': return spellDetectMonstersEffect(spell, D);
     case 'detect treasure': return spellDetectTreasureEffect(spell, D);

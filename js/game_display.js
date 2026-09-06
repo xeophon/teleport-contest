@@ -161,7 +161,9 @@ export class GameDisplay {
         const hp = deathMoreHp ? (game._death_pending_confirm && game._death_status_hp_before_zero == null
             ? 0 : game._death_status_hp_before_zero) : u.uhp || 0;
         const heldUac = game._message_more && game._status_uac_before_more != null;
-        const displayAc = heldUac ? game._status_uac_before_more : u.uac ?? 10;
+        // newgame prints the initial status before skills/discoveries call
+        // find_ac. The legacy story retains that screen while internal AC is current.
+        const displayAc = game._intro_lines ? 0 : heldUac ? game._status_uac_before_more : u.uac ?? 10;
         let line2;
         const statusTurn = () => {
             let turn = game.moves || 1;

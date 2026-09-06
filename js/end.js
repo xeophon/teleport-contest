@@ -33,6 +33,13 @@ export function scheduleLifeSavingRecovery() {
     game._wake_message = 'You survived that attempt on your life.';
     game.multi_reason = game._startup_role === 'Tourist'
         ? 'being toyed with by Fate' : 'attempting to cheat Death';
+    if (game._queued_explore_lifesaving_message) {
+        game._queued_message_after_more = '';
+        game._queued_explore_lifesaving_message = 0;
+        game._pending_explore_lifesaving_message = 0;
+        game._survivor_emit_after_moves = 0;
+        game._survivor_via_search_stop = 0;
+    }
 }
 
 const GOLD_PIECE = 466; // object id for gold zorkmids (mirrors allmain.js/cmd.js)
