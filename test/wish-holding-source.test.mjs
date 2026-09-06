@@ -98,12 +98,13 @@ for(const key of [' ','\x1b'])test(`a saved wish load report precedes divine not
     setup();await wish('80000 gold pieces');
     assert.equal(game._command_mode,'heldWishMore');
     assert.equal(game.u.ublesscnt,0);assert.equal(game._goldCount,80000);
-    assert.equal(game._encumbrance_level,1);
+    assert.equal(game._encumbrance_level??0,0,'load status changes only after the report returns');
     const calls=getRngLog().length,saved=encodeSaveState(),{coreCtx,displayCtx,rng}=game;
     resetGame();restoreSaveState(saved);Object.assign(game,{coreCtx,displayCtx,rng});
     await rhack('z');assert.equal(game._command_mode,'heldWishMore');
     assert.equal(getRngLog().length,calls);assert.equal(game.u.ublesscnt,0);
     await rhack(key);assert.equal(game._command_mode,null);
+    assert.equal(game._encumbrance_level,1);
     assert.equal(getRngLog().length,calls+1);assert.match(getRngLog().at(-1),/^rn2\(100\)=/);
     assert.ok(game.u.ublesscnt>=50&&game.u.ublesscnt<150);
     assert.equal(game._goldCount,80000);assert.equal(game.moves,100);

@@ -55,6 +55,8 @@ Twenty-nine new state tests pass, including save/restore and ignored More keys.
 Three fresh C recordings match all 138 screens and 8,270 random calls. General
 wish stack merging, artifact touch, levitated/swallowed drops and full serial
 floor effects remain open. Weapon name/quantity edge cases need a wider pass.
+Load status now commits after its report returns, as `encumber_msg` does;
+this restores both affected recordings (612 screens and 14,068 random calls).
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

@@ -18696,9 +18696,13 @@ async function finishHeldWishFeedback(messages = null, item = null) {
         if (state.phase === 'messages') {
             if (state.index < state.messages.length) message = state.messages[state.index++];
             else { state.phase = 'load'; continue; }
+        } else if (state.phase === 'load') {
+            state.phase = 'loadUpdate';
+            message = encumberMsg(false);
         } else {
+            encumberMsg();
             state.phase = 'notice';
-            message = encumberMsg();
+            continue;
         }
         if (message && !state.skipMessages && !addToplineMessage(message)) {
             state.pendingMessage = game._topline_after_more;
@@ -46642,11 +46646,14 @@ function syncHeroEncumbranceStatus(level) {
 
 // C ref: encumber_msg() (pickup.c:1978) — when the encumbrance tier changed
 // since the last check, print the report and flag the status line.
-export function encumberMsg() {
+export function encumberMsg(commit = true) {
     const newcap = heroEncumbranceForWeight(heroCarriedWeight());
     const oldcap = game._encumbrance_level ?? 0;
-    game._encumbrance_level = newcap;
-    syncHeroEncumbranceStatus(newcap);
+    if (commit) {
+        game._encumbrance_level = newcap;
+        syncHeroEncumbranceStatus(newcap);
+        if (newcap !== oldcap) (game.disp ??= {}).botl = true;
+    }
     if (newcap === oldcap) return '';
     return newcap > oldcap ? encumberIncreaseMessage(newcap) : encumberDecreaseMessage(newcap);
 }
