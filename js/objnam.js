@@ -1,3 +1,9 @@
+import { tinDetails } from './eat.js';
+import { game } from './gstate.js';
+import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified } from './object_knowledge.js';
+import { JAPANESE_ITEM_ALIASES } from './o_init.js';
+import { MONS, G_UNIQ, type_is_pname, PM_ALIGNED_CLERIC, PM_CLERIC, PM_HIGH_CLERIC, PM_LONG_WORM_TAIL } from './permonst.js';
+
 // objnam.c: shared noun inflection for object names, wishes and monster names.
 const ONE_OFF = [
     ['child', 'children'], ['cubus', 'cubi'], ['culus', 'culi'], ['Cyclops', 'Cyclopes'],
@@ -124,4 +130,174 @@ export function makeSingular(value) {
     else if (/(?:matzot|ae|eaux)$/.test(word)) start = len - 1;
     else if (/e[lr]ia$/.test(word)) { start = len - 1; suffix = 'um'; }
     return replaceSuffixCase(base, start, suffix) + excess;
+}
+
+
+const JAPANESE_NAMES = new Map([...JAPANESE_ITEM_ALIASES].map(([japanese, english]) => [english.replace(/^potion of /, ''), japanese]));
+const GEM_WITHOUT_STONE = new Set(['DILITHIUM_CRYSTAL', 'RUBY', 'DIAMOND', 'SAPPHIRE', 'BLACK_OPAL', 'EMERALD', 'OPAL']);
+
+export function indefiniteArticle(text) {
+    const word = String(text).toLowerCase();
+    if (!word[1] || word[1] === ' ') return 'aefhilmnosx'.includes(word[0]) ? 'an ' : 'a ';
+    if (word.startsWith('the ') || ['molten lava', 'iron bars', 'ice'].includes(word)) return '';
+    const vowel = /^[aeiou]/.test(word) && !/^one(?:$|[-_ ])/.test(word)
+        && !/^(?:eu|uke|ukulele|unicorn|uranium|useful)/.test(word);
+    return vowel || /^x[^aeiou]/.test(word) ? 'an ' : 'a ';
+}
+
+// do_name.c:obj_pmname derives gender from the corpse/statue/figurine, not
+// from saved monster traits (which can refer to a different revived species).
+export function objectMonsterName(item) {
+    const raw = item.corpsenm;
+    let mon = typeof raw === 'number' ? MONS[raw] : MONS.find(mon => mon.name === raw?.name || mon.names?.includes(raw?.name));
+    if (!mon) return raw?.name || 'two-legged glorkum-seeker';
+    const gender = (item.spe || 0) & 3;
+    if (mon.pm === PM_ALIGNED_CLERIC && gender === 0) mon = MONS[PM_CLERIC];
+    return mon.names?.[gender === 2 ? 0 : gender === 1 ? 1 : 2] || mon.name;
+}
+
+// objnam.c:armor_simple_name supplies the short noun before a called name.
+// Glove and boot wording depends on actual observation, even during override_ID.
+export function armorSimpleName(item, type = objectTypeData(item), description = type.description) {
+    const seen = item.dknown, known = objectTypeIsKnown(item, type);
+    const symbol = type.symbol, name = type.name, material = item.material ?? type.material;
+    switch (type.subtype) {
+    case 0:
+        return /dragon scale mail$/.test(name) ? 'dragon mail' : /dragon scales$/.test(name) ? 'dragon scales'
+            : name.endsWith(' mail') ? 'mail' : name.endsWith(' jacket') ? 'jacket' : 'suit';
+    case 1: return symbol === 'SHIELD_OF_REFLECTION' ? seen ? 'silver shield' : 'smooth shield' : 'shield';
+    case 2: return (material >= 11 && material <= 17 || material === 19) ? 'helm' : 'hat';
+    case 3: return seen && (known ? name : description || '').includes('gauntlets') ? 'gauntlets' : 'gloves';
+    case 4: return seen && ((description || '').includes('shoes') || known && name.includes('shoes')) ? 'shoes' : 'boots';
+    case 5: return symbol === 'ROBE' ? 'robe' : symbol === 'MUMMY_WRAPPING' ? 'wrapping'
+        : symbol === 'ALCHEMY_SMOCK' ? known && seen ? 'smock' : 'apron' : 'cloak';
+    case 6: return 'shirt';
+    default: return name;
+    }
+}
+
+// objnam.c:xname_flags. Context supplies shuffled descriptions and discovery
+// callbacks; type, instance and appearance knowledge stay separate throughout.
+export function xname(item, D = {}, { singular = false, partlyEaten = false } = {}) {
+    const type = objectTypeData(item);
+    if (!type) return D.fallback?.(item) || item.kind || 'object?';
+    const symbol = type.symbol, role = D.role || game._startup_role || game.urole?.name?.m;
+    let actual = type.name || (type.id > 0 && type.id < 18 ? 'generic' : 'object?');
+    let description = D.description?.(item, type) ?? item.appearance ?? type.description;
+    if (role === 'Samurai') {
+        actual = JAPANESE_NAMES.get(actual) || actual;
+        if (symbol === 'WOODEN_HARP' || symbol === 'MAGIC_HARP') description = 'koto';
+    }
+    description ??= actual;
+    let nameKnown = objectTypeIsKnown(item, type);
+    if (!nameKnown && type.usesKnown && type.unique) item.known = false;
+    if (!D.blind && !D.distant && !D.hallucinating && type.id >= 18) {
+        item.dknown = true;
+        D.observe?.(item, type);
+    }
+    if (role === 'Priest') item.bknown = true;
+    const override = D.override || item._identify_override;
+    const known = override || (item.known ?? !type.usesKnown), seen = override || item.dknown;
+    const bucKnown = override || item.bknown;
+    nameKnown ||= override;
+    const artifact = item.artifact || item.oartifact;
+    if (artifact && item.dknown) D.findArtifact?.(item);
+    const oname = D.oname?.(item) ?? item.oname ?? item.o_name ?? item.userName
+        ?? item._wish_object_name ?? (typeof artifact === 'string' ? artifact : null)
+        ?? String(item.kind || '').match(/ named (.+)$/)?.[1];
+    const proper = artifact && oname && (override || D.gameover || objectIsFullyIdentified(item));
+    if (proper) return oname.replace(/^[Tt]he /, '').slice(0, 175);
+    const called = D.called?.(item, type);
+    const hasMonster = item.corpsenm != null && item.corpsenm !== -1;
+    let name = '';
+    switch (type.class) {
+    case 5:
+        name = !seen ? 'amulet' : ['AMULET_OF_YENDOR', 'FAKE_AMULET_OF_YENDOR'].includes(symbol)
+            ? known ? actual : description : nameKnown ? actual : called ? 'amulet called ' + called : description + ' amulet';
+        break;
+    case 2:
+    case 6:
+    case 17:
+        if (type.class === 2 && (type.subtype >= -24 && type.subtype <= -20 || String(artifact).toLowerCase() === 'grimtooth') && item.opoisoned) name = 'poisoned ';
+        if (symbol === 'LENSES') name = 'pair of ';
+        else if (symbol === 'TOWEL' && item.spe > 0) name = item.spe < 3 ? 'moist ' : 'wet ';
+        name += !seen ? description : nameKnown ? actual : called ? description + ' called ' + called : description;
+        if (symbol === 'FIGURINE' && hasMonster) {
+            const monster = objectMonsterName(item);
+            name += ' of ' + indefiniteArticle(monster) + monster;
+        } else if (symbol === 'TOWEL' && item.spe > 0 && D.wizard) name += ` (${item.spe})`;
+        break;
+    case 3:
+        if (/dragon scales$/.test(type.name)) { name = 'set of ' + actual; break; }
+        if (type.subtype === 3 || type.subtype === 4) name = 'pair of ';
+        else if (type.subtype === 1 && !seen) {
+            if (['ELVEN_SHIELD', 'URUK_HAI_SHIELD', 'ORCISH_SHIELD'].includes(symbol)) { name = 'shield'; break; }
+            if (symbol === 'SHIELD_OF_REFLECTION') { name = 'smooth shield'; break; }
+        }
+        name += nameKnown ? actual : called ? armorSimpleName(item, type, description) + ' called ' + called : description;
+        break;
+    case 7:
+        if (symbol === 'SLIME_MOLD') {
+            name = D.fruit?.(item.spe) || game._fruit_registry?.find(fruit => fruit.fid === item.spe)?.fname || 'fruit';
+            if ((item.quan ?? 1) !== 1 && !singular) name = makeSingular(name);
+        } else {
+            if (partlyEaten && item.oeaten) name = 'partly eaten ';
+            if (item.globby) name += (item.owt <= 100 ? 'small ' : item.owt <= 300 ? 'medium ' : item.owt <= 500 ? 'large ' : 'very large ') + actual;
+            else {
+                name += actual;
+                if (symbol === 'TIN' && known) name = tinDetails(item, name, !!override);
+            }
+        }
+        break;
+    case 12:
+    case 16: name = actual; break;
+    case 14:
+        if (symbol === 'STATUE' && hasMonster) {
+            const monster = typeof item.corpsenm === 'number' ? MONS[item.corpsenm]
+                : MONS.find(mon => mon.name === item.corpsenm.name || mon.names?.includes(item.corpsenm.name));
+            const monsterName = objectMonsterName(item);
+            const unique = monster && monster.geno & G_UNIQ && ![PM_HIGH_CLERIC, PM_LONG_WORM_TAIL].includes(monster.pm);
+            name = (role === 'Archeologist' && item.spe & 4 ? 'historic ' : '') + actual + ' of '
+                + (monster && type_is_pname(monster) ? '' : unique ? 'the ' : indefiniteArticle(monsterName)) + monsterName;
+        } else if (symbol === 'BOULDER' && (item.next_boulder ?? item.corpsenm) === 1) {
+            name = 'next ' + actual;
+            item.next_boulder = 0;
+            if (typeof item.corpsenm === 'number') item.corpsenm = 0;
+        } else name = actual;
+        break;
+    case 15: name = (item.owt > type.weight ? 'very ' : '') + 'heavy iron ball'; break;
+    case 8:
+        if (seen && item.odiluted) name = 'diluted ';
+        name += !seen ? 'potion' : nameKnown ? 'potion of '
+            + (symbol === 'POT_WATER' && bucKnown && (item.blessed || item.cursed) ? item.blessed ? 'holy ' : 'unholy ' : '') + actual
+            : called ? 'potion called ' + called : description + ' potion';
+        break;
+    case 9:
+        name = !seen ? 'scroll' : nameKnown ? 'scroll of ' + actual : called ? 'scroll called ' + called
+            : type.magic ? 'scroll labeled ' + description : description + ' scroll';
+        break;
+    case 10:
+        if (symbol === 'SPE_NOVEL') name = !seen ? 'book' : nameKnown ? actual
+            : called ? 'novel called ' + called : description + ' book';
+        else name = !seen ? 'spellbook' : nameKnown ? (symbol === 'SPE_BOOK_OF_THE_DEAD' ? '' : 'spellbook of ') + actual
+            : called ? 'spellbook called ' + called : description + ' spellbook';
+        break;
+    case 4:
+    case 11: {
+        const cls = type.class === 4 ? 'ring' : 'wand';
+        name = !seen ? cls : nameKnown ? cls + ' of ' + actual : called ? cls + ' called ' + called : description + ' ' + cls;
+        break;
+    }
+    case 13: {
+        const cls = type.material === 21 ? 'stone' : 'gem';
+        name = !seen ? cls : !nameKnown ? called ? cls + ' called ' + called : description + ' ' + cls
+            : actual + (symbol === 'FLINT' || type.material === 20 && !GEM_WITHOUT_STONE.has(symbol) ? ' stone' : '');
+        break;
+    }
+    default: name = `glorkum ${type.class} ${type.id} ${item.spe || 0}`;
+    }
+    if ((item.quan ?? 1) !== 1 && !singular) name = makePlural(name);
+    if (D.gameover && item.o_id) name += D.disclosureText?.(item, type) || '';
+    if (oname && seen) name += ' named ' + (artifact ? oname.replace(/^The /, 'the ') : oname);
+    return name.slice(0, 175).replace(/^the /, '');
 }

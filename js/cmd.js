@@ -1,4 +1,5 @@
-import { makePlural as pluralizeMonsterName } from './objnam.js';
+import { tinVariety, TIN_VARIETY_TEXTS } from './eat.js';
+import { makePlural as pluralizeMonsterName, xname } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
 import { FUMBLING, STONE_RES } from './const.js';
@@ -297,7 +298,7 @@ import { createGasCloud } from './region.js';
 import { figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, maybeAttachCarriedFigurineTimeout, stopFigurineTransformTimeout, syncCarriedFigurineTransformTimer } from './figurine.js';
 import { applyMonsterLiquidEffectsAt } from './monster_liquid.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
-import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
+import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitNameForId, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
 import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay, resumeReleasedSpell, resumeSelfElementalSpell, resumeSpellBursts } from './spell.js';
@@ -3884,11 +3885,6 @@ const WISH_LOCK_QUALIFIER_RE = /^(locked|unlocked|broken|open|closed|doorless)\s
 const WISH_PROOF_QUALIFIER_RE = /^(rustproof|erodeproof|corrodeproof|fixed|fireproof|rotproof|tempered|crackproof)\s+/i;
 const WISH_PRIMARY_EROSION_RE = /^(rusty|rusted|burnt|burned|cracked)\s+/i;
 const WISH_SECONDARY_EROSION_RE = /^(corroded|rotted)\s+/i;
-const TIN_VARIETY_TEXTS = [
-    'rotten', 'homemade', 'soup made from', 'french fried', 'pickled',
-    'boiled', 'smoked', 'dried', 'deep fried', 'szechuan', 'broiled',
-    'stir fried', 'sauteed', 'candied', 'pureed',
-];
 const TIN_VARIETY_NUTRITION = [-50, 50, 20, 40, 40, 50, 50, 55, 60, 70, 80, 80, 95, 100, 500];
 const TIN_GREASY_VARIETIES = new Set([3, 8, 11]);
 const ROTTEN_TIN = 0;
@@ -36712,16 +36708,6 @@ function tinObjectName(item) {
     return (item?.quan || 1) > 1 ? 'tins' : 'tin';
 }
 
-function tinVariety(item, display = false) {
-    let r;
-    if (item?.spe === 1 || objectKindKey(item) === 'tin:spinach') r = SPINACH_TIN;
-    else if (item?.cursed) r = ROTTEN_TIN;
-    else if ((item?.spe || 0) < 0) r = -item.spe - 1;
-    else r = rn2(TIN_VARIETY_TEXTS.length);
-    if (!display && r === HOMEMADE_TIN && !item?.blessed && !rn2(7)) r = ROTTEN_TIN;
-    return r;
-}
-
 function heroIsMetallivorous() {
     return !!(polyselfFormWithDiet()?.metallivorous || game.u?.metallivorous);
 }
@@ -51022,50 +51008,47 @@ function lockableBoxDoname(box) {
     return `${/^[aeiou]/i.test(lockPrefix + base) ? 'an' : 'a'} ${lockPrefix}${base}${suffix}`;
 }
 
-function inventorySortDependencies(wizard = false) {
-    const calledName = item => {
-        const appearance = item.appearance || (item.cls === 'potion'
-            ? game._object_descriptions?.potions?.[item.potionIndex]?.description
-            : item.cls === 'scroll' ? game._object_descriptions?.scrolls?.[item.scrollIndex]
-                : game._object_descriptions?.spellbooks?.[item.spellbookIndex]);
-        return game['_called_' + ({ potion: 'potions', scroll: 'scrolls', spellbook: 'spellbooks' })[item.cls]]?.[appearance];
-    };
+function objectNameDependencies(override = false) {
+    const description = (item, type) => item.appearance || (type.class === 8
+        ? game._object_descriptions?.potions?.[item.potionIndex]?.description
+        : type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex]
+            : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex]
+                : type.class === 11 ? game._object_descriptions?.wands?.[item.wandIndex]?.description
+                    : type.class === 4 ? game._object_descriptions?.rings?.[(item.ringRoll || 0) - 1]
+                        : type.class === 5 ? game._object_descriptions?.amulets?.[item.amuletIndex]
+                            : type.description);
     return {
-        blind: heroIsBlind(),
+        blind: heroIsBlind(), hallucinating: heroIsHallucinating(), override,
+        wizard: game.flags?.debug, description, fallback: pickupObjectName,
+        fruit: fruitNameForId,
+        observe: recordObservedObjectDiscovery,
+        called: (item, type = objectTypeData(item)) => {
+            if (!type) return undefined;
+            const section = ({ 3: 'armor', 4: 'rings', 5: 'amulets', 6: 'tools', 8: 'potions',
+                9: 'scrolls', 10: 'spellbooks', 11: 'wands', 13: 'gems' })[type.class];
+            return game._called_object_types?.[type.id] || game['_called_' + section]?.[description(item, type)];
+        },
+        oname: item => item.oname || item.o_name || item.userName || item._wish_object_name
+            || artifactDefinitionForName(item.artifact || item.oartifact)?.name,
+        findArtifact: item => {
+            const artifact = item.artifact || item.oartifact;
+            game._found_artifacts ??= [];
+            if (!game._found_artifacts.includes(artifact)) game._found_artifacts.push(artifact);
+        },
+    };
+}
+
+function inventorySortDependencies(wizard = false) {
+    const names = objectNameDependencies(wizard);
+    return {
+        blind: names.blind,
         observe: item => {
-            if (heroIsHallucinating() || (objectTypeData(item)?.id ?? 0) < 18) return;
+            if (names.hallucinating || (objectTypeData(item)?.id ?? 0) < 18) return;
             item.dknown = true;
-            recordObservedObjectDiscovery(item);
+            names.observe(item);
         },
-        called: calledName,
-        xname: item => {
-            const type = objectTypeData(item);
-            if (!type) return pickupObjectName(item);
-            if (item.artifact || item.oartifact) return artifactObjectName({ ...item, _identify_override: wizard });
-            const known = wizard || objectTypeIsKnown(item, type);
-            const seen = wizard || item.dknown;
-            const description = item.appearance || (type.class === 8
-                ? game._object_descriptions?.potions?.[item.potionIndex]?.description
-                : type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex]
-                    : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex]
-                        : type.class === 11 ? game._object_descriptions?.wands?.[item.wandIndex]?.description
-                            : type.class === 4 ? game._object_descriptions?.rings?.[(item.ringRoll || 0) - 1]
-                                : type.description);
-            const cls = ({ 4: 'ring', 8: 'potion', 9: 'scroll', 10: 'spellbook', 11: 'wand' })[type.class];
-            if (cls) {
-                if (!seen) return cls;
-                if (known) return type.symbol === 'SCR_MAIL' ? 'stamped scroll'
-                    : type.symbol === 'SPE_NOVEL' ? 'novel' : type.symbol === 'SPE_BOOK_OF_THE_DEAD' ? 'Book of the Dead' : cls + ' of ' + type.name;
-                const called = calledName(item);
-                if (called) return cls + ' called ' + called;
-                return type.class === 9 && type.magic ? 'scroll labeled ' + description : description + ' ' + cls;
-            }
-            if (type.class === 13) return !seen ? type.material === 21 ? 'stone' : 'gem'
-                : known ? type.name : description + (type.material === 21 ? ' stone' : ' gem');
-            if ([2, 3, 5, 6].includes(type.class)) return known || !description ? type.name
-                : type.class === 5 ? (seen ? description + ' amulet' : 'amulet') : description;
-            return pickupObjectName({ ...item, blessed: false, cursed: false, bknown: false, lamplit: false });
-        },
+        called: names.called,
+        xname: item => xname(item, names),
     };
 }
 

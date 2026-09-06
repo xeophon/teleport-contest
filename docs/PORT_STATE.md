@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 82 JavaScript modules and approximately 176,000 lines;
+The port now has 83 JavaScript modules and approximately 176,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,835 passing tests**, with no
+The latest source-driven checkpoint has **6,956 passing tests**, with no
 failures, skips or TODOs. All seven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -152,6 +152,15 @@ only its explicit alternatives and canonical-name suffixes. Twenty-one new
 tests pass. An oracle compiled from the unmodified C functions verifies both
 results for 4,947 inputs covering all object/monster names and additional edge
 cases; a fresh fruit-wish recording matches 20 screens and 2,730 random calls.
+
+The shared xname owner now covers object classes, unseen/type/instance knowledge,
+called and personal names, artifact completeness, Samurai wording, Priest BUC,
+monster gender and articles, historic statues, next-boulder state, gems, globs,
+wet towels and tin details. Loot sorting uses this owner. Tin variety selection
+is shared with consumption and preserves nonrotting species exceptions and
+display-time random draws. One hundred twenty-one new state tests pass. General
+doname prefixes/suffixes, disclosure text, centralized discovery and the remaining
+name consumers still need integration.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
