@@ -1,0 +1,12 @@
+{
+  "version": 5,
+  "segments": [
+    {
+      "seed": 9520,
+      "datetime": "20260720120000",
+      "nethackrc": "OPTIONS=name:Nameaudit,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,time,showexp,playmode:debug\nOPTIONS=autoquiver\n",
+      "moves": "\u0017uncursed very rusty -2 long sword\n\u0017blessed greased +3 leather gloves\n\u0017cursed thoroughly corroded +1 iron chain\n\u0017uncursed 2 wax candles\n\u0017uncursed locked trapped chest\n\u0017blessed tin of spinach\n\u0017uncursed 3 meat rings\n\u0017uncursed aklys\n#wizidentify\n\u001b#wizidentify\n_\n          ",
+      "steps": []
+    }
+  ]
+}

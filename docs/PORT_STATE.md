@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,043 passing tests**, with no
+The latest source-driven checkpoint has **7,048 passing tests**, with no
 failures, skips or TODOs. All seven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -33,9 +33,12 @@ Full inventory naming now shares the C base-name owner for wizard override and
 permanent identification feedback. Qualifiers cover container knowledge, traps,
 BUC, erosion/proofing, charges, corpse possessives, eggs, lamps and equipment
 state. Eighty-seven new tests exercise these branches and live identification,
-including hallucinating unseen items and wielded nonweapons. Ordinary inventory
-and wish delivery still have legacy formatters; a fresh broader C recording
-exposes missing chain wishes and qualifier ordering there.
+including hallucinating unseen items and wielded nonweapons. Wish delivery now uses that formatter too, resolves shuffled armor appearances,
+and supports iron-chain wishes with C initialization draws. Class headings and
+chain/ball selection follow C menu precedence. Three new state tests and two
+fresh C recordings pass (342 screens, including cursors, and 5,314 random calls).
+Ordinary inventory, cached price quotes and rejected-wish prompt pauses still
+need source passes.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
 bonuses, movement/load gates, sleeping regeneration, separate active monster HP

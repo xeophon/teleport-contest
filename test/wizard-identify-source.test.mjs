@@ -240,3 +240,14 @@ test('wizard naming keeps a wielded ordinary item in its own class', async () =>
     await rhack('a'); await rhack('\n'); await finish();
     assert.equal(item.line, 'a - an uncursed apple (wielded)');
 });
+
+for (const [symbol, glyph, section] of [['IRON_CHAIN', '_', 'Chains'], ['HEAVY_IRON_BALL', '0', 'Iron balls']])
+    test(`C inventory class accelerator ${glyph} takes precedence over selector or count`, async () => {
+        setup(); const item = add(symbol, 'a'); add('APPLE', 'b');
+        await command();
+        assert.ok(game._overlay_lines.some(row => row[2] === section));
+        await rhack(glyph);
+        assert.deepEqual(game._identification.selected, ['a']);
+        await rhack('\n'); await finish();
+        assert.equal(item.known, true); assert.equal(game.inventory[1].known, false);
+    });

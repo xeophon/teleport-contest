@@ -3401,6 +3401,7 @@ const OBJECT_CLASS_GLYPHS = {
     gem: '*',
     amulet: '"',
     spellbook: '+',
+    coin: '$', rock: '`', ball: '0', chain: '_', venom: '.',
 };
 const ARROW = 349;
 const DART = 353;
@@ -4054,6 +4055,7 @@ const WISH_BASE_OBJECTS = new Map([
     ['touchstone', { otyp: TOUCHSTONE, cls: 'gem', glyph: '*', kind: 'touchstone', actualKind: 'touchstone', gemDescription: 'gray stone' }],
     ['flint', { otyp: FLINT, cls: 'gem', glyph: '*', kind: 'flint', actualKind: 'flint', gemDescription: 'gray stone' }],
     ['heavy iron ball', { otyp: HEAVY_IRON_BALL, cls: 'ball', glyph: '0', kind: 'heavy iron ball', actualKind: 'heavy iron ball' }],
+    ['iron chain', { otyp: IRON_CHAIN, cls: 'chain', glyph: '_', kind: 'iron chain', actualKind: 'iron chain', owt: 120 }],
     ['egg', { otyp: EGG, cls: 'food', glyph: '%', kind: 'egg', plural: 'eggs' }],
     ['eggs', { otyp: EGG, cls: 'food', glyph: '%', kind: 'egg', plural: 'eggs' }],
     ['large box', { otyp: LARGE_BOX, cls: 'tool', glyph: '(', kind: 'large box' }],
@@ -4190,7 +4192,7 @@ const WISH_BASE_NAMEDESC_BOUNDS = new Map([
     ['k-ration', 1], ['k-rations', 1], ['c-ration', 1], ['c-rations', 1],
     ['meatball', 1], ['meatballs', 1], ['meat stick', 1], ['meat sticks', 1], ['enormous meatball', 1], ['enormous meatballs', 1], ['rock', 101], ['luckstone', 11],
     ['loadstone', 11], ['touchstone', 9], ['flint', 11],
-    ['heavy iron ball', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
+    ['heavy iron ball', 1001], ['iron chain', 1001], ['large box', 41], ['chest', 36], ['ice box', 6],
     ['sack', 36], ['oilskin sack', 6], ['bag of holding', 21],
     ['brass lantern', 31], ['oil lamp', 46], ['magic lamp', 16],
     ['tallow candle', 21], ['tallow candles', 21],
@@ -18891,6 +18893,7 @@ async function resumeWishedArtifact(messages = []) {
 }
 
 function wishedInventoryPhrase(item, wishedQuan = 1) {
+    if (objectTypeData(item)) return doname(item, objectNameDependencies());
     const bucPrefix = knownBlessCursePrefix(item);
     const baseVisibleName = game.u?.blind && item.cls === 'potion' ? 'potion'
         : game.u?.blind && item.cls === 'ring' ? 'ring'
@@ -51009,7 +51012,10 @@ function lockableBoxDoname(box) {
 }
 
 function objectNameDependencies(override = false) {
-    const description = (item, type) => item.appearance || (type.class === 8
+    const description = (item, type) => {
+        const armor = type.class === 3 && ARMOR_WISH_APPEARANCES[type.name];
+        if (armor) return game._object_descriptions?.[armor[0]]?.[armor[1]] || item.appearance || armor[2];
+        return item.appearance || (type.class === 8
         ? game._object_descriptions?.potions?.[item.potionIndex]?.description
         : type.class === 9 ? game._object_descriptions?.scrolls?.[item.scrollIndex]
             : type.class === 10 ? game._object_descriptions?.spellbooks?.[item.spellbookIndex]
@@ -51017,6 +51023,7 @@ function objectNameDependencies(override = false) {
                     : type.class === 4 ? game._object_descriptions?.rings?.[(item.ringRoll || 0) - 1]
                         : type.class === 5 ? game._object_descriptions?.amulets?.[item.amuletIndex]
                             : type.description);
+    };
     return {
         blind: heroIsBlind(), hallucinating: heroIsHallucinating(), override,
         wizard: game.flags?.debug, description, fallback: pickupObjectName,
@@ -51354,6 +51361,7 @@ export function putInInventoryOverlayLines(entries, title, page = 0, selected = 
         coin: 'Coins', amulet: 'Amulets', weapon: 'Weapons', armor: 'Armor', food: 'Comestibles',
         scroll: 'Scrolls', spellbook: 'Spellbooks', potion: 'Potions',
         ring: 'Rings', wand: 'Wands', tool: 'Tools', gem: 'Gems/Stones', rock: 'Boulders/Statues',
+        ball: 'Iron balls', chain: 'Chains', venom: 'Venoms',
     })[item.cls] || (item.otyp === SCROLL_CLASS ? 'Scrolls'
         : item.otyp === POTION_CLASS ? 'Potions'
             : item.otyp === WAND_CLASS ? 'Wands'
@@ -63702,6 +63710,7 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
         coin: 'Coins', amulet: 'Amulets', weapon: 'Weapons', armor: 'Armor', food: 'Comestibles',
         scroll: 'Scrolls', spellbook: 'Spellbooks', potion: 'Potions',
         ring: 'Rings', wand: 'Wands', tool: 'Tools', gem: 'Gems/Stones', rock: 'Boulders/Statues',
+        ball: 'Iron balls', chain: 'Chains', venom: 'Venoms',
     })[item.cls] || (item.otyp === SCROLL_CLASS ? 'Scrolls'
         : item.otyp === POTION_CLASS ? 'Potions'
             : item.otyp === WAND_CLASS ? 'Wands'
@@ -68439,7 +68448,11 @@ function tutorialEnterStash() {
             return;
         } else {
             const group = Object.entries(OBJECT_CLASS_GLYPHS).find(([, glyph]) => glyph === ch)?.[0];
-            const letters = !state.ordinary && (ch === '_' || ch === '\t') ? (state.items.length ? ['_'] : [])
+            const groupLetters = state.items.filter(item => item.cls === group).map(item => item.letter);
+            // tty checks group accelerators before explicit selectors. A
+            // chain therefore claims '_' ahead of wizard identification's all row.
+            const letters = groupLetters.length && ![',', '-', '@', '.', '\\', '~'].includes(ch) ? groupLetters
+                : !state.ordinary && (ch === '_' || ch === '\t') ? (state.items.length ? ['_'] : [])
                 : [',', '-', '@'].includes(ch) ? (state.ordinary ? allLetters : ['_', ...allLetters])
                     : ['.', '\\', '~'].includes(ch) ? state.pageLetters
                         : allLetters.includes(ch) ? [ch]

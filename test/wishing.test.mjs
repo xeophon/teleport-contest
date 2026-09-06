@@ -1079,7 +1079,7 @@ test('burning wished candles keep C candle metadata', async () => {
     assert.equal(item.burning, true);
     assert.equal(item.age, 75);
     assert.equal(item.owt, 12);
-    assert.match(item.line, /6 tallow candles \(lit\)/);
+    assert.match(item.line, /6 candles \(lit\)/);
 });
 
 test('non-debug wished spe follows C class constraints', async () => {
@@ -1268,7 +1268,7 @@ test('called wished range bases use C namedesc tail lookup', async () => {
 
     for (const [wish, otyp, namedesc, kind, actualKind, line, weight, cost] of [
         ['bag called holding', BAG_OF_HOLDING, /^rn2\(21\)=/, 'bag of holding', undefined, /a bag/, 15, 100],
-        ['bag called tricks', BAG_OF_TRICKS, /^rn2\(21\)=/, 'bag of tricks', 'bag of tricks', /a bag of tricks/, 15, 100],
+        ['bag called tricks', BAG_OF_TRICKS, /^rn2\(21\)=/, 'bag of tricks', 'bag of tricks', /a bag$/, 15, 100],
         ['horn called plenty', HORN_OF_PLENTY, /^rn2\(3\)=/, 'horn', 'horn of plenty', /a horn/, 18, 50],
         ['gauntlets called power', GAUNTLETS_OF_POWER, /^rn2\(9\)=/, 'gauntlets of power', 'gauntlets of power', /riding gloves/, 30, 50],
         ['gloves called dexterity', GAUNTLETS_OF_DEXTERITY, /^rn2\(9\)=/, 'gauntlets of dexterity', 'gauntlets of dexterity', /fencing gloves/, 10, 50],
@@ -2469,7 +2469,7 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.equal(item.owt, 1);
     assert.equal(game.u.uconduct?.wishes, 1);
     assert.equal(game.u.uconduct?.wisharti || 0, 0);
-    assert.match(item.line, /^a - a splash of acid venom$/);
+    assert.match(item.line, /^a - a splash of venom$/);
 
     installWishState();
     beginWishDirectly();
@@ -2504,7 +2504,7 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.ok(['splash of blinding venom', 'splash of acid venom'].includes(item.kind));
     assert.equal(item.quan, 2);
     assert.equal(item.owt, 2);
-    assert.match(item.line, /^a - 2 splashes of (?:blinding|acid) venom$/);
+    assert.match(item.line, /^a - 2 splashes of venom$/);
 
     installWishState();
     beginWishDirectly();
@@ -2541,7 +2541,7 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.equal(item.cls, 'venom');
     assert.equal(item.quan, 2);
     assert.equal(item.owt, 2);
-    assert.match(item.line, /^a - 2 splashes of (?:blinding|acid) venom$/);
+    assert.match(item.line, /^a - 2 splashes of venom$/);
 
     installWishState();
     beginWishDirectly();
@@ -2550,7 +2550,7 @@ test('wizard-only venom wishes follow C oc_nowish policy', async () => {
     assert.equal(item.kind, 'splash of acid venom');
     assert.equal(item.quan, 2);
     assert.equal(item.spe, 1);
-    assert.match(item.line, /^a - 2 splashes of acid venom$/);
+    assert.match(item.line, /^a - 2 splashes of venom$/);
 
     installWishState(7, { debug: false });
     beginWishDirectly();
@@ -2847,4 +2847,17 @@ test('carry capacity without a polyself form is the 25*(Str+Con)+50 base', () =>
     const g = installWishState();
     g.u.acurr.a = [8, 18, 10, 18, 12, 9];
     assert.equal(heroCarryCapacity(), 550);
+});
+
+test('iron-chain wishes initialize the C type without a substitute class or erosion draw', async () => {
+    installWishState(); enableRngLog({ reset: true }); beginWishDirectly();
+    await submitWish('cursed thoroughly corroded +1 iron chain');
+    const item = game.inventory[0];
+    assert.equal(item.cls, 'chain'); assert.equal(item.owt, 120);
+    assert.equal(item.oeroded2, 3); assert.equal(item.cursed, true);
+    assert.equal(item.line, 'a - a thoroughly corroded iron chain');
+    assert.match(getRngLog()[0], /^rn2\(1001\)=/);
+    assert.match(getRngLog()[1], /^rnd\(2\)=/);
+    assert.match(getRngLog()[2], /^rn2\(100\)=/);
+    assert.equal(getRngLog().length, 3);
 });
