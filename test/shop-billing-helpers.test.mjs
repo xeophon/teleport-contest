@@ -45407,7 +45407,7 @@ test('metallivorous metal amulet eating can grant guarding protection', async ()
     assert.equal(amulet.dknown, true);
     assert.match(game._pending_message, /This perforated amulet is delicious!/);
     assert.match(game._pending_message, /Magic spreads through your body as you digest the amulet\./);
-    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet' && entry.text === 'amulet (perforated)'), true);
+    assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet of guarding' && entry.text === 'amulet (perforated)'), true);
     assert.equal(game._discoveries.some(entry => entry.section === 'Amulets' && entry.name === 'amulet of guarding' && entry.known), false);
 });
 
