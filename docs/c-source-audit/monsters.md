@@ -352,8 +352,24 @@ tests cover these states, including an actual `moveloop_core` firing turn and
 save/restore during an active Heart water escape; seven reproduced failures
 before fixes. The 72 ownership tests and existing 3,134 shop command tests pass.
 
-This is not a complete transfer audit: ordinary horizontal `t` object copies,
-returning weapons, specialized nonweapon `f` monster impacts, other direct floor-removal destruction callers,
+Horizontal `t` now uses the same serializable detached-object handoff before
+trajectory or recoil. The multi-shot path shares the firing loop, while its
+existing specialized impact effects receive the actual singleton or timed
+split. C `return_throw_to_inv:1855-1908` restores caught boomerangs to their
+original equipment slot and rejoins a split with its own source stack; the
+generic aklys/Mjollnir return restores the wielded object. A pre-flight
+boomerang recoil death retains that detached object through life saving and
+save/restore, with dual-wielding stopped during detachment and restored on
+catch. Egg impact deletion now stops timers before the source's petrification
+or pyrolisk explosion (`uhitm.c:1219-1252`). Eighteen new tests cover these
+paths, with ten initial ownership failures and three further impact-timer
+failures reproduced. Both old poisoned-bolt tests now assert the same object
+is unpoisoned and landed, matching `uhitm.c:1528` instead of expecting a stale
+poisoned inventory copy. The 90 ownership and 3,134 shop tests pass together.
+
+This is not a complete transfer audit: remaining returning-weapon impact
+details (including failed-catch artifact damage and recoil landing location),
+specialized nonweapon `f` monster impacts, other direct floor-removal destruction callers,
 migration mode variations and the remaining non-timer stack compatibility
 properties still need review. Full drowning effects between every individual
 pline also remain broader than the successful-crawl continuation implemented

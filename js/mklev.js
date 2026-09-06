@@ -1672,40 +1672,41 @@ const ARMOR_AC_BONUS = new Map([
     [GREEN_DRAGON_SCALES, 3], [YELLOW_DRAGON_SCALES, 3],
     [HAWAIIAN_SHIRT, 0], [T_SHIRT, 0],
 ]);
+// Canonical order and intrinsic costs from include/artilist.h (disabled artifacts excluded).
 export const ARTIFACT_DEFS = Object.freeze([
-    { name: 'Excalibur', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
-    { name: 'Stormbringer', otyp: RUNESWORD, cls: 'weapon', glyph: ')', base: 'runesword', questArtifact: false },
-    { name: 'Mjollnir', otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
-    { name: 'Cleaver', otyp: BATTLE_AXE, cls: 'weapon', glyph: ')', base: 'battle-axe', questArtifact: false },
-    { name: 'Grimtooth', otyp: ORCISH_DAGGER, cls: 'weapon', glyph: ')', base: 'orcish dagger', questArtifact: false },
-    { name: 'Orcrist', otyp: ELVEN_BROADSWORD, cls: 'weapon', glyph: ')', base: 'elven broadsword', questArtifact: false, nameable: true },
-    { name: 'Sting', otyp: ELVEN_DAGGER, cls: 'weapon', glyph: ')', base: 'elven dagger', questArtifact: false, nameable: true },
-    { name: 'Magicbane', otyp: ATHAME, cls: 'weapon', glyph: ')', base: 'athame', questArtifact: false },
-    { name: 'Frost Brand', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
-    { name: 'Fire Brand', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
-    { name: 'Dragonbane', otyp: BROADSWORD, cls: 'weapon', glyph: ')', base: 'broadsword', questArtifact: false },
-    { name: 'Demonbane', otyp: SILVER_MACE, cls: 'weapon', glyph: ')', base: 'silver mace', questArtifact: false },
-    { name: 'Werebane', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false },
-    { name: 'Grayswandir', otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false, restricted: true, alignment: 'lawful' },
-    { name: 'Giantslayer', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
-    { name: 'Ogresmasher', otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
-    { name: 'Trollsbane', otyp: MORNING_STAR, cls: 'weapon', glyph: ')', base: 'morning star', questArtifact: false },
-    { name: 'Vorpal Blade', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
-    { name: 'Snickersnee', otyp: KATANA, cls: 'weapon', glyph: ')', base: 'katana', questArtifact: false },
-    { name: 'Sunsword', otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
-    { name: 'The Orb of Detection', otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', base: 'crystal ball', questArtifact: true, questRole: 'Archeologist' },
-    { name: 'The Heart of Ahriman', otyp: LUCKSTONE, cls: 'gem', glyph: '*', base: 'luckstone', questArtifact: true, questRole: 'Barbarian' },
-    { name: 'The Sceptre of Might', otyp: MACE, cls: 'weapon', glyph: ')', base: 'mace', questArtifact: true, questRole: 'Caveman' },
-    { name: 'The Staff of Aesculapius', otyp: QUARTERSTAFF, cls: 'weapon', glyph: ')', base: 'quarterstaff', questArtifact: true, questRole: 'Healer' },
-    { name: 'The Magic Mirror of Merlin', otyp: MIRROR, cls: 'tool', glyph: '(', base: 'mirror', questArtifact: true, questRole: 'Knight' },
-    { name: 'The Eyes of the Overworld', otyp: LENSES, cls: 'tool', glyph: '(', base: 'lenses', questArtifact: true, questRole: 'Monk' },
-    { name: 'The Mitre of Holiness', otyp: HELM_OF_BRILLIANCE, cls: 'armor', glyph: '[', base: 'helm of brilliance', questArtifact: true, questRole: 'Priest' },
-    { name: 'The Longbow of Diana', otyp: BOW, cls: 'weapon', glyph: ')', base: 'bow', questArtifact: true, questRole: 'Ranger' },
-    { name: 'The Master Key of Thievery', otyp: SKELETON_KEY, cls: 'tool', glyph: '(', base: 'skeleton key', questArtifact: true, questRole: 'Rogue' },
-    { name: 'The Tsurugi of Muramasa', otyp: TSURUGI, cls: 'weapon', glyph: ')', base: 'tsurugi', questArtifact: true, questRole: 'Samurai' },
-    { name: 'The Platinum Yendorian Express Card', otyp: CREDIT_CARD, cls: 'tool', glyph: '(', base: 'credit card', questArtifact: true, questRole: 'Tourist' },
-    { name: 'The Orb of Fate', otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', base: 'crystal ball', questArtifact: true, questRole: 'Valkyrie' },
-    { name: 'The Eye of the Aethiopica', otyp: AMULET_OF_ESP, cls: 'amulet', glyph: '"', base: 'amulet of ESP', questArtifact: true, questRole: 'Wizard' },
+    { name: 'Excalibur', cost: 4000, otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Stormbringer', cost: 8000, otyp: RUNESWORD, cls: 'weapon', glyph: ')', base: 'runesword', questArtifact: false },
+    { name: 'Mjollnir', cost: 4000, otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
+    { name: 'Cleaver', cost: 1500, otyp: BATTLE_AXE, cls: 'weapon', glyph: ')', base: 'battle-axe', questArtifact: false },
+    { name: 'Grimtooth', cost: 1200, otyp: ORCISH_DAGGER, cls: 'weapon', glyph: ')', base: 'orcish dagger', questArtifact: false },
+    { name: 'Orcrist', cost: 2000, otyp: ELVEN_BROADSWORD, cls: 'weapon', glyph: ')', base: 'elven broadsword', questArtifact: false, nameable: true },
+    { name: 'Sting', cost: 800, otyp: ELVEN_DAGGER, cls: 'weapon', glyph: ')', base: 'elven dagger', questArtifact: false, nameable: true },
+    { name: 'Magicbane', cost: 3500, otyp: ATHAME, cls: 'weapon', glyph: ')', base: 'athame', questArtifact: false },
+    { name: 'Frost Brand', cost: 3000, otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Fire Brand', cost: 3000, otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Dragonbane', cost: 500, otyp: BROADSWORD, cls: 'weapon', glyph: ')', base: 'broadsword', questArtifact: false },
+    { name: 'Demonbane', cost: 2500, otyp: SILVER_MACE, cls: 'weapon', glyph: ')', base: 'silver mace', questArtifact: false },
+    { name: 'Werebane', cost: 1500, otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false },
+    { name: 'Grayswandir', cost: 8000, otyp: SILVER_SABER, cls: 'weapon', glyph: ')', base: 'silver saber', questArtifact: false, restricted: true, alignment: 'lawful' },
+    { name: 'Giantslayer', cost: 200, otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Ogresmasher', cost: 200, otyp: WAR_HAMMER, cls: 'weapon', glyph: ')', base: 'war hammer', questArtifact: false },
+    { name: 'Trollsbane', cost: 200, otyp: MORNING_STAR, cls: 'weapon', glyph: ')', base: 'morning star', questArtifact: false },
+    { name: 'Vorpal Blade', cost: 4000, otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'Snickersnee', cost: 1200, otyp: KATANA, cls: 'weapon', glyph: ')', base: 'katana', questArtifact: false },
+    { name: 'Sunsword', cost: 1500, otyp: LONG_SWORD, cls: 'weapon', glyph: ')', base: 'long sword', questArtifact: false },
+    { name: 'The Orb of Detection', cost: 2500, otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', base: 'crystal ball', questArtifact: true, questRole: 'Archeologist' },
+    { name: 'The Heart of Ahriman', cost: 2500, otyp: LUCKSTONE, cls: 'gem', glyph: '*', base: 'luckstone', questArtifact: true, questRole: 'Barbarian' },
+    { name: 'The Sceptre of Might', cost: 2500, otyp: MACE, cls: 'weapon', glyph: ')', base: 'mace', questArtifact: true, questRole: 'Caveman' },
+    { name: 'The Staff of Aesculapius', cost: 5000, otyp: QUARTERSTAFF, cls: 'weapon', glyph: ')', base: 'quarterstaff', questArtifact: true, questRole: 'Healer' },
+    { name: 'The Magic Mirror of Merlin', cost: 1500, otyp: MIRROR, cls: 'tool', glyph: '(', base: 'mirror', questArtifact: true, questRole: 'Knight' },
+    { name: 'The Eyes of the Overworld', cost: 2500, otyp: LENSES, cls: 'tool', glyph: '(', base: 'lenses', questArtifact: true, questRole: 'Monk' },
+    { name: 'The Mitre of Holiness', cost: 2000, otyp: HELM_OF_BRILLIANCE, cls: 'armor', glyph: '[', base: 'helm of brilliance', questArtifact: true, questRole: 'Priest' },
+    { name: 'The Longbow of Diana', cost: 4000, otyp: BOW, cls: 'weapon', glyph: ')', base: 'bow', questArtifact: true, questRole: 'Ranger' },
+    { name: 'The Master Key of Thievery', cost: 3500, otyp: SKELETON_KEY, cls: 'tool', glyph: '(', base: 'skeleton key', questArtifact: true, questRole: 'Rogue' },
+    { name: 'The Tsurugi of Muramasa', cost: 4500, otyp: TSURUGI, cls: 'weapon', glyph: ')', base: 'tsurugi', questArtifact: true, questRole: 'Samurai' },
+    { name: 'The Platinum Yendorian Express Card', cost: 7000, otyp: CREDIT_CARD, cls: 'tool', glyph: '(', base: 'credit card', questArtifact: true, questRole: 'Tourist' },
+    { name: 'The Orb of Fate', cost: 3500, otyp: CRYSTAL_BALL, cls: 'tool', glyph: '(', base: 'crystal ball', questArtifact: true, questRole: 'Valkyrie' },
+    { name: 'The Eye of the Aethiopica', cost: 4000, otyp: AMULET_OF_ESP, cls: 'amulet', glyph: '"', base: 'amulet of ESP', questArtifact: true, questRole: 'Wizard' },
 ]);
 function artifactKey(name) {
     return String(name || '')
@@ -4873,7 +4874,7 @@ function makeTool(roll, init = true, artif = false) {
         otmp.kind = nameEntry[1];
         otmp.actualKind = nameEntry[2] || nameEntry[1];
     }
-    if (otmp.kind === 'saddle') otmp.owt = 150 * otmp.quan; // objects.h:SADDLE
+    if (otmp.kind === 'saddle') otmp.owt = 200 * otmp.quan; // objects.h:SADDLE
     otmp._display_color = objectColorForRoll(roll, TOOL_ROLL_COLORS);
     return otmp;
 }

@@ -8,7 +8,7 @@ import { objectMergeableByCMetadata, mergeStackableObject, putSaddleOnMonster, a
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
-import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP } from './const.js';
+import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, MAX_SPELL_STUDY, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP, W_SWAPWEP, W_QUIVER } from './const.js';
 import { S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsAcid } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
@@ -12265,7 +12265,9 @@ function removeInventoryItem(item, amount = 1) {
 // The owning operation resumes with the same detached object after any prompt.
 async function detachInventoryItemWithArtifactEffects(item, amount, messages, after) {
     const removed = amount >= (item.quan || 1);
+    const wasWeapon = itemIsPrimaryWielded(item) || item.alternate || !!(item.owornmask & W_SWAPWEP);
     messages.push(...removeInventoryItem(item, amount));
+    if (removed && wasWeapon) game.u.twoweap = false;
     if (after?.type === 'heroProjectile' || after?.type === 'bagPut' || after?.type === 'containerPut') {
         after.object.owornmask = 0;
         after.object.worn = after.object.wielded = after.object.quivered = after.object.alternate = false;
@@ -29737,6 +29739,7 @@ function heroUpwardThrowEffect(item) {
 // The continuation holds the actual detached object across float-down prompts.
 async function resumeHeroProjectileCommand(after) {
     if (after.operation === 'fire') return resumeHeroFireVolley(after);
+    if (after.operation === 'horizontal') return resumeHeroHorizontalThrow(after);
     const obj = after.object;
     Object.assign(obj, {
         letter: undefined, line: undefined, worn: false, wielded: false,
@@ -29812,16 +29815,18 @@ async function beginHeroUpwardThrow(item, effect) {
     await resumeHeroProjectileCommand(after);
 }
 
-async function beginHeroFireVolley(source, launcher, dir) {
-    const shotLimit = Math.max(0, Math.trunc(Number(game._fire_count || 0)));
+async function beginHeroFireVolley(source, launcher, dir, options = {}) {
+    const shotLimit = options.shotLimit ?? Math.max(0, Math.trunc(Number(game._fire_count || 0)));
     const firedFromLauncher = !!(launcher && heroThrowAmmoAndLauncher(source, launcher));
-    const shotCount = firedFromLauncher
+    const shotCount = options.shotCount ?? (firedFromLauncher
         ? heroLauncherAmmoMultishotCount(source, launcher, shotLimit)
-        : heroThrownStackableWeaponMultishotCount(source, shotLimit);
+        : heroThrownStackableWeaponMultishotCount(source, shotLimit));
     const after = {
         type: 'heroProjectile', operation: 'fire', phase: 'detach',
         source, launcher, dir, shotLimit, shotCount, firedFromLauncher, shot: 0,
         name: heroProjectileVolleyName(source, shotCount),
+        command: options.command || 'fire',
+        wasBurdened: (game.u?._statusSuffix || '').includes('Burdened'),
         messages: [], impactMessages: [], landingMessages: [], more: false,
     };
     await resumeHeroFireVolley(after);
@@ -29887,13 +29892,13 @@ async function resumeHeroFireVolley(after) {
             if (!objectLocations().has(obj)) stopDestroyedObjectTreeTimers(obj);
         } else {
             const landing = landProjectileObjectWithShopHandling(obj, flight.ox, flight.oy, {
-                breakRoll: !projectileLandingIsSoft(flight.ox, flight.oy) ? rn2(100) : null,
+                breakRoll: !(after.command === 'throw' && impact.hit) && !projectileLandingIsSoft(flight.ox, flight.oy) ? rn2(100) : null,
                 ohit: !!impact.hit, passiveTarget: impact.passiveTarget, snuffCandles: true,
             });
             after.landingMessages.push(...landing.messages);
         }
         if (flight.targetMon) newsym(flight.targetMon.mx, flight.targetMon.my);
-        if (firedFromLauncher && after.shot === 0) {
+        if (after.command === 'fire' && firedFromLauncher && after.shot === 0) {
             game._stale_projectile_marks ??= [];
             game._stale_projectile_marks.push({ x: startX + dir.dx * 2, y: startY + dir.dy * 2, ch: '%', color: CLR_BROWN });
         }
@@ -29921,9 +29926,540 @@ async function resumeHeroFireVolley(after) {
     game._fire_item_letter = null;
     game._fire_launcher_letter = null;
     game._fire_count = null;
-    game.context.move = 1;
+    if (after.command === 'throw') {
+        game._throw_item_letter = null;
+        clearThrowCountState();
+        game._resume_time_after_more = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        if (after.wasBurdened && heroEncumbranceForWeight(heroCarriedWeight()) === 0) {
+            game._topline_after_more = 'Your movements are now unencumbered.';
+            game._unburden_after_topline_more = 1;
+        }
+    } else game.context.move = 1;
     if (after.recoil?.trapResult?.lifeSaving || after.recoil?.trapResult?.fatal)
         applyLifeSavingOrFatalCommandMode(after.recoil.trapResult);
+}
+
+async function beginHeroHorizontalThrow(source, dir) {
+    const throwLauncher = heroWieldedThrowLauncher();
+    const directLauncherAmmo = !!(heroLauncherAmmoData(source) && heroThrowAmmoAndLauncher(source, throwLauncher));
+    const directShotLimit = Math.max(0, Math.trunc(Number(game._throw_shot_limit || 0)));
+    const stackable = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(source);
+    const shotCount = directLauncherAmmo
+        ? heroLauncherAmmoMultishotCount(source, throwLauncher, directShotLimit)
+        : stackable ? heroThrownStackableWeaponMultishotCount(source, directShotLimit) : 1;
+    const curvedBoomerang = tossUpWeaponObjectKey(source) === 'boomerang' && !heroIsUnderwaterForThrow();
+    if ((directLauncherAmmo || stackable) && (shotCount > 1 || directShotLimit > 0) && !curvedBoomerang) {
+        await beginHeroFireVolley(source, throwLauncher, dir, { command: 'throw', shotCount, shotLimit: directShotLimit });
+        return;
+    }
+    const quantity = source.quan || 1;
+    const amount = shopBillableGold(source)
+        ? Math.min(quantity, Math.max(1, Math.trunc(Number(game._throw_count || game._goldCount || quantity)))) : 1;
+    const returningAklysThrow = itemIsPrimaryWieldedAklys(source);
+    const after = {
+        type: 'heroProjectile', operation: 'horizontal', source, dir, throwLauncher,
+        directLauncherAmmo, directShotLimit, returningAklysThrow,
+        mjollnirThrow: heroThrownMjollnirObject(source),
+        returningObjectThrow: returningAklysThrow || heroThrownMjollnirAutoReturn(source)
+            || (heroIsUnderwaterForThrow() && tossUpWeaponObjectKey(source) === 'boomerang'),
+        mask: source.owornmask || (itemIsPrimaryWielded(source) ? W_WEP : source.alternate ? W_SWAPWEP : source.quivered ? W_QUIVER : 0),
+        letter: source.letter, inventoryIndex: game.inventory.indexOf(source), twoweap: !!game.u?.twoweap,
+        wasBurdened: (game.u?._statusSuffix || '').includes('Burdened'), messages: [],
+    };
+    const split = quantity > amount;
+    const obj = split ? { ...source, id: next_ident(), quan: amount, timed: 0, owornmask: 0 } : source;
+    if (split) {
+        delete obj.o_id;
+        delete obj._shopBillObjectId;
+        splitCarriedObjectShopBill(source, obj, amount);
+        splitObjectTimers(source, obj);
+    }
+    after.object = obj;
+    const detach = await detachInventoryItemWithArtifactEffects(source, amount, after.messages, after);
+    if (detach.pending) {
+        await setMessage(after.messages.join('  '), true);
+        game.context.move = 0;
+        if ((detach.fatal || detach.lifeSaving) && !detach.lavaDeath)
+            applyLifeSavingOrFatalCommandMode(detach);
+        return;
+    }
+    await resumeHeroHorizontalThrow(after);
+}
+
+// C return_throw_to_inv first tries to undo this throw's split, then restores
+// its original slot without merging into an unrelated compatible stack.
+function restoreHeroReturnedProjectile(after, wield = false) {
+    let obj = after.object;
+    if (!wield && after.source !== obj && game.inventory.includes(after.source)
+        && sameMonsterThrownStackObject(after.source, { ...obj, ox: after.source.ox, oy: after.source.oy })) {
+        mergeStackedShopBillEntries(after.source, obj);
+        mergePickedObjectIntoInventory(obj, after.source);
+        return after.source;
+    }
+    delete obj.ox; delete obj.oy;
+    obj.letter = after.letter;
+    const mask = wield ? W_WEP : after.mask;
+    obj.owornmask = mask;
+    obj.wielded = !!(mask & W_WEP);
+    obj.alternate = !!(mask & W_SWAPWEP);
+    obj.quivered = !!(mask & W_QUIVER);
+    obj.line = normalInventoryLine({ ...obj, line: '' });
+    game.inventory.splice(Math.min(after.inventoryIndex, game.inventory.length), 0, obj);
+    if (obj.wielded) game.u.uwep = obj;
+    else if (obj.alternate) game.u.uswapwep = obj;
+    else if (obj.quivered) game.u.uquiver = obj;
+    game.u.twoweap = after.twoweap;
+    setArtifactEquipmentLight(obj, true);
+    game._pet_food_scan_inventory = game.inventory;
+    return obj;
+}
+
+async function resumeHeroHorizontalThrow(after) {
+    const { object: item, dir, throwLauncher, directLauncherAmmo, directShotLimit,
+        mjollnirThrow, returningAklysThrow, returningObjectThrow } = after;
+    stopCarriedFigurineTimerOnLeave(item);
+    curseLoadstoneLeavingInventory(item);
+    item.letter = item.line = undefined;
+    let ux = game.u?.ux || 0;
+    let uy = game.u?.uy || 0;
+    const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'
+        && !heroIsUnderwaterForThrow();
+    let boomerangPreRecoilMessage = '';
+    let boomerangPreRecoilMore = false;
+    if (boomerangUsesCurvedFlight && heroHorizontalThrowAirRecoilActive()) {
+        const skipBoomerangPreRecoil = !!game._skip_boomerang_pre_recoil_once;
+        const boomerangPreRecoilPrefix = game._boomerang_pre_recoil_prefix_once || '';
+        game._skip_boomerang_pre_recoil_once = 0;
+        game._boomerang_pre_recoil_prefix_once = '';
+        if (skipBoomerangPreRecoil) {
+            boomerangPreRecoilMessage = boomerangPreRecoilPrefix;
+        } else {
+            const boomerangPreRecoilResult = heroHorizontalThrowRecoilResult(dir, 1);
+            boomerangPreRecoilMessage = boomerangPreRecoilResult?.message || '';
+            boomerangPreRecoilMore = !!boomerangPreRecoilResult?.more;
+            const preRecoilTrapResult = boomerangPreRecoilResult?.trapResult || null;
+            if (preRecoilTrapResult?.lifeSaving || preRecoilTrapResult?.fatal) {
+                await setMessage(boomerangPreRecoilMessage, boomerangPreRecoilMore);
+                if (preRecoilTrapResult.lifeSaving)
+                    queueBoomerangPreRecoilLifeSavingContinuation(after);
+                else {
+                    game._throw_item_letter = null;
+                    clearThrowCountState();
+                }
+                if (applyLifeSavingOrFatalCommandMode(preRecoilTrapResult)) return;
+            }
+        }
+        ux = game.u?.ux || ux;
+        uy = game.u?.uy || uy;
+    }
+    const boomerangFlight = heroThrownBoomerangFlightResult(item, dir, ux, uy);
+    if (boomerangFlight.caught) {
+        exerciseHeroProjectileHitDexterity();
+        restoreHeroReturnedProjectile(after);
+        newsym(ux, uy);
+        await setMessage([boomerangPreRecoilMessage, 'You skillfully catch the boomerang.'].filter(Boolean).join('  '),
+            boomerangPreRecoilMore);
+        game._command_mode = null;
+        game._throw_item_letter = null;
+        clearThrowCountState();
+        game._resume_time_after_more = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        return;
+    }
+    let ox = ux;
+    let oy = uy;
+    let targetMon = null;
+    let ironBarsImpact = null;
+    const ammoRange = heroHorizontalThrowAmmoRange(item, throwLauncher);
+    let throwNoLauncherMessage = ammoRange?.noLauncherMessage || '';
+    let throwRange = heroHorizontalThrowFinalRange(
+        item,
+        ammoRange?.range ?? heroHorizontalThrowWeightedRange(item).range,
+        { mjollnirThrow, returningAklysThrow },
+    );
+    let ordinaryAirRecoilRange = 0;
+    if (!boomerangFlight.handled && heroHorizontalThrowAirRecoilActive()) {
+        const airSplit = heroHorizontalThrowAirSplitRange(item, throwLauncher);
+        ordinaryAirRecoilRange = airSplit.recoilRange;
+        throwRange = heroHorizontalThrowFinalRange(
+            item,
+            airSplit.throwRange,
+            { mjollnirThrow, returningAklysThrow },
+        );
+        throwNoLauncherMessage = airSplit.noLauncherMessage || throwNoLauncherMessage;
+    }
+    let flightImpactMessage = '';
+    if (boomerangFlight.handled) {
+        ox = boomerangFlight.x ?? ox;
+        oy = boomerangFlight.y ?? oy;
+        targetMon = boomerangFlight.targetMon || null;
+        flightImpactMessage = [boomerangPreRecoilMessage, boomerangFlight.message || ''].filter(Boolean).join('  ');
+    } else {
+        for (let step = 0; step < throwRange; step++) {
+            const nx = ox + dir.dx;
+            const ny = oy + dir.dy;
+            const loc = game.level?.at(nx, ny);
+            if (loc?.typ === IRONBARS) {
+                const pointBlank = step === 0;
+                const forcedHit = pointBlank ? false : rn2(5) === 0;
+                if (forcedHit || heroThrownIronBarsClassHitObject(item)) {
+                    ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank, forcedHit };
+                    break;
+                }
+            }
+            if (!loc || (loc.typ !== IRONBARS && IS_OBSTRUCTED(loc.typ))) break;
+            ox = nx;
+            oy = ny;
+            targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
+            if (targetMon) break;
+        }
+    }
+    if (shopBillableGold(item)) {
+        const thrownGold = Object.assign(item, { ox, oy, glyph: '$', color: CLR_YELLOW });
+        const landing = landProjectileObjectWithShopHandling(thrownGold, ox, oy, { breakRoll: 0 });
+        const landingMessage = landing.messages.join('  ');
+        newsym(ox, oy);
+        if (landingMessage) await setMessage(landingMessage);
+        else {
+            game._pending_message = '';
+            game._message_more = 0;
+        }
+        game._command_mode = null;
+        game._throw_item_letter = null;
+        clearThrowCountState();
+        game._resume_time_after_more = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        return;
+    }
+    const attachedBallThrow = heroThrownAttachedBallObject(item);
+    const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
+        ? attachedBallThrow
+            ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
+            : heroHorizontalThrowRecoilResult(dir, ordinaryAirRecoilRange)
+        : null;
+    const ordinaryAirRecoilMessage = [...after.messages, ordinaryAirRecoilResult?.message || ''].filter(Boolean).join('  ');
+    const ordinaryAirRecoilMore = !!ordinaryAirRecoilResult?.more;
+    const ordinaryAirRecoilTrapResult = ordinaryAirRecoilResult?.trapResult || null;
+    const applyOrdinaryAirRecoilTrapResult = () => {
+        if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
+        return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
+    };
+    const thrownObject = item;
+    Object.assign(thrownObject, {
+        letter: undefined,
+        line: undefined,
+        wielded: false,
+        worn: false,
+        quivered: false,
+        ox,
+        oy,
+        quan: 1,
+        glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
+        color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
+    });
+    const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
+    let impactMessage = flightImpactMessage;
+    let impactConsumedThrownObject = false;
+    let impactObjectHit = false;
+    let impactPassiveTarget = null;
+    let boomerangSelfHitResult = null;
+    let projectileImpactMore = false;
+    if (ironBarsImpact) {
+        const barsImpact = await heroThrownIronBarsImpact(thrownObject, ironBarsImpact);
+        if (barsImpact.broke) {
+            markThrownBrokenObjectDebt(thrownObject);
+            newsym(ironBarsImpact.x, ironBarsImpact.y);
+            if (directShotLimit > 0)
+                barsImpact.messages.unshift(`You ${directLauncherAmmo ? 'shoot' : 'throw'} 1 ${heroProjectileVolleyName(item, 1)}.`);
+            prependHeroHorizontalThrowRecoilMessage(barsImpact.messages, ordinaryAirRecoilMessage);
+            await setMessage(barsImpact.messages.join('  '), ordinaryAirRecoilMore);
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
+            return;
+        }
+        impactMessage = barsImpact.messages.join('  ');
+    }
+    if (boomerangFlight.failedCatch) {
+        boomerangSelfHitResult = heroThrownBoomerangSelfHitResult(thrownObject);
+        impactMessage = [impactMessage, ...(boomerangSelfHitResult.messages || [])].filter(Boolean).join('  ');
+    } else if (targetMon && isCreamPieObject(item)) {
+        rnd(20);
+        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        if (dex > rnd(25)) {
+            const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
+
+            newsym(targetMon.mx, targetMon.my);
+            prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
+            await setMessage(messages.join('  '), ordinaryAirRecoilMore);
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
+            return;
+        }
+        const messages = [heroProjectileMissMessage('cream pie', targetMon)];
+        messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+        impactMessage = messages.join('  ');
+    } else if (targetMon && isEggItem(item)) {
+        rnd(20);
+        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        if (dex > rnd(25)) {
+            const messages = heroThrownEggHitMonster(thrownObject, targetMon);
+
+            newsym(targetMon.mx, targetMon.my);
+            prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
+            await setMessage(messages.join('  '), !!messages.more || ordinaryAirRecoilMore);
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
+            if (applyLifeSavingOrFatalCommandMode(messages)) return;
+            game._command_mode = null;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            return;
+        }
+        const thrownName = pickupObjectName({ ...item, quan: 1 });
+        const messages = [heroProjectileMissMessage(thrownName, targetMon)];
+        messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+        impactMessage = messages.join('  ');
+    } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
+        rnd(20);
+        const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
+        if (dex > rnd(25)) {
+            const messages = heroThrownPotionHitMonster(thrownObject, targetMon, { allowLifeSaving: true });
+
+            newsym(targetMon.mx, targetMon.my);
+            const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
+            prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
+            await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more || ordinaryAirRecoilMore);
+            game._throw_item_letter = null;
+            game._resume_time_after_more = 0;
+            game.context.move = 0;
+            if (messages.lifeSaving) {
+                game._command_mode = 'lifeSavingMore';
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                return;
+            }
+            if (messages.fatal) {
+                game._command_mode = 'deathDieMore';
+                game._pending_time_passed = 0;
+                game._process_command_time_now = 0;
+                game._run_steps_remaining = 0;
+                prepareDeathBones();
+                return;
+            }
+            if (!keepPotionCallPrompt) game._command_mode = null;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            return;
+        }
+        const thrownName = pickupObjectName({ ...item, quan: 1 });
+        const messages = [heroProjectileMissMessage(thrownName, targetMon)];
+        messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+        impactMessage = messages.join('  ');
+    } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
+        const ammoImpact = await heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
+        impactMessage = (ammoImpact.messages || []).join('  ');
+        impactConsumedThrownObject = !!ammoImpact.mulched;
+        impactObjectHit = !!ammoImpact.hit;
+        impactPassiveTarget = ammoImpact.hit ? targetMon : null;
+        if (ammoImpact.more) projectileImpactMore = true;
+    } else if (targetMon && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(item)) {
+        const unicornImpact = heroThrownUnicornGemImpact(thrownObject, targetMon);
+        impactMessage = (unicornImpact.messages || []).join('  ');
+        impactConsumedThrownObject = !!unicornImpact.consumed;
+        if (unicornImpact.more) projectileImpactMore = true;
+    } else if (targetMon && heroThrownStoneMissileHarmlessRockPasser(item, targetMon)) {
+        const hitValue = heroThrownGemHitValue(thrownObject, targetMon);
+        const dieroll = rnd(20);
+        const thrownName = floorObjectTheSubject(thrownObject);
+        const targetName = heroThrownVenomTargetName(targetMon);
+        if (hitValue >= dieroll) {
+            wakeMonsterFromHeroThrownHit(targetMon);
+            exerciseHeroProjectileHitDexterity();
+            impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
+            impactObjectHit = true;
+            impactPassiveTarget = targetMon;
+        } else {
+            const messages = [heroProjectileMissMessage(item, targetMon)];
+            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+            impactMessage = messages.join('  ');
+        }
+    } else if (targetMon && heroThrownGemClassObject(item)) {
+        const gemImpact = await heroThrownGemImpact(thrownObject, targetMon);
+        impactMessage = (gemImpact.messages || []).join('  ');
+        impactConsumedThrownObject = !!gemImpact.mulched;
+        impactObjectHit = !!gemImpact.hit;
+        impactPassiveTarget = gemImpact.hit ? targetMon : null;
+        if (gemImpact.more) projectileImpactMore = true;
+    } else if (targetMon && heroThrownByHandAmmoObject(item, throwLauncher)) {
+        const ammoImpact = await heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
+        impactMessage = (ammoImpact.messages || []).join('  ');
+        impactConsumedThrownObject = !!ammoImpact.mulched;
+        impactObjectHit = !!ammoImpact.hit;
+        impactPassiveTarget = ammoImpact.hit ? targetMon : null;
+        if (ammoImpact.more) projectileImpactMore = true;
+    } else if (targetMon && heroProjectileSupportedWeaponObject(item)) {
+        const weaponImpact = await heroThrownWeaponImpact(thrownObject, targetMon);
+        impactMessage = (weaponImpact.messages || []).join('  ');
+        impactConsumedThrownObject = !!weaponImpact.mulched;
+        impactObjectHit = !!weaponImpact.hit;
+        impactPassiveTarget = weaponImpact.hit ? targetMon : null;
+        if (weaponImpact.more) projectileImpactMore = true;
+    } else if (targetMon && !combatObject) {
+        rnd(20);
+        const thrownName = pickupObjectName({ ...item, quan: 1 });
+        const targetName = targetMon.data?.name || 'creature';
+        const messages = [`The ${thrownName} misses the ${targetName}.`];
+        messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
+        impactMessage = messages.join('  ');
+    }
+    if (boomerangPreRecoilMessage && boomerangFlight.handled
+        && !impactMessage.includes(boomerangPreRecoilMessage))
+        impactMessage = [boomerangPreRecoilMessage, impactMessage].filter(Boolean).join('  ');
+    if (ordinaryAirRecoilMessage)
+        impactMessage = [ordinaryAirRecoilMessage, impactMessage].filter(Boolean).join('  ');
+    if (impactConsumedThrownObject) {
+        if (!objectLocations().has(thrownObject)) stopDestroyedObjectTreeTimers(thrownObject);
+        newsym(targetMon.mx, targetMon.my);
+        await setMessage(impactMessage, ordinaryAirRecoilMore || projectileImpactMore);
+        game._command_mode = null;
+        game._throw_item_letter = null;
+        game._resume_time_after_more = 0;
+        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+        game.context.move = 0;
+        if (applyOrdinaryAirRecoilTrapResult()) return;
+        return;
+    }
+    if (returningObjectThrow) {
+        const returnMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns to your hand!`;
+        const failMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} fails to return!`;
+        if (rn2(100)) {
+            if (!heroIsConfused() && !heroIsStunned() && !heroIsBlind()
+                && !heroIsHallucinating() && !heroIsFumbling() && rn2(100)) {
+                restoreHeroReturnedProjectile(after, true);
+                newsym(ox, oy);
+                await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '), ordinaryAirRecoilMore || projectileImpactMore);
+                game._command_mode = null;
+                game._throw_item_letter = null;
+                clearThrowCountState();
+                game._resume_time_after_more = 0;
+                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+                game.context.move = 0;
+                if (applyOrdinaryAirRecoilTrapResult()) return;
+                return;
+            }
+            const armHit = !!rn2(2);
+            const badCatchMessage = armHit
+                ? `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} flies back toward you, hitting your arm!`
+                : `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns back to you, landing at your feet.`;
+            if (armHit) {
+                const damage = 1 + rnd(3);
+                if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
+            }
+            const landing = landProjectileObjectWithShopHandling(thrownObject, ux, uy, { skipTopBreak: true });
+            const landingMessage = landing.messages.join('  ');
+            newsym(ux, uy);
+
+            await setMessage([impactMessage, badCatchMessage, landingMessage].filter(Boolean).join('  '),
+                !!landingMessage || ordinaryAirRecoilMore || projectileImpactMore);
+            game._command_mode = null;
+            game._throw_item_letter = null;
+            clearThrowCountState();
+            game._resume_time_after_more = 0;
+            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+            game.context.move = 0;
+            if (applyOrdinaryAirRecoilTrapResult()) return;
+            return;
+        }
+        impactMessage = [impactMessage, failMessage].filter(Boolean).join('  ');
+    }
+    const projectileBreakRoll = !impactObjectHit && !projectileLandingIsSoft(ox, oy)
+        ? rn2(100) // C breaktest: obj_resists() on hard landing.
+        : null;
+    const landing = isHeroThrownCrackableArmorObject(thrownObject) && !impactObjectHit
+        ? (() => {
+            const messages = [];
+            const object = landHeroThrownCrackableArmorAt(thrownObject, ox, oy, messages, { breakRoll: projectileBreakRoll });
+            return { object, messages };
+        })()
+        : landProjectileObjectWithShopHandling(thrownObject, ox, oy, {
+            breakRoll: projectileBreakRoll,
+            ohit: impactObjectHit,
+            passiveTarget: impactPassiveTarget, snuffCandles: true,
+        });
+    let attachedBallLandingMore = false;
+    let attachedBallTrapResult = null;
+    if (attachedBallThrow && landing.object) {
+        const attachedDrop = await heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
+        landing.messages.push(...attachedDrop.messages);
+        attachedBallLandingMore = !!attachedDrop.more;
+        attachedBallTrapResult = attachedDrop.trapResult;
+    }
+    const landingMessage = landing.messages.join('  ');
+    newsym(ox, oy);
+    const wasBurdened = after.wasBurdened;
+
+    if (wasBurdened) {
+        let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
+        for (const invItem of game.inventory || []) {
+            if (isGoldObject(invItem)) continue;
+            const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
+            const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
+                : invItem.otyp === SCROLL_CLASS ? 'scroll'
+                    : invItem.otyp === POTION_CLASS ? 'potion'
+                        : invItem.otyp === WAND_CLASS ? 'wand'
+                            : invItem.otyp === GEM_CLASS ? 'gem' : '');
+            carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
+        }
+        const stats = game.u?.acurr?.a || [];
+        const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
+        if (carriedWeight <= capacity) {
+            game._topline_after_more = 'Your movements are now unencumbered.';
+            game._unburden_after_topline_more = 1;
+        }
+    }
+    if (throwNoLauncherMessage) {
+        const followUpMessage = [impactMessage, landingMessage].filter(Boolean).join('  ');
+        if (followUpMessage) game._queued_message_after_more = followUpMessage;
+        if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
+        await setMessage(throwNoLauncherMessage, !!followUpMessage || ordinaryAirRecoilMore || projectileImpactMore);
+    }
+    else if (impactMessage) {
+        if (landingMessage) game._queued_message_after_more = landingMessage;
+        if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
+        await setMessage(impactMessage, true);
+    }
+    else if (landingMessage) await setMessage(landingMessage, attachedBallLandingMore || ordinaryAirRecoilMore);
+    else {
+        game._pending_message = '';
+        game._message_more = 0;
+    }
+    game._command_mode = null;
+    game._throw_item_letter = null;
+    clearThrowCountState();
+    game._resume_time_after_more = 0;
+    if (boomerangSelfHitResult?.lifeSaving || boomerangSelfHitResult?.fatal) {
+        if (applyLifeSavingOrFatalCommandMode(boomerangSelfHitResult)) return;
+    }
+    if (attachedBallTrapResult?.lifeSaving || attachedBallTrapResult?.fatal) {
+        if (applyLifeSavingOrFatalCommandMode(attachedBallTrapResult)) return;
+    }
+    if (applyOrdinaryAirRecoilTrapResult()) return;
+    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
+    game.context.move = 0;
+    return;
 }
 
 function monsterTouchPetrifies(mon) {
@@ -30077,6 +30613,7 @@ function heroThrownPetrifyingEggHitMonster(egg, mon, options = {}) {
     messages.push(`Splat!  You hit ${thrownEggTargetTheName(mon)} with ${thrownPetrifyingEggHitArticle(egg)} egg${plural}!`);
     egg.known = true;
     markObjectShopBillUsedUp(egg);
+    stopDestroyedObjectTreeTimers(egg);
     if (!petrifyMonsterFromThrownEgg(mon, messages))
         applyThrownEggNominalDamage(mon, messages, options);
     return messages;
@@ -30088,6 +30625,7 @@ function heroThrownPyroliskEggHitMonster(egg, mon) {
     const plural = count === 1 ? '' : 's';
     messages.push(`You hit ${thrownEggTargetTheName(mon)} with ${thrownEggHitArticle(egg)} egg${plural}.`);
     markObjectShopBillUsedUp(egg);
+    stopDestroyedObjectTreeTimers(egg);
     const explosion = resolvePyroliskEggExplosion(mon.mx, mon.my, d(3, 6));
     appendFireExplosionMessages(messages, explosion);
     return messages;
@@ -30141,6 +30679,7 @@ function heroThrownOrdinaryEggHitMonster(egg, mon) {
     } else {
         messages.push('Splat!');
         markObjectShopBillUsedUp(egg);
+        stopDestroyedObjectTreeTimers(egg);
     }
     applyThrownEggNominalDamage(mon, messages);
     return messages;
@@ -35788,7 +36327,9 @@ function articleFor(noun) {
 }
 
 function spellbookCallAppearance(item) {
-    return item?.appearance || game._object_descriptions?.spellbooks?.[item?.spellbookIndex] || '';
+    const name = item?.spellName || item?.spell?.name || String(item?.kind || '').replace(/^spellbook(?: of)? /, '');
+    const index = item?.spellbookIndex ?? Object.keys(SPELLBOOK_LEVELS).indexOf(name);
+    return item?.appearance || game._object_descriptions?.spellbooks?.[index] || '';
 }
 
 function spellbookCallKey(item) {
@@ -41273,6 +41814,8 @@ function shopSaleableObject(shkp, obj) {
 
 function shopSaleBasePrice(obj) {
     let price = shopBaseCost(obj);
+    // C getprice(TRUE) discounts intrinsic artifact value before enchantment.
+    if (obj.artifact || obj.oartifact) price = Math.trunc(price / 4);
     if (!price) return 0;
     if ((obj.cls === 'food' || obj.otyp === FOOD_CLASS || obj.otyp === CORPSE || obj.otyp === 'corpse') && obj.oeaten)
         return 0;
@@ -44561,6 +45104,25 @@ async function floatArtifact(on, messages, { resume = false } = {}) {
                 messages.push(`You float down, but you are still ${digests ? 'swallowed' : 'engulfed'}.`);
                 state.phase = 'done';
             } else {
+                const ball = u.uball;
+                if (ball && !(game.inventory || []).includes(ball) && !heroDropBallMonsterAt(ball.ox, ball.oy)) {
+                    const pool = movementIsPoolAt(ball.ox, ball.oy);
+                    // C retains t_at's result even when the pit/hole test fails.
+                    state.ballTrap = pool ? null : heroTrapAt(ball.ox, ball.oy);
+                    if (pool || (state.ballTrap && (is_pit(state.ballTrap.ttyp) || is_hole(state.ballTrap.ttyp)))) {
+                        u.ux0 = u.ux; u.uy0 = u.uy;
+                        u.ux = ball.ox; u.uy = ball.oy;
+                        const chain = u.uchain;
+                        removeFloorObject(chain);
+                        maybeUnhideAt(chain.ox, chain.oy);
+                        newsym(chain.ox, chain.oy);
+                        chain.ox = ball.ox; chain.oy = ball.oy;
+                        game.level.objects.push(chain);
+                        newsym(chain.ox, chain.oy);
+                        newsym(u.ux0, u.uy0);
+                        game.vision_full_recalc = 1;
+                    }
+                }
                 if (u.ustuck) {
                     const name = monsterNameForWaterHit(u.ustuck);
                     messages.push(heroFormSticks() ? `You aren't able to maintain your hold on ${name}.`
@@ -44594,16 +45156,18 @@ async function floatArtifact(on, messages, { resume = false } = {}) {
     }
     if (state.phase === 'afterLava') {
         state.phase = 'afterTrap';
-        if (Is_airlevel(u.uz)) messages.push('You begin to tumble in place.');
-        else if (!state.noMessage && Is_waterlevel(u.uz)) messages.push('You feel heavier.');
-        else if (!state.noMessage && !u.uinwater) messages.push(heroIsHallucinating()
-            ? `Bummer!  You've ${movementIsPoolAt(u.ux, u.uy) ? 'splashed down' : 'hit the ground'}.`
-            : `You float gently to the ${polyselfFalloffSurfaceName(u.ux, u.uy)}.`);
+        if (!state.ballTrap) {
+            if (Is_airlevel(u.uz)) messages.push('You begin to tumble in place.');
+            else if (!state.noMessage && Is_waterlevel(u.uz)) messages.push('You feel heavier.');
+            else if (!state.noMessage && !u.uinwater) messages.push(heroIsHallucinating()
+                ? `Bummer!  You've ${movementIsPoolAt(u.ux, u.uy) ? 'splashed down' : 'hit the ground'}.`
+                : `You float gently to the ${polyselfFalloffSurfaceName(u.ux, u.uy)}.`);
+        }
         const encumbrance = encumberMsg();
         if (encumbrance) messages.push(encumbrance);
-        const trap = heroTrapAt(u.ux, u.uy);
+        const trap = state.ballTrap || heroTrapAt(u.ux, u.uy);
         if (trap && trap.ttyp !== STATUE_TRAP && !u.utrap) {
-            const landing = await heroLandingTrapEffectAt(u.ux, u.uy, messages);
+            const landing = await heroLandingTrapEffectAt(trap.tx, trap.ty, messages);
             state.more = !!landing.more;
             if (landing.trapResult) {
                 game._artifact_float_continuation = state;
@@ -49961,7 +50525,7 @@ function chatShopkeeperCanQuoteFloor(shkp) {
         && !tipHatMonsterHelpless(shkp);
 }
 
-function chatShopQuoteWearingSurcharge() {
+function shopPriceWearingSurcharge() {
     const worn = (game.inventory || []).filter(isWornInventoryItem);
     if (worn.some(item => objectKindKey(item) === 'dunce cap')) return true;
     const role = game._startup_role || game.urole?.name?.m || '';
@@ -49973,7 +50537,7 @@ function chatShopQuoteWearingSurcharge() {
     return visibleShirt;
 }
 
-function chatShopQuoteUnitCost(obj, shkp) {
+function shopObjectUnitCost(obj, shkp) {
     let price = shopBaseCost(obj);
     if ((obj?.cls === 'food' || obj?.otyp === FOOD_CLASS || obj?.otyp === CORPSE || obj?.otyp === 'corpse')
         && (game.u?.uhs || 0) >= 2)
@@ -49994,7 +50558,7 @@ function chatShopQuoteUnitCost(obj, shkp) {
         multiplier *= 4;
         divisor *= 3;
     }
-    if (chatShopQuoteWearingSurcharge()) {
+    if (shopPriceWearingSurcharge()) {
         multiplier *= 4;
         divisor *= 3;
     }
@@ -50016,7 +50580,7 @@ function chatShopQuoteUnitCost(obj, shkp) {
 
 function chatShopQuoteTopCost(obj, shkp) {
     if (!obj || obj.no_charge || obj === game.u?.uball || obj === game.u?.uchain) return 0;
-    let price = chatShopQuoteUnitCost(obj, shkp);
+    let price = shopObjectUnitCost(obj, shkp);
     if (isGlobbyObject(obj)) price *= shopPricingUnits(obj);
     return Math.max(0, Math.trunc(Number(price || 0)));
 }
@@ -50028,7 +50592,7 @@ function chatShopQuoteContainedCost(obj, shkp, seen = new Set()) {
     for (const child of globContents(obj)) {
         if (!child || seen.has(child)) continue;
         if (!shopBillableGold(child) && !child.no_charge)
-            price += chatShopQuoteUnitCost(child, shkp) * shopPricingUnits(child);
+            price += shopObjectUnitCost(child, shkp) * shopPricingUnits(child);
         price += chatShopQuoteContainedCost(child, shkp, seen);
     }
     return Math.max(0, Math.trunc(price));
@@ -53040,6 +53604,8 @@ function pickupObjectPhrase(obj) {
 }
 
 function shopBaseCost(obj) {
+    const artifact = artifactDefinitionForName(obj.artifact || obj.oartifact);
+    if (artifact) return artifact.cost || 100 * shopBaseCost({ ...obj, artifact: null, oartifact: null });
     const cls = obj.cls || '';
     let kind = String(obj.actualKind || obj.kind || '').toLowerCase();
     kind = kind.replace(/^(?:blessed|uncursed|cursed) /, '');
@@ -53306,28 +53872,8 @@ function shopItemPrice(obj, x = game.u?.ux, y = game.u?.uy) {
     if (shkp.shk && x === shkp.shk.x && y === shkp.shk.y) return 0;
     if (obj.no_charge) return 0;
 
-    let price = shopBaseCost(obj);
-    if (!price) return null;
-    if ((obj.cls === 'armor' || obj.cls === 'weapon' || obj.glyph === '[' || obj.glyph === ')')
-        && (obj.spe || 0) > 0) price += 10 * obj.spe;
-
-    let multiplier = 1;
-    let divisor = 1;
-    if ((obj.dknown !== true || !shopObjectNameKnown(obj)) && ((obj.id ?? obj.o_id ?? 0) % 4) === 0) {
-        multiplier *= 4;
-        divisor *= 3;
-    }
-    const cha = game.u?.acurr?.a?.[A_CHA] ?? 10;
-    if (cha > 18) divisor *= 2;
-    else if (cha === 18) { multiplier *= 2; divisor *= 3; }
-    else if (cha >= 16) { multiplier *= 3; divisor *= 4; }
-    else if (cha <= 5) multiplier *= 2;
-    else if (cha <= 7) { multiplier *= 3; divisor *= 2; }
-    else if (cha <= 10) { multiplier *= 4; divisor *= 3; }
-    price *= multiplier;
-    if (divisor > 1) price = Math.trunc((Math.trunc(price * 10 / divisor) + 5) / 10);
-    price = Math.max(1, price) * shopPricingUnits(obj);
-    return price;
+    if (!shopBaseCost(obj)) return null;
+    return shopObjectUnitCost(obj, shkp) * shopPricingUnits(obj);
 }
 
 function containedShopNonGoldPrice(obj, x = game.u?.ux, y = game.u?.uy, seen = new Set()) {
@@ -57409,11 +57955,8 @@ function consumeKickOuchLifeSavingRecoil() {
     return heroHorizontalThrowRecoilResult(queued.dir, rn1(2, 4));
 }
 
-function queueBoomerangPreRecoilLifeSavingContinuation(item, key) {
-    game._life_saving_boomerang_pre_recoil = {
-        key,
-        letter: item?.letter || game._throw_item_letter || null,
-    };
+function queueBoomerangPreRecoilLifeSavingContinuation(after) {
+    game._life_saving_boomerang_pre_recoil = { after };
 }
 
 function finishLandminePitFalloutResult(messages, fatalResult, pitResult, terrainResult = null) {
@@ -64123,12 +64666,10 @@ async function rhackInternal(_cmd) {
             if (boomerangPreRecoilContinuation) {
                 game._skip_boomerang_pre_recoil_once = 1;
                 game._boomerang_pre_recoil_prefix_once = lifeSavingMessage;
-                game._command_mode = 'throwDirection';
-                if (boomerangPreRecoilContinuation.letter)
-                    game._throw_item_letter = boomerangPreRecoilContinuation.letter;
+                game._command_mode = null;
                 game._pending_message = '';
                 game._message_more = 0;
-                await rhack(boomerangPreRecoilContinuation.key || 'l');
+                await resumeHeroProjectileCommand(boomerangPreRecoilContinuation.after);
                 return;
             }
             const postRecoil = consumeKickOuchLifeSavingRecoil();
@@ -73202,7 +73743,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     }
 
     if (game._command_mode === 'readRefreshPrompt' || game._command_mode === 'readDifficultyPrompt') {
-        if (!['y', 'Y', 'n', 'N', '\x1b', '\r', '\n'].includes(ch)) return;
+        if (!['y', 'Y', 'n', 'N', '\x1b', '\r', '\n'].includes(ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
         const difficulty = game._command_mode === 'readDifficultyPrompt';
         const prompt = game._spellbook_read_prompt;
         game._spellbook_read_prompt = null;
@@ -82260,586 +82804,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const selectedThrowCount = Math.max(0, Math.trunc(Number(game._throw_count || 0)));
         if (selectedThrowCount > 0 && !shopBillableGold(item))
             item = splitCarriedInventoryItemCount(item, selectedThrowCount);
-        let ux = game.u?.ux || 0;
-        let uy = game.u?.uy || 0;
-        const boomerangUsesCurvedFlight = tossUpWeaponObjectKey(item) === 'boomerang'
-            && !heroIsUnderwaterForThrow();
-        let boomerangPreRecoilMessage = '';
-        let boomerangPreRecoilMore = false;
-        if (boomerangUsesCurvedFlight && heroHorizontalThrowAirRecoilActive()) {
-            const skipBoomerangPreRecoil = !!game._skip_boomerang_pre_recoil_once;
-            const boomerangPreRecoilPrefix = game._boomerang_pre_recoil_prefix_once || '';
-            game._skip_boomerang_pre_recoil_once = 0;
-            game._boomerang_pre_recoil_prefix_once = '';
-            if (skipBoomerangPreRecoil) {
-                boomerangPreRecoilMessage = boomerangPreRecoilPrefix;
-            } else {
-                const boomerangPreRecoilResult = heroHorizontalThrowRecoilResult(dir, 1);
-                boomerangPreRecoilMessage = boomerangPreRecoilResult?.message || '';
-                boomerangPreRecoilMore = !!boomerangPreRecoilResult?.more;
-                const preRecoilTrapResult = boomerangPreRecoilResult?.trapResult || null;
-                if (preRecoilTrapResult?.lifeSaving || preRecoilTrapResult?.fatal) {
-                    await setMessage(boomerangPreRecoilMessage, boomerangPreRecoilMore);
-                    if (preRecoilTrapResult.lifeSaving)
-                        queueBoomerangPreRecoilLifeSavingContinuation(item, ch);
-                    else {
-                        game._throw_item_letter = null;
-                        clearThrowCountState();
-                    }
-                    if (applyLifeSavingOrFatalCommandMode(preRecoilTrapResult)) return;
-                }
-            }
-            ux = game.u?.ux || ux;
-            uy = game.u?.uy || uy;
-        }
-        const boomerangFlight = heroThrownBoomerangFlightResult(item, dir, ux, uy);
-        if (boomerangFlight.caught) {
-            exerciseHeroProjectileHitDexterity();
-            newsym(ux, uy);
-            await setMessage([boomerangPreRecoilMessage, 'You skillfully catch the boomerang.'].filter(Boolean).join('  '),
-                boomerangPreRecoilMore);
-            game._command_mode = null;
-            game._throw_item_letter = null;
-            clearThrowCountState();
-            game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-            game.context.move = 0;
-            return;
-        }
-        const returningAklysThrow = itemIsPrimaryWieldedAklys(item);
-        const returningBoomerangOrdinaryThrow = heroIsUnderwaterForThrow()
-            && tossUpWeaponObjectKey(item) === 'boomerang';
-        const returningMjollnirThrow = heroThrownMjollnirAutoReturn(item);
-        const returningObjectThrow = returningAklysThrow || returningBoomerangOrdinaryThrow || returningMjollnirThrow;
-        let ox = ux;
-        let oy = uy;
-        let targetMon = null;
-        let ironBarsImpact = null;
-        const throwLauncher = heroWieldedThrowLauncher();
-        const ammoRange = heroHorizontalThrowAmmoRange(item, throwLauncher);
-        let throwNoLauncherMessage = ammoRange?.noLauncherMessage || '';
-        let throwRange = heroHorizontalThrowFinalRange(
-            item,
-            ammoRange?.range ?? heroHorizontalThrowWeightedRange(item).range,
-            { mjollnirThrow, returningAklysThrow },
-        );
-        let ordinaryAirRecoilRange = 0;
-        if (!boomerangFlight.handled && heroHorizontalThrowAirRecoilActive()) {
-            const airSplit = heroHorizontalThrowAirSplitRange(item, throwLauncher);
-            ordinaryAirRecoilRange = airSplit.recoilRange;
-            throwRange = heroHorizontalThrowFinalRange(
-                item,
-                airSplit.throwRange,
-                { mjollnirThrow, returningAklysThrow },
-            );
-            throwNoLauncherMessage = airSplit.noLauncherMessage || throwNoLauncherMessage;
-        }
-        const itemQuantity = item.quan || 1;
-        const directLauncherAmmo = !!(heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher));
-        const directShotLimit = Math.max(0, Math.trunc(Number(game._throw_shot_limit || 0)));
-        const directLauncherShotCount = directLauncherAmmo
-            ? heroLauncherAmmoMultishotCount(item, throwLauncher, directShotLimit)
-            : 1;
-        const directThrownStackableWeapon = !directLauncherAmmo && heroThrownStackableWeaponMultishotObject(item);
-        const directThrownStackableWeaponShotCount = directThrownStackableWeapon
-            ? heroThrownStackableWeaponMultishotCount(item, directShotLimit)
-            : 1;
-        const directMultishotCount = directLauncherAmmo
-            ? directLauncherShotCount
-            : directThrownStackableWeaponShotCount;
-        const directCountForcesVolleyMessage = directShotLimit > 0
-            && (directLauncherAmmo || directThrownStackableWeapon);
-        const directProjectileVolley = (directLauncherAmmo || directThrownStackableWeapon)
-            && (directMultishotCount > 1 || directCountForcesVolleyMessage)
-            && !boomerangFlight.handled;
-        let flightImpactMessage = '';
-        if (boomerangFlight.handled) {
-            ox = boomerangFlight.x ?? ox;
-            oy = boomerangFlight.y ?? oy;
-            targetMon = boomerangFlight.targetMon || null;
-            flightImpactMessage = [boomerangPreRecoilMessage, boomerangFlight.message || ''].filter(Boolean).join('  ');
-        } else if (!directProjectileVolley) {
-            for (let step = 0; step < throwRange; step++) {
-                const nx = ox + dir.dx;
-                const ny = oy + dir.dy;
-                const loc = game.level?.at(nx, ny);
-                if (loc?.typ === IRONBARS) {
-                    const pointBlank = step === 0;
-                    const forcedHit = pointBlank ? false : rn2(5) === 0;
-                    if (forcedHit || heroThrownIronBarsClassHitObject(item)) {
-                        ironBarsImpact = { x: ox, y: oy, barsX: nx, barsY: ny, pointBlank, forcedHit };
-                        break;
-                    }
-                }
-                if (!loc || (loc.typ !== IRONBARS && IS_OBSTRUCTED(loc.typ))) break;
-                ox = nx;
-                oy = ny;
-                targetMon = (game.level?.monsters || []).find(mon => mon.mx === ox && mon.my === oy) || null;
-                if (targetMon) break;
-            }
-        }
-        if (shopBillableGold(item)) {
-            const amount = Math.max(1, Math.trunc(Number(game._throw_count || game._goldCount || item.quan || 1)));
-            const thrownGold = {
-                ...item,
-                letter: undefined,
-                line: undefined,
-                ox,
-                oy,
-                quan: amount,
-                glyph: '$',
-                color: CLR_YELLOW,
-            };
-            const landing = landProjectileObjectWithShopHandling(thrownGold, ox, oy, { breakRoll: 0 });
-            const landingMessage = landing.messages.join('  ');
-            newsym(ox, oy);
-            removeGoldFromHero(amount);
-            if (landingMessage) await setMessage(landingMessage);
-            else {
-                game._pending_message = '';
-                game._message_more = 0;
-            }
-            game._command_mode = null;
-            game._throw_item_letter = null;
-            clearThrowCountState();
-            game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-            game.context.move = 0;
-            return;
-        }
-        const attachedBallThrow = heroThrownAttachedBallObject(item);
-        const ordinaryAirRecoilResult = !boomerangFlight.handled && ordinaryAirRecoilRange > 0
-            ? attachedBallThrow
-                ? heroHorizontalThrowRecoilResultFromMessages(['You feel a tug from the iron ball.'])
-                : heroHorizontalThrowRecoilResult(dir, ordinaryAirRecoilRange)
-            : null;
-        const ordinaryAirRecoilMessage = ordinaryAirRecoilResult?.message || '';
-        const ordinaryAirRecoilMore = !!ordinaryAirRecoilResult?.more;
-        const ordinaryAirRecoilTrapResult = ordinaryAirRecoilResult?.trapResult || null;
-        const applyOrdinaryAirRecoilTrapResult = () => {
-            if (!ordinaryAirRecoilTrapResult?.lifeSaving && !ordinaryAirRecoilTrapResult?.fatal) return false;
-            return applyLifeSavingOrFatalCommandMode(ordinaryAirRecoilTrapResult);
-        };
-        if (directProjectileVolley) {
-            const impactMessages = [];
-            const landingMessages = [];
-            const newsymTargets = [];
-            let projectileImpactMore = false;
-            for (let shot = 0; shot < directMultishotCount; shot++) {
-                const shotId = itemQuantity - shot > 1 ? next_ident() : item.id;
-                const splitShot = shotId !== item.id;
-                const projectileObject = {
-                    ...item,
-                    letter: undefined,
-                    line: undefined,
-                    wielded: false,
-                    worn: false,
-                    quivered: false,
-                    id: shotId,
-                    o_id: splitShot ? undefined : item.o_id,
-                    _shopBillObjectId: splitShot ? undefined : item._shopBillObjectId,
-                    quan: 1,
-                    glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
-                    color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-                };
-                const flight = heroFireProjectileFlightResult(ux, uy, dir, throwRange, projectileObject, { ironBars: true });
-                ox = flight.ox;
-                oy = flight.oy;
-                targetMon = flight.targetMon;
-                projectileObject.ox = ox;
-                projectileObject.oy = oy;
-                if (itemQuantity - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
-                const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, flight, impactMessages);
-                const impact = !barsResult.handled && targetMon
-                    ? await heroFireProjectileMonsterImpact(projectileObject, targetMon, throwLauncher, directLauncherAmmo)
-                    : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
-                if (impact.handled) impactMessages.push(...impact.messages);
-                if (impact.more) projectileImpactMore = true;
-                if (targetMon) newsymTargets.push(targetMon);
-                if (!impact.consumed && !barsResult.broke) {
-                    const breakRoll = !impact.hit && !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
-                    const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
-                        breakRoll,
-                        ohit: impact.hit,
-                        passiveTarget: impact.passiveTarget,
-                    });
-                    landingMessages.push(...landing.messages);
-                }
-            }
-            for (const mon of newsymTargets) newsym(mon.mx, mon.my);
-            const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
-            removeInventoryItem(item, directMultishotCount);
-            if (wasBurdened) {
-                let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
-                for (const invItem of game.inventory || []) {
-                    if (isGoldObject(invItem)) continue;
-                    const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
-                    const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
-                        : invItem.otyp === SCROLL_CLASS ? 'scroll'
-                            : invItem.otyp === POTION_CLASS ? 'potion'
-                                : invItem.otyp === WAND_CLASS ? 'wand'
-                                    : invItem.otyp === GEM_CLASS ? 'gem' : '');
-                    carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
-                }
-                const stats = game.u?.acurr?.a || [];
-                const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
-                if (carriedWeight <= capacity) {
-                    game._topline_after_more = 'Your movements are now unencumbered.';
-                    game._unburden_after_topline_more = 1;
-                }
-            }
-            const volleyName = heroProjectileVolleyName(item, directMultishotCount);
-            const impactMessage = impactMessages.join('  ');
-            const landingMessage = landingMessages.join('  ');
-            const message = [`You ${directLauncherAmmo ? 'shoot' : 'throw'} ${directMultishotCount} ${volleyName}.`, ordinaryAirRecoilMessage, impactMessage]
-                .filter(Boolean).join('  ');
-            if (landingMessage) game._queued_message_after_more = landingMessage;
-            await setMessage(message, !!landingMessage || ordinaryAirRecoilMore || projectileImpactMore);
-            game._command_mode = null;
-            game._throw_item_letter = null;
-            clearThrowCountState();
-            game._resume_time_after_more = 0;
-            if (applyOrdinaryAirRecoilTrapResult()) return;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-            game.context.move = 0;
-            return;
-        }
-        let thrownId = null;
-        if (itemQuantity > 1) {
-            thrownId = next_ident(); // C splitobj: nextoid()/next_ident() for the thrown unit.
-        }
-        const thrownObject = attachedBallThrow ? item : {
-            ...item,
-            id: thrownId ?? item.id,
-        };
-        Object.assign(thrownObject, {
-            letter: undefined,
-            line: undefined,
-            wielded: false,
-            worn: false,
-            quivered: false,
-            ox,
-            oy,
-            quan: 1,
-            glyph: item.cls === 'food' ? '%' : item.glyph || (item.cls === 'gem' ? '*' : ')'),
-            color: item.cls === 'food' ? CLR_ORANGE : item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-        });
-        const combatObject = item.cls === 'weapon' || item.cls === 'gem' || item.glyph === ')' || item.otyp === GEM_CLASS;
-        let impactMessage = flightImpactMessage;
-        let impactConsumedThrownObject = false;
-        let impactObjectHit = false;
-        let impactPassiveTarget = null;
-        let boomerangSelfHitResult = null;
-        let projectileImpactMore = false;
-        if (ironBarsImpact) {
-            const barsImpact = await heroThrownIronBarsImpact(thrownObject, ironBarsImpact);
-            if (barsImpact.broke) {
-                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-                markThrownBrokenObjectDebt(thrownObject);
-                stopCarriedFigurineTimerOnLeave(thrownObject);
-                removeInventoryItem(item, 1);
-                newsym(ironBarsImpact.x, ironBarsImpact.y);
-                if (directShotLimit > 0)
-                    barsImpact.messages.unshift(`You ${directLauncherAmmo ? 'shoot' : 'throw'} 1 ${heroProjectileVolleyName(item, 1)}.`);
-                prependHeroHorizontalThrowRecoilMessage(barsImpact.messages, ordinaryAirRecoilMessage);
-                await setMessage(barsImpact.messages.join('  '), ordinaryAirRecoilMore);
-                game._command_mode = null;
-                game._throw_item_letter = null;
-                clearThrowCountState();
-                game._resume_time_after_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                game.context.move = 0;
-                if (applyOrdinaryAirRecoilTrapResult()) return;
-                return;
-            }
-            impactMessage = barsImpact.messages.join('  ');
-        }
-        if (boomerangFlight.failedCatch) {
-            boomerangSelfHitResult = heroThrownBoomerangSelfHitResult(thrownObject);
-            impactMessage = [impactMessage, ...(boomerangSelfHitResult.messages || [])].filter(Boolean).join('  ');
-        } else if (targetMon && isCreamPieObject(item)) {
-            rnd(20);
-            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-            if (dex > rnd(25)) {
-                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-                const messages = heroThrownCreamPieHitMonster(thrownObject, targetMon);
-                removeInventoryItem(item, 1);
-                newsym(targetMon.mx, targetMon.my);
-                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '), ordinaryAirRecoilMore);
-                game._command_mode = null;
-                game._throw_item_letter = null;
-                game._resume_time_after_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                game.context.move = 0;
-                if (applyOrdinaryAirRecoilTrapResult()) return;
-                return;
-            }
-            const messages = [heroProjectileMissMessage('cream pie', targetMon)];
-            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
-            impactMessage = messages.join('  ');
-        } else if (targetMon && isEggItem(item)) {
-            rnd(20);
-            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-            if (dex > rnd(25)) {
-                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-                const messages = heroThrownEggHitMonster(thrownObject, targetMon);
-                removeInventoryItem(item, 1);
-                newsym(targetMon.mx, targetMon.my);
-                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '), !!messages.more || ordinaryAirRecoilMore);
-                game._throw_item_letter = null;
-                game._resume_time_after_more = 0;
-                game.context.move = 0;
-                if (applyLifeSavingOrFatalCommandMode(messages)) return;
-                game._command_mode = null;
-                if (applyOrdinaryAirRecoilTrapResult()) return;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                return;
-            }
-            const thrownName = pickupObjectName({ ...item, quan: 1 });
-            const messages = [heroProjectileMissMessage(thrownName, targetMon)];
-            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
-            impactMessage = messages.join('  ');
-        } else if (targetMon && supportsHeroThrownPotionHit(item, targetMon)) {
-            rnd(20);
-            const dex = game.u?.acurr?.a?.[A_DEX] ?? 10;
-            if (dex > rnd(25)) {
-                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-                const messages = heroThrownPotionHitMonster(thrownObject, targetMon, { allowLifeSaving: true });
-                removeInventoryItem(item, 1);
-                newsym(targetMon.mx, targetMon.my);
-                const keepPotionCallPrompt = game._command_mode === 'callPotionAfterMore';
-                prependHeroHorizontalThrowRecoilMessage(messages, ordinaryAirRecoilMessage);
-                await setMessage(messages.join('  '), keepPotionCallPrompt || !!messages.more || ordinaryAirRecoilMore);
-                game._throw_item_letter = null;
-                game._resume_time_after_more = 0;
-                game.context.move = 0;
-                if (messages.lifeSaving) {
-                    game._command_mode = 'lifeSavingMore';
-                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                    return;
-                }
-                if (messages.fatal) {
-                    game._command_mode = 'deathDieMore';
-                    game._pending_time_passed = 0;
-                    game._process_command_time_now = 0;
-                    game._run_steps_remaining = 0;
-                    prepareDeathBones();
-                    return;
-                }
-                if (!keepPotionCallPrompt) game._command_mode = null;
-                if (applyOrdinaryAirRecoilTrapResult()) return;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                return;
-            }
-            const thrownName = pickupObjectName({ ...item, quan: 1 });
-            const messages = [heroProjectileMissMessage(thrownName, targetMon)];
-            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
-            impactMessage = messages.join('  ');
-        } else if (targetMon && heroLauncherAmmoData(item) && heroThrowAmmoAndLauncher(item, throwLauncher)) {
-            const ammoImpact = await heroFiredLauncherAmmoImpact(thrownObject, targetMon, throwLauncher);
-            impactMessage = (ammoImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!ammoImpact.mulched;
-            impactObjectHit = !!ammoImpact.hit;
-            impactPassiveTarget = ammoImpact.hit ? targetMon : null;
-            if (ammoImpact.more) projectileImpactMore = true;
-        } else if (targetMon && heroThrownMonsterIsUnicorn(targetMon) && heroThrownUnicornGemKind(item)) {
-            const unicornImpact = heroThrownUnicornGemImpact(thrownObject, targetMon);
-            impactMessage = (unicornImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!unicornImpact.consumed;
-            if (unicornImpact.more) projectileImpactMore = true;
-        } else if (targetMon && heroThrownStoneMissileHarmlessRockPasser(item, targetMon)) {
-            const hitValue = heroThrownGemHitValue(thrownObject, targetMon);
-            const dieroll = rnd(20);
-            const thrownName = floorObjectTheSubject(thrownObject);
-            const targetName = heroThrownVenomTargetName(targetMon);
-            if (hitValue >= dieroll) {
-                wakeMonsterFromHeroThrownHit(targetMon);
-                exerciseHeroProjectileHitDexterity();
-                impactMessage = `${thrownName} hits ${targetName} but does no harm.`;
-                impactObjectHit = true;
-                impactPassiveTarget = targetMon;
-            } else {
-                const messages = [heroProjectileMissMessage(item, targetMon)];
-                messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
-                impactMessage = messages.join('  ');
-            }
-        } else if (targetMon && heroThrownGemClassObject(item)) {
-            const gemImpact = await heroThrownGemImpact(thrownObject, targetMon);
-            impactMessage = (gemImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!gemImpact.mulched;
-            impactObjectHit = !!gemImpact.hit;
-            impactPassiveTarget = gemImpact.hit ? targetMon : null;
-            if (gemImpact.more) projectileImpactMore = true;
-        } else if (targetMon && heroThrownByHandAmmoObject(item, throwLauncher)) {
-            const ammoImpact = await heroThrownByHandAmmoImpact(thrownObject, targetMon, throwLauncher);
-            impactMessage = (ammoImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!ammoImpact.mulched;
-            impactObjectHit = !!ammoImpact.hit;
-            impactPassiveTarget = ammoImpact.hit ? targetMon : null;
-            if (ammoImpact.more) projectileImpactMore = true;
-        } else if (targetMon && heroProjectileSupportedWeaponObject(item)) {
-            const weaponImpact = await heroThrownWeaponImpact(thrownObject, targetMon);
-            impactMessage = (weaponImpact.messages || []).join('  ');
-            impactConsumedThrownObject = !!weaponImpact.mulched;
-            impactObjectHit = !!weaponImpact.hit;
-            impactPassiveTarget = weaponImpact.hit ? targetMon : null;
-            if (weaponImpact.more) projectileImpactMore = true;
-        } else if (targetMon && !combatObject) {
-            rnd(20);
-            const thrownName = pickupObjectName({ ...item, quan: 1 });
-            const targetName = targetMon.data?.name || 'creature';
-            const messages = [`The ${thrownName} misses the ${targetName}.`];
-            messages.push(...wakeMonsterFromHeroThrownMiss(targetMon));
-            impactMessage = messages.join('  ');
-        }
-        if (boomerangPreRecoilMessage && boomerangFlight.handled
-            && !impactMessage.includes(boomerangPreRecoilMessage))
-            impactMessage = [boomerangPreRecoilMessage, impactMessage].filter(Boolean).join('  ');
-        if (ordinaryAirRecoilMessage)
-            impactMessage = [ordinaryAirRecoilMessage, impactMessage].filter(Boolean).join('  ');
-        if (impactConsumedThrownObject) {
-            if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-            stopCarriedFigurineTimerOnLeave(thrownObject);
-            removeInventoryItem(item, 1);
-            newsym(targetMon.mx, targetMon.my);
-            await setMessage(impactMessage, ordinaryAirRecoilMore || projectileImpactMore);
-            game._command_mode = null;
-            game._throw_item_letter = null;
-            game._resume_time_after_more = 0;
-            game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-            game.context.move = 0;
-            if (applyOrdinaryAirRecoilTrapResult()) return;
-            return;
-        }
-        if (returningObjectThrow) {
-            const returnMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns to your hand!`;
-            const failMessage = `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} fails to return!`;
-            if (rn2(100)) {
-                if (!heroIsConfused() && !heroIsStunned() && !heroIsBlind()
-                    && !heroIsHallucinating() && !heroIsFumbling() && rn2(100)) {
-                    item.wielded = true;
-                    item.alternate = false;
-                    item.quivered = false;
-                    if (!/\b(?:weapon|wielded) in (?:right hand|hands)\b/.test(String(item.line || '')))
-                        item.line = normalInventoryLine({ ...item, line: '' });
-                    newsym(ox, oy);
-                    await setMessage([impactMessage, returnMessage].filter(Boolean).join('  '), ordinaryAirRecoilMore || projectileImpactMore);
-                    game._command_mode = null;
-                    game._throw_item_letter = null;
-                    clearThrowCountState();
-                    game._resume_time_after_more = 0;
-                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                    game.context.move = 0;
-                    if (applyOrdinaryAirRecoilTrapResult()) return;
-                    return;
-                }
-                const armHit = !!rn2(2);
-                const badCatchMessage = armHit
-                    ? `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} flies back toward you, hitting your arm!`
-                    : `${floorObjectTheSubject({ ...thrownObject, quan: 1 })} returns back to you, landing at your feet.`;
-                if (armHit) {
-                    const damage = 1 + rnd(3);
-                    if (game.u) game.u.uhp = Math.max(0, (game.u.uhp || 0) - damage);
-                }
-                curseLoadstoneLeavingInventory(thrownObject);
-                if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-                stopCarriedFigurineTimerOnLeave(thrownObject);
-                const landing = landProjectileObjectWithShopHandling(thrownObject, ux, uy, { skipTopBreak: true });
-                const landingMessage = landing.messages.join('  ');
-                newsym(ux, uy);
-                removeInventoryItem(item);
-                await setMessage([impactMessage, badCatchMessage, landingMessage].filter(Boolean).join('  '),
-                    !!landingMessage || ordinaryAirRecoilMore || projectileImpactMore);
-                game._command_mode = null;
-                game._throw_item_letter = null;
-                clearThrowCountState();
-                game._resume_time_after_more = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-                game.context.move = 0;
-                if (applyOrdinaryAirRecoilTrapResult()) return;
-                return;
-            }
-            impactMessage = [impactMessage, failMessage].filter(Boolean).join('  ');
-        }
-        const projectileBreakRoll = !impactObjectHit && !projectileLandingIsSoft(ox, oy)
-            ? rn2(100) // C breaktest: obj_resists() on hard landing.
-            : null;
-        curseLoadstoneLeavingInventory(thrownObject);
-        if ((item.quan || 1) > 1) splitCarriedObjectShopBill(item, thrownObject, 1);
-        stopCarriedFigurineTimerOnLeave(thrownObject);
-        const landing = isHeroThrownCrackableArmorObject(thrownObject) && !impactObjectHit
-            ? (() => {
-                const messages = [];
-                const object = landHeroThrownCrackableArmorAt(thrownObject, ox, oy, messages, { breakRoll: projectileBreakRoll });
-                return { object, messages };
-            })()
-            : landProjectileObjectWithShopHandling(thrownObject, ox, oy, {
-                breakRoll: projectileBreakRoll,
-                ohit: impactObjectHit,
-                passiveTarget: impactPassiveTarget,
-            });
-        let attachedBallLandingMore = false;
-        let attachedBallTrapResult = null;
-        if (attachedBallThrow && landing.object) {
-            const attachedDrop = await heroDropAttachedBallAfterThrow(landing.object, ox, oy, dir);
-            landing.messages.push(...attachedDrop.messages);
-            attachedBallLandingMore = !!attachedDrop.more;
-            attachedBallTrapResult = attachedDrop.trapResult;
-        }
-        const landingMessage = landing.messages.join('  ');
-        newsym(ox, oy);
-        const wasBurdened = (game.u?._statusSuffix || '').includes('Burdened');
-        removeInventoryItem(item);
-        if (wasBurdened) {
-            let carriedWeight = Math.trunc(((game._goldCount || 0) + 50) / 100);
-            for (const invItem of game.inventory || []) {
-                if (isGoldObject(invItem)) continue;
-                const kind = String(invItem.kind || invItem.actualKind || invItem.spellName || invItem.spell?.name || '').toLowerCase();
-                const cls = invItem.cls || (invItem.otyp === RING_CLASS ? 'ring'
-                    : invItem.otyp === SCROLL_CLASS ? 'scroll'
-                        : invItem.otyp === POTION_CLASS ? 'potion'
-                            : invItem.otyp === WAND_CLASS ? 'wand'
-                                : invItem.otyp === GEM_CLASS ? 'gem' : '');
-                carriedWeight += (OBJECT_WEIGHTS[kind] ?? CLASS_WEIGHTS[cls] ?? invItem.owt ?? 0) * (invItem.quan || 1);
-            }
-            const stats = game.u?.acurr?.a || [];
-            const capacity = Math.min(1000, 25 * ((stats[0] ?? 10) + (stats[4] ?? 10)) + 50);
-            if (carriedWeight <= capacity) {
-                game._topline_after_more = 'Your movements are now unencumbered.';
-                game._unburden_after_topline_more = 1;
-            }
-        }
-        if (throwNoLauncherMessage) {
-            const followUpMessage = [impactMessage, landingMessage].filter(Boolean).join('  ');
-            if (followUpMessage) game._queued_message_after_more = followUpMessage;
-            if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
-            await setMessage(throwNoLauncherMessage, !!followUpMessage || ordinaryAirRecoilMore || projectileImpactMore);
-        }
-        else if (impactMessage) {
-            if (landingMessage) game._queued_message_after_more = landingMessage;
-            if (attachedBallLandingMore) game._queued_message_more_after_more = 1;
-            await setMessage(impactMessage, true);
-        }
-        else if (landingMessage) await setMessage(landingMessage, attachedBallLandingMore || ordinaryAirRecoilMore);
-        else {
-            game._pending_message = '';
-            game._message_more = 0;
-        }
-        game._command_mode = null;
-        game._throw_item_letter = null;
-        clearThrowCountState();
-        game._resume_time_after_more = 0;
-        if (boomerangSelfHitResult?.lifeSaving || boomerangSelfHitResult?.fatal) {
-            if (applyLifeSavingOrFatalCommandMode(boomerangSelfHitResult)) return;
-        }
-        if (attachedBallTrapResult?.lifeSaving || attachedBallTrapResult?.fatal) {
-            if (applyLifeSavingOrFatalCommandMode(attachedBallTrapResult)) return;
-        }
-        if (applyOrdinaryAirRecoilTrapResult()) return;
-        game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
-        game.context.move = 0;
+        await beginHeroHorizontalThrow(item, dir);
         return;
     }
 

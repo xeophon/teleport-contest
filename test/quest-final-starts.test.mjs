@@ -103,7 +103,7 @@ test('warhorse inventory callbacks wear a selected saddle and leave unsaddleable
         const state={area:{lx:1,ly:0,hx:79,hy:20},map:new Set(),variables:new Map(),levregions:[]};
         await __mklevTestHooks.questFillerOperations(parseQuestLua(`des.monster({id="${species}",coord={10,10},inventory=function() des.object("saddle") end})`),state);
         const mon=g.level.monsters[0],saddle=mon.minvent[0];assert.equal(saddle.kind,'saddle');assert.equal(saddle.ocarry,mon);
-        assert.equal(saddle.owornmask||0,species==='warhorse'?W_SADDLE:0);assert.equal(saddle.owt,150);
+        assert.equal(saddle.owornmask||0,species==='warhorse'?W_SADDLE:0);assert.equal(saddle.owt,200);
     }
 });
 

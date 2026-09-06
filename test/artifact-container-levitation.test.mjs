@@ -79,6 +79,13 @@ for(const ice of [false,true]) {
         await rhack('\r');
         while(game._command_mode==='containerSaleMore')await rhack(' ');
         assert.equal(game._command_mode,'shopSaleConfirm');
+        assert.equal(game._shop_sale_pending.after.object,item);
+        assert.equal(box.contents.length,0);
+        assert.equal(game.inventory.includes(blade),true);
+        assert.ok(item.age>100,'Heart sale precedes ice age conversion');
+        await rhack('n');
+        while(game._command_mode==='containerSaleMore')await rhack(' ');
+        assert.equal(game._shop_sale_pending.after.object,blade);
         assert.equal(game.inventory.includes(blade),false); assert.equal(box.contents[0],item);
         assert.equal(game.u.levitating,false);
         const age=item.age; while(game._message_more) await rhack(' ');

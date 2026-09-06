@@ -45,7 +45,7 @@ import { COLNO, ROWNO, A_CHA, A_CON, A_DEX, A_INT, A_MAX, A_STR, A_WIS, ALTAR, G
 import { CLR_BROWN, CLR_CYAN, CLR_MAGENTA, CLR_RED, CLR_WHITE, CLR_YELLOW, NO_COLOR } from './terminal.js';
 import { advanceVaultGuard, prepareVaultGuardEscort, restVaultFakecorr } from './vault.js';
 import { DISPLAY_MONSTER_GLYPHS, DISPLAY_MONSTER_HALLU_NAMES, GIANT_M2_MONSTERS } from './monster_data.js';
-import { MONS, MZ_SMALL, MZ_MEDIUM, MZ_GIGANTIC, carnivorous, herbivorous, is_animal, mindless, tunnels, needspick, nohands, verysmall, MS_ANIMAL, MS_HUMANOID, AD_MAGM, AD_RBRE, PM_BABY_GRAY_DRAGON } from './permonst.js';
+import { MONS, MZ_SMALL, MZ_MEDIUM, MZ_GIGANTIC, strongmonst, throws_rocks, carnivorous, herbivorous, is_animal, mindless, tunnels, needspick, nohands, verysmall, MS_ANIMAL, MS_HUMANOID, AD_MAGM, AD_RBRE, PM_BABY_GRAY_DRAGON } from './permonst.js';
 import { pmOf as monsterSpecies } from './mhitm.js';
 import { W_ARMS, MSLOW, MFAST } from './const.js';
 import { clearMonsterTrack, updateMonsterTrack } from './montrack.js';
@@ -12990,6 +12990,23 @@ function monsterPickupClass(obj) {
     return obj.otyp;
 }
 
+// mon.c:curr_mon_load/max_mon_load. Equipment contributes to weight even
+// when droppables() keeps it, and species strength determines capacity.
+function monsterCarryingLoad(mon) {
+    const data = mon.data || {};
+    const species = monsterSpecies(mon);
+    const weight = species?.weight ?? data.cwt ?? MONSTER_BODY_WEIGHTS.get(data.name) ?? 1450;
+    const strong = species ? strongmonst(species) : !!data.strong;
+    let maximum = !weight ? Math.trunc(1000 * (species?.size ?? data.msize ?? MZ_MEDIUM) / MZ_MEDIUM)
+        : !strong || weight > 1450 ? Math.trunc(1000 * weight / 1450) : 1000;
+    if (!strong) maximum = Math.trunc(maximum / 2);
+    const throwsBoulders = species ? throws_rocks(species) : !!data.throwsRocks;
+    let current = 0;
+    for (const obj of mon.minvent || [])
+        if (obj.otyp !== BOULDER || !throwsBoulders) current += objectWeight(obj);
+    return { current, maximum: Math.max(maximum, 1) };
+}
+
 function monsterWouldTakeItem(mon, obj) {
     if (!obj || obj.transientProjectile) return false;
     const cubeWantsObject = isGelatinousCube(mon) && !gelatinousCubeUntouchableObject(mon, obj);
@@ -13000,13 +13017,7 @@ function monsterWouldTakeItem(mon, obj) {
 
     const cls = monsterPickupClass(obj);
     const data = mon.data || {};
-    const bodyWeight = data.cwt ?? MONSTER_BODY_WEIGHTS.get(data.name) ?? 1450;
-    let maxLoad = (!data.strong || bodyWeight > 1450)
-        ? Math.trunc((1000 * bodyWeight) / 1450)
-        : 1000;
-    if (!data.strong) maxLoad = Math.trunc(maxLoad / 2);
-    let currentLoad = 0;
-    for (const held of mon.minvent || []) currentLoad += objectWeight(held);
+    const { current: currentLoad, maximum: maxLoad } = monsterCarryingLoad(mon);
     const pctLoad = Math.trunc((currentLoad * 100) / Math.max(maxLoad, 1));
     if (!mon.isshk && currentLoad + objectWeight(obj) > Math.max(maxLoad, 1)) return false;
     if (cubeWantsObject) return true;
@@ -16539,16 +16550,8 @@ async function movePet(mon, resumeAfterInventory = false, conflictActive = false
             addMonsterConsumeMessages(consumeMessages);
             return;
         }
-        const petBodyWeight = mon.data?.cwt ?? MONSTER_BODY_WEIGHTS.get(mon.data?.name) ?? 1450;
         const hereWeight = objectWeight(hereObj);
-        let petLoad = 0;
-        for (const held of mon.minvent || []) {
-            petLoad += objectWeight(held);
-        }
-        let maxLoad = (!mon.data?.strong || petBodyWeight > 1450)
-            ? Math.trunc((1000 * petBodyWeight) / 1450)
-            : 1000;
-        if (!mon.data?.strong) maxLoad = Math.trunc(maxLoad / 2);
+        const { current: petLoad, maximum: maxLoad } = monsterCarryingLoad(mon);
         const unresolvedHereObject = hereObj.otyp === WEAPON_CLASS && !hereObj.cls && !hereObj.kind;
         let carryAmount = 0;
         if (!unresolvedHereObject
@@ -16665,20 +16668,12 @@ async function movePet(mon, resumeAfterInventory = false, conflictActive = false
                 goal = { x: obj.ox, y: obj.oy };
                 gtyp = food;
             }
-        } else if (gtyp === UNDEF && !(mon.minvent?.length) && inMastersSight
+        } else if (gtyp === UNDEF && !petDroppable(mon) && inMastersSight
                    && (!(game.level?.at(mon.mx, mon.my)?.lit) || game.level?.at(ux, uy)?.lit)) {
             const unresolvedObject = obj.otyp === WEAPON_CLASS && !obj.cls && !obj.kind
                 || game.level?.flags?.sokoban_rules && typeof obj.otyp === 'string' && obj.otyp.startsWith('soko-random-');
-            const petBodyWeight = mon.data?.cwt ?? MONSTER_BODY_WEIGHTS.get(mon.data?.name) ?? 1450;
             const targetWeight = objectWeight(obj);
-            let petLoad = 0;
-            for (const held of mon.minvent || []) {
-                petLoad += objectWeight(held);
-            }
-            let maxLoad = (!mon.data?.strong || petBodyWeight > 1450)
-                ? Math.trunc((1000 * petBodyWeight) / 1450)
-                : 1000;
-            if (!mon.data?.strong) maxLoad = Math.trunc(maxLoad / 2);
+            const { current: petLoad, maximum: maxLoad } = monsterCarryingLoad(mon);
             let carryAmount = 0;
             if (!unresolvedObject && obj.otyp !== LARGE_BOX && obj.otyp !== CHEST) {
                 const noHandsStack = mon.data?.nohands && (obj.quan || 1) > 1;
@@ -16700,7 +16695,7 @@ async function movePet(mon, resumeAfterInventory = false, conflictActive = false
         if (udist > 1) {
             // C ref: dogmove.c:573-576 — the apport fallback only rolls for a
             // pet carrying DROPPABLES (worn gear like a saddle doesn't count).
-            const dogHasMinvent = (mon.minvent || []).some(o => !(o.owornmask || o.worn));
+            const dogHasMinvent = !!petDroppable(mon);
             if (!IS_ROOM(heroLoc?.typ ?? 0) || !rn2(4) || whappr || (dogHasMinvent && rn2(edog.apport || 3))) appr = 1;
         }
         if (!appr) {
@@ -18474,7 +18469,6 @@ export async function moveloop_core() {
             g._prayer_pending_done = 0;
             g._prayer_occupation = 0;
             if (g.u) g.u.uinvulnerable = false;
-            g.u.umovement = NORMAL_SPEED;
             if (finishSplitPrayer) {
                 const finishMessage = 'You finish your prayer.';
                 if (g._message_more && g._topline_after_more) {

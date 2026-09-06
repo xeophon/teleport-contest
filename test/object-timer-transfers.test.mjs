@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM, STONE, IRONBARS, W_WEP, W_QUIVER, LANDMINE, LAVAPOOL, LADDER, HOLE, POOL, LEVITATION, W_ARTI } from '../js/const.js';
+import { ROOM, STONE, IRONBARS, W_WEP, W_SWAPWEP, W_QUIVER, LANDMINE, LAVAPOOL, LADDER, HOLE, POOL, LEVITATION, W_ARTI } from '../js/const.js';
 import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
 import { rhack, holdCaughtThrownObject, landMonsterThrownObject, earthFloorEffects, queueImpactDroppedObjects,
@@ -908,4 +908,213 @@ test('firing completes the bars impact before recoil collision damage', async ()
     assert.equal(collision > bars, true);
     assert.equal(game.level.objects[0], lamp);
     assert.equal(peekTimer(BURN_OBJECT, lamp), burnDeadline);
+});
+
+for (const kind of ['oil lamp', 'corpse']) {
+    for (const quantity of [1, 3]) {
+        test(`horizontal throw preserves ${kind} identity and timers from quantity ${quantity}`, async () => {
+            setup();
+            const object = { id: 60, kind, cls: kind === 'corpse' ? 'food' : 'tool', letter: 'a',
+                quan: quantity, age: 1, wielded: true, owornmask: W_WEP };
+            if (kind === 'corpse') object.corpsenm = monsterByRndName('newt');
+            game.inventory.push(object); game.u.uwep = object;
+            if (kind === 'corpse') startTimer(100, TIMER_OBJECT, ROT_CORPSE, object);
+            else beginBurn(object);
+            await rhack('t'); await rhack('a'); await rhack('l');
+            const landed = game.level.objects.find(item => item.kind === kind);
+            assert.ok(landed);
+            assert.equal(landed.quan, 1);
+            assert.equal(landed.owornmask, 0);
+            assert.equal(peekTimer(kind === 'corpse' ? ROT_CORPSE : BURN_OBJECT, landed), kind === 'corpse' ? 200 : 101);
+            if (quantity === 1) {
+                assert.equal(landed, object);
+                assert.equal(game.u.uwep, null);
+            } else {
+                assert.equal(object.quan, 2);
+                assert.equal(game.u.uwep, object);
+                assert.equal(object.wielded, true);
+                assert.equal(peekTimer(kind === 'corpse' ? ROT_CORPSE : BURN_OBJECT, object), kind === 'corpse' ? 200 : 101);
+            }
+        });
+    }
+}
+
+test('horizontal candle throw splits timers and snuffs only the detached candle', async () => {
+    setup();
+    const candles = { kind: 'tallow candle', cls: 'tool', otyp: 370, letter: 'a', quan: 3,
+        age: 100, wielded: true, owornmask: W_WEP };
+    game.inventory.push(candles); game.u.uwep = candles; beginBurn(candles);
+    await rhack('t'); await rhack('a'); await rhack('l');
+    const landed = game.level.objects.find(object => object.kind === 'tallow candle');
+    assert.ok(landed);
+    assert.equal(landed.lamplit, false);
+    assert.equal(landed.age, 100);
+    assert.equal(landed.timed, 0);
+    assert.equal(candles.quan, 2);
+    assert.equal(candles.lamplit, true);
+    assert.equal(peekTimer(BURN_OBJECT, candles), 125);
+});
+
+test('horizontal soft landing preserves the split fertile egg timer', async () => {
+    setup();
+    for (let x = 11; x < 30; x++) game.level.at(x, 10).typ = POOL;
+    const eggs = { kind: 'egg', cls: 'food', otyp: 10001, letter: 'a', quan: 3 };
+    game.inventory.push(eggs); attachEggHatchTimeout(eggs, 100);
+    await rhack('t'); await rhack('a'); await rhack('l');
+    const landed = game.level.objects.find(object => object.kind === 'egg');
+    assert.ok(landed);
+    assert.equal(peekTimer(HATCH_EGG, landed), 200);
+    assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+    assert.equal(eggs.quan, 2);
+});
+
+test('throwing all gold moves the actual coin object and clears its quiver slot', async () => {
+    setup();
+    const gold = { kind: 'gold piece', cls: 'coin', glyph: '$', letter: '$', quan: 10, quivered: true, owornmask: W_QUIVER };
+    game.inventory.push(gold); game.u.uquiver = gold; game._goldCount = 10;
+    await rhack('t'); await rhack('$'); await rhack('l');
+    assert.equal(game.level.objects[0], gold);
+    assert.equal(gold.quan, 10);
+    assert.equal(gold.owornmask, 0);
+    assert.equal(game.u.uquiver, null);
+    assert.equal(game._goldCount, 0);
+});
+
+test('a failed aklys return lands the actual detached weapon', async () => {
+    setup();
+    const raw = Array(100).fill(0n);
+    game.coreCtx = { n: raw.length, r: raw, m: [], a: 0n, b: 0n, c: 0n };
+    game.rng = { ...(game.rng || {}), core: game.coreCtx };
+    const aklys = { id: 61, kind: 'aklys', cls: 'weapon', glyph: ')', letter: 'a', quan: 1,
+        wielded: true, owornmask: W_WEP };
+    game.inventory.push(aklys); game.u.uwep = aklys;
+    await rhack('t'); await rhack('a'); await rhack('l');
+    assert.match(game._pending_message, /fails to return/);
+    assert.equal(game.level.objects[0], aklys);
+    assert.equal(game.u.uwep, null);
+    assert.equal(aklys.wielded, false);
+});
+
+test('boomerang recoil life saving retains a detached projectile across save and restore', async () => {
+    setup();
+    const raw = [2n, ...Array(100).fill(0n)];
+    game.coreCtx = { n: raw.length, r: raw.reverse(), m: [], a: 0n, b: 0n, c: 0n };
+    game.rng = { ...(game.rng || {}), core: game.coreCtx };
+    Object.assign(game.u, { levitating: true, uhp: 3, uhpmax: 20 });
+    game.u.acurr.a[3] = 25;
+    game.level.at(9, 10).typ = STONE;
+    const amulet = { id: 62, kind: 'amulet of life saving', cls: 'amulet', letter: 'a', worn: true, quan: 1 };
+    let boomerang = { id: 63, kind: 'boomerang', cls: 'weapon', glyph: ')', letter: 'b',
+        quan: 1, wielded: true, owornmask: W_WEP };
+    const offhand = { id: 69, kind: 'dagger', cls: 'weapon', glyph: ')', letter: 'c',
+        quan: 1, alternate: true, owornmask: W_SWAPWEP };
+    game.inventory.push(amulet, boomerang, offhand); game.u.uwep = boomerang;
+    game.u.uswapwep = offhand; game.u.twoweap = true;
+    await rhack('t'); await rhack('b'); await rhack('l');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.inventory.includes(boomerang), false);
+    assert.equal(game.u.uwep, null);
+    assert.equal(game.u.twoweap, false);
+    assert.equal(game._life_saving_boomerang_pre_recoil.after.object, boomerang);
+    const saved = encodeSaveState(); resetGame(); restoreSaveState(saved); initRng(1);
+    boomerang = game._life_saving_boomerang_pre_recoil.after.object;
+    await rhack(' ');
+    assert.match(game._pending_message, /skillfully catch/);
+    assert.equal(game.inventory.includes(boomerang), true);
+    assert.equal(game.u.uwep, boomerang);
+    assert.equal(boomerang.owornmask, W_WEP);
+    assert.equal(game.u.twoweap, true);
+});
+
+test('horizontal active Heart throw resumes flight from its saved water escape location', async () => {
+    setup(); initRng(31);
+    game._startup_role = 'Barbarian'; game._startup_align = 'neutral';
+    Object.assign(game.u, { ulevel: 12, uhp: 100, uhpmax: 100, uen: 30, uenmax: 30,
+        teleportation: true, teleportControl: true, ualign: { type: 0, record: 10 } });
+    const def = artifactDefinitionForName('The Heart of Ahriman');
+    let heart = { id: 64, artifact: def.name, kind: def.base, cls: def.cls, otyp: def.otyp,
+        glyph: def.glyph, letter: 'a', quan: 1, age: 0, wielded: true, owornmask: W_WEP };
+    game.inventory.push(heart); game.u.uwep = heart;
+    game.u.uprops = { [LEVITATION]: { intrinsic: 0, extrinsic: W_ARTI } };
+    game.u.levitating = game.u.levitation = true;
+    game.level.at(10, 10).typ = POOL;
+    await rhack('t'); await rhack('a'); await rhack('l');
+    assert.equal(game._command_mode, 'waterTeleportCursor');
+    assert.equal(game.inventory.includes(heart), false);
+    assert.equal(game.level.objects.includes(heart), false);
+    assert.equal(game._artifact_float_continuation.after.object, heart);
+    const cooldown = heart.age;
+    const saved = encodeSaveState(); resetGame(); restoreSaveState(saved); initRng(31);
+    heart = game._artifact_float_continuation.after.object;
+    while (game._message_more) await rhack(' ');
+    await rhack('l'); await rhack('.');
+    assert.equal(game.level.objects.includes(heart), true);
+    assert.equal(heart.ox > 11, true);
+    assert.equal(heart.age, cooldown);
+    assert.equal(game.u.uwep, null);
+});
+
+for (const species of ['newt', 'cockatrice', 'pyrolisk']) {
+    test(`horizontal ${species} egg impact cancels only the thrown egg hatch timer`, async () => {
+        setup();
+        game.u.acurr.a[3] = 25;
+        const eggs = { kind: 'egg', cls: 'food', otyp: 10001, letter: 'a', quan: 3,
+            corpsenm: monsterByRndName(species) };
+        const goblin = { mx: 11, my: 10, mhp: 50, mhpmax: 50, data: monsterByRndName('goblin') };
+        game.inventory.push(eggs); game.level.monsters.push(goblin);
+        attachEggHatchTimeout(eggs, 100);
+        await rhack('t'); await rhack('a'); await rhack('l');
+        assert.match(game._pending_message, /hit.*egg/i);
+        assert.equal(game.timers.length, 1);
+        assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+        assert.equal(eggs.quan, 2);
+    });
+}
+
+for (const [flag, slot, mask] of [['wielded', 'uwep', W_WEP], ['alternate', 'uswapwep', W_SWAPWEP], ['quivered', 'uquiver', W_QUIVER]]) {
+    test(`caught boomerang restores its original ${slot} slot and object`, async () => {
+        setup();
+        game.u.acurr.a[3] = 25;
+        const boomerang = { id: 65, kind: 'boomerang', cls: 'weapon', glyph: ')',
+            letter: 'b', quan: 1, [flag]: true, owornmask: mask };
+        const other = { ...boomerang, id: 66, letter: 'a', [flag]: false, owornmask: 0 };
+        game.inventory.push(other, boomerang); game.u[slot] = boomerang;
+        await rhack('t'); await rhack('b'); await rhack('l');
+        assert.match(game._pending_message, /skillfully catch/);
+        assert.deepEqual(game.inventory, [other, boomerang]);
+        assert.equal(game.u[slot], boomerang);
+        assert.equal(boomerang.owornmask, mask);
+        assert.equal(boomerang.letter, 'b');
+    });
+}
+
+test('a caught split boomerang rejoins its source stack before another compatible stack', async () => {
+    setup(); game.u.acurr.a[3] = 25;
+    const other = { id: 67, kind: 'boomerang', cls: 'weapon', glyph: ')', letter: 'a', quan: 2 };
+    const stack = { ...other, id: 68, letter: 'b', quan: 3, wielded: true, owornmask: W_WEP };
+    game.inventory.push(other, stack); game.u.uwep = stack;
+    await rhack('t'); await rhack('b'); await rhack('l');
+    assert.match(game._pending_message, /skillfully catch/);
+    assert.equal(game.inventory.length, 2);
+    assert.equal(other.quan, 2);
+    assert.equal(stack.quan, 3);
+    assert.equal(game.u.uwep, stack);
+});
+
+test('moveloop horizontal throw expires the same landed lamp after one turn', async () => {
+    setup(); resetInputState(); game.u.umovement = 12;
+    const lamp = { kind: 'oil lamp', cls: 'tool', otyp: 227, letter: 'a', quan: 1, age: 1,
+        wielded: true, owornmask: W_WEP };
+    game.inventory.push(lamp); game.u.uwep = lamp; beginBurn(lamp);
+    for (const key of ['t', 'a']) { pushKey(key); await moveloop_core(); }
+    assert.equal(game.moves, 100);
+    pushKey('l'); await moveloop_core();
+    while (game._message_more) await rhack(' ');
+    pushKey('\x1b'); await moveloop_core();
+    assert.equal(game.moves, 101);
+    assert.equal(game.level.objects[0], lamp);
+    assert.equal(game.u.uwep, null);
+    assert.equal(lamp.lamplit, false);
+    assert.equal(lamp.timed, 0);
+    resetInputState();
 });

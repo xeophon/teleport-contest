@@ -6,7 +6,7 @@ import { rhack, __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { artifactDefinitionForName } from '../js/mklev.js';
 import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { ROOM, STONE, POOL, LAVAPOOL, LEVITATION, W_ARTI, W_ART, W_RINGL, I_SPECIAL, TIMEOUT,
-    PIT, STATUE_TRAP, TT_PIT, TT_BEARTRAP } from '../js/const.js';
+    PIT, SPIKED_PIT, WEB, STATUE_TRAP, TT_PIT, TT_BEARTRAP } from '../js/const.js';
 import { vision_reset } from '../js/vision.js';
 import { MONS } from '../js/permonst.js';
 import { moveloop_core } from '../js/allmain.js';
@@ -408,3 +408,80 @@ for(const lava of [false,true]) test(`bag insertion finishes after lethal ${lava
     assert.equal(bag.contents[0],item);
     assert.ok(game.u.uhp>0);
 });
+
+function punishmentObjects() {
+    const ball={id:3,otyp:474,cls:'ball',kind:'heavy iron ball',quan:1,ox:11,oy:10};
+    const chain={id:4,otyp:475,cls:'chain',kind:'iron chain',quan:1,ox:10,oy:11};
+    game.u.uball=ball;game.u.uchain=chain;game.level.objects.push(ball,chain);
+    return{ball,chain};
+}
+
+for(const type of [PIT,SPIKED_PIT]) test(`ending levitation drags hero and chain to punishment ball over trap ${type}`,async()=>{
+    setup();await command('invokeObject');const{ball,chain}=punishmentObjects();
+    game.level.traps.push({tx:11,ty:10,ttyp:type});
+    await command('invokeObject');
+    assert.deepEqual([game.u.ux,game.u.uy],[11,10]);
+    assert.deepEqual([game.u.ux0,game.u.uy0],[10,10]);
+    assert.deepEqual([chain.ox,chain.oy],[ball.ox,ball.oy]);
+    assert.equal(game.u.utraptype,'pit');assert.ok(game.u.utrap>0);
+    assert.doesNotMatch(game._pending_message,/float gently/,'C retains the ball trap and skips ordinary landing text');
+});
+
+for(const condition of ['carried','occupied','solid floor']) test(`${condition} punishment ball does not drag a landing hero`,async()=>{
+    setup();await command('invokeObject');const{ball,chain}=punishmentObjects();
+    if(condition!=='solid floor')game.level.traps.push({tx:11,ty:10,ttyp:PIT});
+    if(condition==='carried'){game.level.objects=game.level.objects.filter(obj=>obj!==ball);game.inventory.push(ball);}
+    if(condition==='occupied')game.level.monsters.push({mx:11,my:10,mhp:5,data:{name:'newt'}});
+    await command('invokeObject');
+    assert.deepEqual([game.u.ux,game.u.uy],[10,10]);assert.deepEqual([chain.ox,chain.oy],[10,11]);
+    assert.equal(game.u.utrap||0,0);assert.match(game._pending_message,/float gently/);
+});
+
+test('C ball-square trap pointer survives failed pit/hole predicate without relocation',async()=>{
+    setup();await command('invokeObject');const{chain}=punishmentObjects();
+    const web={tx:11,ty:10,ttyp:WEB};game.level.traps.push(web);
+    await command('invokeObject');
+    assert.deepEqual([game.u.ux,game.u.uy],[10,10]);assert.deepEqual([chain.ox,chain.oy],[10,11]);
+    assert.equal(game.u.utraptype,'web');assert.ok(web.tseen);
+    assert.doesNotMatch(game._pending_message,/float gently/);
+});
+
+test('ball drags hero into pool before a saved water landing continuation',async()=>{
+    setup();await command('invokeObject');punishmentObjects();game.level.at(11,10).typ=POOL;
+    await command('invokeObject');
+    assert.deepEqual([game.u.ux,game.u.uy],[11,10]);assert.equal(game._command_mode,'waterCrawlMore');
+    assert.deepEqual([game.u.uchain.ox,game.u.uchain.oy],[11,10]);
+    restoreSaveState(encodeSaveState());const ball=game.u.uball,chain=game.u.uchain;
+    assert.ok(game.level.objects.includes(ball));assert.ok(game.level.objects.includes(chain));
+    for(let i=0;i<12&&game._artifact_float_continuation;i++)await rhack(' ');
+    assert.equal(game._artifact_float_continuation,null);assert.notDeepEqual([game.u.ux,game.u.uy],[11,10]);
+});
+
+test('lethal ball-pit landing resumes after life saving without repeating relocation',async()=>{
+    setup();await command('invokeObject');const{chain}=punishmentObjects();game.u.uhp=1;
+    game.inventory.push({letter:'b',cls:'amulet',kind:'amulet of life saving',amuletIndex:1,worn:true,quan:1});
+    game.level.traps.push({tx:11,ty:10,ttyp:PIT});
+    await command('invokeObject');assert.equal(game._command_mode,'lifeSavingMore');
+    assert.deepEqual([game.u.ux,game.u.uy],[11,10]);
+    chain.ox=12;await rhack(' ');
+    assert.equal(game._artifact_float_continuation,null);assert.equal(chain.ox,12);assert.ok(game.u.uhp>0);
+});
+
+for (const otherCover of [false, true]) {
+    test(`moving the chain ${otherCover ? 'preserves another cover over' : 'uncovers'} a hidden snake`, async () => {
+        setup();
+        await command('invokeObject');
+        const { chain } = punishmentObjects();
+        const mon = { data: MONS.find(species => species.name === 'garter snake'),
+            mx: chain.ox, my: chain.oy, mhp: 4, mundetected: true, mcansee: true };
+        game.level.monsters.push(mon);
+        if (otherCover) game.level.objects.push({ kind: 'rock', quan: 1, ox: chain.ox, oy: chain.oy });
+        game.level.traps.push({ tx: 11, ty: 10, ttyp: PIT });
+        const objectsBefore = [...game.level.objects];
+        await command('invokeObject');
+        assert.equal(!!mon.mundetected, otherCover);
+        assert.deepEqual(game.level.objects, [...objectsBefore.filter(obj => obj !== chain), chain],
+            'movobj removes and places the chain on top of the destination pile');
+        assert.deepEqual([chain.ox, chain.oy], [11, 10]);
+    });
+}

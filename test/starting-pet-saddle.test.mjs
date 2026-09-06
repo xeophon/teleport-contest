@@ -25,7 +25,7 @@ test('starting Knight pony owns one identified worn saddle tied to its monster i
     assert.ok(saddle); assert.equal(saddle.kind, 'saddle'); assert.equal(pony.m_id, 900);
     assert.equal(saddle.ocarry, pony); assert.equal(saddle.leashmon, pony.m_id);
     assert.equal(saddle.owornmask, W_SADDLE); assert.equal(pony.misc_worn_check & W_SADDLE, W_SADDLE);
-    assert.equal(saddle.owt, 150); assert.equal(saddle.quan, 1);
+    assert.equal(saddle.owt, 200); assert.equal(saddle.quan, 1);
     for (const field of ['known', 'dknown', 'bknown', 'rknown']) assert.equal(saddle[field], true);
     assert.equal(objectLocations(g).get(saddle).owner, pony); assert.equal(g.level.objects.includes(saddle), false);
     assert.equal(g.context.startingpet_mid, pony.m_id); assert.equal(g.context.startingpet_typ, PM_PONY);

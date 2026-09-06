@@ -79549,9 +79549,9 @@ test('hero-thrown lawful poisoned crossbow bolt can wear off before deadly poiso
     assert.equal(goblin.dead, true);
     assert.equal(game.u.ualign.record, -1);
     assert.equal(game.u.ualign.abuse, 8);
-    assert.equal(missile.opoisoned, true);
+    assert.equal(missile.opoisoned, false); // C uhitm.c:1528 updates the projectile itself.
     const landed = game.level.objects.find(obj => obj.id === missile.id);
-    assert.ok(landed);
+    assert.equal(landed, missile);
     assert.equal(landed.opoisoned, false);
     assert.deepEqual(rngLog.map(rngCallName).slice(0, 7), [
         'rnd(20)', 'rnd(4)', 'rn2(10)', 'rn2(10)', 'rn2(6)', 'rn2(3)', 'rn2(19)',
@@ -86753,9 +86753,9 @@ test('hero-thrown deadly poisoned crossbow bolt uses monster life saving before 
     assert.equal(game.u.uconduct?.killer, 1);
     assert.equal(game.u.uexp, 0);
     assert.equal(game.u.urexp, 0);
-    assert.equal(missile.opoisoned, true);
+    assert.equal(missile.opoisoned, false);
     const landed = game.level.objects.find(obj => obj.id === missile.id);
-    assert.ok(landed);
+    assert.equal(landed, missile);
     assert.equal(landed.opoisoned, false);
     assert.equal(landed.ox, 7);
     assert.equal(landed.oy, 5);

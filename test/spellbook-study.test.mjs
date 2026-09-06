@@ -39,6 +39,28 @@ for (const knowledge of [0, 1, 2000, 2001, 20000]) test(`C study refresh thresho
     }
 });
 
+test('refresh prompt remains visible after an unrelated key', async () => {
+    setup(20000); await rhack('a'); await rhack('\r');
+    game._keep_pending_message = 0; await rhack('i');
+    assert.equal(game._command_mode, 'readRefreshPrompt');
+    assert.equal(game._keep_pending_message, 1);
+    assert.equal(game.context.move, 0);
+    assert.match(game._pending_message, /Refresh your memory anyway/);
+});
+
+for (const appearance of ['purple', 'dull']) test(`starting spellbook uses shuffled ${appearance} appearance without an explicit index`, async () => {
+    const book = setup(20000);
+    delete book.spellName; delete book.kind;
+    book.spell = { name: 'healing', level: 1 };
+    game._object_descriptions = { spellbooks: Array(41).fill('') };
+    game._object_descriptions.spellbooks[8] = appearance;
+    game.u.acurr.a[A_WIS] = 3;
+    await rhack('a');
+    if (appearance === 'dull') assert.ok(game._sleeping_time > 0);
+    else assert.equal(game._discoveries.find(entry => entry.name === 'spellbook of healing').text,
+        'spellbook of healing (purple)');
+});
+
 for (const answer of ['y', 'n', '\x1b']) test(`refresh confirmation ${JSON.stringify(answer)} completes the read command`, async () => {
     setup(20000); await rhack('a'); await rhack('\r'); await rhack(answer);
     assert.equal(game._command_mode, null);
@@ -162,6 +184,17 @@ for (const speed of [6, 24]) test(`study ticks once per hero action at speed ${s
     assert.equal(game._spellbook_study_occupation, null);
     assert.equal(calls, 1, 'no input is read between occupation ticks');
     assert.equal(game.moves, speed === 6 ? 18 : 12);
+});
+
+for (const movement of [24, 36, 48]) test(`prayer completion retains ${movement - 12} movement points for the next study command`, async () => {
+    setup(); game._command_mode = null;
+    game.u.umovement = movement;
+    game._prayer_pending_done = 1;
+    game._pending_time_passed = 1;
+    pushKey('\x1b'); await moveloop_core();
+    assert.equal(game._prayer_pending_done, 0);
+    assert.equal(game.moves, 10);
+    assert.equal(game.u.umovement, movement - 12, 'C unmul/prayer_done does not reset earned movement');
 });
 
 for (const condition of ['ordinary', 'sleep resistant', 'confused', 'wisdom 25', 'floating eye'])

@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,247 passing tests**, with no
+The latest source-driven checkpoint has **5,338 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -72,13 +72,26 @@ Casting now uses C's effective attributes, role/intelligence nutrition costs,
 hunger-state transitions, load gate and peak-energy messages (43 tests).
 Spell study now follows the C refresh threshold and confirmations, effective
 reading ability, Wizard difficulty warnings, lens speed rolls, book fading,
-object identity and per-action occupation scheduling (50 tests). New learning
+object identity and per-action occupation scheduling (56 tests). New learning
 and relearning preserve their distinct wisdom-exercise/message order, including
 the separate exercise for discovering a book type. Dull books can cause sleep;
 interrupted study retains its object and remaining delay. Adjacent threats use
 C's attack, disguise, awareness and visibility gates. General hunger and
 distant-monster study interruption still require their source passes;
 cursed-book fatal/teleport callbacks need their own completion audit.
+Prayer completion preserves earned movement, as C's `unmul` does; resetting
+it to normal speed delayed the next spellbook study. The installed C recorder
+was checked with an isolated wizard-enabled configuration, and live movement
+traces identified that earlier cause. Starting spellbooks also resolve their
+shuffled appearance for discovery and dullness checks.
+
+All 33 enabled artifacts now carry their C prices. Shared shop valuation uses
+the source buying/selling order and rounding, including artifact multipliers
+(52 new tests). Levitation loss follows the floor ball/chain pull and captured
+trap pointer, including C's non-pit trap quirk (10 tests). Horizontal throws
+and returning weapons retain actual object identities, timers, slots and
+saved continuations (18 tests). Pet carrying capacity uses canonical species
+data; worn saddles count toward load but do not prevent fetching (five tests).
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
 Knight, Ranger and Rogue starts now execute their source operations, including
@@ -93,13 +106,15 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit ea6e24a, passed 51/53
-public sessions (11,400/12,712 screens, 773,863/832,102 RNG calls) and 12/19
+The last complete recording run, at preceding commit fe1bbe6, passed 48/53
+public sessions (11,124/12,712 screens, 747,634/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,132/141,728 RNG calls), with
-zero worker errors. The Priest refresh-prompt screen and Knight spell-study
-timing diverged; the current prompt correction and turn-order investigation
-are source driven. Current full corpora will be rerun from the committed
-checkpoint. These recording results do not establish full C behavior.
+zero worker errors. Current source corrections restore the full RNG traces in
+the three pony sessions and the Knight session, and all Priest spellbook
+screens. The Knight's remaining retention difference comes from a hardcoded
+Sanctum sequence that still assigns HP and clock values; replacing that
+sequence is the next source task. Current full corpora will be rerun from the
+committed checkpoint. These recording results do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched
