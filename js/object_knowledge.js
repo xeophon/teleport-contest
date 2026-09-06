@@ -104,3 +104,22 @@ export function fullyIdentifyObject(item, D) {
     if (type.symbol === 'EGG' && item.corpsenm != null && item.corpsenm !== -1) D.learnEgg(item);
     return true;
 }
+
+// zap.c:learnwand observes an already discovered wand even while blind. An
+// unknown type can be learned only after its appearance has been observed.
+export function learnWandType(item, D) {
+    const type = objectTypeData(item);
+    if (!type || type.class === 10) return;
+    const known = objectTypeIsKnown(item, type);
+    if ((known || !D.blind) && !D.hallucinating && type.id >= 18) {
+        item.dknown = true;
+        D.observe(item, type);
+    }
+    if (!known && item.dknown && type.id >= 18) {
+        game._known_object_types ??= [];
+        game._known_object_types.push(type.id);
+        D.exercise(A_WIS, true);
+        D.discover(item, type);
+    }
+    D.update(item);
+}

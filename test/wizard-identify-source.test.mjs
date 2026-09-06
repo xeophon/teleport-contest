@@ -251,3 +251,34 @@ for (const [symbol, glyph, section] of [['IRON_CHAIN', '_', 'Chains'], ['HEAVY_I
         await rhack('\n'); await finish();
         assert.equal(item.known, true); assert.equal(game.inventory[1].known, false);
     });
+
+for (const [symbol, fields, expected] of [
+    ['POT_HEALING', { appearance: 'puce', known: true, line: 'a - a potion of healing' }, 'a - a puce potion'],
+    ['BAG_OF_HOLDING', { contents: [{ quan: 20 }], cknown: false, line: 'a - a bag containing 1 item' }, 'a - a bag'],
+    ['CHEST', { cknown: true, contents: [], lknown: true, olocked: true }, 'a - an empty locked chest'],
+    ['APPLE', { wielded: true, line: 'a - a +9 apple (weapon in hand)' }, 'a - an apple (wielded)'],
+]) test(`ordinary inventory ignores cached text for ${symbol}`, async () => {
+    setup(); const item = add(symbol, 'a', fields);
+    await rhack('i');
+    assert.ok(game._overlay_lines.some(row => row[2] === expected), JSON.stringify(game._overlay_lines));
+    assert.equal(item.dknown, true);
+});
+
+for (const saved of [false, true]) test(`wand of wishing learns its type after the wish returns, saved=${saved}`, async () => {
+    setup(); add('WAN_WISHING', 'a', { wand: 'wishing', spe: 2 });
+    await rhack('z'); await rhack('a');
+    assert.equal(game._command_mode, 'wizardWish');
+    assert.equal(game._known_object_types?.includes(game.inventory[0]._c_otyp) || false, false);
+    assert.equal(getRngLog().filter(line => line.startsWith('rn2(19)')).length, 1);
+    if (saved) {
+        const save = encodeSaveState(), { coreCtx, displayCtx, rng } = game;
+        resetGame(); restoreSaveState(save); Object.assign(game, { coreCtx, displayCtx, rng });
+        assert.equal(game._wish_learn_wand, game.inventory[0]);
+    }
+    await command('nothing\n');
+    assert.equal(game._command_mode, null); assert.equal(game._wish_learn_wand, null);
+    assert.ok(game._known_object_types.includes(game.inventory[0]._c_otyp));
+    assert.equal(game.inventory[0].known, false, 'observing the effect gives no charge knowledge');
+    assert.equal(game.u.urexp, 10);
+    assert.equal(getRngLog().filter(line => line.startsWith('rn2(19)')).length, 2);
+});

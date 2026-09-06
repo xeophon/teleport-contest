@@ -60,7 +60,7 @@ export function changeArmorBonuses(item, on, g = game, discoverType = null) {
         u.fumbling = !!(prop.intrinsic || prop.extrinsic);
     }
     item._armorDonPending = false;
-    if (on) item.chargeKnown = true;
+    if (on) item.known = item.chargeKnown = true;
     return discover;
 }
 

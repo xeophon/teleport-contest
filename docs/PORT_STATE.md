@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **7,048 passing tests**, with no
+The latest source-driven checkpoint has **7,075 passing tests**, with no
 failures, skips or TODOs. All seven generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -37,8 +37,15 @@ including hallucinating unseen items and wielded nonweapons. Wish delivery now u
 and supports iron-chain wishes with C initialization draws. Class headings and
 chain/ball selection follow C menu precedence. Three new state tests and two
 fresh C recordings pass (342 screens, including cursors, and 5,314 random calls).
-Ordinary inventory, cached price quotes and rejected-wish prompt pauses still
-need source passes.
+Ordinary inventory now uses the shared formatter and ignores stale cached text.
+Dressing sets instance enchantment knowledge independently of type discovery.
+Wand effect learning observes C sight/hallucination gates, gives first-discovery
+Wisdom credit, and preserves charge knowledge; wishing learns after makewish
+returns, including saved input. Freshly tinned tins preserve C hidden BUC and
+variety state. Twenty-five new state tests and two fresh recordings pass
+(118 screens, including cursors, and 4,396 random calls). Other name consumers,
+cached price quotes, full discovery integration and rejected-wish prompt pauses
+still need source passes.
 
 HP/power regeneration now uses canonical property sources, temporary attribute
 bonuses, movement/load gates, sleeping regeneration, separate active monster HP

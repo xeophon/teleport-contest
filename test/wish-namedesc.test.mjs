@@ -245,7 +245,7 @@ test('wished potion merges into an existing stack with comparison discovery', as
     assert.equal(game._command_mode, 'heldWishMore');
     assert.equal(game.u.ublesscnt || 0, 0, 'divine notice waits until inventory feedback returns');
     await rhack(' ');
-    assert.equal(game._pending_message, 'h - an uncursed potion of booze (2 in total).');
+    assert.equal(game._pending_message, 'h - an uncursed pink potion (2 in total).');
     assert.ok(game.u.ublesscnt >= 50);
 });
 

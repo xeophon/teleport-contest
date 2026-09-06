@@ -1,7 +1,7 @@
 import { tinVariety, TIN_VARIETY_TEXTS } from './eat.js';
 import { makePlural as pluralizeMonsterName, xname, doname } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
-import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
+import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject, learnWandType } from './object_knowledge.js';
 import { W_ARM, W_ARMC, W_ARMH, W_ARMS, W_ARMG, W_ARMU, W_BALL, W_CHAIN, FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
 import { hasWoundedLegs, setWoundedLegs } from './do.js';
@@ -487,8 +487,9 @@ function setKnownWandLine(item, wand) {
     item.wand = wand;
     item.kind = wand;
     item.wandIndex = WAND_NAME_TO_INDEX.get(wand);
-    item.known = true;
-    refreshWandLine(item);
+    learnWandType(item, { blind: heroIsBlind(), hallucinating: heroIsHallucinating(),
+        observe: recordObservedObjectDiscovery, discover: recordIdentifiedObjectType,
+        exercise: exerciseAttribute, update: refreshWandLine });
 }
 
 function zappableWand(item, { fallbackCharges = 0 } = {}) {
@@ -2349,7 +2350,7 @@ function useUpDustWand(item) {
     return `The ${name} turns to dust.`;
 }
 
-async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For what do you wish?', wizard = false } = {}) {
+async function beginWishPrompt({ moveCost = 0, dustItem = null, learnWand = null, message = 'For what do you wish?', wizard = false } = {}) {
     if (wizard) {
         game._wish_restore_verbose = game.flags.verbose ?? true;
         game.flags.verbose = false;
@@ -2358,6 +2359,7 @@ async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For w
     game._wish_tries = 0;
     game._wish_move_cost = moveCost;
     game._wish_dust_item = dustItem;
+    game._wish_learn_wand = learnWand;
     await setMessage(message);
     game._command_mode = 'wizardWish';
 }
@@ -2365,10 +2367,18 @@ async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For w
 async function setWishResultMessage(message, more = false) {
     const moveCost = game._wish_move_cost || 0;
     const dustItem = game._wish_dust_item || null;
+    const learnWand = game._wish_learn_wand;
     game._wish_move_cost = 0;
     game._wish_dust_item = null;
+    game._wish_learn_wand = null;
     game._wish_tries = 0;
     game.context.move = moveCost;
+    // zapnodir learns the wand after makewish returns, before a wrested
+    // wand turns to dust. The observable-effect flag was captured at the zap.
+    if (learnWand) {
+        if (!objectTypeIsKnown(learnWand)) game.u.urexp = (game.u.urexp || 0) + 10;
+        setKnownWandLine(learnWand, 'wishing');
+    }
     let text = message;
     if (dustItem && (game.inventory || []).includes(dustItem)) {
         const dustMessage = dustWand(dustItem);
@@ -17110,30 +17120,20 @@ function controlledPolyselfZapResult(item, name) {
         else result = rn2(5) === 0 ? becomeMonster('human') : becomeMonster(form.name);
     }
     if (item) setKnownWandLine(item, 'polymorph');
-    // zap.c:123-150 learnwand() - discover_object() (o_init.c:474-490): the
-    // first time the wand type is discovered with an observable effect, the
-    // hero gets credit_hero and exercise(A_WIS, TRUE) rolls (attrib.c:499-509).
-    const alreadyKnown = (game._discoveries || []).some(entry =>
-        entry.section === 'Wands' && entry.name === 'wand of polymorph');
-    if (!alreadyKnown) {
-        if (result && result.message) exerciseAttribute(A_WIS, true);
-        game._discoveries ??= [];
-        game._discoveries.push({
-            section: 'Wands', name: 'wand of polymorph', text: 'wand of polymorph',
-            starred: false, known: true,
-        });
-    }
     return result;
 }
 
 function polymorphSelfZapResult(item = null) {
     if (heroHasUnchanging()) return { message: '', more: false };
-    if (item) setKnownWandLine(item, 'polymorph');
     const shock = polymorphSystemShock();
-    if (shock) return shock;
+    if (shock) {
+        if (item) setKnownWandLine(item, 'polymorph');
+        return shock;
+    }
     const formName = randomPolyselfMonsterName();
     const result = rn2(5) ? becomeMonster(formName) : becomeMonster('human');
     newsym(game.u?.ux || 0, game.u?.uy || 0);
+    if (item) setKnownWandLine(item, 'polymorph');
     return {
         message: result?.message || 'Nothing happens.',
         more: !!result?.more,
@@ -36585,8 +36585,8 @@ function createHomemadeTinFromCorpse(corpse, kit) {
         blessed: !!kit?.blessed,
         cursed: !!kit?.cursed,
         known: true,
-        dknown: true,
-        bknown: true,
+        dknown: false,
+        bknown: false,
         ox: game.u?.ux ?? corpse?.ox ?? 0,
         oy: game.u?.uy ?? corpse?.oy ?? 0,
     });
@@ -36611,7 +36611,7 @@ function addHomemadeTinToInventory(can, messages) {
         return;
     }
     can.letter = letter;
-    can.line = normalInventoryLine({ ...can, line: '' });
+    can.line = normalInventoryLine(can);
     game.inventory.push(can);
     game._pet_food_scan_inventory = game.inventory;
     messages.push(`${can.line}.`);
@@ -50937,13 +50937,7 @@ export function pickupObjectName(obj) {
     if (obj.cls === 'armor') {
         const kind = String(obj.actualKind || obj.kind || '').toLowerCase();
         const armorAppearance = ARMOR_WISH_APPEARANCES[kind];
-        const typeKnown = obj.known === true
-            || !armorAppearance
-            || (game._discoveries || []).some(entry => {
-                if (entry.section !== 'Armor') return false;
-                const discoveredName = entry.name.toLowerCase().replace(/^pair of /, '');
-                return discoveredName === kind && (entry.starred || discoveredName === 'leather gloves');
-            });
+        const typeKnown = objectTypeIsKnown(obj);
         if (!typeKnown && (obj.appearance || armorAppearance)) {
             const [group, index, fallback] = armorAppearance || [];
             return named(obj.appearance || game._object_descriptions?.[group]?.[index] || fallback);
@@ -51037,9 +51031,9 @@ function objectNameDependencies(override = false) {
         artifactName: name => artifactDefinitionForName(name)?.name,
         knownEgg: species => game._known_egg_types?.includes(species?.name ?? species),
         burnDeadline: item => peekTimer(BURN_OBJECT, item),
-        doffing: item => game._armor_wear_occupation?.itemLetter === item.letter
+        doffing: item => !!game._armor_wear_occupation && game._armor_wear_occupation.itemLetter === item.letter
             && game._armor_wear_occupation?.action === 'takeoff',
-        donning: item => item._armorDonPending || game._armor_wear_occupation?.itemLetter === item.letter,
+        donning: item => item._armorDonPending || !!game._armor_wear_occupation && game._armor_wear_occupation.itemLetter === item.letter,
         wornMask: (item, type) => {
             let mask = item.owornmask || 0;
             if (item.wielded || game.u?.uwep === item) mask |= W_WEP;
@@ -57930,111 +57924,6 @@ function quiverSuffix(item) {
     return ' (at the ready)';
 }
 
-function identifiedInventoryLine(item) {
-    const letter = item.letter || '?';
-    const quan = item.quan || 1;
-    const cls = item.cls || (item.otyp === RING_CLASS ? 'ring' : item.otyp === GEM_CLASS ? 'gem' : item.otyp === SCROLL_CLASS ? 'scroll' : item.otyp === POTION_CLASS ? 'potion' : item.otyp === WAND_CLASS ? 'wand' : '');
-    const buc = item.blessed ? 'blessed' : item.cursed ? 'cursed' : 'uncursed';
-    let phrase = '';
-    let suffix = '';
-
-    if (cls === 'coin') return `$ - ${quan} gold piece${quan === 1 ? '' : 's'}`;
-    if (cls === 'weapon' || item.otyp === DART || item.wielded || item.alternate) {
-        const spe = item.spe ?? 0;
-        const enchantment = `${spe >= 0 ? '+' : ''}${spe} `;
-        const lineShowsBuc = /\b(?:blessed|uncursed|cursed)\b/.test(String(item.line || ''));
-        const knownBuc = item.blessed || item.cursed || item.bknown === true || lineShowsBuc;
-        const bucPrefix = knownBuc && buc !== 'uncursed' ? `${buc} ` : '';
-        const { poisonPrefix, name } = poisonedWeaponDisplayParts(item);
-        phrase = `${bucPrefix}${poisonPrefix}${enchantment}${name}`;
-        if (item.wielded) {
-            const kind = String(item.kind || '').toLowerCase();
-            suffix = ` (weapon in ${/quarterstaff|two-handed sword|battle-axe/.test(kind) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`})`;
-        } else if (item.alternate) {
-            suffix = ` (alternate weapon${quan > 1 ? 's' : ''}; not wielded)`;
-        } else if (item.quivered) {
-            suffix = quiverSuffix(item);
-        }
-    } else if (cls === 'armor') {
-        let armorName = pickupObjectName(item);
-        if (!armorName.startsWith('pair of ')
-            && (armorName.endsWith('boots') || armorName.endsWith('shoes') || armorName.endsWith('gloves') || armorName.startsWith('gauntlets')))
-            armorName = `pair of ${armorName}`;
-        const erosion = erosionPrefix(item);
-        phrase = `${buc} ${erosion}${item.spe == null ? '' : `${item.spe >= 0 ? '+' : ''}${item.spe} `}${armorName}`;
-        if (item.worn) suffix = ' (being worn)';
-    } else if (cls === 'scroll') {
-        const raw = String(item.kind || '').replace(/^scroll:/, '').replace(/^scroll of /, '') || 'identify';
-        phrase = `${buc} ${quan > 1 ? 'scrolls' : 'scroll'} of ${raw}`;
-    } else if (cls === 'spellbook') {
-        const raw = item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '') || 'blank paper';
-        phrase = `${buc} ${quan > 1 ? 'spellbooks' : 'spellbook'} of ${raw}`;
-    } else if (cls === 'potion') {
-        const raw = String(item.actualKind || item.kind || '').replace(/^potion:/, '').replace(/^potion of /, '') || 'water';
-        if (raw === 'water' && item.blessed) phrase = 'potion of holy water';
-        else if (raw === 'water' && item.cursed) phrase = 'potion of unholy water';
-        else {
-            const diluted = item.odiluted && !isWaterPotion(item) ? 'diluted ' : '';
-            phrase = `${buc} ${diluted}${quan > 1 ? 'potions' : 'potion'} of ${raw}`;
-            phrase = maybeLitObjectName(item, phrase);
-        }
-    } else if (cls === 'ring') {
-        const roll = item.ringRoll || item.roll || 0;
-        const ring = roll ? `ring of ${IDENTIFIED_RING_NAMES[roll - 1]}` : String(item.kind || 'ring');
-        const spe = roll <= 6 || item.spe ? `${(item.spe || 0) >= 0 ? '+' : ''}${item.spe || 0} ` : '';
-        phrase = `${buc} ${spe}${ring}`;
-    } else if (cls === 'amulet') {
-        const name = item.actualKind
-            || (item.amuletIndex != null ? IDENTIFIED_AMULET_NAMES[item.amuletIndex] : '')
-            || String(item.kind || '')
-            || pickupObjectName(item);
-        phrase = `${buc} ${name}`;
-        if (item.worn || item.line?.includes('being worn')) suffix = ' (being worn)';
-    } else if (cls === 'wand') {
-        const raw = item.wand
-            || (item.wandIndex != null ? IDENTIFIED_WAND_NAMES[item.wandIndex] : '')
-            || String(item.kind || '').replace(/^wand of /, '')
-            || 'nothing';
-        phrase = `wand of ${raw}${identifiedChargeSuffix(item)}`;
-    } else if (cls === 'tool') {
-        const raw = pickupObjectName(item);
-        const chargeSuffix = isChargedTool(item) ? identifiedChargeSuffix(item) : '';
-        phrase = item.tool === 'magicMarker' || item.kind === 'magic marker'
-            ? `magic marker${identifiedChargeSuffix(item)}`
-            : item.kind === 'sack'
-                ? `empty ${buc} sack`
-            : `${buc} ${raw}${chargeSuffix}`;
-    } else if (cls === 'food' || item.otyp === FOOD_CLASS) {
-        let name = pickupObjectName(item);
-        if (String(item.kind || '').startsWith('tin:')) {
-            const tin = item.kind.slice(4);
-            name = tin === 'spinach' ? 'tin of spinach' : `homemade tin of ${tin === 'lichen' ? tin : `${tin} meat`}`;
-        } else if (item.kind === 'tin' && item.corpsenm?.name) {
-            const meat = item.corpsenm.name === 'lichen' ? 'lichen' : `${item.corpsenm.name} meat`;
-            name = `homemade tin of ${meat}`;
-        }
-        phrase = `${buc} ${name}`;
-        if (isMeatRingObject(item)) {
-            if (item.worn === 'right' || item.line?.includes('(on right hand)')) suffix = ' (on right hand)';
-            else if (item.worn === 'left' || item.line?.includes('(on left hand)')) suffix = ' (on left hand)';
-        } else if (item.quivered) suffix = quiverSuffix(item);
-    } else if (cls === 'gem') {
-        const gem = item.actualKind || (item.gemRoll
-            ? IDENTIFIED_GEM_NAMES.find(([upper]) => item.gemRoll <= upper)?.[1]
-            : (String(item.gemDescription || item.kind || '').match(/^(.+) gem$/)?.[1]
-                ? `worthless piece of ${String(item.gemDescription || item.kind).replace(/ gem$/, '')} glass`
-                : pickupObjectName(item)));
-        phrase = `${buc} ${gem}`;
-    } else {
-        phrase = `${buc} ${pickupObjectName(item)}`;
-    }
-
-    const amount = quan > 1
-        ? `${quan} ${phrase}`
-        : `${/^[aeiou]/i.test(phrase) ? 'an' : 'a'} ${phrase}`;
-    return `${letter} - ${amount}${suffix}`;
-}
-
 function identifyInventoryItem(item) {
     if (!item) return;
     fullyIdentifyObject(item, { hallucinating: heroIsHallucinating(), exercise: exerciseAttribute,
@@ -58079,6 +57968,7 @@ function identifyInventoryItem(item) {
 
 
 function normalInventoryLine(item) {
+    if (objectTypeData(item)) return `${item.letter || '?'} - ${doname(item, objectNameDependencies())}`;
     const letter = item.letter || '?';
     if ((BAG_OBJECT_TYPES.has(item.otyp) || /bag|sack/.test(String(item.kind || item.line || '').toLowerCase()))
         && item.contents?.length) {
@@ -63744,7 +63634,7 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
             if (objectIndex + FIRST_DISPLAY_OBJECT === C_RANDOM_CORPSE)
                 rn2_on_display_rng(DISPLAY_MONSTER_GLYPHS.length);
         }
-        let name = wizard?.ordinary ? normalInventoryLine(item) : wizard ? wizardIdentifiedItemLine(item) : identify ? identifiedInventoryLine(item) : normalInventoryLine(item);
+        let name = wizard?.ordinary ? normalInventoryLine(item) : wizard ? wizardIdentifiedItemLine(item) : identify ? wizardIdentifiedItemLine(item) : normalInventoryLine(item);
         if (wizard && wizard.selected.includes(item.letter)) name = name.replace(' - ', ' + ');
         rows.push([name, 0, item.letter]);
     }
@@ -73560,6 +73450,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game.context.move = 1;
                 return;
             }
+            exerciseAttribute(A_WIS, true); // zapnodir, before the wishing luck gate
             const luck = (game.u?.uluck || 0) + (game.u?.moreluck || 0);
             if (luck + rn2(5) < 0) {
                 const messages = spentMessages();
@@ -73572,10 +73463,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game.context.move = 1;
                 return;
             }
-            setKnownWandLine(item, 'wishing');
             await beginWishPrompt({
                 moveCost: 1,
                 dustItem: wandCharges(item) < 0 ? item : null,
+                learnWand: item.dknown ? item : null,
                 message: [...spentMessages(), 'For what do you wish?'].join('  '),
             });
             return;
@@ -74564,7 +74455,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (hornElement) {
-            await setMessage([...preludeMessages, `${instrumentTheName(item)} vibrates.`].join('  '), preludeMessages.length > 0);
+            await setMessage([...preludeMessages, `The ${xname(item, objectNameDependencies())} vibrates.`].join('  '), preludeMessages.length > 0);
             game._command_mode = null;
             game.context.move = 1;
             return;

@@ -1,0 +1,12 @@
+{
+  "version": 5,
+  "segments": [
+    {
+      "seed": 9522,
+      "datetime": "20260720120000",
+      "nethackrc": "OPTIONS=name:Inventoryaudit,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,time,showexp,playmode:debug\nOPTIONS=autoquiver\n",
+      "moves": "i\u001b\u0017apple\nwni\u001b\u0017blessed bag of holding\ni\u001b\u0017uncursed +2 helm of telepathy\nWqi\u001b",
+      "steps": []
+    }
+  ]
+}

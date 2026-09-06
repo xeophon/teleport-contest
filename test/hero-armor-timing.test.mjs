@@ -116,7 +116,7 @@ for(const kind of ['fumble boots','helm of telepathy']) test(`dressing learns ${
     setup(); const armor={id:1,letter:'a',cls:'armor',kind,actualKind:kind,appearance:kind==='fumble boots'?'combat boots':'visored helmet',spe:-4,quan:1,known:false};
     game.inventory.push(armor);await rhack('W');await rhack('a');
     game._pending_message='';game._pending_time_passed=1;await inputBoundary();
-    assert.equal(armor.chargeKnown,true);assert.equal(armor.known,false);
+    assert.equal(armor.chargeKnown,true);assert.equal(armor.known,true);
     game._pending_message='';game._message_more=0;game._command_mode=null;await rhack('i');
     const screen=JSON.stringify(game._overlay_lines);
     assert.match(screen,/-4/);assert.ok(screen.includes(armor.appearance));assert.ok(!screen.includes(kind));

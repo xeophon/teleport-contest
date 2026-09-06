@@ -1,0 +1,12 @@
+{
+  "version": 5,
+  "segments": [
+    {
+      "seed": 9523,
+      "datetime": "20260720120000",
+      "nethackrc": "OPTIONS=name:Wandaudit,role:Wizard,race:human,gender:male,align:neutral\nOPTIONS=!autopickup,!verbose,!legacy,!tutorial,!splash_screen\nOPTIONS=pettype:none,time,showexp,playmode:debug\nOPTIONS=autoquiver\n",
+      "moves": "\u0017uncursed wand of wishing (0:1)\nzoapple\ni\u001b",
+      "steps": []
+    }
+  ]
+}

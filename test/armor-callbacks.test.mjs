@@ -139,7 +139,7 @@ for (const kind of ['fumble boots', 'gauntlets of fumbling']) for (const source 
 for (const kind of ['helm of brilliance', 'gauntlets of dexterity']) test(`${kind} at +0 reveals enchantment but not its shuffled type`, async () => {
     const item = setup(kind);
     await rhack('W'); await rhack('a'); await finishDressing();
-    assert.equal(item.chargeKnown, true); assert.equal(item.known, false);
+    assert.equal(item.chargeKnown, true); assert.equal(item.known, true);
     assert.deepEqual(game.u.abon.a, [0,0,0,0,0,0]);
 });
 

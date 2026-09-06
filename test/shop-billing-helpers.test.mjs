@@ -1,3 +1,4 @@
+import { objectTypeIsKnown } from '../js/object_knowledge.js';
 import { encodeSaveState, restoreSaveState } from '../js/save.js';
 import { WOUNDED_LEGS, LEFT_SIDE } from '../js/const.js';
 import { ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON } from '../js/timeout.js';
@@ -1066,6 +1067,7 @@ function simpleFood(id, kind, letter = 'f', extra = {}) {
         kind,
         actualKind: kind,
         quan: 1,
+        spe: kind === 'slime mold' ? 1 : 0,
         plural: pluralByKind[kind],
         ox: 5,
         oy: 5,
@@ -3672,13 +3674,13 @@ test('tip question menu shows suggested sources while star menu exposes downplay
     await rhack('?');
 
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a sack/);
+    assert.match(menuText, /s - an empty bag/);
     assert.doesNotMatch(menuText, /t - a towel/);
 
     await rhack('*');
 
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a sack/);
+    assert.match(menuText, /s - an empty bag/);
     assert.match(menuText, /t - a towel/);
 });
 
@@ -12557,7 +12559,7 @@ test('tip excludes gold and rejects direct gold selection', async () => {
     await rhack('*');
 
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a sack/);
+    assert.match(menuText, /s - an empty bag/);
     assert.doesNotMatch(menuText, /gold/);
 
     await rhack('$');
@@ -13386,8 +13388,8 @@ test('blessed destroy armor rusts unpaid worn armor into a used-up bill', async 
     assert.equal(shop.shopBillEntryTotal(shkp.bill[0]), 100);
     assert.equal((game._usedUpShopBills || []).length, 1);
     assert.equal(game._usedUpShopBills[0].bo_id, shkp.bill[0].bo_id);
-    assert.match(game._pending_message, /Your orcish helm rusts!/);
-    assert.match(game._pending_message, /You rust that .*orcish helm, you pay for it!/);
+    assert.match(game._pending_message, /Your iron skull cap rusts!/);
+    assert.match(game._pending_message, /You rust that .*iron skull cap, you pay for it!/);
     assert.ok(game._pending_message.indexOf('rusts!') < game._pending_message.indexOf('you pay for it'));
 });
 
@@ -13412,7 +13414,7 @@ test('blessed destroy armor erosion ignores stale field-only unpaid armor', asyn
     assert.equal(shkp.billct || 0, 0);
     assert.equal((shkp.bill || []).length, 0);
     assert.equal((game._usedUpShopBills || []).length, 0);
-    assert.match(game._pending_message, /Your orcish helm rusts!/);
+    assert.match(game._pending_message, /Your iron skull cap rusts!/);
     assert.doesNotMatch(game._pending_message, /you pay for it/);
 });
 
@@ -16862,7 +16864,7 @@ test('self-cast stone to flesh preserves wielded meat stick state and skips merg
     const result = game.inventory[1];
     assert.equal(result.otyp, MEAT_STICK);
     assert.equal(result.wielded, true);
-    assert.equal(result.line, 'b - a meat stick (weapon in right hand)');
+    assert.equal(result.line, 'b - a meat stick (wielded)');
 });
 
 test('self-cast stone to flesh preserves quivered meat stick state and skips merge', async () => {
@@ -18812,7 +18814,7 @@ test('apply question menu shows suggestions while star menu exposes all inventor
     const scroll = scrollOfCharging(30564, 's');
     const potion = namedPotion(30565, 'healing', 'p', 1, {
         known: false,
-        kind: 'puce',
+        kind: 'puce', appearance: 'puce',
         line: 'p - a puce potion',
     });
     game.inventory = [tool, gold, scroll, potion];
@@ -18825,17 +18827,17 @@ test('apply question menu shows suggestions while star menu exposes all inventor
     await rhack('?');
 
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /l - a lamp/);
     assert.doesNotMatch(menuText, /\$ - 7 gold pieces/);
-    assert.doesNotMatch(menuText, /s - a scroll of charging/);
+    assert.doesNotMatch(menuText, /s - a scroll labeled HACKEM MUCHE/);
     assert.doesNotMatch(menuText, /p - a puce potion/);
 
     await rhack('*');
 
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /l - a lamp/);
     assert.match(menuText, /\$ - 7 gold pieces/);
-    assert.match(menuText, /s - a scroll of charging/);
+    assert.match(menuText, /s - a scroll labeled HACKEM MUCHE/);
     assert.match(menuText, /p - a puce potion/);
 });
 
@@ -18897,8 +18899,8 @@ test('known invalid apply objects stay out of the prompt but star-select rejects
     await rhack('*');
 
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /l - an oil lamp/);
-    assert.match(menuText, /s - a scroll of charging/);
+    assert.match(menuText, /l - a lamp/);
+    assert.match(menuText, /s - a scroll labeled HACKEM MUCHE/);
 
     await rhack('s');
 
@@ -19231,7 +19233,7 @@ test('remove command can prompt and take off armor fallback', async () => {
     await rhack('?');
 
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /a - a \+0 small shield/);
+    assert.match(menuText, /a - a \+0 wooden shield/);
 
     await rhack('a');
 
@@ -19423,7 +19425,7 @@ test('remove command blocks ring removal through cursed gloves', async () => {
     assert.equal(ring.worn, 'right');
     assert.equal(gloves.worn, true);
     assert.equal(gloves.bknown, true);
-    assert.equal(game._pending_message, 'You cannot take off your leather gloves to remove the ring.');
+    assert.equal(game._pending_message, 'You cannot take off your old gloves to remove the ring.');
 });
 
 test('remove command blocks primary-hand ring removal with welded weapon', async () => {
@@ -19473,7 +19475,7 @@ test('takeoff command blocks slippery glove removal', async () => {
 
     assert.equal(game.context.move || 0, 0);
     assert.equal(gloves.worn, true);
-    assert.equal(game._pending_message, 'Your leather gloves are too slippery to take off.');
+    assert.equal(game._pending_message, 'Your old gloves are too slippery to take off.');
 });
 
 test('takeoff command prompts before removing gloves while carrying cockatrice corpse', async () => {
@@ -19652,7 +19654,7 @@ test('takeoff command blocks covered body armor before select-off checks', async
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
     assert.doesNotMatch(menuText, /b - a \+0 leather armor/);
     assert.match(menuText, /c - a \+0 cloak/);
-    assert.match(menuText, /h - a \+0 helmet/);
+    assert.match(menuText, /h - a \+0 plumed helmet/);
 
     await rhack('b');
 
@@ -19777,8 +19779,8 @@ test('takeoff prompt suggests armor while downplayed accessories stay selectable
     await rhack('?');
 
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a \+0 small shield/);
-    assert.match(menuText, /g - a \+0 pair of leather gloves/);
+    assert.match(menuText, /s - a \+0 wooden shield/);
+    assert.match(menuText, /g - a \+0 pair of old gloves/);
     assert.doesNotMatch(menuText, /r - an iron ring/);
 
     await rhack('*');
@@ -19817,12 +19819,12 @@ test('remove prompt suggests accessories while downplayed armor stays selectable
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
     assert.match(menuText, /r - an iron ring/);
     assert.match(menuText, /m - an octagonal amulet/);
-    assert.doesNotMatch(menuText, /s - a \+0 small shield/);
+    assert.doesNotMatch(menuText, /s - a \+0 wooden shield/);
 
     await rhack('*');
 
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a \+0 small shield/);
+    assert.match(menuText, /s - a \+0 wooden shield/);
 
     await rhack('s');
 
@@ -19897,14 +19899,14 @@ test('known non-touchstone gray stone hides from apply prompt but star-selects s
     await rhack('?');
 
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /l - an oil lamp/);
+    assert.match(menuText, /l - a lamp/);
     assert.doesNotMatch(menuText, /loadstone/);
 
     await rhack('*');
 
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /l - an oil lamp/);
-    assert.match(menuText, /s - a uncursed loadstone/);
+    assert.match(menuText, /l - a lamp/);
+    assert.match(menuText, /s - an uncursed gray stone/);
 
     await rhack('s');
 
@@ -19964,18 +19966,18 @@ test('#rub suggests known non-touchstone gray stones and lists them with other r
     await rhack('?');
 
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /l - an oil lamp/);
-    assert.match(menuText, /s - a uncursed loadstone/);
+    assert.match(menuText, /l - a lamp/);
+    assert.match(menuText, /s - an uncursed gray stone/);
     assert.match(menuText, /j - a lump of royal jelly/);
-    assert.doesNotMatch(menuText, /d - a dagger/);
+    assert.doesNotMatch(menuText, /d - a \+0 dagger/);
 
     await rhack('*');
 
     const fullMenuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(fullMenuText, /l - an oil lamp/);
-    assert.match(fullMenuText, /s - a uncursed loadstone/);
+    assert.match(fullMenuText, /l - a lamp/);
+    assert.match(fullMenuText, /s - an uncursed gray stone/);
     assert.match(fullMenuText, /j - a lump of royal jelly/);
-    assert.match(fullMenuText, /d - a dagger/);
+    assert.match(fullMenuText, /d - a \+0 dagger/);
 });
 
 test('#rub direct non-candidate selection uses C silly thing wording', async () => {
@@ -21424,7 +21426,7 @@ test('self-zapped polymorph wand system shock still discovers the wand', async (
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.equal(wand.known, true);
+    assert.equal(wand.known, false); assert.equal(objectTypeIsKnown(wand), true);
     assert.equal(wand.kind, 'polymorph');
     assert.match(wand.line, /wand of polymorph/);
     assert.match(game._pending_message, /You shudder for a moment\./);
@@ -21432,7 +21434,7 @@ test('self-zapped polymorph wand system shock still discovers the wand', async (
     assert.equal(game.u._polyself_form || null, null);
     assert.ok(game.u.uhp < hpBefore);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
-        'rn2(20)', 'rnd(30)', 'rn2(2)',
+        'rn2(20)', 'rnd(30)', 'rn2(2)', 'rn2(19)',
     ]);
 });
 
@@ -22976,7 +22978,7 @@ test('monster iron shoes warp on polymorph trap and stay worn', async () => {
     assert.equal(goblin.data.name, 'goblin');
     assert.equal(shoes.kind, 'kicking boots');
     assert.equal(shoes.actualKind, 'kicking boots');
-    assert.match(shoes.line, /kicking boots/);
+    assert.match(shoes.line, /buckled boots/);
     assert.equal(shoes.worn, true);
     assert.equal(shoes.owornmask, W_ARMF);
     assert.equal(!!(goblin.misc_worn_check & W_ARMF), true);
@@ -35133,7 +35135,7 @@ test('iron footwear polymorph trap warps boots and removes trap', async () => {
     assert.equal(game.level.traps.includes(trap), false);
     assert.equal(boots.kind, 'kicking boots');
     assert.equal(boots.actualKind, 'kicking boots');
-    assert.match(boots.line, /kicking boots/);
+    assert.match(boots.line, /buckled boots/);
     assert.equal(boots.worn, true);
     assert.equal(game.u._polyself_form || null, null);
 });
@@ -41285,7 +41287,7 @@ test('lateral wand polymorph hits a monster before the same-square pile', async 
     assert.equal(goblin.mpeaceful, false);
     assert.equal(game.level.objects.includes(ration), false);
     assert.equal(game.u.uconduct.polypiles, 1);
-    assert.equal(wand.known, true);
+    assert.equal(wand.known, false); assert.equal(objectTypeIsKnown(wand), true);
     assert.match(game._pending_message, /The goblin turns into an? .*!/);
     assert.match(game._pending_message, /Izchak gets angry!/);
     assert.equal(game._pending_message.indexOf('turns into') < game._pending_message.indexOf('Izchak gets angry!'), true);
@@ -41476,7 +41478,7 @@ test('floor polymorph upward while hiding under objects hits only the top cover'
     assert.equal(game.level.objects.includes(cover), false);
     assert.equal(game.u.uconduct.polypiles, 1);
     assert.equal(game.u.uundetected, 1);
-    assert.equal(wand.known, true);
+    assert.equal(wand.known, false); assert.equal(objectTypeIsKnown(wand), true);
 });
 
 test('floor polymorph downward while hiding under objects skips the top cover', async () => {
@@ -43036,8 +43038,8 @@ test('magic marker target menu distinguishes question and star inventory', async
 
     assert.equal(game._command_mode, 'markerWriteInventoryOverlay');
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a scroll of blank paper/);
-    assert.doesNotMatch(menuText, /r - a scroll of charging/);
+    assert.match(menuText, /s - an uncursed unlabeled scroll/);
+    assert.doesNotMatch(menuText, /r - a scroll labeled HACKEM MUCHE/);
     assert.doesNotMatch(menuText, /t - a towel/);
 
     await rhack(' ');
@@ -43048,8 +43050,8 @@ test('magic marker target menu distinguishes question and star inventory', async
 
     assert.equal(game._command_mode, 'markerWriteInventoryOverlay');
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /s - a scroll of blank paper/);
-    assert.match(menuText, /r - a scroll of charging/);
+    assert.match(menuText, /s - an uncursed unlabeled scroll/);
+    assert.match(menuText, /r - a scroll labeled HACKEM MUCHE/);
     assert.match(menuText, /t - a towel/);
 
     await rhack('t');
@@ -43096,7 +43098,7 @@ test('magic marker question menu falls back to downplayed paper without blanks',
     await rhack('?');
 
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /r - a scroll of charging/);
+    assert.match(menuText, /r - a scroll labeled HACKEM MUCHE/);
     assert.doesNotMatch(menuText, /t - a towel/);
 });
 
@@ -43235,7 +43237,8 @@ test('applying unpaid tinning kit to a carried corpse bills usage and makes a ho
     assert.equal(madeTin.quan, 1);
     assert.notEqual(madeTin.unpaid, true);
     assert.match(game._pending_message, new RegExp(`Usage fee, ${expectedFee} zorkmids`));
-    assert.match(game._pending_message, /homemade tin of newt meat/);
+    assert.match(game._pending_message, /a tin of newt meat/);
+    assert.equal(madeTin.bknown, false); assert.equal(!!madeTin.cknown, false);
 });
 
 test('applying unpaid tinning kit with no corpse spends no charge and adds no usage fee', async () => {
@@ -64026,7 +64029,7 @@ test('production monster sling ruby catch retains split gem in inventory', async
 
     assert.equal(preNhgetchMessages.some(message => /You catch the ruby!/.test(message)), true,
         preNhgetchMessages.join('\n'));
-    assertCaughtSplitThrownObject(ammo, thrower, 'ruby');
+    assertCaughtSplitThrownObject(ammo, thrower, 'ruby', 'red gem');
     assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
@@ -64052,7 +64055,7 @@ test('production unicorn polyself accepts slung real gem before generic catch', 
 
     assert.match(visibleMessages, /You accept the goblin's gift in the spirit in which it was intended\./);
     assert.doesNotMatch(visibleMessages, /You catch the ruby!/);
-    assertCaughtSplitThrownObject(ammo, thrower, 'ruby');
+    assertCaughtSplitThrownObject(ammo, thrower, 'ruby', 'red gem');
     assert.equal(rng.some(entry => entry === 'rn2(90)'
         || entry === 'rnd(3)'
         || entry === 'rnd(20)'
@@ -64119,7 +64122,7 @@ test('production monster sling loadstone catch retains split gray stone in inven
 
     assert.equal(preNhgetchMessages.some(message => /You catch the loadstone!/.test(message)), true,
         preNhgetchMessages.join('\n'));
-    assertCaughtSplitThrownObject(ammo, thrower, 'loadstone');
+    assertCaughtSplitThrownObject(ammo, thrower, 'loadstone', 'gray stone');
     assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(3)'
         || entry === 'rnd(20)'
@@ -64145,7 +64148,7 @@ test('production unicorn polyself slung loadstone still uses generic catch', asy
 
     assert.equal(preNhgetchMessages.some(message => /You catch the loadstone!/.test(message)), true,
         preNhgetchMessages.join('\n'));
-    assertCaughtSplitThrownObject(ammo, thrower, 'loadstone');
+    assertCaughtSplitThrownObject(ammo, thrower, 'loadstone', 'gray stone');
     assert.ok(rng.includes('rn2(75)'), rng.join(', '));
 });
 
@@ -64205,7 +64208,7 @@ test('production monster potion catch retains split potion in inventory', async 
     assert.notEqual(caught.id, potion.id);
     assert.equal(caught.quan, 1);
     assert.equal(caught.letter, 'a');
-    assert.equal(caught.line, 'a - a potion of paralysis');
+    assert.equal(caught.line, 'a - an emerald potion');
     assert.equal(caught.glyph, '!');
     assert.equal(caught.transientProjectile, false);
     assert.equal(game.level.objects.some(obj => obj.transientProjectile), false);
@@ -69636,7 +69639,7 @@ test('production monster shuriken catch retains split shuriken in inventory', as
 
     assert.equal(preNhgetchMessages.some(message => /You catch the shuriken!/.test(message)), true,
         preNhgetchMessages.join('\n'));
-    assertCaughtSplitThrownObject(shurikenItem, thrower, 'shuriken');
+    assertCaughtSplitThrownObject(shurikenItem, thrower, 'shuriken', 'throwing star');
     assert.ok(rng.includes('rn2(75)'), rng.join(', '));
     assert.equal(rng.some(entry => entry === 'rnd(8)'
         || entry === 'rnd(20)'
@@ -72258,7 +72261,7 @@ test('throw question menu falls back to downplayed inventory when no suggestions
     assert.equal(game._command_mode, 'throwInventory');
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
     assert.match(menuText, /f - a food ration/);
-    assert.match(menuText, /s - a scroll of charging/);
+    assert.match(menuText, /s - a scroll labeled HACKEM MUCHE/);
     assert.doesNotMatch(menuText, /You are not carrying anything/);
 
     await rhack('*');
@@ -72266,7 +72269,7 @@ test('throw question menu falls back to downplayed inventory when no suggestions
     assert.equal(game._command_mode, 'throwInventory');
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
     assert.match(menuText, /f - a food ration/);
-    assert.match(menuText, /s - a scroll of charging/);
+    assert.match(menuText, /s - a scroll labeled HACKEM MUCHE/);
 });
 
 test('throw question menu keeps suggested subset when suggestions exist', async () => {
@@ -72284,20 +72287,20 @@ test('throw question menu keeps suggested subset when suggestions exist', async 
 
     assert.equal(game._command_mode, 'throwInventory');
     let menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /d - a \+0 dagger/);
     assert.doesNotMatch(menuText, /f - a food ration/);
 
     await rhack('*');
 
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /d - a \+0 dagger/);
     assert.doesNotMatch(menuText, /f - a food ration/);
 
     await rhack(' ');
     await rhack('*');
 
     menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /d - a \+0 dagger/);
     assert.match(menuText, /f - a food ration/);
 });
 
@@ -75078,7 +75081,7 @@ test('underwater hero-thrown boomerang uses ordinary range one and generic auto-
     assert.equal(goblin.msleeping, 1);
     assert.equal(game.inventory.includes(boomerang), true);
     assert.equal(boomerang.wielded, true);
-    assert.match(boomerang.line, /weapon in right hand/);
+    assert.match(boomerang.line, /\(wielded\)/);
     assert.equal(game.level.objects.some(obj => obj.id === boomerang.id), false);
     assert.deepEqual(rngLog, ['rn2(100)=33', 'rn2(100)=82']);
 });
@@ -75620,7 +75623,7 @@ test('hero-thrown primary-wielded aklys returns to hand after monster hit', asyn
     assert.equal(goblin.mpeaceful, 0);
     assert.equal(game.inventory.includes(aklys), true);
     assert.equal(aklys.wielded, true);
-    assert.match(aklys.line, /weapon in right hand/);
+    assert.match(aklys.line, /tethered to right hand/);
     assert.equal(game.level.objects.some(obj => obj.id === aklys.id), false);
     assert.deepEqual(rngLog.map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(6)', 'rn2(19)', 'rn2(100)', 'rn2(100)',
@@ -78115,7 +78118,7 @@ test('magic trap fate 20 uncurses active inventory and unpunishes hero', () => {
     assert.equal(magicTrap.tseen, true);
     assert.equal(game.level.traps.includes(magicTrap), true);
     assert.equal(loadstone.cursed, false);
-    assert.match(loadstone.line, /uncursed loadstone/);
+    assert.match(loadstone.line, /uncursed gray stone/);
     assert.equal(game.u.upunished, false);
     assert.equal(game._punished, 0);
     assert.equal(game.u.uball, null);
@@ -80371,7 +80374,7 @@ test('applying polearm hit applies rust monster passive object erosion', async (
     assert.match(game._pending_message, /You hit the rust monster[.!]/);
     assert.match(game._pending_message, /Your glaive rusts!/);
     assert.equal(weapon.oeroded, 1);
-    assert.match(weapon.line, /rusty .*glaive/);
+    assert.match(weapon.line, /rusty .*single-edged polearm/);
     assert.equal(rustMonster.mhp < 50, true);
     assert.deepEqual(getRngLog().map(rngCallName).slice(0, 2), ['rnd(20)', 'rnd(6)']);
 });
@@ -81160,8 +81163,8 @@ test('f command question menu shows ready suggestions and selection readies item
 
     assert.equal(game._command_mode, 'readyInventory');
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /b - an arrow/);
-    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /b - a \+0 arrow/);
+    assert.match(menuText, /d - a \+0 dagger/);
     assert.match(menuText, /\$ - 5 gold pieces/);
     assert.doesNotMatch(menuText, /a - a bow/);
     assert.doesNotMatch(menuText, /f - a food ration/);
@@ -81218,7 +81221,7 @@ test('f command star menu exposes full inventory and rejects worn armor', async 
     assert.equal(game._command_mode, 'readyInventory');
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
     assert.match(menuText, /a - a \+0 leather armor \(being worn\)/);
-    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /d - a \+0 dagger/);
 
     await rhack('a');
 
@@ -81788,7 +81791,7 @@ test('f question ready menu ignores hidden downplayed letter', async () => {
 
     assert.equal(game._command_mode, 'readyInventory');
     const menuText = (game._overlay_lines || []).map(row => row[2]).join('\n');
-    assert.match(menuText, /d - a dagger/);
+    assert.match(menuText, /d - a \+0 dagger/);
     assert.doesNotMatch(menuText, /f - a food ration/);
 
     await rhack('f');
@@ -87740,7 +87743,7 @@ test('wielded potion stack bash consumes one and keeps the stack wielded', async
     assert.equal(game.inventory[0], potion);
     assert.equal(potion.quan, 1);
     assert.equal(potion.wielded, true);
-    assert.equal(potion.line, 'p - a potion of confusion (wielded)');
+    assert.equal(potion.line, 'p - an orange potion (wielded)');
     assert.equal(game.u.uconduct?.weaphit || 0, 0);
 });
 
@@ -90568,12 +90571,12 @@ test('direct hero melee bare-handed disenchanter drains worn gloves', async () =
     await rhack('l');
 
     assert.match(game._pending_message, /You hit it\./);
-    assert.match(game._pending_message, /You drain .*leather gloves, you pay for it!/);
-    assert.match(game._pending_message, /Your leather gloves seem less effective\./);
+    assert.match(game._pending_message, /You drain .*old gloves, you pay for it!/);
+    assert.match(game._pending_message, /Your old gloves seem less effective\./);
     assert.equal(gloves.spe, 1);
     assert.equal(gloves.unpaid, false);
     assert.equal(game.inventory.includes(gloves), true);
-    assert.match(gloves.line, /\+1 pair of leather gloves \(being worn\)/);
+    assert.match(gloves.line, /\+1 pair of old gloves \(being worn\)/);
     assert.equal(shop.shopBillEntryForObject(shkp, gloves), null);
     assert.equal(shkp.billct, 1);
     assert.equal(shkp.bill[0].useup, true);
