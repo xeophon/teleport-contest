@@ -6,7 +6,8 @@ import { artifactDefinitionForName, rlocNoMsg, enextoMonsterSpot } from './mklev
 import { CONFLICT, LEVITATION, INVIS, W_ARTI, In_quest, In_endgame } from './const.js';
 import { pmOf } from './mhitm.js';
 import { is_demon, S_IMP, MS_NEMESIS, M2_LORD, M2_PRINCE } from './permonst.js';
-import { couldsee } from './vision.js';
+import { couldsee, objectLightRadius } from './vision.js';
+import { artifactLight, beginBurn, endBurn, lightObjectKind } from './burn.js';
 
 const INVOKED_PROPERTIES = { CONFLICT: [CONFLICT, 'conflict'], LEVITATION: [LEVITATION, 'levitating'], INVIS: [INVIS, 'invisible'] };
 
@@ -25,6 +26,25 @@ export function artifactInvocation(item) {
     const identity = item?.artifact || item?.oartifact;
     const definition = artifactDefinitionForName(identity);
     return { definition, power: INVOCATIONS.get(definition?.name) || null };
+}
+
+// C: wield.c:setuwep/ready_weapon and do_wear.c:Armor_on/off/gone.
+// The caller changes equipment first; gold armor must already be worn on entry.
+export function setArtifactEquipmentLight(item, on) {
+    if (!item) return '';
+    const name = artifactDefinitionForName(item.artifact || item.oartifact)?.name;
+    const kind = lightObjectKind(item);
+    const goldArmor = kind === 'gold dragon scales' || kind === 'gold dragon scale mail';
+    if (name !== 'Sunsword' && !goldArmor) return '';
+    if (on ? item.lamplit || !artifactLight(item) : !item.lamplit) return '';
+    if (on) beginBurn(item);
+    else endBurn(item, false);
+    if (game.u?.blind || (game.u?._statusSuffix || '').includes('Blind')) return '';
+    const plural = kind === 'gold dragon scales';
+    const subject = name === 'Sunsword' ? name : `${on ? 'Your' : 'The'} ${kind}`;
+    if (!on) return `${subject} ${plural ? 'stop' : 'stops'} shining.`;
+    const adverb = ['strangely', 'dimly', 'brightly', 'brilliantly', 'radiantly'][objectLightRadius(item)];
+    return `${subject} ${plural ? 'begin' : 'begins'} to shine ${adverb}!`;
 }
 
 export function canInvokeItem(item) {

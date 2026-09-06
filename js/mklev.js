@@ -30,7 +30,7 @@ import { clearBuriedOrganicRotTimer, clearCorpseTimeout, freezeObjectInIcebox, o
 import { applySlimeMoldFruitFields } from './fruit.js';
 import { attachEggHatchTimeout } from './egg_timers.js';
 import { QUEST_FILLERS } from './quest_filler_data.js';
-import { ROLE_RANKS } from './roles.js';
+import { ROLE_RANKS, QUEST_ROLE_MONSTERS } from './roles.js';
 import { mkFakeAmuletOfYendor } from './wizard.js';
 import { dressMonster } from './worn.js';
 import { selectHwep } from './mhitm.js';
@@ -6558,13 +6558,13 @@ export function dropMonsterInventory(mon, { floorEffects = null, verb = 'fall' }
     if (!inventory.length) return;
     for (const otmp of inventory) {
         if ((otmp.quan || 1) <= 0) continue;
-        Object.assign(otmp, { ox: mon.mx, oy: mon.my });
+        Object.assign(otmp, { ox: mon.mx, oy: mon.my, ocarry: null });
         if (floorEffects?.(otmp, otmp.ox, otmp.oy, verb))
             continue;
         const stack = game.level.objects.find(obj => obj.ox === otmp.ox && obj.oy === otmp.oy
-            && obj.kind === otmp.kind && obj.otyp === otmp.otyp && obj.cls === otmp.cls);
+            && sameStackableObject(obj, otmp));
         if (stack) {
-            stack.quan = (stack.quan || 1) + (otmp.quan || 1);
+            mergeStackableObject(stack, otmp);
             continue;
         }
         game.level.objects.push(otmp);
@@ -9330,6 +9330,18 @@ function questFillerLocation(area, croom = null, humidity = DRY, stairs = false,
 // The random-generation metadata omits quest-only species. Adapt their full
 // canonical rows to the legacy fields consumed by makemon and combat.
 function questMonsterData(data) {
+    // C role.c:role_init changes these species for the chosen quest. The same
+    // Master of Thieves is a Rogue leader and a Tourist nemesis.
+    const [leader, guardian, nemesis] = QUEST_ROLE_MONSTERS[game._startup_role || game.urole?.name?.m] || [];
+    if (data.name === leader || data.name === guardian) {
+        data = { ...data, m2: data.m2 | questSpecies.M2_PEACEFUL,
+            align: (game.u?.ualignbase?.[0] ?? game.u?.ualign?.type ?? 0) * 3 };
+        if (data.name === leader) data = { ...data, sound: questSpecies.MS_LEADER, m3: data.m3 | questSpecies.M3_CLOSE };
+    }
+    if (data.name === nemesis) data = { ...data, sound: questSpecies.MS_NEMESIS,
+        m2: (data.m2 & ~questSpecies.M2_PEACEFUL) | questSpecies.M2_NASTY | questSpecies.M2_STALK | questSpecies.M2_HOSTILE,
+        m3: (data.m3 & ~questSpecies.M3_CLOSE) | questSpecies.M3_WANTSARTI | questSpecies.M3_WAITFORU };
+
     const attackCodes = new Map(Object.entries(questSpecies).filter(([key]) => key.startsWith('AT_')).map(([key, val]) => [val, key.slice(3).toLowerCase()]));
     const damageCodes = new Map(Object.entries(questSpecies).filter(([key]) => key.startsWith('AD_')).map(([key, val]) => [val, key.slice(3).toLowerCase()]));
     return {
@@ -9339,6 +9351,7 @@ function questMonsterData(data) {
         mplayer: data.pm >= questSpecies.PM_ARCHEOLOGIST && data.pm <= questSpecies.PM_WIZARD,
         male: is_male(data), female: is_female(data), neuter: questSpecies.is_neuter(data),
         unique: !!(data.geno & questSpecies.G_UNIQ), noCorpse: !!(data.geno & questSpecies.G_NOCORPSE),
+        msound: data.sound === questSpecies.MS_LEADER ? 'leader' : data.sound,
         nemesis: data.sound === questSpecies.MS_NEMESIS, waiting: !!(data.m3 & questSpecies.M3_WAITFORU),
         alwaysHostile: questSpecies.always_hostile(data), alwaysPeaceful: questSpecies.always_peaceful(data),
         strong: questSpecies.strongmonst(data), nasty: questSpecies.extra_nasty(data),
@@ -9667,10 +9680,13 @@ async function questFillerMonster(spec, area, croom, coord = null) {
     const name = typeof spec === 'string' ? spec : spec.id || spec.class;
     const named = name.length > 1;
     let ptr = named ? monsterByRndName(name) : null;
-    let pm = named ? QUEST_MONSTERS.find(mon => mon.name === name) : null;
-    if (!ptr && pm) ptr = questMonsterData(pm);
+    let pm = named ? QUEST_MONSTERS.find(mon => mon.name === name || mon.names?.includes(name)) : null;
+    const roleMonsters = QUEST_ROLE_MONSTERS[game._startup_role || game.urole?.name?.m] || [];
+    if (pm && (!ptr || roleMonsters.includes(pm.name))) ptr = { ...ptr, ...questMonsterData(pm) };
     const mplayer = pm?.pm >= questSpecies.PM_ARCHEOLOGIST && pm?.pm <= questSpecies.PM_WIZARD;
-    const gender = !named ? 0 : is_female(pm) ? 1 : is_male(pm) ? 0 : rn2(2);
+    const aliasGender = pm?.names?.indexOf(name) ?? -1;
+    const gender = !named ? 0 : !pm ? 2 : is_female(pm) ? 1 : is_male(pm) ? 0
+        : aliasGender === 0 || aliasGender === 1 ? aliasGender : rn2(2);
     // sp_lev.c:find_montype precedes create_monster's alignment and class rolls.
     inducedAlign80();
     if (named && (pm?.geno & questSpecies.G_UNIQ) && monsterNameExtinct(name)) return null;
@@ -9729,7 +9745,7 @@ function questLuaValue(value, state, croom) {
     }
     if (value.lua === 'binary') {
         const left = questLuaValue(value.left, state, croom), right = questLuaValue(value.right, state, croom);
-        if (value.op === '|') return left.or(right);
+        if (left instanceof SplevSelection) return value.op === '-' ? left.subtract(right) : left.or(right);
         return value.op === '+' ? left + right : left - right;
     }
     if (value.lua === 'call') {
@@ -9997,7 +10013,7 @@ async function questFillerOperations(operations, state, croom = null) {
             const pos = questFillerLocation(state.area, croom, DRY, false, coord);
             if (!pos) break;
             const def = artifactDefinitionForName(spec.name);
-            const types = { chest: CHEST, tin: TIN, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
+            const types = { chest: CHEST, tin: TIN, 'blank paper': SCR_BLANK_PAPER, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
             const otyp = def?.otyp ?? types[spec.id];
             const classes = { ')': WEAPON_CLASS, '[': ARMOR_CLASS, '*': GEM_CLASS, '(': TOOL_CLASS,
                 '%': FOOD_CLASS, '!': POTION_CLASS, '?': SCROLL_CLASS, '/': WAND_CLASS, '=': RING_CLASS,
@@ -10009,19 +10025,34 @@ async function questFillerOperations(operations, state, croom = null) {
             if (otyp === WAN_LIGHTNING) Object.assign(obj, { kind: 'lightning', cls: 'wand', wandIndex: 24,
                 glyph: '/', color: game._object_descriptions?.wands?.[24]?.color ?? CLR_BROWN });
             if (otyp === SCR_TELEPORTATION) Object.assign(obj, { kind: 'scroll of teleportation', cls: 'scroll', scrollIndex: 10 });
+            if (otyp === SCR_BLANK_PAPER) Object.assign(obj, { kind: 'scroll of blank paper', cls: 'scroll', scrollIndex: 21 });
             if (otyp === TIN) {
-                Object.assign(obj, { kind: 'tin', cls: 'food', singular: 'tin', plural: 'tins', spe: spec.montype === 'spinach' ? 1 : 0 });
+                Object.assign(obj, { kind: 'tin', cls: 'food', singular: 'tin', plural: 'tins', owt: 10 * obj.quan, spe: spec.montype === 'spinach' ? 1 : 0 });
                 if (spec.montype) obj.corpsenm = ['spinach', 'empty'].includes(spec.montype) ? null : monsterByRndName(spec.montype);
             }
             if (spec.spe != null) obj.spe = spec.spe;
             if (spec.buc === 'blessed') bless(obj);
             else if (spec.buc === 'cursed') curse(obj);
             else if (spec.buc === 'uncursed') { unbless(obj); uncurse(obj); }
+            else if (spec.buc === 'not-cursed') uncurse(obj);
             if (def && !artifactExists(def.name)) applyArtifactFields(obj, def, { dknown: false });
             else if (spec.name) obj.oname = spec.name;
             obj.oeroded = obj.oeroded2 = 0;
             obj.oerodeproof = false;
+            if (spec.quantity > 0 && (otyp === TIN || obj.cls === 'scroll' || obj.cls === 'food'
+                || obj.cls === 'potion' || obj.cls === 'gem' || obj.cls === 'weapon')) {
+                obj.owt = (obj.owt || 0) / obj.quan * spec.quantity;
+                obj.quan = spec.quantity;
+            }
             stack_floor_object(obj);
+            break;
+        }
+        case 'engraving': {
+            const spec = rest.length ? { coord: arg, type: rest[0], text: rest[1] } : arg;
+            const pos = questFillerLocation(state.area, croom, DRY, false, spec.coord || [spec.x, spec.y]);
+            const type = ({ dust: DUST, engrave: ENGRAVE, burn: BURN, mark: MARK, blood: ENGR_BLOOD })[spec.type || 'engrave'];
+            make_engr_at(pos.x, pos.y, spec.text, false, 0, type);
+            Object.assign(engr_at(pos.x, pos.y), { nowipeout: spec.degrade === false, guardobjects: !!spec.guardobjects });
             break;
         }
         case 'altar': {
@@ -10051,6 +10082,11 @@ async function questFillerOperations(operations, state, croom = null) {
                 'magic portal': MAGIC_PORTAL, web: WEB, statue: STATUE_TRAP,
                 magic: MAGIC_TRAP, 'anti magic': ANTI_MAGIC, polymorph: POLY_TRAP,
                 'vibrating square': VIBRATING_SQUARE };
+            if (arg && typeof arg === 'object') {
+                const pos = questFillerLocation(state.area, croom, DRY, false, arg.coord || arg);
+                await barFillTrap(arg.type ? kinds[arg.type] : null, () => pos);
+                break;
+            }
             if (arg != null && kinds[arg] == null) throw new Error(`Unsupported quest trap ${arg}`);
             if (rest.length) {
                 const pos = questFillerLocation(state.area, croom, DRY, false, rest.length === 1 ? rest[0] : rest);

@@ -111,3 +111,20 @@ export const ROLE_RANKS = {
         ['Sorcerer', 'Sorceress'], ['Necromancer'], ['Wizard'], ['Mage'],
     ],
 };
+
+// C role.c:roles[]: quest leader, guardian, and nemesis species names.
+export const QUEST_ROLE_MONSTERS = {
+    Archeologist: ['Lord Carnarvon', 'student', 'Minion of Huhetotl'],
+    Barbarian: ['Pelias', 'chieftain', 'Thoth Amon'],
+    Caveman: ['Shaman Karnov', 'neanderthal', 'Chromatic Dragon'],
+    Healer: ['Hippocrates', 'attendant', 'Cyclops'],
+    Knight: ['King Arthur', 'page', 'Ixoth'],
+    Monk: ['Grand Master', 'abbot', 'Master Kaen'],
+    Priest: ['Arch Priest', 'acolyte', 'Nalzok'],
+    Ranger: ['Orion', 'hunter', 'Scorpius'],
+    Rogue: ['Master of Thieves', 'thug', 'Master Assassin'],
+    Samurai: ['Lord Sato', 'roshi', 'Ashikaga Takauji'],
+    Tourist: ['Twoflower', 'guide', 'Master of Thieves'],
+    Valkyrie: ['Norn', 'warrior', 'Lord Surtur'],
+    Wizard: ['Neferet the Green', 'apprentice', 'Dark One'],
+};

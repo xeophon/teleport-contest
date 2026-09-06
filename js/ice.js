@@ -149,7 +149,7 @@ export function scheduleMeltIceTimeout(x, y, when) {
     return turn;
 }
 
-export function meltIceAway(where, timeout, { afterMelt = null } = {}, g = game) {
+export async function meltIceAway(where, timeout, { afterMelt = null } = {}, g = game) {
     const x = (where >>> 16) & 0xffff;
     const y = where & 0xffff;
     const moving = g._monster_moving;
@@ -159,11 +159,22 @@ export function meltIceAway(where, timeout, { afterMelt = null } = {}, g = game)
     try {
         stopMeltTimers(x, y);
         const result = meltIceAt(x, y, { message: ICE_TIMER_MELT_MESSAGE });
-        if (afterMelt) result.messages.push(...afterMelt(x, y, result));
+        if (afterMelt) {
+            const effects = await afterMelt(x, y, result);
+            result.messages.push(...(effects.messages || effects));
+            // C keeps mon_moving set while spoteffects waits for input.
+            // Save only data so a suspended drowning callback can be saved.
+            if (effects.pending) {
+                g._water_operation_resumed = 0;
+                g._timer_callback_pending = { monsterMoving: moving, contextMoving };
+            }
+        }
         return result.messages;
     } finally {
-        g._monster_moving = moving;
-        g.context.mon_moving = contextMoving;
+        if (!g._timer_callback_pending) {
+            g._monster_moving = moving;
+            g.context.mon_moving = contextMoving;
+        }
     }
 }
 

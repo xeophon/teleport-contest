@@ -64,7 +64,7 @@ const LIGHT_SOURCE_MONSTERS = new Set([
 ]);
 
 // C: timeout.c begin_burn(), light.c candle_light_range()/arti_light_radius().
-function objectLightRadius(obj) {
+export function objectLightRadius(obj) {
     if (!(obj.lamplit || obj.burning)) return 0;
     const name = String(obj.actualKind || obj.kind || '').toLowerCase();
     if ([370, 371].includes(obj.otyp) || ['tallow candle', 'wax candle'].includes(name))

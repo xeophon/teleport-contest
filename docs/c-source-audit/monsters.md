@@ -257,3 +257,35 @@ water callers, shopkeeper diagonal-door blocking, and full generalized steed
 landing/float-down behavior. The existing gremlin split dependency also still
 needs canonical `cloneu` creation and monster-HP field integration. Timer/main
 flow pause/resume integration is pending in the parent work.
+
+## Object identity across timer-bearing transfers
+
+The live drop, comma pickup, pickup menus, autopickup and catch paths now keep
+the original object, following `do.c:dropx:786` and `invent.c:addinv:1152` /
+`freeinv:1403`. Previously a one-turn lamp could be dropped or picked up and
+remain lit forever: its timer extinguished a detached copy. Floor pickup,
+container insertion/takeout and bag scatter splits now duplicate timers at
+their existing deadlines (`mkobj.c:splitobj:457-507`), with sale previews
+remaining views rather than allocating unused split objects.
+
+Monster inventory drops use the existing full stack compatibility and merge
+operations. This preserves independently hatching eggs and retires discarded
+candle timers as required by `invent.c:merged:807-854`. Destruction of carried
+and floor containers, including cursed-bag losses, stops timers throughout
+the contents tree (`shk.c:obfree:1187`, `mkobj.c:dealloc_obj:2745-2767`).
+Eleven new independent tests cover these transfer and destruction boundaries;
+the first eight reproduced failures before implementation. The 3,134 existing
+shop tests pass, with one expectation corrected to require the C object
+identity on whole-stack pickup.
+
+The ordinary water command and melt callback can now suspend before successful
+crawl relocation while the remaining message pages are displayed
+(`trap.c:drown:5159-5164`, `win/tty/topl.c:update_topl:251`). A source-derived
+state test checks that the hero remains in water at the first More prompt and
+that resuming does not repeat escape RNG. The public swimmer session again
+matches all 73 screens and all 3,713 RNG calls.
+
+This is not a complete transfer audit: deferred theft, monster projectile and
+no-hands pickup splits, plus other direct floor-removal destruction callers
+still need review. Full drowning effects between every individual pline also
+remain broader than the successful-crawl continuation implemented here.

@@ -39,7 +39,26 @@ test('ordinary forced water entry damages inventory before crawling out', async 
     await cmd.rhack('m');
     await cmd.rhack('l');
     assert.equal(game.inventory[0].otyp, SCR_BLANK_PAPER);
+    assert.match(game._pending_message, /fall into the pool/);
+    await cmd.rhack(' ');
     assert.match(game._pending_message, /crawl out/);
+});
+
+test('completed water entry retains every pline across the tty More boundary', async () => {
+    setup();
+    game.u.ux = 9;
+    game.level.at(9, 10).typ = ROOM;
+    await cmd.rhack('m');
+    await cmd.rhack('l');
+    assert.equal(game._pending_message, 'You fall into the pool of water!  You sink like a rock.');
+    assert.equal(game._message_more, 1);
+    assert.deepEqual([game.u.ux, game.u.uy], [10, 10]);
+    const rolls = getRngLog().length;
+    await cmd.rhack(' ');
+    assert.equal(game._pending_message, 'You try to crawl out of the water.  Pheew!  That was close.');
+    assert.equal(game._message_more, 0);
+    assert.deepEqual([game.u.ux, game.u.uy], [9, 10]);
+    assert.equal(getRngLog().length, rolls);
 });
 
 for (const property of ['flying', 'levitating', 'waterWalking']) {
@@ -90,7 +109,7 @@ test('canonical amphibious form enters water and touches bottom', async () => {
 test('crawl escape shuffles all eight directions before finding a safe orthogonal destination', async () => {
     setup();
     game.level.at(11, 10).typ = ROOM;
-    const result = await cmd.afterMeltHeroSpotEffects(10, 10);
+    const result = await cmd.heroWaterLandingEffects();
     assert.deepEqual([game.u.ux, game.u.uy], [11, 10]);
     assert.equal(game.u.uinwater || 0, 0);
     assert.equal(result.relocated, true);
@@ -209,7 +228,7 @@ test('excess carried weight is shed before the crawl message, while cursed loads
     const stone = { letter: 'a', cls: 'gem', kind: 'loadstone', cursed: true, quan: 1, owt: 500 };
     const weapon = { letter: 'b', cls: 'gem', glyph: '*', kind: 'rock', quan: 80, owt: 800 };
     game.inventory.push(stone, weapon);
-    const result = await cmd.afterMeltHeroSpotEffects(10, 10);
+    const result = await cmd.heroWaterLandingEffects();
     assert.deepEqual(game.inventory, [stone]);
     assert.deepEqual([game.u.ux, game.u.uy], [11, 10]);
     assert.ok(game.level.objects.some(obj => obj.kind === 'rock' && obj.ox === 10 && obj.oy === 10));

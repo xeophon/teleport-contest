@@ -38,9 +38,10 @@ export function peekTimer(func, arg, g = game) {
         && (timer.kind !== TIMER_LEVEL || timer.level === g.level))?.timeout || 0;
 }
 
-export async function runTimers(handlers, g = game, active = () => true) {
+export async function runTimers(handlers, g = game, active = () => true, paused = () => false) {
     const results = [];
     for (;;) {
+        if (paused()) break;
         // C unloads local timers with their level; this queue retains them.
         const index = (g.timers || []).findIndex(timer => timer.timeout <= (g.moves || 0)
             && (timer.kind !== TIMER_LEVEL || timer.level === g.level) && active(timer));

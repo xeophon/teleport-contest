@@ -56201,7 +56201,7 @@ test('accepted ordinary floor burden prompt bills after confirmation', async () 
     assert.match(game._pending_message, /much trouble lifting .*11 food rations.*unpaid/);
     assert.equal(game.level.objects.includes(stack), false);
     assert.ok(carried);
-    assert.notEqual(carried, stack);
+    assert.equal(carried, stack);
     assert.equal(carried.quan, 11);
     assert.equal(carried.unpaid, true);
     assert.ok(entry);

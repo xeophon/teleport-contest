@@ -108,7 +108,7 @@ export async function emergencyDisrobe(D, g = game) {
     return { success: true, lost };
 }
 
-export async function waterLandingEffects(D, { newspot = true, resume = false } = {}, g = game) {
+export async function waterLandingEffects(D, { newspot = true, resume = false, deferCrawl = false } = {}, g = game) {
     const messages = [];
     let props = D.properties();
     const u = g.u;
@@ -116,6 +116,14 @@ export async function waterLandingEffects(D, { newspot = true, resume = false } 
     const continuation = resume ? g._water_continuation : null;
     let phase = continuation?.phase || 'enter';
     let deathAttempts = continuation?.deathAttempts || 0;
+
+    if (phase === 'afterCrawlMessages') {
+        messages.push(continuation.pages.shift());
+        if (continuation.pages.length) return result({ pending: true });
+        g._water_continuation = null;
+        const landing = await D.relocate(continuation.x, continuation.y, messages, false);
+        return result({ ...landing, relocated: true });
+    }
 
     if (phase === 'afterDismountDamage') {
         g._water_continuation = null;
@@ -225,6 +233,8 @@ export async function waterLandingEffects(D, { newspot = true, resume = false } 
                 if (escape.lost) messages.push('You dump some of your gear to lose weight...');
                 if (escape.success) {
                     messages.push('Pheew!  That was close.');
+                    if (deferCrawl && D.pauseBeforeCrawl(messages, destination))
+                        return result({ pending: true });
                     const landing = await D.relocate(destination.x, destination.y, messages, false);
                     return result({ ...landing, relocated: true });
                 }

@@ -7,10 +7,10 @@ import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightOb
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
-import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL } from './const.js';
+import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP } from './const.js';
 import { AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsAcid } from './mhitm.js';
-import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal } from './artifact.js';
+import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
     recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
 
@@ -2160,8 +2160,8 @@ function carriedDropDisplayColor(item) {
 function dropCarriedObjectAtHero(item, messages = [], dropTarget = null) {
     const dropX = dropTarget?.x ?? game.u?.ux ?? 0;
     const dropY = dropTarget?.y ?? game.u?.uy ?? 0;
-    const dropped = {
-        ...item,
+    removeInventoryItem(item, item.quan || 1);
+    const dropped = Object.assign(item, {
         invlet: item.invlet ?? item.letter,
         letter: undefined,
         line: undefined,
@@ -2174,12 +2174,11 @@ function dropCarriedObjectAtHero(item, messages = [], dropTarget = null) {
             : item.cls === 'ring' ? '=' : item.cls === 'potion' ? '!' : item.cls === 'scroll' ? '?'
                 : item.cls === 'spellbook' ? '+' : '('),
         color: carriedDropDisplayColor(item),
-    };
+    });
     curseLoadstoneLeavingInventory(dropped);
     if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
     if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
     normalizeContainedObjectParents(dropped);
-    removeInventoryItem(item, item.quan || 1);
     const shipObject = maybeShipCarriedDropObject(dropped, dropped.ox, dropped.oy, messages);
     const placed = shipObject.handled
         ? false
@@ -12304,6 +12303,7 @@ function removeInventoryItem(item, amount = 1) {
         item.line = normalInventoryLine({ ...item, line: '' });
         if (item.unpaid) syncUnpaidBillLine(item);
     } else {
+        setArtifactEquipmentLight(item, false);
         stopCarriedFigurineTimerOnLeave(item);
         game.inventory = (game.inventory || []).filter(other => other !== item);
     }
@@ -12318,8 +12318,7 @@ function useUpInventoryItem(item, amount = 1) {
     const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
     if (usedCount >= quantity) {
         markObjectTreeShopBillsUsedUp(item);
-        stopObjectTimers(item, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
-        if (item.lamplit || item.burning) endBurn(item, false);
+        stopDestroyedObjectTreeTimers(item);
         for (const slot of ['uwep', 'uswapwep', 'uquiver', 'uarm', 'uarmc', 'uarmh',
             'uarms', 'uarmg', 'uarmf', 'uarmu', 'uamul', 'uleft', 'uright', 'ublindf']) {
             if (game.u?.[slot] === item) game.u[slot] = null;
@@ -12329,6 +12328,13 @@ function useUpInventoryItem(item, amount = 1) {
     }
     removeInventoryItem(item, usedCount);
     return true;
+}
+
+// C obfree deletes contents before dealloc_obj stops each object's timers.
+function stopDestroyedObjectTreeTimers(obj) {
+    for (const child of globContents(obj)) stopDestroyedObjectTreeTimers(child);
+    stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
+    if (obj.lamplit || obj.burning) endBurn(obj, false);
 }
 
 function splitOneCarriedInventoryItem(item) {
@@ -13215,8 +13221,7 @@ function useUpFloorObject(obj, count, { heroCaused = false } = {}) {
         : null;
     const usedObj = splitFloorObjectForUseUp(obj, count);
     if (heroCaused) billHeroCausedFloorUseUp(usedObj, precomputedPrice);
-    stopObjectTimers(usedObj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
-    if (usedObj.lamplit || usedObj.burning) endBurn(usedObj, false);
+    stopDestroyedObjectTreeTimers(usedObj);
     removeFloorObject(usedObj);
     return usedObj;
 }
@@ -19370,6 +19375,8 @@ async function takeOffEquipment(item, options = {}) {
     updateGauntletsOfPowerStrength(kind, false);
     updateWornDisplacement();
     const messages = [...wornOffMessages];
+    const lightMessage = setArtifactEquipmentLight(item, false);
+    if (lightMessage) messages.push(lightMessage);
     const gloveFallout = slot === 'gloves' ? takeOffGlovesPetrifyingSelfTouchMessages(item) : [];
     messages.push(...gloveFallout);
     return {
@@ -19414,13 +19421,14 @@ async function takeOffReadiedItem(item) {
             return takeOffCursedBlockerResult(item, { primaryWeapon: true });
         }
         const wasTwoweap = !!game._twoweapon;
+        const stoppedLight = setArtifactEquipmentLight(item, false);
         item.wielded = false;
         item.alternate = false;
         if (item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item)))
             game._wielded_mjollnir = false;
         game._twoweapon = false;
         item.line = unwieldedBaseLine(item);
-        return { messages: [wasTwoweap ? 'You are no longer wielding either weapon.' : 'You are empty handed.'], move: 1 };
+        return { messages: [stoppedLight, wasTwoweap ? 'You are no longer wielding either weapon.' : 'You are empty handed.'].filter(Boolean), move: 1 };
     }
     if (slot === 'alternate') {
         const wasTwoweap = !!game._twoweapon;
@@ -24407,9 +24415,10 @@ async function completeReadyWieldedSplit(item, verb, slot, wasTwoweap = game._tw
 }
 
 async function completeReadyWieldedAll(item, verb, slot) {
+    const stoppedLight = slot === 'primary' ? setArtifactEquipmentLight(item, false) : '';
     const wasTwoweap = clearReadyWieldedStateForQuiver(item, slot);
     const timeCost = slot === 'primary' || wasTwoweap;
-    const timeMessage = timeCost ? readyWieldedWeaponTimeMessage(slot) : '';
+    const timeMessage = [stoppedLight, timeCost ? readyWieldedWeaponTimeMessage(slot) : ''].filter(Boolean).join('  ');
     await completeReadyObject(item, verb, { timeMessage, timeCost });
 }
 
@@ -24597,6 +24606,7 @@ function heroAlternateLineForItem(item) {
 
 function swapHeroAlternatePolearmForFire(item) {
     const previous = (game.inventory || []).find(invItem => invItem !== item && itemIsPrimaryWielded(invItem));
+    const stoppedLight = setArtifactEquipmentLight(previous, false);
     for (const invItem of game.inventory || []) {
         if (invItem === item || invItem === previous) continue;
         if (itemIsPrimaryWielded(invItem)) {
@@ -24614,7 +24624,7 @@ function swapHeroAlternatePolearmForFire(item) {
     item.line = heroWieldedLineForItem(item);
     game._twoweapon = false;
     game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item));
-    return previous ? `${previous.line}.` : 'You have no secondary weapon readied.';
+    return [stoppedLight, previous ? `${previous.line}.` : 'You have no secondary weapon readied.'].filter(Boolean).join('  ');
 }
 
 async function beginHeroFireAlternatePolearmFallback(item) {
@@ -25305,6 +25315,8 @@ async function beginHeroFireProjectile(projectile, { readyMessage = '' } = {}) {
         const current = (game.inventory || []).find(item =>
             item !== launcher && (item.wielded || item.line?.includes('weapon in')));
         if (current) {
+            const stoppedLight = setArtifactEquipmentLight(current, false);
+            if (stoppedLight) readyMessage = [readyMessage, stoppedLight].filter(Boolean).join('  ');
             current.wielded = false;
             current.alternate = true;
             current.line = `${current.letter || '?'} - ${inventoryItemName(current)} (alternate weapon; not wielded)`;
@@ -25972,6 +25984,14 @@ const HERO_WATER_DEPS = {
     splitHero: splitGremlinPolyselfFromWaterVapor,
     damageHero: async (amount, cause, messages) => applyChestTrapFireDamage(messages, amount, cause),
     crawlDestination: heroWaterCrawlDestination,
+    pauseBeforeCrawl: (messages, destination) => {
+        const pages = packToplineMessages(messages);
+        if (pages.length < 2) return false;
+        game._water_continuation = { phase: 'afterCrawlMessages', ...destination, pages: pages.slice(1) };
+        game._command_mode = 'waterCrawlMore';
+        messages.splice(0, messages.length, pages[0]);
+        return true;
+    },
     nearCapacity: () => heroEncumbranceForWeight(heroCarriedWeight()),
     canEmergencyDrop: obj => {
         const slot = takeOffAllSlot(obj);
@@ -26066,7 +26086,7 @@ export async function heroWaterLandingEffects(options = {}) {
 
 export async function afterMeltHeroSpotEffects(x, y) {
     if (game.u?.ux !== x || game.u?.uy !== y) return { messages: [] };
-    const result = await heroWaterLandingEffects();
+    const result = await heroWaterLandingEffects({ deferCrawl: true });
     if (!result.pending && !result.relocated) {
         const landing = await heroLandingSpotEffectsNoPickup(result.messages, { skipWater: true });
         Object.assign(result, landing, landing.trapResult || {});
@@ -26084,6 +26104,7 @@ async function resumeWaterAfterPrompt(messages = []) {
     const result = await heroWaterLandingEffects({ resume: true });
     messages.push(...result.messages);
     await setMessage(messages.join('  '), !!result.pending);
+    if (game._water_continuation?.phase === 'afterCrawlMessages') game._command_mode = 'waterCrawlMore';
     if (result.fatal || result.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
     if (!result.pending) {
         game._water_operation_resumed = 1;
@@ -30822,8 +30843,9 @@ async function djinniFromLamp(lamp, messages) {
 async function rubLampObject(item) {
     const messages = [];
     if (!itemIsWielded(item)) {
+        const stoppedLight = setArtifactEquipmentLight(wieldedItem(), false);
         wieldItemForApply(item);
-        await setMessage(`You now wield ${articleFor(pickupObjectName({ ...item, line: '' }))}.`);
+        await setMessage([stoppedLight, `You now wield ${articleFor(pickupObjectName({ ...item, line: '' }))}.`].filter(Boolean).join('  '));
         game._command_mode = null;
         game.context.move = 1;
         return;
@@ -32569,6 +32591,7 @@ function isTwoHandedWieldItem(item) {
 function wieldItemForApply(item) {
     touchArtifactForWield(item);
     const previousWielded = (game.inventory || []).find(invItem => invItem !== item && itemIsWielded(invItem));
+    const stoppedLight = setArtifactEquipmentLight(previousWielded, false);
     if (previousWielded) {
         previousWielded.wielded = false;
         previousWielded.alternate = false;
@@ -32583,7 +32606,7 @@ function wieldItemForApply(item) {
     const hand = isTwoHandedWieldItem(item) ? 'hands' : `${game.u?.uhandedness || 'right'} hand`;
     item.line = `${item.letter || '?'} - ${inventoryItemName(item)} (weapon in ${hand})`;
     game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(inventoryItemName(item));
-    return item.line;
+    return [stoppedLight, item.line].filter(Boolean).join('  ');
 }
 
 function polearmTargetDescription(x, y) {
@@ -35006,6 +35029,7 @@ async function startTinOpening(tin, floorObject = false) {
 function wieldTinOpenerForUse(opener) {
     if (!opener || opener.wielded || opener.line?.includes('(wielded)') || opener.line?.includes('weapon in')) return;
     const previous = wieldedItem();
+    const stoppedLight = previous !== opener ? setArtifactEquipmentLight(previous, false) : '';
     if (previous && previous !== opener) {
         previous.wielded = false;
         previous.alternate = true;
@@ -35014,6 +35038,7 @@ function wieldTinOpenerForUse(opener) {
     opener.wielded = true;
     opener.alternate = false;
     opener.line = `${opener.letter || '?'} - ${inventoryItemName(opener)} (wielded)`;
+    return stoppedLight;
 }
 
 async function beginTinOpenerUse(opener) {
@@ -35023,13 +35048,14 @@ async function beginTinOpenerUse(opener) {
         game._command_mode = null;
         return true;
     }
-    wieldTinOpenerForUse(opener);
+    const stoppedLight = wieldTinOpenerForUse(opener);
     if (tins.length === 1) {
         await startTinOpening(tins[0], false);
+        if (stoppedLight) await setMessage([stoppedLight, game._pending_message].filter(Boolean).join('  '), !!game._message_more);
         return true;
     }
     const letters = tins.map(item => item.letter).filter(Boolean).join('');
-    await setMessage(`What do you want to open? [${getobjPromptLetters(letters)} or ?*]`);
+    await setMessage([stoppedLight, `What do you want to open? [${getobjPromptLetters(letters)} or ?*]`].filter(Boolean).join('  '));
     game._tin_opener_letter = opener?.letter || '';
     game._command_mode = 'tinOpenerObject';
     return true;
@@ -41650,7 +41676,8 @@ function beginShopFloorContainerPutSale(container, item, amount = item?.quan || 
     const reject = containerPutRejectMessage(container, item);
     if (reject) return null;
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
-    const putItem = splitInventoryObjectForContainerPut(item, count);
+    // A sale preview is not yet a split object in an inventory chain.
+    const putItem = count < (item.quan || 1) ? { ...item, quan: count } : item;
     const sale = shopFloorContainerPutSaleInfo(container, putItem);
     if (!sale?.prompt) return sale;
     return {
@@ -42836,8 +42863,7 @@ export function holdCaughtThrownObject(obj, {
 } = {}) {
     if (!obj) return { held: false, dropped: false, message: '' };
     const name = catchName || pickupObjectName({ ...obj, quan: 1 });
-    const caught = {
-        ...obj,
+    const caught = Object.assign(obj, {
         quan: Math.max(1, Math.trunc(Number(obj.quan || 1))),
         kind: obj.kind || pickupObjectName({ ...obj, quan: 1 }),
         glyph,
@@ -42846,7 +42872,7 @@ export function holdCaughtThrownObject(obj, {
         hidden: false,
         buried: false,
         transientProjectile: false,
-    };
+    });
     delete caught.letter;
     delete caught.line;
     delete caught.ox;
@@ -42861,11 +42887,10 @@ export function holdCaughtThrownObject(obj, {
 
     const letter = simulatedNextInventoryLetters(1)?.[0];
     if (!letter) {
-        const dropped = {
-            ...caught,
+        const dropped = Object.assign(caught, {
             ox: game.u?.ux || 0,
             oy: game.u?.uy || 0,
-        };
+        });
         game.level.objects ??= [];
         game.level.objects.push(dropped);
         newsym(dropped.ox, dropped.oy);
@@ -44104,7 +44129,8 @@ function splitFloorPickupObjectForLift(obj, count) {
     const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
     if (isLoadstoneObject(obj)) return obj;
     if (!obj || takeCount >= quantity) return obj;
-    const lifted = { ...obj, id: next_ident(), quan: takeCount };
+    const lifted = { ...obj, id: next_ident(), quan: takeCount, timed: 0 };
+    splitObjectTimers(obj, lifted);
     delete lifted.o_id;
     delete lifted._shopBillObjectId;
     delete lifted.letter;
@@ -45787,6 +45813,8 @@ function destroyWornArmorItem(armor, messages = null) {
         armor.worn = false;
         armor.owornmask = 0;
         armor.line = normalInventoryLine({ ...armor, line: '' });
+        const lightMessage = setArtifactEquipmentLight(armor, false);
+        if (lightMessage && messages) messages.push(lightMessage);
     }
     if ((kind === 'speed boots' || isBlueDragonArmorKind(kind)) && game.u)
         syncHeroSpeedState();
@@ -48547,7 +48575,8 @@ function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1) {
 
 function splitInventoryObjectForContainerPut(item, count) {
     if (!item || (item.quan || 1) <= count) return item;
-    const putItem = { ...item, quan: count, id: next_ident() };
+    const putItem = { ...item, quan: count, id: next_ident(), timed: 0 };
+    splitObjectTimers(item, putItem);
     delete putItem.o_id;
     delete putItem._shopBillObjectId;
     if (item.unpaid && !splitCarriedObjectShopBill(item, putItem, count))
@@ -48625,8 +48654,6 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
 
     const name = inventoryItemName(item);
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
-    const putItem = splitInventoryObjectForContainerPut(item, count);
-    clearContainerPutEquipmentState(putItem, name);
     let sellobjResult = null;
     if (!options.skipSalePrompt) {
         const pendingSale = beginShopFloorContainerPutSale(container, item, count);
@@ -48634,6 +48661,8 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
             return { moved: false, pendingSale, message: pendingSale.promptMessage };
         if (pendingSale?.handled) sellobjResult = pendingSale;
     }
+    const putItem = splitInventoryObjectForContainerPut(item, count);
+    clearContainerPutEquipmentState(putItem, name);
     curseLoadstoneLeavingInventory(putItem);
     if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
         const triggerOwner = shopkeeperOwningBillEntry(putItem);
@@ -48924,7 +48953,8 @@ function splitContainerTakeoutObjectForLift(obj, count) {
     const takeCount = Math.max(1, Math.min(quantity, Math.trunc(Number(count || quantity))));
     if (isLoadstoneObject(obj)) return obj;
     if (!obj || takeCount >= quantity) return obj;
-    const lifted = { ...obj, id: next_ident(), quan: takeCount };
+    const lifted = { ...obj, id: next_ident(), quan: takeCount, timed: 0 };
+    splitObjectTimers(obj, lifted);
     delete lifted.o_id;
     delete lifted._shopBillObjectId;
     delete lifted.letter;
@@ -51621,6 +51651,7 @@ function destroyMagicBagItem(item, messages, { silent = false, usedUpShopBill = 
     if (!item) return;
     if (usedUpShopBill) markObjectTreeShopBillsUsedUp(item);
     if (!silent) messages.push(magicBagItemGoneMessage(item));
+    stopDestroyedObjectTreeTimers(item);
     removeObjectFromWorld(item);
 }
 
@@ -51690,9 +51721,11 @@ function splitMagicBagScatterStack(obj) {
         ...obj,
         id: next_ident(),
         quan: splitCount,
+        timed: 0,
         contents: Array.isArray(obj.contents) ? [...obj.contents] : obj.contents,
         cobj: Array.isArray(obj.cobj) ? [...obj.cobj] : obj.cobj,
     };
+    splitObjectTimers(obj, splitObj);
     delete splitObj.o_id;
     delete splitObj._shopBillObjectId;
     if (obj.unpaid && !splitCarriedObjectShopBill(obj, splitObj, splitCount))
@@ -54044,13 +54077,12 @@ function pickupListHandleObject(obj, preflight, state) {
         removePickupListFloorObject(pickupObj);
         return;
     }
-    const pickedItem = {
-        ...pickupObj,
+    const pickedItem = Object.assign(pickupObj, {
         cls: pickupListPickedClass(pickupObj),
         letter,
         kind: pickupObj.kind || pickupObjectName({ ...pickupObj, quan: 1 }),
         line: `${letter} - ${amount}`,
-    };
+    });
     const billing = addPickedObjectToShopBill(pickupObj, pickedItem);
     const billedPrice = billing.itemPrice ?? billing.price ?? 0;
     objectIceEffect(pickedItem, pickupObj.ox, pickupObj.oy, { onLevel: false });
@@ -61112,8 +61144,7 @@ async function moveHero(dx, dy) {
             const spellbookInfo = pickedObject.otyp === SPE_HEALING
                 ? { cls: 'spellbook', spellName: 'healing', spell: { name: 'healing', level: 1, skill: 'healing' }, known: false, bknown: false }
                 : {};
-            const pickedItem = {
-                ...pickedObject,
+            const pickedItem = Object.assign(pickedObject, {
                 ...spellbookInfo,
                 cls: pickedObject.cls || spellbookInfo.cls || (pickedObject.otyp === DART ? 'weapon'
                     : pickedObject.otyp === GEM_CLASS ? 'gem'
@@ -61127,7 +61158,7 @@ async function moveHero(dx, dy) {
                 letter,
                 kind: pickedObject.kind || pickupObjectName({ ...pickedObject, quan: 1 }),
                 line: `${letter} - ${amount}`,
-            };
+            });
             objectIceEffect(pickedItem, newx, newy, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             maybeAttachCarriedFigurineTimeout(pickedItem);
@@ -62157,8 +62188,9 @@ async function moveHero(dx, dy) {
     if (liquidTarget && nopick && targetMoveTyp !== LAVAPOOL && targetMoveTyp !== LAVAWALL) {
         game.u.dx = dx;
         game.u.dy = dy;
-        const water = await heroWaterLandingEffects();
-        if (water.messages.length) await setMessage(water.messages.join('  '), water.pending || water.messages.length > 1);
+        const water = await heroWaterLandingEffects({ deferCrawl: true });
+        if (water.pending) await setMessage(water.messages.join('  '), true);
+        else await setPackedToplineMessages(water.messages);
         game.context.move = water.pending ? 0 : 1;
         if (water.fatal || water.lifeSaving) applyLifeSavingOrFatalCommandMode(water);
         return;
@@ -62473,8 +62505,7 @@ async function moveHero(dx, dy) {
         const spellbookInfo = pickedObject.otyp === SPE_HEALING
             ? { cls: 'spellbook', spellName: 'healing', spell: { name: 'healing', level: 1, skill: 'healing' }, known: false, bknown: false }
             : {};
-        const pickedItem = {
-            ...pickedObject,
+        const pickedItem = Object.assign(pickedObject, {
             ...spellbookInfo,
             cls: pickedObject.cls || spellbookInfo.cls || (pickedObject.otyp === DART ? 'weapon'
                 : pickedObject.otyp === GEM_CLASS ? 'gem'
@@ -62490,7 +62521,7 @@ async function moveHero(dx, dy) {
             letter,
             kind: pickedObject.kind || pickupObjectName({ ...pickedObject, quan: 1 }),
             line: `${letter} - ${amount}`,
-        };
+        });
         game.inventory = [...(game.inventory || []), pickedItem];
         maybeAttachCarriedFigurineTimeout(pickedItem);
         game.level.objects = (game.level.objects || []).filter(obj => obj !== pickedObject);
@@ -63376,6 +63407,15 @@ async function rhackInternal(_cmd) {
             }
             game._command_mode = null;
             finishQuestLeaderTalkTurn();
+        }
+        return;
+    }
+
+    if (game._command_mode === 'waterCrawlMore') {
+        if (ch === ' ' || ch === '\r' || ch === '\n' || ch === '\x1b') {
+            const timerOwned = !!game._timer_callback_pending;
+            const result = await resumeWaterAfterPrompt();
+            if (!result.pending && !timerOwned) game.context.move = 1;
         }
         return;
     }
@@ -66864,7 +66904,10 @@ function tutorialEnterStash() {
                         .find(invItem => invItem.letter === occupation.itemLetter);
                     if (item && item.worn && occupation.acBonus != null) {
                         item.worn = false;
+                        item.owornmask = 0;
                         item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
+                        const lightMessage = setArtifactEquipmentLight(item, false);
+                        if (lightMessage) next += `  ${lightMessage}`;
                         if (game.u) game.u.uac = (game.u.uac ?? 10) + occupation.acBonus;
                         if ((occupation.kind === 'speed boots' || isBlueDragonArmorKind(occupation.kind)) && game.u)
                             syncHeroSpeedState();
@@ -74310,9 +74353,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 // and returns ECMD_TIME: the wield itself consumes the turn.
                 // allmain.js:maybePromptQueuedPickDigApply() is the canned
                 // re-apply; it runs after the turn passes.
+                const stoppedLight = setArtifactEquipmentLight(wieldedItem(), false);
                 wieldItemForApply(item);
                 game._queued_pick_dig_apply_letter = item.letter;
-                await setMessage(`You now wield ${inventoryItemName(item)}.`);
+                await setMessage([stoppedLight, `You now wield ${inventoryItemName(item)}.`].filter(Boolean).join('  '));
                 game.context.move = 1;
                 return;
             }
@@ -76023,12 +76067,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game._command_mode = null;
                 return;
             }
-            stopCarriedFigurineTimerOnLeave(item);
-            game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
-            updateWornDisplacement();
-            game._pet_food_scan_inventory = game.inventory;
-            const dropped = {
-                ...item,
+            const droppedName = inventoryItemName(item);
+            const stoppedLight = setArtifactEquipmentLight(item, false);
+            removeInventoryItem(item, item.quan || 1);
+            const dropped = Object.assign(item, {
                 invlet: item.invlet ?? item.letter,
                 letter: undefined,
                 line: undefined,
@@ -76044,7 +76086,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                         : item.cls === 'spellbook' ? '+' : '('),
                 color: item.cls === 'weapon' ? (item.kind === 'quarterstaff' ? CLR_BROWN : item.color ?? CLR_CYAN)
                     : item.color ?? (item.cls === 'scroll' || item.cls === 'spellbook' ? CLR_WHITE : NO_COLOR),
-            };
+            });
             curseLoadstoneLeavingInventory(dropped);
             if (Array.isArray(dropped.contents)) dropped.contents = [...dropped.contents];
             if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
@@ -76072,18 +76114,18 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             game._message_more = 0;
-            const dropMessages = [];
+            const dropMessages = stoppedLight ? [stoppedLight] : [];
             if (item.cls === 'weapon' || item.kind === 'chest') {
                 if (game.flags?.verbose === false) {
                     dropMessages.push(...floorMessages);
                 } else {
-                    dropMessages.push(`You drop ${inventoryItemName(item)}.`, ...floorMessages);
+                    dropMessages.push(`You drop ${droppedName}.`, ...floorMessages);
                 }
             } else {
                 dropMessages.push(...floorMessages);
             }
             if (shopSale?.prompt) {
-                const declineMessage = dropMessages.length ? dropMessages.join('  ') : `You drop ${inventoryItemName(item)}.`;
+                const declineMessage = dropMessages.length ? dropMessages.join('  ') : `You drop ${droppedName}.`;
                 game._shop_sale_pending.declineMessage = declineMessage;
                 const promptMessages = [...dropMessages, shopSale.promptMessage];
                 await setMessage(promptMessages.join('  '));
@@ -78146,9 +78188,26 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         if (ch === '-') {
-            for (const invItem of game.inventory || []) invItem.wielded = false;
+            const primary = primaryWieldedItem();
+            if (readyPrimaryWillWeld(primary)) {
+                primary.bknown = true;
+                await setMessage(readyWeldedPrimaryMessage(primary));
+                game._command_mode = null;
+                return;
+            }
+            const messages = ['You are empty handed.'];
+            for (const invItem of game.inventory || []) {
+                if (itemIsPrimaryWielded(invItem)) {
+                    const lightMessage = setArtifactEquipmentLight(invItem, false);
+                    if (lightMessage) messages.push(lightMessage);
+                    invItem.owornmask = (invItem.owornmask || 0) & ~W_WEP;
+                    invItem.line = `${invItem.letter || '?'} - ${inventoryItemName(invItem)}`;
+                }
+                invItem.wielded = false;
+            }
+            game.u.uwep = null;
             game._wielded_mjollnir = false;
-            await setMessage('You are empty handed.');
+            await setMessage(messages.join('  '));
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -78160,10 +78219,21 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game._command_mode = null;
                 return;
             }
+            const held = primaryWieldedItem();
+            if (readyPrimaryWillWeld(held)) {
+                held.bknown = true;
+                await setMessage(readyWeldedPrimaryMessage(held));
+                game._command_mode = null;
+                return;
+            }
             touchArtifactForWield(item);
+            const lightMessages = [];
             const previousWielded = (game.inventory || []).find(invItem => invItem !== item
                 && (invItem.wielded || invItem.line?.includes('weapon in') || invItem.line?.includes('(wielded)')));
             if (previousWielded) {
+                const lightMessage = setArtifactEquipmentLight(previousWielded, false);
+                if (lightMessage) lightMessages.push(lightMessage);
+                previousWielded.owornmask = (previousWielded.owornmask || 0) & ~W_WEP;
                 const previousName = inventoryItemName(previousWielded);
                 if (game.flags?.pushweapon) {
                     const previousLine = `${previousWielded.letter || '?'} - ${previousName} (alternate weapon${(previousWielded.quan || 1) > 1 ? 's' : ''}; not wielded)`;
@@ -78191,7 +78261,10 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             item.alternate = false;
             item.line = isWeapon ? `${ch} - ${baseName} (weapon in ${hand})` : `${ch} - ${baseName} (wielded)`;
             game._wielded_mjollnir = item.artifact === 'Mjollnir' || item.kind === 'mjollnir' || /Mjollnir/.test(baseName);
-            await setMessage(`${item.line}.`);
+            lightMessages.unshift(`${item.line}.`);
+            const lightMessage = setArtifactEquipmentLight(item, true);
+            if (lightMessage) lightMessages.push(lightMessage);
+            await setMessage(lightMessages.join('  '));
             game._command_mode = null;
             game.context.move = 1;
             return;
@@ -83076,16 +83149,24 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             await setMessage("You don't have a secondary weapon readied.");
             return;
         }
+        if (readyPrimaryWillWeld(primary)) {
+            primary.bknown = true;
+            await setMessage(readyWeldedPrimaryMessage(primary));
+            return;
+        }
         const primaryName = inventoryItemName(primary);
         const secondaryName = inventoryItemName(secondary);
+        const stoppedLight = setArtifactEquipmentLight(primary, false);
         primary.wielded = false;
+        primary.owornmask = (primary.owornmask || 0) & ~W_WEP;
         primary.alternate = true;
         primary.line = `${primary.letter || '?'} - ${primaryName} (alternate weapon; not wielded)`;
         secondary.wielded = true;
         secondary.alternate = false;
         secondary.line = `${secondary.letter || '?'} - ${secondaryName} (weapon in right hand)`;
         game._swap_exchange_count = (game._swap_exchange_count || 0) + 1;
-        await setMessage(`${secondary.line}.`, true);
+        const litLight = setArtifactEquipmentLight(secondary, true);
+        await setMessage([`${secondary.line || heroWieldedLineForItem(secondary)}.`, stoppedLight, litLight].filter(Boolean).join('  '), true);
         game._swap_more_line = `${primary.line}.`;
         game._swap_time_pending_after_more = 1;
         game._swap_skip_tail_after_more = game._swap_exchange_count === 1 ? 1 : 0;
@@ -83361,13 +83442,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
             const corpseName = pickupObjectName({ ...objectHere, quan: 1 });
             const letter = nextInventoryLetter();
-            const pickedItem = {
-                ...objectHere,
+            const pickedItem = Object.assign(objectHere, {
                 cls: 'food',
                 letter,
                 quan: 1,
                 kind: corpseName,
-            };
+            });
             objectIceEffect(pickedItem, game.u?.ux || 0, game.u?.uy || 0, { onLevel: false });
             game.inventory = [...(game.inventory || []), pickedItem];
             game._pet_food_scan_inventory = game.inventory;
@@ -83454,14 +83534,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 : pickupObj.wasStolen && pickupObj.letter
                 ? pickupObj.letter
                 : preflight.inventoryLetter || nextInventoryLetter();
-            const pickedItem = {
-                ...pickupObj,
+            const pickedItem = Object.assign(pickupObj, {
                 letter,
                 kind: pickupObj.kind || name,
                 quan: pickupObj.quan || 1,
-                no_charge: undefined,
                 line: `${letter} - ${amount}`,
-            };
+            });
             const billing = addPickedObjectToShopBill(pickupObj, pickedItem);
             const billedPrice = billing.itemPrice ?? billing.price ?? 0;
             const unpaidSuffix = shopPickupLinePriceSuffix(liftedPriceInfo, billedPrice);

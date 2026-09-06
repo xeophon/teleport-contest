@@ -25,64 +25,47 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **4,785 passing tests**, with no failures,
-skips or TODOs, up from 4,309 at the previous checkpoint. Public recordings
-remain 53/53 with 12,712/12,712 screens and 832,102/832,102 RNG calls.
-Supplemental recordings remain 12/19 with 3,070/3,346 screens and
-137,929/141,728 RNG calls; both corpora have zero worker errors. These are
-separate measures, not evidence that the whole C port is complete.
+The latest source-driven checkpoint has **4,846 passing tests**, with no
+failures, skips or TODOs. All four generated-data/source-inventory checks pass.
+These checks establish progress, not whole-game parity or hidden-test success.
 
-This checkpoint adds source-ordered timer queue primitives and live burn
-callbacks; lamp/candle/oil thresholds, ownership, save identity and off-level
-catch-up; shared object hiding checks; fireball and skilled fire/cold bursts;
-and artifact invocation cooldown, healing, energy, ammunition, charging,
-untrap, property toggles, banishment and dungeon portals. It also adds ten
-named quest maps: Barbarian/Caveman/Healer/Ranger goals and
-Caveman/Healer/Knight/Ranger/Rogue/Valkyrie locates. All 26 fillers and 21 of
-39 named stages dispatched at that checkpoint. The next group adds Rogue, Monk
-and Valkyrie goals, bringing dispatch to 50/65 (26 fillers and 24/39 named
-stages), with 15 named maps still absent.
+All nine object/level timer kinds now share C's deadline ordering, including
+newest-first ties, cancellation, object identity, inactive levels, and catch-up.
+The main loop advances the clock at C's turn-setup point, then runs intrinsic
+expiries, timers, regions and regeneration. Melting under the hero suspends the
+remaining queue during controlled teleport, crawl messages, life saving and
+wizard death refusals. Saved continuations retain data and resume the same turn.
+Eleven live-turn tests cover these phases, slow heroes and prayer invulnerability.
+Arrival still needs a complete continuation for timer prompts before the rest
+of the destination-level setup proceeds.
 
-The next group also adds candle/Candelabrum application, timer-preserving
-stack splits and merge cleanup, shared camera/Sunsword flash combat, and C
-life-saving HP restoration including generated amulets, Unchanging and
-fire-resistant paper damage. Its combined suite passes 4,589/4,589. The
-recording counts above were last rerun at the preceding 4,520-test checkpoint.
+Object transfers now preserve live identity for ordinary drop, pickup and
+caught items; partial floor/container stacks copy timers; monster inventory
+merges and carried-container destruction cancel discarded timers. Some deferred
+theft, floor-merge and monster partial-pickup callers remain to be audited.
+Sunsword and gold dragon armor now start/stop untimed light through ordinary
+wield, swap, removal, dressing, quiver and tool-driven weapon changes. Thirty
+new tests cover equipment state, BCU light radii and welded-weapon refusal.
+Retouch, invoked-property loss and transformation callers remain unfinished.
 
-The latest batch puts burn and ice-melt callbacks on the same ordered queue,
-including cancellation, inactive levels, restored identity, map flips and
-lowered drawbridges. It also expands source-derived spell targeting, camera
-illumination, photography records and experience, flash continuation after
-life saving, and petrification checks against the correct genocide flag.
+Quest dispatch is **56/65 maps**: all 26 fillers and 30/39 named stages.
+Monk locate and Tourist locate/goal are newly implemented; nine named start
+maps remain. Source-ordered player-monster equipment, first Astral arrival
+population and guardian creation are present. Artificial Astral stair entry
+and later guardian loss under conflict remain follow-ups.
 
-The next checkpoint adds egg and figurine callbacks to that queue, including
-container/migration behavior, source retry and blocked-hatching RNG order,
-genocide cancellation and all creation callers. It also adds ordinary
-player-monster equipment for all 13 roles, retaining C's unused armor draws,
-plus Samurai locate/goal and Wizard goal. Quest dispatch is now 53/65
-(26 fillers and 27/39 named stages).
+The last complete recording run, at preceding commit f98b4e1, passed 52/53
+public sessions (12,708/12,712 screens, 832,102/832,102 RNG calls) and 12/19
+supplemental sessions (3,070/3,346 screens, 137,929/141,728 RNG calls), with
+zero worker errors. The four public screen mismatches were in swimming:
+messages and hero relocation crossed a More prompt too early. That source
+behavior is now fixed and the individual recording matches 73/73 screens and
+3,713/3,713 RNG calls. The current full corpora will be rerun after this commit.
 
-All nine timer callback kinds now use the shared queue. Source-derived
-regressions cover silent floor/container decay, wielded-corpse cleanup,
-migrating and buried globs, organic container rot, revival failure, repeated
-ice adjustment, mixed-family messages and arrival callbacks after delivery.
-Grimtooth uses shared venom throwing and projectile death handling. The water
-entry operation covers inventory damage, controlled teleport, escape and
-disrobing, life-saving continuations and grounded-mounted entry. Its melt
-callback API still needs integration with the main loop's prompt continuation.
-The same checkpoint adds endgame player-monster equipment and creation armor,
-shared role ranks, and first Astral arrival hostility, player population and
-guardian-angel behavior. Artificial Astral stair entry and later guardian
-loss under conflict remain follow-ups.
-
-Still open in these slices: the main turn's timer phase and prompt resumption,
-remaining object destruction/transfer lifecycle,
-automatic artifact light activation, remaining artifact powers and property
-loss, immediate hero water landing after ice melts, and broader
-explosion/hero-death branches. The independent reviews
-found and fixed bulk timer cancellation, inactive level ownership, numeric
-artifact lights, container weight and hiding state. Source quirks are retained,
-including the missing on-time oil hiding recheck in this C revision.
+Still open across the repository are the broader source-audit gaps below and
+in the per-subsystem audit files. Implemented callback kinds or dispatched
+maps do not certify every branch in their owning C files. C quirks are retained;
+changes to the reference behavior belong upstream.
 
 ## Previous checkpoint measurements
 

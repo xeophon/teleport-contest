@@ -1,4 +1,6 @@
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
+import { setArtifactEquipmentLight } from './artifact.js';
+import { afterMeltHeroSpotEffects } from './cmd.js';
 import { clearHeroSickness, adjustHeroAttribute } from './cmd.js';
 // allmain.js — Main game setup and move loop.
 
@@ -3492,7 +3494,7 @@ function processAttributeExercise() {
 
     const oneShotExerciseTurnOffset = game._exercise_turn_offset || 0;
     const exerciseTurnOffset = oneShotExerciseTurnOffset;
-    const turn = (game.moves || 1) + 1 + exerciseTurnOffset;
+    const turn = (game.moves || 1) + exerciseTurnOffset;
     const skipPeriodicExerciseTurn = game._skip_periodic_exercise_turn || 0;
     const skipPeriodicExerciseAtTurn = !!skipPeriodicExerciseTurn && turn === skipPeriodicExerciseTurn;
     if (skipPeriodicExerciseAtTurn) game._skip_periodic_exercise_turn = 0;
@@ -4208,6 +4210,13 @@ export async function transformFigurine(figurine, timeout, g = game) {
 }
 
 export async function processGameTimers(g = game) {
+    if (g._timer_callback_pending) {
+        if (!g._water_operation_resumed) return [];
+        g._monster_moving = g._timer_callback_pending.monsterMoving;
+        g.context.mon_moving = g._timer_callback_pending.contextMoving;
+        g._timer_callback_pending = null;
+        g._water_operation_resumed = 0;
+    }
     const handlers = {
         ...CORPSE_TIMER_HANDLERS,
         [ROT_ORGANIC]: { run: runOrganicRotTimer },
@@ -4216,17 +4225,23 @@ export async function processGameTimers(g = game) {
         [FIG_TRANSFORM]: { run: transformFigurine },
         [BURN_OBJECT]: { run: runObjectBurnTimer },
         [MELT_ICE_AWAY]: { run: (where, time) => meltIceAway(where, time, {
-            afterMelt: (x, y, result) => result.becameLiquid
-                ? applyMeltedIceMonsterLiquidEffects(x, y, { recordKill: recordVanquished }) : [],
+            afterMelt: async (x, y, result) => {
+                if (!result.becameLiquid) return [];
+                const messages = applyMeltedIceMonsterLiquidEffects(x, y, { recordKill: recordVanquished });
+                const hero = await afterMeltHeroSpotEffects(x, y);
+                messages.push(...hero.messages);
+                applyLifeSavingOrFatalCommandMode(hero);
+                return { messages, pending: hero.pending };
+            },
         }, g) },
     };
     const results = await runTimers(handlers, g,
-        timer => handlers[timer.func] && !objectLocations(g, true).get(timer.arg)?.saved);
+        timer => handlers[timer.func] && !objectLocations(g, true).get(timer.arg)?.saved,
+        () => !!g._timer_callback_pending || !!g.program_state?.gameover);
     return results.flat();
 }
 
 async function afterMoveTurn(g, includeHeroTime = true) {
-    for (const msg of await processGameTimers(g)) addToplineMessage(msg);
     if (includeHeroTime && g.moves >= (g.context.seer_turn || 0)) {
         if (g._prayer_debug_pleased && (g._prayer_pending_done && (g._pending_time_passed || 0) <= 1
             || (g._pending_prayer_finish_message
@@ -4296,6 +4311,10 @@ function maybeShapeshiftVampire(mon) {
 }
 
 export async function processMonsterTurns() {
+    if (game._turn_tail_phase === 'timers') {
+        game._deferred_monster_turn_tail = 0;
+        return await finishMonsterTurnTail();
+    }
     if (game._pending_feral_steed_dismount) {
         const steed = game._pending_feral_steed_dismount;
         game._pending_feral_steed_dismount = null;
@@ -10534,6 +10553,8 @@ if (attack.adtyp === 'steal') {
         game._utrack.push({ x: game.u?.ux || 0, y: game.u?.uy || 0 });
         if (game._utrack.length > 100) game._utrack.shift();
     }
+    // C allmain.c:244: all once-per-turn effects observe the new turn.
+    game.moves = (game.moves || 1) + 1;
     if (game.u?.fumbling) {
         game.u._fumblingTimeout = Math.max(0, (game.u._fumblingTimeout ?? 0) - 1);
         if (!game.u._fumblingTimeout) {
@@ -10593,17 +10614,14 @@ if (attack.adtyp === 'steal') {
 	}
 
 async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
+    const resumeTimers = game._turn_tail_phase === 'timers';
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
     if (!resumeAfterSounds) {
-    // Resume-after-stoning-death: the pre-nh_timeout()/run_regions prefix
-    // (blind/veryfast/invulnerable decrements, regions, fumble — moveloop
-    // once-per-turn items between allmain.c:267 and :294) already ran inside
-    // the aborted tail call; C continues nh_timeout()'s decrement loop from
-    // done_timeout()'s return and only the items AFTER the STONED expiry
-    // still execute.  Skip the prefix here.
-    if (!resumeAfterStoningDeath) {
+    // C resumes nh_timeout after a refused death or a suspended timer.
+    // Neither continuation repeats the earlier intrinsic decrements.
+    if (!resumeTimers && !resumeAfterStoningDeath) {
         // C ref: allmain.c:273-274 — nh_timeout() runs BEFORE run_regions()
         // in moveloop_core; its BLINDED expiry (timeout.c:744-750 ->
         // make_blinded(0L, TRUE), potion.c) decrements the timeout and, on
@@ -10627,7 +10645,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 game.vision_full_recalc = 1;
             }
         }
-        advanceRegions(game);
         if (game._finish_fumble_timeout) {
             game._finish_fumble_timeout = 0;
             if (game.u?.fumbling) game.u._fumblingTimeout = rnd(20);
@@ -10654,7 +10671,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
         // exercise(A_DEX, FALSE) costs one rn2(2) draw (attrib.c:509)
         // every turn, before regen_hp()'s rn2(100) (allmain.c:659).
     } /* !resumeAfterStoningDeath prefix */
-        if (!resumeAfterStoningDeath && (game.u?._stonedTimeout || 0) > 0) {
+        if (!resumeTimers && !resumeAfterStoningDeath && !game.u?.uinvulnerable && (game.u?._stonedTimeout || 0) > 0) {
             addHeroStatusSuffix('Stone');
             const stonedStage = game.u._stonedTimeout;
             const stonedMessage = STONED_TEXTS[5 - stonedStage];
@@ -10679,13 +10696,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                     return false;
                 }
                 game._death_bones_body = 'statue';
-                // C ref: allmain.c:243-244 — svm.moves++ clocks in at the
-                // death turn's setup (before nh_timeout()), so the corpse
-                // count/status (T field) shows T+1 during the whole
-                // --More--/"Die?" chain; the aborted JS tail below loses the
-                // pass's post-turn increment — restore it at the arm point
-                // so stoning-death bookkeeping stays phase-locked with C.
-                game.moves = (game.moves || 1) + 1;
                 // C ref: end.c:726-735 die() -> savelife() — the refused
                 // petrification stomps gm.multi to -1 and rewrites
                 // gn.nomovemsg to "You survived that attempt on your
@@ -10712,7 +10722,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
         // C timeout.c:sickness_dialogue()/nh_timeout(): warnings and
         // constitution exercise precede expiry, which precedes HP regen.
         const sickTime = game.u?._sickTimeout || game.u?._sicknessTimeout || 0;
-        if (!resumeAfterStoningDeath && !game.u?.uinvulnerable && sickTime > 0) {
+        if (!resumeTimers && !resumeAfterStoningDeath && !game.u?.uinvulnerable && sickTime > 0) {
             const u = game.u;
             let warning = { 7: 'Your illness feels worse.', 5: 'Your illness is severe.', 3: "You are at Death's door." }[sickTime];
             if (warning) {
@@ -10750,13 +10760,125 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                     } else {
                         game._sickness_expired = 1;
                         game._resume_turn_tail_after_stoning_death = 1;
-                        game.moves = (game.moves || 1) + 1;
                         armHeroDeathMore('');
                     }
                     return false;
                 }
             }
         }
+        if (!resumeTimers && !game.u?.uinvulnerable) {
+            if ((game.u?._confusionTimeout || 0) > 0) {
+                game.u._confusionTimeout--;
+                if (!game.u._confusionTimeout) {
+                    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Conf', '');
+                    addToplineMessage((game.u?._statusSuffix || '').includes('Hallu')
+                        ? 'You feel less trippy now.'
+                        : 'You feel less confused now.');
+                }
+            }
+            if ((game.u?._stunTimeout || 0) > 0) {
+                game.u._stunTimeout--;
+                if (!game.u._stunTimeout) clearHeroStunTimeout();
+            }
+            if ((game.u?._halluTimeout || 0) > 0) {
+                game.u._halluTimeout--;
+                if (!game.u._halluTimeout) clearHeroHallucinationTimeout();
+            }
+            if ((game.u?._slimingTimeout || 0) > 0) {
+                addHeroStatusSuffix('Slime');
+                game.u.sliming = true;
+                game.u._slimingTimeout--;
+                const timeout = game.u._slimingTimeout;
+                const message = SLIME_TEXTS.get(timeout);
+                if (message) addToplineMessage(message);
+                applySlimingDialogueSideEffects(timeout);
+                if (!game.u._slimingTimeout) {
+                    game.u.sliming = false;
+                    removeHeroStatusSuffix('Slime');
+                    game.u.uhp = 0;
+                    game._death_cause = 'turned into green slime';
+                    game._death_current_move = 1;
+                    if (consumeLifeSavingAmulet()) {
+                        armHeroLifeSavingMore();
+                        return false;
+                    }
+                    armHeroDeathMore();
+                    return false;
+                }
+            }
+            if ((game.u?._acidResistanceTimeout || 0) > 0) {
+                game.u._acidResistanceTimeout--;
+                if (!game.u._acidResistanceTimeout) {
+                    if (!game.u._acidResistanceBase) game.u.acidResistance = false;
+                    delete game.u._acidResistanceBase;
+                }
+            }
+            if ((game.u?._temporaryFireResistanceTimeout || 0) > 0) {
+                game.u._temporaryFireResistanceTimeout--;
+                if (!game.u._temporaryFireResistanceTimeout) {
+                    if (!game.u._temporaryFireResistanceBase) game.u.fireResistance = false;
+                    delete game.u._temporaryFireResistanceBase;
+                    addToplineMessage('Your temporary ability to survive burning has ended.');
+                }
+            }
+            if ((game.u?._temporaryWaterWalkingTimeout || 0) > 0) {
+                game.u._temporaryWaterWalkingTimeout--;
+                if (!game.u._temporaryWaterWalkingTimeout) {
+                    if (!game.u._temporaryWaterWalkingBase) {
+                        game.u.waterWalking = false;
+                        game.u.Wwalking = false;
+                    }
+                    delete game.u._temporaryWaterWalkingBase;
+                    addToplineMessage('Your temporary ability to walk on liquid has ended.');
+                }
+            }
+            if ((game.u?._stoneResistanceTimeout || 0) > 0) {
+                game.u._stoneResistanceTimeout--;
+                if (!game.u._stoneResistanceTimeout) {
+                    if (!game.u._stoneResistanceBase) game.u.stoneResistance = false;
+                    delete game.u._stoneResistanceBase;
+                }
+            }
+            if ((game.u?._vomitingTimeout || 0) > 0) {
+                addHeroStatusSuffix('Vom');
+                game.u.vomiting = true;
+                game.u._vomitingTimeout--;
+                if (!game.u._vomitingTimeout) {
+                    game.u.vomiting = false;
+                    removeHeroStatusSuffix('Vom');
+                    addToplineMessage('You vomit!');
+                }
+            }
+            if ((game.u?._deafTimeout || 0) > 0) {
+                game.u._deafTimeout--;
+                if (!game.u._deafTimeout)
+                    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Deaf', '');
+            }
+            if ((game.u?._woundedLegTurns || 0) > 0) {
+                game.u._woundedLegTurns--;
+                if (!game.u._woundedLegTurns && game.u._woundedDexPenalty && game.u.acurr?.a) {
+                    const wasBurdened = (game.u._statusSuffix || '').includes('Burdened');
+                    game.u.acurr.a[3]++;
+                    game.u._woundedDexPenalty = 0;
+                    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Burdened', '');
+                    addToplineMessage('Your leg feels better.');
+                    if (wasBurdened) addToplineMessage('Your movements are now unencumbered.');
+                }
+            }
+        }
+        if (!game.u?.uinvulnerable || resumeTimers) {
+            game._turn_tail_phase = 'timers';
+            for (const message of await processGameTimers(game)) addToplineMessage(message);
+            if (game._timer_callback_pending) {
+                game._deferred_monster_turn_tail = 1;
+                game._resume_time_after_more = 1;
+                game._process_time_with_more = 0;
+                return 'defer-tail';
+            }
+            game._turn_tail_phase = null;
+        }
+        advanceRegions(game);
+        if (game.u?.ublesscnt) game.u.ublesscnt--;
 	        let reachedFullHp = false;
         let reachedFullPower = false;
         if (process.env.WEREDBG) console.error(`WEREDBG regen-eval moves=${game.moves} uhp=${game.u?.uhp}/${game.u?.uhpmax} rngidx=${getRngLog().length} dp=${!!game._death_pending_confirm} poly=${!!game.u?._polyself_form}`);
@@ -10813,7 +10935,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             const roleName = game.urole?.name?.m || game._startup_role || '';
             const interval = Math.trunc(((30 + 8 - (game.u?.ulevel || 1)) * (roleName === 'Wizard' ? 3 : 4)) / 6);
             const energyRegeneration = !!game.u?.energy_regeneration;
-            if ((wtcap < MOD_ENCUMBER && !(((game.moves || 1) + 1) % interval)) || energyRegeneration) {
+            if ((wtcap < MOD_ENCUMBER && !((game.moves || 1) % interval)) || energyRegeneration) {
                 const magicalBreathing = (game.inventory || []).some(item =>
                     item.worn && (item.actualKind === 'amulet of magical breathing'
                         || item.kind === 'amulet of magical breathing'));
@@ -11108,104 +11230,6 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
 	    if (game.u && (game.u._statusSuffix || '').includes('Satiated') && (game.u.uhunger ?? 900) <= 1001)
 	        game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Satiated', '');
 	    if (sleepingHunger && !game._helpless_time) game._sleeping_time = 0;
-    if ((game.u?._confusionTimeout || 0) > 0) {
-        game.u._confusionTimeout--;
-        if (!game.u._confusionTimeout) {
-            game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Conf', '');
-            addToplineMessage((game.u?._statusSuffix || '').includes('Hallu')
-                ? 'You feel less trippy now.'
-                : 'You feel less confused now.');
-        }
-    }
-    if ((game.u?._stunTimeout || 0) > 0) {
-        game.u._stunTimeout--;
-        if (!game.u._stunTimeout) clearHeroStunTimeout();
-    }
-    if ((game.u?._halluTimeout || 0) > 0) {
-        game.u._halluTimeout--;
-        if (!game.u._halluTimeout) clearHeroHallucinationTimeout();
-    }
-    if ((game.u?._slimingTimeout || 0) > 0) {
-        addHeroStatusSuffix('Slime');
-        game.u.sliming = true;
-        game.u._slimingTimeout--;
-        const timeout = game.u._slimingTimeout;
-        const message = SLIME_TEXTS.get(timeout);
-        if (message) addToplineMessage(message);
-        applySlimingDialogueSideEffects(timeout);
-        if (!game.u._slimingTimeout) {
-            game.u.sliming = false;
-            removeHeroStatusSuffix('Slime');
-            game.u.uhp = 0;
-            game._death_cause = 'turned into green slime';
-            game._death_current_move = 1;
-            if (consumeLifeSavingAmulet()) {
-                armHeroLifeSavingMore();
-                return false;
-            }
-            armHeroDeathMore();
-            return false;
-        }
-    }
-    if ((game.u?._acidResistanceTimeout || 0) > 0) {
-        game.u._acidResistanceTimeout--;
-        if (!game.u._acidResistanceTimeout) {
-            if (!game.u._acidResistanceBase) game.u.acidResistance = false;
-            delete game.u._acidResistanceBase;
-        }
-    }
-    if ((game.u?._temporaryFireResistanceTimeout || 0) > 0) {
-        game.u._temporaryFireResistanceTimeout--;
-        if (!game.u._temporaryFireResistanceTimeout) {
-            if (!game.u._temporaryFireResistanceBase) game.u.fireResistance = false;
-            delete game.u._temporaryFireResistanceBase;
-            addToplineMessage('Your temporary ability to survive burning has ended.');
-        }
-    }
-    if ((game.u?._temporaryWaterWalkingTimeout || 0) > 0) {
-        game.u._temporaryWaterWalkingTimeout--;
-        if (!game.u._temporaryWaterWalkingTimeout) {
-            if (!game.u._temporaryWaterWalkingBase) {
-                game.u.waterWalking = false;
-                game.u.Wwalking = false;
-            }
-            delete game.u._temporaryWaterWalkingBase;
-            addToplineMessage('Your temporary ability to walk on liquid has ended.');
-        }
-    }
-    if ((game.u?._stoneResistanceTimeout || 0) > 0) {
-        game.u._stoneResistanceTimeout--;
-        if (!game.u._stoneResistanceTimeout) {
-            if (!game.u._stoneResistanceBase) game.u.stoneResistance = false;
-            delete game.u._stoneResistanceBase;
-        }
-    }
-    if ((game.u?._vomitingTimeout || 0) > 0) {
-        addHeroStatusSuffix('Vom');
-        game.u.vomiting = true;
-        game.u._vomitingTimeout--;
-        if (!game.u._vomitingTimeout) {
-            game.u.vomiting = false;
-            removeHeroStatusSuffix('Vom');
-            addToplineMessage('You vomit!');
-        }
-    }
-    if ((game.u?._deafTimeout || 0) > 0) {
-        game.u._deafTimeout--;
-        if (!game.u._deafTimeout)
-            game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Deaf', '');
-    }
-    if ((game.u?._woundedLegTurns || 0) > 0) {
-        game.u._woundedLegTurns--;
-        if (!game.u._woundedLegTurns && game.u._woundedDexPenalty && game.u.acurr?.a) {
-            const wasBurdened = (game.u._statusSuffix || '').includes('Burdened');
-            game.u.acurr.a[3]++;
-            game.u._woundedDexPenalty = 0;
-            game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Burdened', '');
-            addToplineMessage('Your leg feels better.');
-            if (wasBurdened) addToplineMessage('Your movements are now unencumbered.');
-        }
-    }
     processAttributeExercise();
     const delaySwallowedArmorFinish = game.u?.uswallow && game._armor_wear_occupation
         && game._pending_time_passed && /You are freezing to death!/.test(game._pending_message || '');
@@ -11311,6 +11335,10 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             }
             if (occupation.action !== 'takeoff' && occupation.kind === 'fumble boots')
                 game._pending_fumble_boots_timeout = 1;
+            if (!game._armor_takeoff_after_more) {
+                const lightMessage = setArtifactEquipmentLight(item, occupation.action !== 'takeoff');
+                if (lightMessage) message += '  ' + lightMessage;
+            }
             if (game._pending_message && game._message_more) {
                 game._queued_message_after_more ||= message;
                 game._armor_finish_after_more = 1;
@@ -11382,9 +11410,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     // the immobile-hero extra monster phase here; the next keyed pass owns it.
     if (resumeAfterStoningDeath) return true;
     if ((game.u?.umovement ?? 0) < NORMAL_SPEED && !collapsedDoubleMiss && !suppressImmobileExtraTurns) {
-        game.moves = (game.moves || 1) + 1;
         await afterMoveTurn(game, false);
-        if (game.u?.ublesscnt) game.u.ublesscnt--;
         if (armBallDragForceTail) {
             game._force_monster_turn_tail_once = 1;
             game._ball_drag_subtract_after_forced_tail = 1;
@@ -17904,6 +17930,11 @@ function finishPrayerDeclineOutcome(g, angryResult) {
 
 export async function moveloop_core() {
     const g = game;
+    if (g._turn_tail_phase === 'timers' && g._water_operation_resumed) {
+        // savelife may clear command time; this is the retained current turn.
+        g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
+        g._resume_time_after_more = 1;
+    }
     // C ref: allmain.c:483-510 — while an occupation is armed the moveloop
     // charges a full turn automatically (svc.context.move = 1 immediately
     // before (*go.occupation)()); the eat occupation ticks back-to-back
@@ -17912,6 +17943,7 @@ export async function moveloop_core() {
         && g._command_mode !== 'continueEatingPrompt')
         g._pending_time_passed = 1;
     while (g._pending_time_passed
+        && !(g._timer_callback_pending && !g._water_operation_resumed)
         && !(g._pending_message && !g._message_more && g._pending_message_blocks_time)
         // C ref: end.c:1107-1118 — when the hero died mid-monster-turn,
         // done() blocks at "You die..."/"Die?" inline; the movemon monster
@@ -17964,12 +17996,11 @@ export async function moveloop_core() {
         if (g._deferred_monster_turn_tail && !(g._pending_message && g._message_more)) {
             g._deferred_monster_turn_tail = 0;
             const tailResult = await finishMonsterTurnTail();
+            if (tailResult !== true) break;
             if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:1', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
-            g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
             g.u.umoved = false;
-            if (g.u?.ublesscnt) g.u.ublesscnt--;
             if ((tailResult === false && g._command_mode === 'deathDieMore')
                 || lavaSinkingResult?.fatal || lavaSinkingResult?.lifeSaving) {
                 g._pending_time_passed = 0;
@@ -18164,9 +18195,9 @@ export async function moveloop_core() {
             g._monster_turns_started = 0;
             const advancedTail = await processMonsterTurns();
             g._armor_wear_occupation = occupationForTail;
-            if (advancedTail) {
+            if (advancedTail !== true) break;
+            if (advancedTail === true) {
                 if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:2', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
-            g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
                 lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
                 if (lavaSinkingResult?.fatal || lavaSinkingResult?.lifeSaving) {
@@ -18257,6 +18288,8 @@ export async function moveloop_core() {
                     }
                 }
                 if (occupation.action !== 'takeoff' && occupation.kind === 'fumble boots') g._pending_fumble_boots_timeout = 1;
+                const lightMessage = setArtifactEquipmentLight(item, occupation.action !== 'takeoff');
+                if (lightMessage) message += '  ' + lightMessage;
                 g._pending_message = message;
                 g._keep_pending_message = 1;
                 g._message_more = armorFinishNeedsMore || armorFinishFatalResult?.more ? 1 : 0;
@@ -18267,17 +18300,15 @@ export async function moveloop_core() {
             }
             g.u.umoved = false;
             turnAdvanced = true;
-            if (g.u?.ublesscnt) g.u.ublesscnt--;
         } else if (movedMonsters === 'defer-tail') {
             // The visible --More-- must be captured before nh_timeout/gethungry tail rolls.
+            if (g._timer_callback_pending) break;
         } else if (movedMonsters) {
             if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:4', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
-            g.moves = (g.moves || 1) + 1;
             await afterMoveTurn(g);
             lavaSinkingResult = applyHeroLavaSinkingAfterTurn();
             g.u.umoved = false;
             turnAdvanced = true;
-            if (g.u?.ublesscnt) g.u.ublesscnt--;
             if (lavaSinkingResult?.fatal || lavaSinkingResult?.lifeSaving) {
                 g._pending_time_passed = 0;
                 break;
@@ -18543,9 +18574,9 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
 			            if (clearDeferredMultiattackHalluDisplay) g._hallu_display_after_deferred_multiattack = 0;
             if (movedMoreMonsters === 'defer-tail') {
                 // Deferred by a message prompt; the top of the loop resumes the tail.
+                if (g._timer_callback_pending) break;
             } else if (movedMoreMonsters) {
                 if (process.env.MSGTRACE) (globalThis.__mt ??= []).push({f:'mvup:5', from:g.moves, rngidx:(typeof getRngLog==='function'?getRngLog().length:-1), pend:String(g._pending_message||'').slice(0,40), mm:g._message_more, mode:g._command_mode||'', keyNh:0});
-            g.moves = (g.moves || 1) + 1;
                 await afterMoveTurn(g);
             }
             if (g._message_more && g._pending_force_lock_start_message && !g._process_time_with_more) {

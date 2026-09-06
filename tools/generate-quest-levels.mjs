@@ -6,7 +6,7 @@ const inputs = {
     Caveman: ['Cav', 'goal', 'loca'], Healer: ['Hea', 'goal', 'loca'],
     Ranger: ['Ran', 'goal', 'loca'], Barbarian: ['Bar', 'goal'],
     Rogue: ['Rog', 'loca', 'goal'], Valkyrie: ['Val', 'loca', 'goal'], Knight: ['Kni', 'loca'],
-    Monk: ['Mon', 'goal'], Samurai: ['Sam', 'goal', 'loca'], Wizard: ['Wiz', 'goal'],
+    Monk: ['Mon', 'goal', 'loca'], Tourist: ['Tou', 'loca', 'goal'], Samurai: ['Sam', 'goal', 'loca'], Wizard: ['Wiz', 'goal'],
 };
 const programs = {}, copyrights = new Set();
 for (const [role, [prefix, ...stages]] of Object.entries(inputs)) {
