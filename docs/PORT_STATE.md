@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,423 passing tests**, with no
+The latest source-driven checkpoint has **6,468 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -33,10 +33,18 @@ HP/power regeneration now uses canonical property sources, temporary attribute
 bonuses, movement/load gates, sleeping regeneration, separate active monster HP
 and eel dehydration with source draw order. Power distinguishes extrinsic
 magical breathing from an intrinsic source. Fifty-eight new tests cover these
-branches and live turn integration. Two wound follow-ups preserve empty status
+branches and live turn integration. Two wound follow-ups remove empty status
 tokens and the C forced More on refused kicks; both affected recordings again
-match all 1,547 screens and 179,817 random calls. Zero-HP rehumanization,
-overexertion and full turn interruption scheduling remain source work.
+match all 1,547 screens and 179,817 random calls. Zero-HP rehumanization and full turn interruption scheduling remain source work.
+
+The turn now applies all `u_calc_moveamt` load fractions after hero/steed speed.
+Moving with a heavy load loses one active HP at the C 30/10-turn intervals;
+at one HP, fainting pauses before Constitution abuse and `fall_asleep`. Saved
+continuations resume before power regeneration without repeating regions or
+HP regeneration, and More input preserves the current turn's movement flag.
+Forty-five new tests pass. Combat overexertion and the remaining full
+`interrupt_multi` scheduling are separate follow-ups. A fresh C heavy-wish
+probe also confirms missing `hold_another_object` rejection in the wish path.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
@@ -285,13 +293,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at commit 2b18b84, passed 49/53 public
-sessions (11,628/12,712 screens, 798,872/832,102 RNG calls) and 12/19
+The last complete recording run, at commit c86eb3f, passed 51/53 public
+sessions (11,899/12,712 screens, 809,608/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
-zero worker errors. Its two newly failing public recordings were traced to
-empty status-token spacing and a refused-kick More prompt; both now match
-all screens and RNG calls in focused reruns. A fresh full-corpus checkpoint
-is still needed. These measurements do not establish full C behavior.
+zero worker errors. These measurements precede the latest turn-rule changes.
+The two failing public recordings remain seeds 0116 and 4500; restoring all
+passing-session counts does not imply every trace within failing sessions
+improved. These measurements do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

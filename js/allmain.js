@@ -68,7 +68,7 @@ import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 import { meltIceAway, removedFromIcebox } from './ice.js';
 import { runObjectBurnTimer } from './cmd.js';
-import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, ROT_ORGANIC, SHRINK_GLOB, MELT_ICE_AWAY, runTimers, splitObjectTimers } from './timeout.js';
+import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, ROT_ORGANIC, SHRINK_GLOB, MELT_ICE_AWAY, runTimers, splitObjectTimers, fallAsleep } from './timeout.js';
 import { objectLocations } from './obj_location.js';
 import { restoreLifeSavedBody } from './end.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
@@ -4337,7 +4337,7 @@ function maybeShapeshiftVampire(mon) {
 
 export async function processMonsterTurns() {
     if (game._monster_attack_continuation) return false;
-    if (['timers', 'legs'].includes(game._turn_tail_phase)) {
+    if (['timers', 'legs', 'exertion'].includes(game._turn_tail_phase)) {
         game._deferred_monster_turn_tail = 0;
         return await finishMonsterTurnTail();
     }
@@ -10391,6 +10391,7 @@ if (attack.adtyp === 'steal') {
         game._refresh_monsters_for_turn_tail_once = 0;
         mons = [...(game.level?.monsters || [])].reverse();
     }
+    game._turn_wtcap = heroEncumbranceForWeight(heroCarriedWeight());
     const liveMons = new Set(game.level?.monsters || []);
     if (!game._monster_turns_started && !finishingQueuedDeadTurn) {
         for (const mon of mons) {
@@ -10543,34 +10544,7 @@ if (attack.adtyp === 'steal') {
         await makemon(null, 0, 0, NO_MM_FLAGS);
         mons = [...(game.level?.monsters || [])].reverse();
     }
-    let heroMoveAmount = NORMAL_SPEED;
-    if (game.u?.usteed && game.u.umoved) {
-        const steed = game.u.usteed;
-        let mmove = steed.data?.mmove ?? NORMAL_SPEED;
-        // C allmain.c:u_calc_moveamt uses mcalcmove for a ridden move,
-        // including the steed's speed and gallop before random rounding.
-        if (steed.mspeed === 'slow' || steed.mspeed === MSLOW || steed.mspeed === -1)
-            mmove = mmove < NORMAL_SPEED ? Math.trunc((2 * mmove + 1) / 3)
-                : 4 + Math.trunc(mmove / 3);
-        else if (steed.mspeed === 'fast' || steed.mspeed === MFAST)
-            mmove = Math.trunc((4 * mmove + 2) / 3);
-        if (game.u.ugallop && game.context?.mv)
-            mmove = Math.trunc(((rn2(2) ? 4 : 5) * mmove) / 3);
-        heroMoveAmount = mmove - (mmove % NORMAL_SPEED);
-        if (rn2(NORMAL_SPEED) < (mmove % NORMAL_SPEED)) heroMoveAmount += NORMAL_SPEED;
-    } else {
-        heroMoveAmount = game.u?._monsterMove ?? NORMAL_SPEED;
-        // C: allmain.c:u_calc_moveamt augments the current form's speed
-        // using the live PRNG, including forms with zero base movement.
-        if (game.u?.veryfast) {
-            if (rn2(3)) heroMoveAmount += NORMAL_SPEED;
-        } else if (game.u?.fast) {
-            if (!rn2(3)) heroMoveAmount += NORMAL_SPEED;
-        }
-    }
-    if ((game.u?._statusSuffix || '').includes('Burdened'))
-        heroMoveAmount -= Math.trunc(heroMoveAmount / 4);
-    game.u.umovement = Math.max(0, (game.u.umovement || 0) + heroMoveAmount);
+    allocateHeroMovement(game._turn_wtcap);
     if (game._prime_newt_movement_after_turn_tail) {
         const newt = (game.level?.monsters || []).find(mon => mon.data?.name === 'newt');
         if (newt) newt.movement = Math.max(newt.movement || 0, game._prime_newt_movement_after_turn_tail);
@@ -10596,6 +10570,66 @@ if (attack.adtyp === 'steal') {
         }
 	    return result;
 	}
+
+// allmain.c:u_calc_moveamt applies load fractions after hero or steed speed.
+export function allocateHeroMovement(wtcap) {
+    let heroMoveAmount = NORMAL_SPEED;
+    if (game.u?.usteed && game.u.umoved) {
+        const steed = game.u.usteed;
+        let mmove = steed.data?.mmove ?? NORMAL_SPEED;
+        // C allmain.c:u_calc_moveamt uses mcalcmove for a ridden move,
+        // including the steed's speed and gallop before random rounding.
+        if (steed.mspeed === 'slow' || steed.mspeed === MSLOW || steed.mspeed === -1)
+            mmove = mmove < NORMAL_SPEED ? Math.trunc((2 * mmove + 1) / 3)
+                : 4 + Math.trunc(mmove / 3);
+        else if (steed.mspeed === 'fast' || steed.mspeed === MFAST)
+            mmove = Math.trunc((4 * mmove + 2) / 3);
+        if (game.u.ugallop && game.context?.mv)
+            mmove = Math.trunc(((rn2(2) ? 4 : 5) * mmove) / 3);
+        heroMoveAmount = mmove - (mmove % NORMAL_SPEED);
+        if (rn2(NORMAL_SPEED) < (mmove % NORMAL_SPEED)) heroMoveAmount += NORMAL_SPEED;
+    } else {
+        heroMoveAmount = game.u?._monsterMove ?? NORMAL_SPEED;
+        // C: allmain.c:u_calc_moveamt augments the current form's speed
+        // using the live PRNG, including forms with zero base movement.
+        if (game.u?.veryfast) {
+            if (rn2(3)) heroMoveAmount += NORMAL_SPEED;
+        } else if (game.u?.fast) {
+            if (!rn2(3)) heroMoveAmount += NORMAL_SPEED;
+        }
+    }
+    switch (wtcap) {
+    case 1: heroMoveAmount -= Math.trunc(heroMoveAmount / 4); break;
+    case MOD_ENCUMBER: heroMoveAmount -= Math.trunc(heroMoveAmount / 2); break;
+    case HVY_ENCUMBER: heroMoveAmount -= Math.trunc(heroMoveAmount * 3 / 4); break;
+    case EXT_ENCUMBER: heroMoveAmount -= Math.trunc(heroMoveAmount * 7 / 8); break;
+    }
+    game.u.umovement = Math.max(0, (game.u.umovement || 0) + heroMoveAmount);
+    return heroMoveAmount;
+}
+
+// hack.c:overexert_hp waits for the fainting message before exercise and sleep.
+// The caller retains this state when a More prompt suspends the current turn.
+export function overexertHeroHp(state = {}) {
+    if (state.phase === 'done') return true;
+    const u = game.u;
+    const poly = u._polyself_form || u.Upolyd || u.polymorphed;
+    const key = poly && u.mh != null ? 'mh' : 'uhp';
+    if (!state.phase) {
+        if (u[key] > 1) {
+            u[key]--;
+            (game.disp ??= {}).botl = true;
+            state.phase = 'done';
+            return true;
+        }
+        state.phase = 'afterMessage';
+        if (!addToplineMessage('You pass out from exertion!')) return false;
+    }
+    exerciseAttribute(A_CON, false);
+    fallAsleep(-10, false, stopHeroOccupation);
+    state.phase = 'done';
+    return true;
+}
 
 // allmain.c:regen_hp. Monster HP is distinct from the inactive human body;
 // older runtime forms keep their active HP in uhp until canonical mh exists.
@@ -10661,7 +10695,6 @@ export function regenerateHeroPower(wtcap) {
 async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     // A More prompt inside movemon must return before C starts a new turn.
     if (game._turn_setup_pending) {
-        game._turn_wtcap = heroEncumbranceForWeight(heroCarriedWeight());
         game._turn_setup_pending = 0;
         // C allmain.c:244: all once-per-turn effects observe the new turn.
         game.moves = (game.moves || 1) + 1;
@@ -10713,7 +10746,8 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             }
         }
     }
-    const resumeTimers = ['timers', 'legs'].includes(game._turn_tail_phase);
+    const resumeTimers = ['timers', 'legs', 'exertion'].includes(game._turn_tail_phase);
+    const resumeExertion = game._turn_tail_phase === 'exertion';
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
@@ -11012,21 +11046,37 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 return 'defer-tail';
             }
         }
-        if (!game.u?.uinvulnerable || resumeTimers) {
-            game._turn_tail_phase = 'timers';
-            for (const message of await processGameTimers(game)) addToplineMessage(message);
-            if (game._timer_callback_pending) {
+        const wtcap = game.u.uinvulnerable ? 0 : (game._turn_wtcap ?? heroEncumbranceForWeight(heroCarriedWeight()));
+        if (!resumeExertion) {
+            if (!game.u?.uinvulnerable || resumeTimers) {
+                game._turn_tail_phase = 'timers';
+                for (const message of await processGameTimers(game)) addToplineMessage(message);
+                if (game._timer_callback_pending) {
+                    game._deferred_monster_turn_tail = 1;
+                    game._resume_time_after_more = 1;
+                    game._process_time_with_more = 0;
+                    return 'defer-tail';
+                }
+                game._turn_tail_phase = null;
+            }
+            advanceRegions(game);
+            if (game.u?.ublesscnt) game.u.ublesscnt--;
+            game._turn_reached_full_hp = regenerateHeroHealth(wtcap);
+        }
+        if (resumeExertion || wtcap > MOD_ENCUMBER && game.u.umoved && game.moves % (wtcap < EXT_ENCUMBER ? 30 : 10) === 0) {
+            game._turn_tail_phase = 'exertion';
+            game._overexertion_turn_state ??= {};
+            if (!overexertHeroHp(game._overexertion_turn_state)) {
                 game._deferred_monster_turn_tail = 1;
                 game._resume_time_after_more = 1;
                 game._process_time_with_more = 0;
                 return 'defer-tail';
             }
+            game._overexertion_turn_state = null;
             game._turn_tail_phase = null;
         }
-        advanceRegions(game);
-        if (game.u?.ublesscnt) game.u.ublesscnt--;
-        const wtcap = game.u.uinvulnerable ? 0 : (game._turn_wtcap ?? heroEncumbranceForWeight(heroCarriedWeight()));
-        const reachedFullHp = regenerateHeroHealth(wtcap);
+        const reachedFullHp = game._turn_reached_full_hp;
+        game._turn_reached_full_hp = false;
         const reachedFullPower = regenerateHeroPower(wtcap);
         if (game._counted_repeat_interruptible && (reachedFullHp || reachedFullPower)) {
             game._pending_time_passed = 0;

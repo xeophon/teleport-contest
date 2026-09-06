@@ -219,7 +219,7 @@ test('the attached chain is neither selected nor counted by check_here', async (
     assert.doesNotMatch(game._pending_message, /see here|iron chain/);
 });
 
-test('moveloop completes one turn after a saved pickup burden response', async () => {
+test('saved pickup response spends the movement cost of its new heavy load', async () => {
     await setup(); resetInputState(); game.u.acurr.a = [3, 3, 10, 10, 3, 10];
     game.u.uprops ??= []; game.u.uprops[WOUNDED_LEGS] = { intrinsic: 100, extrinsic: LEFT_SIDE }; game.u.umovement = 12;
     floorItem({ cls: 'food', glyph: '%', kind: 'food ration', otyp: 143, quan: 11 });
@@ -231,5 +231,6 @@ test('moveloop completes one turn after a saved pickup burden response', async (
     assert.equal(game._artifact_float_continuation, null);
     while (game._message_more) await rhack(' ');
     pushKey('\x1b'); await moveloop_core();
-    assert.equal(game.moves, 101); assert.equal(game.level.regions[0].ttl, 4);
+    // Heavy load grants three movement points per turn: one action costs four turns.
+    assert.equal(game.moves, 104); assert.equal(game.level.regions[0].ttl, 1);
 });

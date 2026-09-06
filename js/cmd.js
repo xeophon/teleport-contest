@@ -66244,7 +66244,7 @@ export async function rhack(_cmd) {
 async function rhackInternal(_cmd) {
     game.context = game.context || {};
     game.context.move = 0;
-    game.u.umoved = false;
+    if (!game._turn_tail_phase) game.u.umoved = false;
 
 	    const key = _cmd || await nhgetch();
 	    let ch = commandChar(key);

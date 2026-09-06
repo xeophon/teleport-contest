@@ -617,3 +617,12 @@ interval, canonical energy sources and extrinsic-only magical breathing bonus
 uses the C unencumbered power gate. Fifty-eight new tests include a live
 canonical-form turn. Zero-HP rehumanization, overexertion and the complete
 interrupt_multi message continuation still need source work.
+
+`allmain.c:114–159 u_calc_moveamt` now applies all four load reductions after
+hero/steed speed. The turn captures load after monsters move, before timer
+expiry. `hack.c:3035–3050 overexert_hp` now removes active-body HP directly or
+pauses at fainting feedback before Constitution abuse and shared fall_asleep.
+Turn exertion uses the source 30/10-turn gates; a saved phase resumes before
+power regeneration and preserves movement across More input. Forty-five new
+tests cover arithmetic, mounted speed, state/RNG boundaries and actual turns.
+Combat overexertion and full interrupt_multi scheduling remain unported.
