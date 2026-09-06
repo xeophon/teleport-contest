@@ -1,6 +1,7 @@
 // weapon.c:1092-1508,1738-1811; role limits from u_init.c:257-572.
 // Skills and their advancement history are canonical hero save state.
 import { game } from './gstate.js';
+import { JAPANESE_ITEM_ALIASES } from './o_init.js';
 import { rn2 } from './rng.js';
 import * as C from './const.js';
 
@@ -420,7 +421,8 @@ export function objectWeaponSkill(obj) {
     if (obj.cls && !['weapon', 'tool', 'gem'].includes(obj.cls)) return C.P_NONE;
     if (obj.oc_skill != null) return obj.oc_skill;
     if (obj.cls === 'gem') return -C.P_SLING;
-    return OBJECT_SKILLS.get(String(obj.actualKind || obj.kind || '').toLowerCase()) || C.P_NONE;
+    const name = String(obj.actualKind || obj.kind || '').toLowerCase();
+    return OBJECT_SKILLS.get(JAPANESE_ITEM_ALIASES.get(name) || name) || C.P_NONE;
 }
 
 export function skillPracticeNeeded(level) {

@@ -1,7 +1,9 @@
+import { JAPANESE_ITEM_ALIASES } from './o_init.js';
 import { M_SEEN_ELEC, M_SEEN_REFL, M_SEEN_SLEEP, HALF_SPDAM } from './const.js';
 import { advanceMonsterAttackSlots } from './mhitu.js';
 import { resumeChainLightning } from './chain_lightning.js';
-import { AD_COLD, AD_MAGM, AD_STUN, AD_CONF, AD_PLYS, AD_PHYS, AT_WEAP, is_undead, type_is_pname } from './permonst.js';
+import { AD_COLD, AD_MAGM, AD_STUN, AD_CONF, AD_PLYS, AD_SAMU, AD_PHYS, AT_WEAP, is_undead, type_is_pname } from './permonst.js';
+import { stealamulet, specialObjectType, mpickobj } from './steal.js';
 import { monWieldItem, mhitmKnockback, monsterMagicNegation } from './mhitm.js';
 import { addToplineMessage, monsterSwingMessage, stopHeroOccupation } from './allmain.js';
 import { chooseMonsterSpell, monsterSpellWouldBeUseless, MCAST_INDIRECT } from './mcastu.js';
@@ -9,7 +11,7 @@ import { ROLE_RANKS } from './roles.js';
 import { autopickTestObject } from './pickup.js';
 import { RING_DEFINITIONS, ringDefinition } from './ring.js';
 import { LOST_DROPPED, W_RINGL, W_RINGR, W_AMUL, FROMOUTSIDE, BLINDED, DEAF, FREE_ACTION, FAINTED } from './const.js';
-import { notake } from './permonst.js';
+import { notake, is_domestic } from './permonst.js';
 import { has_head, is_silent, MS_BUZZ, MS_BURBLE } from './permonst.js';
 import { processGameTimers, monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION, armorBonus, armorSlot } from './armor.js';
@@ -284,7 +286,7 @@ import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { applySlimeMoldFruitFields, currentFruitId, currentFruitJuiceName, currentFruitName, fruitWishMatch, setCurrentFruitName, slimeMoldNameForObject } from './fruit.js';
 import { attachEggHatchTimeout, eggHasHatchTimer, eggSpeciesGenocidedForHatching, killDeadSpeciesEggHatchTimers, killEggHatchTimer } from './egg_timers.js';
 import { METALLIC_MATERIALS, metallivoreObjectAlwaysResists, monsterIsMetallivore, objectIsAmuletLike, objectIsRingLike, objectIsSlowDigestionRing, objectMaterialForMetallivore, wandTrueMaterial } from './metallivore.js';
-import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay } from './spell.js';
+import { castSpellDirectionalEffect, castSpellNodirEffect, castSpellExplosionEffect, spellCastNeedsDirection, spellDamageBonus, resumeSpellRay, resumeReleasedSpell } from './spell.js';
 import { adjAlign, altarAlignAt, alignGodName, heroOnAltar, isHighAltarAt, offerAmulet, offerCorpse } from './offer.js';
 
 const DIR_DX = { h: -1, l: 1, j: 0, k: 0, y: -1, u: 1, b: -1, n: 1 };
@@ -10620,6 +10622,9 @@ async function resumePlayerSpellEffect() {
     } else if (state.kind === 'spellRay') {
         const result = await resumeSpellRay(state.state, playerSpellEffectDependencies());
         await finishSpellEffectResult(state.spell, result);
+    } else if (state.kind === 'releasedSpell') {
+        const result = await resumeReleasedSpell(state.state, playerSpellEffectDependencies());
+        await finishSpellEffectResult(state.spell, result);
     }
 }
 
@@ -13462,7 +13467,116 @@ function publishMonsterDamageResult(messages, result) {
     return !monsterAttackWaiting();
 }
 
+// steal.c:stealamulet keeps the selected object through remove_worn_item,
+// freeinv's property-loss landing, monster pickup, and teleport feedback.
+async function resumeMonsterTheft(state) {
+    const effect = state.effect ??= { phase: 'chance' }, mon = state.mon;
+    if (effect.phase === 'chance') {
+        effect.phase = 'done';
+        if (rn2(20)) return true; // Cancellation does not suppress AD_SAMU.
+        const plan = stealamulet(mon);
+        if (!plan.target) return true;
+        Object.assign(effect, { phase: 'strip', target: plan.target, strips: plan.stripOrder, index: 0 });
+    }
+    while (effect.phase !== 'done') {
+        if (effect.phase === 'strip') {
+            if (effect.index >= effect.strips.length) { effect.phase = 'detach'; continue; }
+            const item = effect.item = effect.strips[effect.index++];
+            const mask = item.owornmask || 0;
+            if (!(mask || isWornEquipmentItem(item) || itemIsWielded(item) || item.alternate || item.quivered)) continue;
+            effect.mask = mask; effect.oldInUse = item.in_use; effect.ringState = {};
+            effect.phase = 'remove';
+            const weapon = itemIsWielded(item) || item.alternate || item.quivered || (mask & (W_WEP | W_SWAPWEP | W_QUIVER));
+            const accessory = wornRingItem(item) || isWornAmuletItem(item) || isWornFacewearItem(item);
+            const name = pickupObjectPhrase(item).replace(/^(?:an?|the) /i, 'your ')
+                .replace(/ \((?:being worn|alternate weapon; not wielded)\)/g, '')
+                .replace(/\(on (left|right) hand\)/, '(from $1 hand)');
+            const subject = heroCanSpotMonster(mon) ? mon.givenName || `The ${mon.data?.name || 'monster'}` : 'Something';
+            if (!addToplineMessage(`${subject} ${weapon ? 'disarms' : accessory ? 'removes' : 'takes off'} ${name}.`)) return false;
+        }
+        if (effect.phase === 'remove') {
+            const item = effect.item, messages = [];
+            item.in_use = 1;
+            if (game._armor_wear_occupation?.itemLetter === item.letter) game._armor_wear_occupation = null;
+            let result = {};
+            if (wornRingItem(item) || effect.ringState.started) {
+                result = await changeHeroRing(item, 0, messages, effect.ringState);
+                if (result.pending) {
+                    game._artifact_float_continuation.after = { type: 'monsterTheft' };
+                    await setMessage([game._pending_message, ...messages].filter(Boolean).join('  '), true);
+                    applyLifeSavingOrFatalCommandMode(result);
+                    return false;
+                }
+            } else if (isWornEquipmentItem(item)) {
+                result = await takeOffEquipment(item, { force: true }) || {};
+                messages.push(...(result.messages || []));
+                const slot = armorSlot(item);
+                if (slot === 'helm') addPolyselfHelmetOffSideEffects(item, messages);
+                if (slot === 'gloves' && objectKindKey(item) === 'gauntlets of dexterity') addPolyselfGlovesOffSideEffects(item);
+            } else {
+                const light = setArtifactEquipmentLight(item, false);
+                if (light) messages.push(light);
+            }
+            for (const slot of ['uwep', 'uswapwep', 'uquiver', 'uarm', 'uarmc', 'uarmh', 'uarms',
+                'uarmg', 'uarmf', 'uarmu', 'uamul', 'uleft', 'uright', 'ublindf']) {
+                if (game.u[slot] !== item) continue;
+                game.u[slot] = null;
+            }
+            if (effect.mask & (W_WEP | W_SWAPWEP) || item.wielded || item.alternate)
+                game.u.twoweap = game._twoweapon = false;
+            for (const prop of Object.values(game.u.uprops || {})) prop.extrinsic &= ~effect.mask;
+            item.owornmask = 0; item.worn = item.wielded = item.alternate = item.quivered = false;
+            item.line = normalInventoryLine({ ...item, line: '' });
+            effect.phase = 'afterRemove';
+            if (!publishMonsterDamageResult(messages, result)) return false;
+        }
+        if (effect.phase === 'afterRemove') {
+            effect.item.in_use = effect.oldInUse;
+            effect.phase = 'strip';
+            continue;
+        }
+        if (effect.phase === 'detach') {
+            const item = effect.target, messages = [];
+            if (item.unpaid) {
+                const { shkp } = shopkeeperOwningBillEntry(item);
+                if (shkp) removeObjectFromShopBill(shkp, item);
+            }
+            const type = specialObjectType(item), def = artifactDefinitionForName(item.artifact || item.oartifact);
+            if (game.u.uhave && ['amulet', 'bell', 'book', 'menorah'].includes(type)) game.u.uhave[type] = 0;
+            if (game.u.uhave && def?.questRole === heroRoleName()) game.u.uhave.questart = 0;
+            effect.phase = 'pickup';
+            const result = await detachInventoryItemWithArtifactEffects(item, item.quan || 1, messages, { type: 'monsterTheft' });
+            if (result.pending) {
+                await setMessage([game._pending_message, ...messages].filter(Boolean).join('  '), true);
+                applyLifeSavingOrFatalCommandMode(result);
+                return false;
+            }
+            if (!publishMonsterDamageResult(messages, result)) return false;
+        }
+        if (effect.phase === 'pickup') {
+            const item = effect.target;
+            const name = pickupObjectPhrase({ ...item, line: '' });
+            mpickobj(mon, item, { seen: heroCanSpotMonster(mon), heroStuckTo: game.u.ustuck });
+            effect.phase = 'teleport';
+            const subject = heroCanSpotMonster(mon) ? mon.givenName || `The ${mon.data?.name || 'monster'}` : 'Something';
+            if (!addToplineMessage(`${subject} steals ${name}!`)) return false;
+        }
+        if (effect.phase === 'teleport') {
+            effect.phase = 'encumbrance';
+            const message = can_teleport(pmOf(mon)) ? tipHatDemonBribeRelocate(mon) : '';
+            if (message && !addToplineMessage(message)) return false;
+        }
+        if (effect.phase === 'encumbrance') {
+            effect.phase = 'done';
+            const message = encumberMsg();
+            if (message && !addToplineMessage(message)) return false;
+        }
+    }
+    return true;
+}
+
 async function applyMonsterContactEffect(state) {
+    if (state.attack.adtyp === AD_SAMU) return resumeMonsterTheft(state);
     if (state.attack.adtyp === AD_PHYS && state.attack.aatyp === AT_WEAP && state.mon.mw) {
         // mhitm_ad_phys computes the pudding split damage even for a human.
         // hitmu independently rolls its later AC reduction.
@@ -16535,9 +16649,9 @@ export function loseExperienceLevel() {
     }
 }
 
-// exper.c:pluslvl changes both bodies, energy and level history before callers
-// present the welcome message. Debug commands own their separate More scheduler.
-function gainExperienceLevel(incremental = false) {
+// exper.c:pluslvl changes HP, energy and level before Welcome; ability and
+// restoration-history changes follow after that message returns.
+function beginExperienceLevelGain(incremental = false) {
     const role = game.urole?.name?.m || game._startup_role;
     const level = Math.min(30, (game.u?.ulevel || 1) + 1);
     const oldLevel = game.u?.ulevel || 1;
@@ -16602,28 +16716,60 @@ function gainExperienceLevel(incremental = false) {
     game.u.uenmax += powerGain;
     game.u.uenpeak = Math.max(game.u.uenpeak || 0, game.u.uenmax);
     game.u.uen += powerGain;
-    if (role === 'Wizard' && level >= 15) game.u.warning = true;
-    if (role === 'Wizard' && level >= 17) game.u.teleportControl = true;
-
-    const rankIndex = level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
-    const rank = ROLE_RANKS[role]?.[rankIndex];
-    if (rank) game.urole.rank = { m: rank[0], f: rank[1] || rank[0] };
-
-    const ability = oldLevel < 30 ? ROLE_LEVEL_ABILITIES[role]?.[level] : null;
-    if (ability?.[1]) {
-        u[ability[1]] = true;
-        if (ability[1] === 'fast') u._intrinsicFast = true;
-    }
-    const skillMessage = oldLevel < 30 ? addWeaponSkill(1) : '';
-    u.ulevelmax = Math.max(u.ulevelmax, level);
-    u.ulevelpeak = Math.max(u.ulevelpeak, level);
     if (u._polyself_base) {
         Object.assign(u._polyself_base, { ulevel:level, uen:u.uen, uenmax:u.uenmax,
-            uhpinc:[...u.uhpinc], ueninc:[...u.ueninc], rank:game.urole?.rank });
+            uhpinc:[...u.uhpinc], ueninc:[...u.ueninc] });
         if (human === u) Object.assign(u._polyself_base, { uhp:u.uhp, uhpmax:u.uhpmax });
     }
-    (game.disp ??= {}).botl = true;
-    return { level, regained, abilityMessage:[ability?.[0], skillMessage, skillMessage ? skillAdvanceTip() : ''].filter(Boolean).join('  ') };
+    return { level, oldLevel, role, regained, phase:'abilities' };
+}
+
+// Each result ends at a possible pline in pluslvl/adjabil. Callers that can
+// suspend retain this plain state until the displayed message is accepted.
+function advanceExperienceLevelEffects(gain) {
+    const u = game.u, { role, level, oldLevel } = gain;
+    switch (gain.phase) {
+    case 'abilities': {
+        u.ulevelmax = Math.max(u.ulevelmax, level);
+        if (role === 'Wizard' && level >= 15) u.warning = true;
+        if (role === 'Wizard' && level >= 17) u.teleportControl = true;
+        const ability = oldLevel < 30 ? ROLE_LEVEL_ABILITIES[role]?.[level] : null;
+        if (ability?.[1]) {
+            u[ability[1]] = true;
+            if (ability[1] === 'fast') u._intrinsicFast = true;
+        }
+        gain.phase = 'skills';
+        return ability?.[0] || '';
+    }
+    case 'skills':
+        gain.phase = 'tip';
+        gain.skillMessage = oldLevel < 30 ? addWeaponSkill(1) : '';
+        return gain.skillMessage;
+    case 'tip':
+        gain.phase = 'finish';
+        return gain.skillMessage ? skillAdvanceTip() : '';
+    case 'finish': {
+        const rankIndex = level <= 2 ? 0 : level <= 30 ? Math.trunc((level + 2) / 4) : 8;
+        const rank = ROLE_RANKS[role]?.[rankIndex];
+        if (rank) game.urole.rank = { m: rank[0], f: rank[1] || rank[0] };
+        u.ulevelpeak = Math.max(u.ulevelpeak, level);
+        if (u._polyself_base) u._polyself_base.rank = game.urole?.rank;
+        (game.disp ??= {}).botl = true;
+        gain.phase = 'done';
+        return '';
+    }
+    default:
+        return '';
+    }
+}
+
+function gainExperienceLevel(incremental = false) {
+    const gain = beginExperienceLevelGain(incremental), messages = [];
+    while (gain.phase !== 'done') {
+        const message = advanceExperienceLevelEffects(gain);
+        if (message) messages.push(message);
+    }
+    return { ...gain, abilityMessage:messages.join('  ') };
 }
 
 async function advanceExperienceLevel(incremental = false) {
@@ -20148,6 +20294,7 @@ async function putOnFacewear(item) {
 async function takeOffFacewear(item) {
     if (!isFacewearItem(item)) return null;
 
+    const wasBlind = heroIsBlind();
     const baseName = facewearBaseName(item);
     item.worn = false;
     item.owornmask = 0;
@@ -20155,6 +20302,13 @@ async function takeOffFacewear(item) {
     // C ref: off_msg() only prints "You were wearing ..." with verbose
     // (do_wear.c:1048); the blindness change reports are unconditional.
     const wornMessage = game.flags?.verbose !== false ? `You were wearing ${baseName}.` : '';
+    if (artifactDefinitionForName(item.artifact || item.oartifact)?.name === 'The Eyes of the Overworld') {
+        // Blindf_off re-evaluates sight after removing the artifact's override.
+        const prop = game.u.uprops?.[BLINDED];
+        const timeout = prop ? (prop.intrinsic || 0) & TIMEOUT : game.u._blindTimeout || 0;
+        setHeroBlindedTimeout(timeout, [], false);
+        return { messages: [wornMessage, !wasBlind && game.u.blind ? "You can't see anything now!" : ''].filter(Boolean) };
+    }
     if (facewearCausesBlindness(item) && game.u) {
         setBlindfoldedState(false);
         const stillBlind = (game.u._blindTimeout || 0) > 0 || (game.u.ucreamed || 0) > 0;
@@ -22727,15 +22881,7 @@ function healHero(amount, nxtra = 0, { cureBlind = false, cureSick = false } = {
     if (cureBlind) {
         u.ucreamed = 0;
         setHeroBlindedTimeout(0, messages);
-        const prop = u.uprops?.[DEAF];
-        const old = prop?.intrinsic || u._deafTimeout || (u.deaf ? 1 : 0);
-        if (prop) prop.intrinsic &= ~TIMEOUT;
-        u._deafTimeout = 0;
-        u.deaf = !!(prop?.intrinsic || prop?.extrinsic || u.uroleplay?.deaf);
-        if (u.deaf) addHeroStatusSuffix('Deaf');
-        else removeHeroStatusSuffix('Deaf');
-        if (old && !u.unaware && !(game._sleeping_time > 0))
-            messages.push(u.deaf ? 'You are unable to hear anything.' : 'You can hear again.');
+        clearHeroDeafness(messages);
     }
     if (cureSick) {
         if (heroIsVomiting() && !u.unaware && !(game._sleeping_time > 0))
@@ -22745,6 +22891,19 @@ function healHero(amount, nxtra = 0, { cureBlind = false, cureSick = false } = {
         clearHeroSickness();
     }
     return messages.join('  ');
+}
+
+// potion.c:make_deaf commits its timed source before giving feedback.
+function clearHeroDeafness(messages) {
+    const u = game.u, prop = u.uprops?.[DEAF];
+    const old = prop ? prop.intrinsic || 0 : u._deafTimeout || (u.deaf ? 1 : 0);
+    if (prop) prop.intrinsic &= ~TIMEOUT;
+    u._deafTimeout = 0;
+    u.deaf = !!(prop?.intrinsic || prop?.extrinsic || u.uroleplay?.deaf);
+    if (u.deaf) addHeroStatusSuffix('Deaf');
+    else removeHeroStatusSuffix('Deaf');
+    if (old && !heroIsUnaware() && !(game._sleeping_time > 0))
+        messages.push(u.deaf ? 'You are unable to hear anything.' : 'You can hear again.');
 }
 
 // potion.c:make_hallucinated(0,TRUE,0), including the resistance-only
@@ -22773,59 +22932,174 @@ function clearHeroHallucination(messages) {
     } else messages.push('Your vision seems to flatten for a moment but is normal now.');
 }
 
-// do.c:heal_legs restores one point of temporary Dexterity and clears both
-// wounded sides. Riding redirects the wounds to the steed and suppresses text.
-function healHeroWoundedLegs(messages) {
+// do.c:heal_legs restores temporary Dexterity before its message, then
+// clears wound properties and checks carrying capacity after pline returns.
+function beginHeroLegHealing() {
     const u = game.u, prop = u.uprops?.[WOUNDED_LEGS];
-    if (!(prop?.intrinsic || u._woundedLegTurns)) return;
     const both = prop ? ((prop.extrinsic || 0) & BOTH_SIDES) === BOTH_SIDES
         : !['left', 'right'].includes(u._woundedLegSide);
     if (u.atemp?.a?.[A_DEX] < 0) ++u.atemp.a[A_DEX];
     else if (u._woundedDexPenalty && u.acurr?.a) ++u.acurr.a[A_DEX];
-    if (!u.usteed) {
-        const leg = bodyPart(heroFormData(), 'leg');
-        messages.push(`Your ${both ? pluralizeMonsterName(leg) : leg} ${both ? 'feel' : 'feels'} better.`);
-    }
+    (game.disp ??= {}).botl = true;
+    if (u.usteed) return '';
+    const leg = bodyPart(heroFormData(), 'leg');
+    return `Your ${both ? pluralizeMonsterName(leg) : leg} ${both ? 'feel' : 'feels'} better.`;
+}
+
+function finishHeroLegHealing() {
+    const u = game.u, prop = u.uprops?.[WOUNDED_LEGS];
     if (prop) prop.intrinsic = prop.extrinsic = 0;
     u._woundedDexPenalty = u._woundedLegTurns = 0;
     u._woundedLegSide = '';
-    (game.disp ??= {}).botl = true;
-    const encumbered = encumberMsg();
-    if (encumbered) messages.push(encumbered);
+    return encumberMsg();
 }
 
-// potion.c:1119-1169. Quaffing uses the active body; inhaled healing vapor
-// deliberately has its own helper because it heals both human and monster HP.
-async function quaffHealingPotion(item, kind) {
-    const sign = item.blessed ? 1 : item.cursed ? -1 : 0;
+// A false result means pline has not returned yet. The phase is advanced
+// before queuing so accepted More input cannot replay RNG or property changes.
+function publishHealingPotionMessage(state, text, nextPhase) {
+    state.phase = nextPhase;
+    if (!text || state.skipMessages) return true;
+    if (addToplineMessage(text)) return true;
+    state.pendingMessage = game._topline_after_more;
+    game._topline_after_more = '';
+    game._command_mode = 'healingPotionMore';
+    game._process_time_with_more = 0;
+    game.context.move = 0;
+    return false;
+}
+
+// potion.c:peffect_* and healup run synchronously in C. Explicit phases retain
+// their call-stack state while tty update_topl waits for a More acknowledgement.
+async function resumeHealingPotion() {
+    const state = game._healing_potion;
+    if (!state) return;
+    const { item, kind } = state, u = game.u;
     const full = kind === 'full healing', extra = kind === 'extra healing';
-    const messages = [`You feel ${full ? 'completely healed' : extra ? 'much better' : 'better'}.`];
-    const amount = full ? 400 : (extra ? 16 : 8) + d(4 + 2 * sign, extra ? 8 : 4);
-    const bonus = full ? 4 + 4 * sign : extra ? (item.blessed ? 5 : item.cursed ? 0 : 2) : item.cursed ? 0 : 1;
-    const healed = healHero(amount, bonus, { cureBlind: extra || full || !item.cursed,
-        cureSick: extra || full ? !item.cursed : !!item.blessed });
-    if (healed) messages.push(healed);
-    if (full && item.blessed && game.u.ulevel < game.u.ulevelmax) {
-        --game.u.ulevelmax;
-        messages.push('You feel more experienced.');
-        const gain = gainExperienceLevel();
-        messages.push(`Welcome ${gain.regained ? 'back ' : ''}to experience level ${gain.level}.`);
-        if (gain.abilityMessage) messages.push(gain.abilityMessage);
+    const cureBlind = extra || full || !item.cursed;
+    const cureSick = extra || full ? !item.cursed : !!item.blessed;
+    while (game._healing_potion) {
+        switch (state.phase) {
+        case 'hp': {
+            const sign = item.blessed ? 1 : item.cursed ? -1 : 0;
+            const amount = full ? 400 : (extra ? 16 : 8) + d(4 + 2 * sign, extra ? 8 : 4);
+            const bonus = full ? 4 + 4 * sign : extra ? (item.blessed ? 5 : item.cursed ? 0 : 2) : item.cursed ? 0 : 1;
+            healHero(amount, bonus);
+            state.phase = 'blind';
+            break;
+        }
+        case 'blind':
+            if (cureBlind) {
+                u.ucreamed = 0;
+                state.blindChange = prepareHeroBlindnessChange(0);
+                if (!publishHealingPotionMessage(state, state.blindChange.message, 'blindCommit')) return;
+            } else state.phase = 'deaf';
+            break;
+        case 'blindCommit':
+            applyHeroBlindnessChange(state.blindChange);
+            state.blindChange = null;
+            state.phase = 'deaf';
+            break;
+        case 'deaf': {
+            const messages = [];
+            if (cureBlind) clearHeroDeafness(messages);
+            if (!publishHealingPotionMessage(state, messages.join('  '), 'vomit')) return;
+            break;
+        }
+        case 'vomit': {
+            const message = cureSick && heroIsVomiting() && !heroIsUnaware() && !(game._sleeping_time > 0)
+                ? 'You feel much less nauseated now.' : '';
+            if (cureSick) clearHeroVomiting();
+            if (!publishHealingPotionMessage(state, message, 'sick')) return;
+            break;
+        }
+        case 'sick': {
+            // make_sick clears its type bits before pline, then the timeout
+            // and delayed killer after pline. These are distinct saved states.
+            const sick = cureSick && heroIsSick() && (u.usick_type ?? 3);
+            if (sick) u.usick_type = 0;
+            if (!publishHealingPotionMessage(state, sick ? 'You feel cured.  What a relief!' : '', 'sickCommit')) return;
+            break;
+        }
+        case 'sickCommit':
+            if (cureSick) clearHeroSickness();
+            (game.disp ??= {}).botl = true;
+            state.phase = 'restore';
+            break;
+        case 'restore':
+            if (full && item.blessed && u.ulevel < u.ulevelmax) {
+                --u.ulevelmax;
+                if (!publishHealingPotionMessage(state, 'You feel more experienced.', 'gain')) return;
+            } else state.phase = 'hallucination';
+            break;
+        case 'gain':
+            state.gain = beginExperienceLevelGain();
+            if (!publishHealingPotionMessage(state,
+                `Welcome ${state.gain.regained ? 'back ' : ''}to experience level ${state.gain.level}.`, 'gainEffects')) return;
+            break;
+        case 'gainEffects': {
+            const message = advanceExperienceLevelEffects(state.gain);
+            if (!publishHealingPotionMessage(state, message, state.gain.phase === 'done' ? 'hallucination' : 'gainEffects')) return;
+            break;
+        }
+        case 'hallucination': {
+            const messages = [];
+            if (extra || full) clearHeroHallucination(messages);
+            if (!publishHealingPotionMessage(state, messages.join('  '), 'exercise')) return;
+            break;
+        }
+        case 'exercise':
+            if (full) exerciseAttribute(A_STR, true);
+            exerciseAttribute(A_CON, true);
+            if (extra) exerciseAttribute(A_STR, true);
+            state.phase = 'legs';
+            break;
+        case 'legs': {
+            const eligible = (extra && item.blessed && !u.usteed)
+                || (full && (item.blessed || !item.cursed && !u.usteed));
+            state.healLegs = eligible && !!(u.uprops?.[WOUNDED_LEGS]?.intrinsic || u._woundedLegTurns);
+            const message = state.healLegs ? beginHeroLegHealing() : '';
+            if (!publishHealingPotionMessage(state, message, 'legsCommit')) return;
+            break;
+        }
+        case 'legsCommit': {
+            const message = state.healLegs ? finishHeroLegHealing() : '';
+            if (!publishHealingPotionMessage(state, message, 'consume')) return;
+            break;
+        }
+        case 'consume':
+            if (item.dknown !== false && !potionDiscoveryKnown(kind)) {
+                exerciseAttribute(A_WIS, true);
+                learnObjectScore('Potions', `potion of ${kind}`);
+                recordKnownPotionDiscovery(item, kind);
+            }
+            item.in_use = false;
+            useUpInventoryItem(item);
+            game._healing_potion = null;
+            game._command_mode = null;
+            game._message_more = 0;
+            game.context.move = 1;
+            return;
+        }
     }
-    if (extra || full) clearHeroHallucination(messages);
-    if (full) exerciseAttribute(A_STR, true);
-    exerciseAttribute(A_CON, true);
-    if (extra) exerciseAttribute(A_STR, true);
-    if ((extra && item.blessed && !game.u.usteed)
-        || (full && (item.blessed || !item.cursed && !game.u.usteed))) healHeroWoundedLegs(messages);
-    if (item.dknown !== false && !potionDiscoveryKnown(kind)) {
-        exerciseAttribute(A_WIS, true);
-        learnObjectScore('Potions', `potion of ${kind}`);
-        recordKnownPotionDiscovery(item, kind);
+}
+
+async function quaffHealingPotion(item, kind) {
+    // A worn stack is split before drinking; the remaining wielded stack
+    // keeps its equipment identity (potion.c:dodrink). Ordinary stacks do not split.
+    if ((item.owornmask || item.worn || item.wielded || item.quivered || item.alternate)
+        && (item.quan || 1) > 1) item = splitOneCarriedInventoryItem(item);
+    if ((item.quan || 1) === 1) {
+        for (const slot of ['uwep', 'uswapwep', 'uquiver']) if (game.u[slot] === item) game.u[slot] = null;
+        if (item.wielded || item.alternate || item.owornmask & (W_WEP | W_SWAPWEP)) game.u.twoweap = false;
+        item.owornmask = 0;
+        item.worn = item.wielded = item.alternate = item.quivered = false;
+        item.line = '';
+        refreshInventoryObjectLine(item);
     }
-    useUpInventoryItem(item);
-    await setMessage(messages.join('  '));
-    game.context.move = 1;
+    item.in_use = true;
+    game._healing_potion = { item, kind, phase:'hp', pendingMessage:'' };
+    await setMessage(`You feel ${kind === 'full healing' ? 'completely healed' : kind === 'extra healing' ? 'much better' : 'better'}.`);
+    await resumeHealingPotion();
 }
 
 function potionDiscoveryKnown(potionName) {
@@ -34118,8 +34392,7 @@ async function finishWizgenesisSpawn(mdat, disposition, monspec) {
             if (disposition === 'tame') {
                 created.mpeaceful = 1;
                 created.pet = true;
-                created.mtame = Math.max(created.mtame || 0,
-                    created.data?.domestic || created.data?.isDomestic ? 10 : 5);
+                created.mtame = Math.max(created.mtame || 0, baseScrollTameness(created));
                 created.mextra ??= {};
                 created.mextra.edog ??= {
                     apport: game.u?.acurr?.a?.[A_CHA] ?? 3,
@@ -37337,13 +37610,10 @@ function wornGlovesItem() {
     return (game.inventory || []).find(item => isWornArmorItem(item) && armorSlot(item) === 'gloves') || null;
 }
 
-// C potion.c:make_blinded probes effective sight before changing the timer.
-// A blindfold, an eyeless form or permanent blindness survives a timed cure;
-// the Eyes of the Overworld can suppress both the old and new blindness.
-function setHeroBlindedTimeout(duration, messages, talk = true) {
-    if (!game.u) return;
-    const u = game.u;
-    const prop = u.uprops?.[BLINDED];
+// potion.c:make_blinded computes feedback before changing the timed source.
+// The returned values are plain save state for callers blocked inside pline.
+function prepareHeroBlindnessChange(duration, talk = true) {
+    const u = game.u, prop = u.uprops?.[BLINDED];
     const oldTimeout = prop ? (prop.intrinsic || 0) & TIMEOUT : u._blindTimeout || 0;
     const permanent = (prop?.intrinsic || 0) & ~TIMEOUT;
     const form = heroFormData();
@@ -37353,28 +37623,44 @@ function setHeroBlindedTimeout(duration, messages, talk = true) {
         && artifactDefinitionForName(item.artifact || item.oartifact)?.name === 'The Eyes of the Overworld');
     const blocked = eyes || prop?.blocked;
     const wasBlind = !blocked && !!(heroIsBlind() || oldTimeout || permanent || blindfold || eyeless || prop?.extrinsic);
-    u._blindTimeout = Math.min(TIMEOUT, Math.max(0, duration));
-    if (prop) prop.intrinsic = permanent | u._blindTimeout;
-    u.blind = !blocked && !!(u._blindTimeout || permanent || blindfold || eyeless || prop?.extrinsic);
+    const timeout = Math.min(TIMEOUT, Math.max(0, duration));
+    const blind = !blocked && !!(timeout || permanent || blindfold || eyeless || prop?.extrinsic);
+    let message = '';
+    if (talk && !heroIsUnaware() && !(game._sleeping_time > 0)) {
+        if (wasBlind !== blind) {
+            message = blind
+                ? heroIsHallucinating() ? 'Oh, bummer!  Everything is dark!  Help!' : 'A cloud of darkness falls upon you.'
+                : heroIsHallucinating() ? 'Far out!  Everything is all cosmic again!' : 'You can see again.';
+        } else if (!!oldTimeout !== !!duration) {
+            if (eyeless || permanent) message = `You have a ${heroIsHallucinating() ? 'normal' : 'strange'} feeling for a moment, then it passes.`;
+            else if (blindfold) {
+                const eye = bodyPart(form, 'eye'), one = ['Cyclops', 'floating eye'].includes(form.name);
+                const verb = duration ? one ? 'twitches' : 'twitch' : one ? 'itches' : 'itch';
+                message = `Your ${one ? eye : pluralizeMonsterName(eye)} momentarily ${verb}.`;
+            } else message = `Your vision seems to ${duration ? 'dim' : 'brighten'} for a moment but is ${heroIsHallucinating() ? duration ? 'happier' : 'sadder' : 'normal'} now.`;
+        }
+    }
+    return { timeout, permanent, wasBlind, blind, message };
+}
+
+function applyHeroBlindnessChange(change) {
+    const u = game.u, prop = u.uprops?.[BLINDED];
+    u._blindTimeout = change.timeout;
+    if (prop) prop.intrinsic = change.permanent | change.timeout;
+    u.blind = change.blind;
     if (u.blind) addHeroStatusSuffix('Blind');
     else removeHeroStatusSuffix('Blind');
-    if (wasBlind !== u.blind) {
+    if (change.wasBlind !== change.blind) {
         vision_recalc(0);
         game._redraw_level_after_more = 1;
     }
-    if (!talk || game._sleeping_time > 0 || u.unaware) return;
-    if (wasBlind !== u.blind) {
-        messages.push(u.blind
-            ? heroIsHallucinating() ? 'Oh, bummer!  Everything is dark!  Help!' : 'A cloud of darkness falls upon you.'
-            : heroIsHallucinating() ? 'Far out!  Everything is all cosmic again!' : 'You can see again.');
-    } else if (!!oldTimeout !== !!duration) {
-        if (eyeless || permanent) messages.push(`You have a ${heroIsHallucinating() ? 'normal' : 'strange'} feeling for a moment, then it passes.`);
-        else if (blindfold) {
-            const eye = bodyPart(form, 'eye'), one = ['Cyclops', 'floating eye'].includes(form.name);
-            const verb = duration ? one ? 'twitches' : 'twitch' : one ? 'itches' : 'itch';
-            messages.push(`Your ${one ? eye : pluralizeMonsterName(eye)} momentarily ${verb}.`);
-        } else messages.push(`Your vision seems to ${duration ? 'dim' : 'brighten'} for a moment but is ${heroIsHallucinating() ? duration ? 'happier' : 'sadder' : 'normal'} now.`);
-    }
+}
+
+function setHeroBlindedTimeout(duration, messages, talk = true) {
+    if (!game.u) return;
+    const change = prepareHeroBlindnessChange(duration, talk);
+    if (change.message) messages.push(change.message);
+    applyHeroBlindnessChange(change);
 }
 
 function takeGoldFromHeroForBook(messages) {
@@ -46625,6 +46911,12 @@ async function resumeArtifactFloatCommand(messages = []) {
         return resumeHeroProjectileCommand(after);
     }
     if (!result.pending && after?.type === 'monsterSpell') return resumeMonsterSpellCommand(messages);
+    if (!result.pending && after?.type === 'monsterTheft') {
+        game._pending_message = messages.join('  ');
+        game._command_mode = null;
+        game._message_more = 0;
+        return runMonsterAttackTurn(game._monster_attack_continuation.mon);
+    }
     if (!result.pending && after?.type === 'ringChange') {
         await changeHeroRing(after.item, 0, messages, after.state);
     }
@@ -48736,11 +49028,7 @@ function ensurePetExtension(mon) {
 }
 
 function baseScrollTameness(mon) {
-    const name = String(mon.data?.name || mon.name || '').toLowerCase();
-    const mlet = mon.data?.mlet || mon.mlet;
-    return mlet === 'dog' || mlet === 'feline' || mlet === 'unicorn'
-        || ['little dog', 'dog', 'large dog', 'kitten', 'housecat', 'large cat', 'pony', 'horse', 'warhorse'].includes(name)
-        ? 10 : 5;
+    return is_domestic(pmOf(mon) || mon.data || {}) ? 10 : 5;
 }
 
 function tameMonsterWithScroll(mon, item) {
@@ -49329,19 +49617,7 @@ const WISH_NAME_ALIASES = new Map([
     ['flint stone', 'flint'],
 ]);
 const WISH_EXPLICIT_SPELLING_ALIASES = new Map([
-    ['wakizashi', 'short sword'],
-    ['ninja-to', 'broadsword'],
-    ['nunchaku', 'flail'],
-    ['naginata', 'glaive'],
-    ['osaku', 'lock pick'],
-    ['koto', 'wooden harp'],
-    ['magic koto', 'magic harp'],
-    ['shito', 'knife'],
-    ['tanko', 'plate mail'],
-    ['kabuto', 'helmet'],
-    ['yugake', 'leather gloves'],
-    ['gunyoki', 'food ration'],
-    ['sake', 'potion of booze'],
+    ...JAPANESE_ITEM_ALIASES,
     ['whip', 'bullwhip'],
     ['saber', 'silver saber'],
     ['silver sabre', 'silver saber'],
@@ -65756,7 +66032,7 @@ export async function rhack(_cmd) {
     if (game._turn_undead && !monsterAttackWaiting()) await resumeTurnUndeadCommand();
     if (game._monster_spell_continuation && !monsterAttackWaiting())
         await resumeMonsterSpellCommand();
-    if (game._monster_attack_continuation && !monsterAttackWaiting())
+    if (game._monster_attack_continuation && !game._artifact_float_continuation && !monsterAttackWaiting())
         await runMonsterAttackTurn(game._monster_attack_continuation.mon);
     if (game._level_arrival_continuation && game._water_operation_resumed)
         await finishLevelArrival();
@@ -66318,7 +66594,7 @@ async function rhackInternal(_cmd) {
                 await resumeMonsterSpellCommand([lifeSavingMessage]);
                 return;
             }
-            if (game._monster_attack_continuation && !game._monster_spell_continuation) {
+            if (game._monster_attack_continuation && !game._monster_spell_continuation && !game._artifact_float_continuation) {
                 scheduleLifeSavingRecovery();
                 await runMonsterAttackTurn(game._monster_attack_continuation.mon);
                 return;
@@ -67370,6 +67646,21 @@ function tutorialEnterStash() {
         game._apply_pick_dig_letter = letter;
         await setMessage(pickDigDirectionPrompt(item));
         game._command_mode = 'applyPickDigDirection';
+        return;
+    }
+
+    if (game._command_mode === 'healingPotionMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const state = game._healing_potion;
+        game._dismissed_more_this_command = 1;
+        if (ch === '\x1b') state.skipMessages = true;
+        await setMessage(state.skipMessages ? '' : state.pendingMessage);
+        state.pendingMessage = '';
+        game._command_mode = null;
+        await resumeHealingPotion();
         return;
     }
 
@@ -70807,7 +71098,7 @@ function tutorialEnterStash() {
                 await resumeMonsterSpellCommand(survivalMessages);
                 return;
             }
-            if (game._monster_attack_continuation && !game._monster_spell_continuation) {
+            if (game._monster_attack_continuation && !game._monster_spell_continuation && !game._artifact_float_continuation) {
                 scheduleLifeSavingRecovery();
                 game._pending_message = survivalMessages.join("  ");
                 game._command_mode = null; game._message_more = 0;

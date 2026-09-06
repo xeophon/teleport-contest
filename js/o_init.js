@@ -201,3 +201,20 @@ export function init_objects() {
     };
     rn2(2); // WAN_NOTHING direction.
 }
+
+// C objnam.c:Japanese_items: localized display names retain their object identity.
+export const JAPANESE_ITEM_ALIASES = new Map([
+    ['wakizashi', 'short sword'],
+    ['ninja-to', 'broadsword'],
+    ['nunchaku', 'flail'],
+    ['naginata', 'glaive'],
+    ['osaku', 'lock pick'],
+    ['koto', 'wooden harp'],
+    ['magic koto', 'magic harp'],
+    ['shito', 'knife'],
+    ['tanko', 'plate mail'],
+    ['kabuto', 'helmet'],
+    ['yugake', 'leather gloves'],
+    ['gunyoki', 'food ration'],
+    ['sake', 'potion of booze'],
+]);

@@ -193,6 +193,42 @@ for (const female of [false, true]) test(`reflected spell death attributes the c
     assert.equal(game._death_cause, `killed by a magic missile cast by ${female ? 'herself' : 'himself'}`);
 });
 
+test('cancelled spell directions clear the previous vertical component and release at self', async () => {
+    setup('magic missile'); game._last_spell_dir = { dx: 0, dy: 0, dz: -1 };
+    await rhack('\x1b'); await finishRay();
+    assert.ok(getRngLog().some(line => line.startsWith('d(4,6)')));
+    assert.ok(!getRngLog().some(line => line.startsWith('rn2(7)')));
+});
+
+test('cancelled directions bypass confusion redirection before reusing horizontal direction', async () => {
+    setup('magic missile', { _confusionTimeout: 10 }); game._last_spell_dir = { dx: 1, dy: 0, dz: 0 };
+    await rhack('\x1b'); await finishRay();
+    assert.equal(getRngLog()[0].split('=')[0], 'rn2(19)');
+});
+
+test('a cancelled ray publishes the energy-release message before traversal', async () => {
+    setup('magic missile'); game._last_spell_dir = { dx: 1, dy: 0, dz: 0 };
+    await rhack('\x1b');
+    assert.match(game._pending_message, /The magical energy is released!/);
+    await finishRay();
+});
+
+test('hallucinated ray names draw afresh at bounce and hit before zhitu damage', async () => {
+    setup('magic missile', { hallucinating: true });
+    await rhack('l'); await finishRay();
+    const calls = getRngLog().map(line => line.split('=')[0]);
+    assert.deepEqual(calls.slice(0, 8), ['rn2(19)', 'rn2(6)', 'rn2(7)', 'rn2(96)',
+        'rn2(20)', 'rn2(96)', 'd(6,6)', 'rn2(2)']);
+    assert.match(game._pending_message, /The blast of .*hits you!/);
+});
+
+test('a hallucinated fatal ray preserves its actual type in the death cause', async () => {
+    setup('magic missile', { hallucinating: true, uhp: 1 });
+    await rhack('l'); await finishRay();
+    assert.equal(game._death_cause, 'killed by a magic missile cast by himself');
+    assert.equal(getRngLog().filter(line => line.startsWith('rn2(96)')).length, 2);
+});
+
 for (const [name, property] of [['magic missile', ANTIMAGIC], ['cone of cold', COLD_RES]])
     for (const source of ['intrinsic', 'extrinsic'])
         test(`returning ${name} respects canonical ${source} resistance`, async () => {

@@ -11,8 +11,9 @@ import { vision_reset, vision_recalc } from '../js/vision.js';
 import { ROOM, BLINDED, DEAF, SICK, VOMITING, HALLUC, HALLUC_RES, WOUNDED_LEGS, FROMOUTSIDE, W_TOOL, LEFT_SIDE, BOTH_SIDES } from '../js/const.js';
 import { encodeSaveState, restoreSaveState } from '../js/save.js';
 
+let healingMessages = [];
 function setup(name = 'full healing', buc = 0, known = true) {
-    resetGame(); resetInputState(); initRng(71);
+    resetGame(); resetInputState(); initRng(71); healingMessages = [];
     Object.assign(game, { moves:100, context:{}, flags:{pickup:false}, level:new GameMap(), inventory:[],
         _startup_role:'Wizard', _startup_race:'human', urole:{name:{m:'Wizard'},rank:{m:'Evoker'}},
         u:{ux:10,uy:10,uz:{dnum:0,dlevel:1},ulevel:5,ulevelmax:5,ulevelpeak:5,uhp:1,uhpmax:100,
@@ -26,8 +27,14 @@ function setup(name = 'full healing', buc = 0, known = true) {
     game.coreCtx={n:100,r:Array(100).fill(0n),m:[],a:0n,b:0n,c:0n}; game.rng.core=game.coreCtx;
     return item;
 }
-async function drink() { await rhack('q'); await rhack('a'); }
-function messages() { return [game._pending_message,game._queued_message_after_more,game._topline_after_more,...(game._queued_messages_after_more||[]).map(x=>x.text)].join(' '); }
+async function drink() {
+    await rhack('q'); await rhack('a');
+    healingMessages.push(game._pending_message || '');
+    for (let i=0;i<20&&game._healing_potion;i++) {
+        await rhack(' '); healingMessages.push(game._pending_message || '');
+    }
+}
+function messages() { return [...healingMessages,game._pending_message,game._queued_message_after_more,game._topline_after_more,...(game._queued_messages_after_more||[]).map(x=>x.text)].join(' '); }
 
 for(const name of ['healing','extra healing','full healing']) for(const buc of [-1,0,1]) {
     test(`C peffect ${name}, BCU ${buc}: amount, overflow bonus, identification and exercise`,async()=>{

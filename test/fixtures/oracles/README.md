@@ -26,6 +26,10 @@ configuration. It casts vertical magic missile, sleep, cold and finger of death,
 then refuses wizard death. The 57 screens include the live beam and the direct
 death prompt; all 2,327 RNG calls are compared by the test runner.
 
+`spell-direction-cancel` casts upward and then cancels the next spell's
+direction. C clears the previous vertical component and releases the spell
+at the hero. All 30 screens and 2,044 RNG calls are compared.
+
 `healing-quaff` wishes for and drinks each of the three blessed healing tiers
 at full HP. It checks their distinct maximum-HP bonuses, messages, discovery,
 and RNG: 101 screens and 2,792 RNG calls from the unchanged C reference.

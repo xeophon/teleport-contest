@@ -30,7 +30,7 @@ All C paths below are relative to `nethack-c/upstream/src/`. “No new gap estab
 | `objnam.c:2836` `makeplural` prefix/pronoun/compound portion | `cmd.js` object display, `pluralizeMonsterName`, wish parsing; `mklev.js` object display | Multiple JS formatters and wish singularization paths exist. No full pronoun/compound comparison established. `wishing.test.mjs` asserts plural money, plural ration foods, pair-of-lenses and quantity gates; those assertions cover those inputs only. |
 | `pickup.c:2488` `mbag_explodes` | `cmd.js` `magicBagExplodesWithObject` → insertion | JS preserves empty cancellation/trick exemptions, depth-dependent chance and recursive contents. No new gap established in this slice. Scatter, loss billing, pickup burden and quantum containers remain outside the inspected body. |
 | `polyself.c:1421` `dobreathe` | `cmd.js` extended-command dispatch, polymorph helpers; `fire_breath.js` | C charges 15 energy and routes self/directional breath using the form's attack. JS `#monster` dispatch still uses generic form messages for some abilities; complete breath-energy/direction routing was not established. Polymorph equipment AC now uses the shared calculation described under `do_wear.c`; other transformation behavior remains separately scoped. |
-| `potion.c:2122` `mixtype` | `cmd.js` `mixtypePotionResultName`, dip neutralization helpers and potion commands | Healing quaff effects and lost-level restoration are now ported through shared HP/property/level operations, with 55 source-derived tests and a fresh C oracle; details and limits are below. Potion-potion recipe helper matches the inspected healing/gain/fruit/enlightenment cases and RNG. Horn/amethyst dip neutralization lives elsewhere. No complete quaff/throw/breathe/alchemy equivalence claim. |
+| `potion.c:2122` `mixtype` | `cmd.js` `mixtypePotionResultName`, dip neutralization helpers and potion commands | Healing quaff effects and lost-level restoration use shared HP/property/level operations, with 55 effect tests, 19 serial continuation tests and a fresh C oracle; details and limits are below. Potion-potion recipe helper matches the inspected healing/gain/fruit/enlightenment cases and RNG. Horn/amethyst dip neutralization lives elsewhere. No complete quaff/throw/breathe/alchemy equivalence claim. |
 | `pray.c:2414` `doturn` | `pray.js` and `cmd.js` saved `#turn` command; `offer.js` sacrifice; `spell.js` separate spell | Priest/Knight checks, monster iteration, resistance, destruction/pacification/fleeing, spell fallback, recovery and engulfing-vampire release now have 50 source-derived tests. See [the monster audit](monsters.md#priest-and-knight-undead-turning) for implemented scope and remaining branches; this does not establish all prayer or sacrifice behavior. |
 | `read.c:1020` `forget` | `cmd.js` `amnesiaScrollEffect`, `loseAmnesiaSpells` | **State omission:** JS consumes the skill-drain `rnd(3/5)` but does not apply `drain_weapon_skill`; it resets `meverseen` only for current-level monsters, not C's migrating chain. Spell forgetting is separate and present. No direct skill-loss/migrating-memory assertion identified. |
 | `sit.c:358` `lay_an_egg` | `cmd.js` `sitLayEgg`/`createHeroLaidEgg`; `egg_timers.js` | Sex, hunger, aquatic spawning and eel refusal branches exist. No new gap established in these guards. Existing egg timer tests verify lifecycle cases, not all player laying branches. Throne effects were not comprehensively compared. |
@@ -273,12 +273,35 @@ and discovery. A fresh unmodified C recording covers all three blessed tiers,
 with 101/101 screens and 2,792/2,792 RNG calls matching. This is a regression
 measurement, not a completeness percentage for `potion.c` or `exper.c`.
 
-Remaining: full potion command preflight (including bottle occupants), every
-quaff effect's intermediate message suspension, complete `adjabil` racial and
-intrinsic transitions, debug level-down scheduling, and the remaining potion
-families/throw/vapor branches still need source completion. The existing death
-pipeline's restoration of a monster's true species before XP remains a separate
-gap. This increment does not claim those functions or files are complete.
+Healing quaffs now retain an explicit saved continuation across intermediate
+More prompts. `make_blinded` changes its timed source after its message returns;
+deafness and vomiting change before their messages, and `make_sick` clears type
+bits before its relief message but the timeout afterward (`potion.c:137–335`,
+`443–468`). Leg healing restores Dexterity before the message and clears wound
+properties afterward (`do.c:2449`). Level restoration pauses before gain RNG at
+the experience message, then after HP/energy/level changes at Welcome; ability,
+skill-slot and restoration-history changes follow that boundary
+(`exper.c:309–373`). Discovery, billing and consumption remain after the effect.
+Worn singleton potions lose their equipment references before drinking; worn
+stacks split the opened item while the remaining stack stays equipped.
+
+`test/healing-potion-continuation.test.mjs` passes 19 cases, including saves at
+different cure boundaries, strict terminal-width message fitting, Escape and
+invalid input, level/skill ordering, exactly-once dice, equipment identity, and
+one completed turn through the live movement loop. The initial 13 cases had
+12 failures before implementation; the six follow-up cases expand boundaries
+and are not counted as that initial pre-fix measurement.
+
+Remaining: full potion command preflight (including bottle occupants), serial
+effects for other potion families, complete `adjabil` racial and intrinsic
+transitions, debug level-down scheduling, and remaining throw/vapor branches.
+Regaining sight still lacks the complete `toggle_blindness` →
+`learn_unseen_invent` → `addinv_core2` operation: observation of inventory
+acquired blind, including Archeologist scroll messages/discovery, needs its
+shared source owner rather than a healing-only exception (`potion.c:338–363`,
+`invent.c:1025–1052`, `2750–2778`). The existing death pipeline's restoration of
+a monster's true species before XP remains a separate gap. This increment does
+not claim those functions or files are complete.
 
 The armor timing suite now passes 28 cases. Ordinary dressing records
 `chargeKnown` separately from type discovery: C reveals an item's enchantment

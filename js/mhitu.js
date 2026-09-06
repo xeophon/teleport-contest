@@ -4,11 +4,11 @@ import { game } from './gstate.js';
 import { d, rnd, rn1, rn2 } from './rng.js';
 import { W_ARMG } from './const.js';
 import { pmOf, hitvalMonsterWeapon, dmgvalMonsterWeapon, selectHwep } from './mhitm.js';
-import { AD_PHYS, AD_COLD, AD_MAGM, AD_STUN, AD_CONF, AD_PLYS, AD_SPEL, AD_CLRC, AT_MAGC, AT_WEAP, AT_CLAW,
+import { AD_PHYS, AD_COLD, AD_MAGM, AD_STUN, AD_CONF, AD_PLYS, AD_SAMU, AD_SPEL, AD_CLRC, AT_MAGC, AT_WEAP, AT_CLAW,
     AT_KICK, AT_BITE, AT_BUTT, AT_TUCH, AT_STNG, AT_TENT, perceives, thick_skinned } from './permonst.js';
 
 const CONTACT_ATTACKS = new Set([AT_WEAP, AT_CLAW, AT_KICK, AT_BITE, AT_BUTT, AT_TUCH, AT_STNG, AT_TENT]);
-const CONTACT_DAMAGE = new Set([AD_PHYS, AD_COLD, AD_STUN, AD_CONF, AD_PLYS]);
+const CONTACT_DAMAGE = new Set([AD_PHYS, AD_COLD, AD_STUN, AD_CONF, AD_PLYS, AD_SAMU]);
 const MAGIC_DAMAGE = new Set([AD_SPEL, AD_CLRC, AD_MAGM, AD_COLD]);
 const HIT_VERBS = new Map([[AT_BITE, 'bites'], [AT_KICK, 'kicks'], [AT_BUTT, 'butts'],
     [AT_TUCH, 'touches you'], [AT_STNG, 'stings']]);
@@ -55,6 +55,13 @@ export async function advanceMonsterAttackSlots(state, D) {
             }
             state.found = found;
             if (state.attack.aatyp === AT_MAGC) {
+                // mattacku recalculates range after theft can teleport its
+                // attacker. buzzmu rejects non-ray spell types immediately.
+                if (Math.max(Math.abs(mon.mx - game.u.ux), Math.abs(mon.my - game.u.uy)) > 1
+                    && (state.attack.adtyp === AD_SPEL || state.attack.adtyp === AD_CLRC)) {
+                    state.hits[state.index++] = false;
+                    continue;
+                }
                 state.phase = 'cast';
                 continue;
             }

@@ -124,6 +124,112 @@ function monsterName(mon) {
     return String(mon?.data?.name || 'monster');
 }
 
+// mthrowu.c:hallublasts and zap.c:flash_str use a fresh core RNG draw
+// for each displayed ray name, including successive messages from one ray.
+const HALLUCINATED_BLASTS = [
+    "asteroids",
+    "beads",
+    "bubbles",
+    "butterflies",
+    "champagne",
+    "chaos",
+    "coins",
+    "cotton candy",
+    "crumbs",
+    "dark matter",
+    "darkness",
+    "data",
+    "dust specks",
+    "emoticons",
+    "emotions",
+    "entropy",
+    "flowers",
+    "foam",
+    "fog",
+    "gamma rays",
+    "gelatin",
+    "gemstones",
+    "ghosts",
+    "glass shards",
+    "glitter",
+    "good vibes",
+    "gravel",
+    "gravity",
+    "gravy",
+    "grawlixes",
+    "holy light",
+    "hornets",
+    "hot air",
+    "hyphens",
+    "hypnosis",
+    "infrared",
+    "insects",
+    "jargon",
+    "laser beams",
+    "leaves",
+    "lightening",
+    "logic gates",
+    "magma",
+    "marbles",
+    "mathematics",
+    "megabytes",
+    "metal shavings",
+    "metapatterns",
+    "meteors",
+    "mist",
+    "mud",
+    "music",
+    "nanites",
+    "needles",
+    "noise",
+    "nostalgia",
+    "oil",
+    "paint",
+    "photons",
+    "pixels",
+    "plasma",
+    "polarity",
+    "powder",
+    "powerups",
+    "prismatic light",
+    "pure logic",
+    "purple",
+    "radio waves",
+    "rainbows",
+    "rock music",
+    "rocket fuel",
+    "rope",
+    "sadness",
+    "salt",
+    "sand",
+    "scrolls",
+    "sludge",
+    "smileys",
+    "snowflakes",
+    "sparkles",
+    "specularity",
+    "spores",
+    "stars",
+    "steam",
+    "tetrahedrons",
+    "text",
+    "the past",
+    "tornadoes",
+    "toxic waste",
+    "ultraviolet light",
+    "viruses",
+    "water",
+    "waveforms",
+    "wind",
+    "X-rays",
+    "zorkmids"
+];
+
+function spellRayName(name, D) {
+    return D.heroIsHallucinating() ? `blast of ${HALLUCINATED_BLASTS[rn2(HALLUCINATED_BLASTS.length)]}`
+        : name === 'sleep' ? 'sleep ray' : name;
+}
+
 function beamGlyph(dx, dy) {
     return dy === 0 ? '─' : dx === 0 ? '│' : dx === dy ? '\\' : '/';
 }
@@ -166,13 +272,14 @@ function spellDirectionFromKey(ch, D) {
     let self = !dir && !vertical && (ch === '.' || ch === 's');
     const canceled = !dir && !vertical && !self;
     if (canceled) {
-        // C: getdir cancelled, re-use previous direction (usually self).
+        // C movecmd clears dz for an unrecognized key; getdir returns
+        // before confdir, preserving only the previous horizontal vector.
         const prev = game._last_spell_dir || null;
-        if (prev?.dz) vertical = { ...prev };
-        else if (prev && (prev.dx || prev.dy)) dir = { ...prev };
+        if (prev && (prev.dx || prev.dy)) dir = { dx: prev.dx, dy: prev.dy, dz: 0 };
         else self = true;
+        game._last_spell_dir = { dx: dir?.dx || 0, dy: dir?.dy || 0, dz: 0 };
     }
-    if (!vertical) {
+    if (!vertical && !canceled) {
         // C cmd.c:getdir() tail: if (!u.dz) confdir(FALSE);
         if (D.heroIsStunned() || (D.heroIsConfused() && !rn2(5))) {
             const k = rn2(8); // C confdir(): dirs_ord[rn2(N_DIRS)]
@@ -753,7 +860,6 @@ async function spellImmediateBeam(spell, dir, D) {
 async function spellRayHitMonster(spell, mon, nd, D, messages, swallowed = false) {
     const name = spellName(spell);
     const data = SPELL_MONSTERS_BY_NAME.get(monsterName(mon).toLowerCase()) || mon.data;
-    const rayName = name === 'sleep' ? 'sleep ray' : name;
     let damage = 0;
     let absorbed = false;
     if (name === 'sleep') {
@@ -790,12 +896,12 @@ async function spellRayHitMonster(spell, mon, nd, D, messages, swallowed = false
         if (damage > 0 && D.monsterResistsEffect(mon, game.u?.ulevel || 1)) damage = Math.trunc(damage / 2);
     }
     mon.mhp -= damage;
-    if (swallowed) messages.push(`The ${rayName} rips into ${D.monsterTheName(mon)}${damage > 4 ? '!' : '.'}`);
+    if (swallowed) messages.push(`The ${spellRayName(name, D)} rips into ${D.monsterTheName(mon)}${damage > 4 ? '!' : '.'}`);
     if (mon.mhp <= 0) {
         await D.killMonsterFromHeroProjectileHit(mon, messages, D.monsterTheName(mon));
     } else if (!swallowed) {
         if (D.visibleMonsterForScroll(mon)) {
-            messages.push(`The ${rayName} hits ${D.monsterTheName(mon)}${damage > 4 ? '!' : '.'}`);
+            messages.push(`The ${spellRayName(name, D)} hits ${D.monsterTheName(mon)}${damage > 4 ? '!' : '.'}`);
             if (absorbed) messages.push(`${D.monsterTheName(mon, true)} absorbs the deadly ray!`, 'It seems even stronger than before.');
         }
         if (name !== 'sleep') D.directMeleeNonlethalWakeupTail(mon, messages, { ...mon },
@@ -870,19 +976,19 @@ export async function resumeSpellRay(state, D) {
                     state.reflection = D.monsterReflectionSource(mon);
                     if (state.reflection) {
                         state.phase = 'monsterReflection';
-                        if (D.visibleMonsterForScroll(mon)) state.output.push(`The ${rayName} hits ${D.monsterTheName(mon)}.`);
+                        if (D.visibleMonsterForScroll(mon)) state.output.push(`The ${spellRayName(name, D)} hits ${D.monsterTheName(mon)}.`);
                     } else {
                         const messages = [];
                         if (await spellRayHitMonster(spell, mon, nd, D, messages)) state.phase = 'end';
                         state.output.push(...messages);
                     }
-                } else if (D.visibleMonsterForScroll(mon)) state.output.push(`The ${rayName} misses ${D.monsterTheName(mon)}.`);
+                } else if (D.visibleMonsterForScroll(mon)) state.output.push(`The ${spellRayName(name, D)} misses ${D.monsterTheName(mon)}.`);
             } else if (name !== 'fireball' && state.sx === u.ux && state.sy === u.uy && state.range >= 0) {
                 state.phase = 'afterHero';
                 if (spellZapHit(u.uac ?? 10, 0)) {
                     state.range -= 2; state.phase = 'heroEffect';
-                    state.output.push(`The ${rayName} hits you!`);
-                } else if (!D.heroIsBlind()) state.output.push(`The ${rayName} whizzes by you!`);
+                    state.output.push(`The ${spellRayName(name, D)} hits you!`);
+                } else if (!D.heroIsBlind()) state.output.push(`The ${spellRayName(name, D)} whizzes by you!`);
             }
             continue;
         }
@@ -983,11 +1089,11 @@ export async function resumeSpellRay(state, D) {
             state.phase = 'bounceDirection';
             if ((--state.range > 0 && lsx >= 1 && lsx < COLNO && lsy >= 0 && lsy < ROWNO && cansee(lsx, lsy)) || name === 'fireball') {
                 if (Is_airlevel(u.uz)) {
-                    state.output.push(`The ${rayName} vanishes into the aether!`);
+                    state.output.push(`The ${spellRayName(name, D)} vanishes into the aether!`);
                     state.phase = 'end'; state.vanished = true;
                 } else if (name === 'fireball') {
                     state.sx = lsx; state.sy = lsy; state.phase = 'end';
-                } else state.output.push(`The ${rayName} bounces!`);
+                } else state.output.push(`The ${spellRayName(name, D)} bounces!`);
             }
             continue;
         }
@@ -1103,14 +1209,7 @@ export async function castSpellDirectionalEffect(spell, ch, D) {
     }
     const { dir, vertical, self, canceled } = spellDirectionFromKey(ch, D);
     if (canceled) {
-        // C: getdir cancelled — "The magical energy is released!" and the
-        // previous direction is reused (usually self).
-        const result = vertical
-            ? await spellZapUpDown(spell, vertical.dz, D)
-            : self || !dir
-                ? await spellZapYourself(spell, D)
-                : await castSpellBeamDispatch(spell, dir, D);
-        return { ...result, released: true };
+        return resumeReleasedSpell({ spell, dir, vertical, self }, D);
     }
     if (self) {
         game._last_spell_dir = { dx: 0, dy: 0, dz: 0 };
@@ -1127,6 +1226,22 @@ export async function castSpellDirectionalEffect(spell, ch, D) {
     }
     game._last_spell_dir = { dx: dir.dx, dy: dir.dy, dz: 0 };
     return castSpellBeamDispatch(spell, dir, D);
+}
+
+// The release pline precedes weffects and its first RNG call. Store the
+// resolved direction so an acknowledgement never repeats getdir/confdir.
+export async function resumeReleasedSpell(state, D) {
+    if (!state.announced) {
+        state.announced = true;
+        if (!D.say('The magical energy is released!')) return {
+            published: true, pending: true, messages: [],
+            afterHeroDamage: { kind: 'releasedSpell', state },
+        };
+    }
+    const { spell, dir, vertical, self } = state;
+    const result = vertical ? await spellZapUpDown(spell, vertical.dz, D)
+        : self || !dir ? await spellZapYourself(spell, D) : await castSpellBeamDispatch(spell, dir, D);
+    return { ...result, released: !result.published };
 }
 
 async function castSpellBeamDispatch(spell, dir, D) {

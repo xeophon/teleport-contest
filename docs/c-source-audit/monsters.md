@@ -551,3 +551,14 @@ practice, gift slots in `pray.c:994`, and skill drain callers in
 terminal wrapping/tab-separated presentation and every alternate role
 reinitialization path have not been independently compared to C. No frozen
 recording fixtures were edited.
+
+The next skill integration check exposed two shared identity errors. Samurai
+starting weapons now resolve `objnam.c:Japanese_items` aliases through the
+same table used by wishes, so a wakizashi grants short-sword proficiency.
+`dog.c:initedog:45-51` tameness now uses the canonical `M2_DOMESTIC` predicate
+for tame wizard creation and the shared charm/taming helper. Horses and
+household pets start at ten; wolves, large wild cats and unicorns start at
+five. Thirteen new independent tests pass, including actual Samurai startup,
+six genesis species and a tame-dependent saddling threshold. The combined
+skill tests pass 62/62 and the shop suite passes 3,134/3,134. The two affected
+public sessions now match all 203 screens and 8,829 RNG calls.

@@ -176,17 +176,22 @@ effect across message prompts and saved death recovery. Hero damage uses the
 current body, half spell damage, equipment reflection and resistance memory.
 Cold inventory damage is applied separately per shattered stack. Direct
 finger-of-death calls preserve C's different death prompt and status snapshot.
-A fresh C recording matches all 57 screens and 2,327 RNG calls. Complete
-monster-hit, terrain, hallucinated naming and multiple-blast continuations
-remain open.
+A fresh C recording matches all 57 screens and 2,327 RNG calls. Cancelled
+directions now clear the previous vertical component, bypass confusion and
+publish release feedback before effect RNG; a second recording matches 30
+screens and 2,044 calls. Ray messages draw canonical hallucinated blast names
+without changing death causes. Complete monster-hit, terrain, monster naming
+and multiple-blast continuations remain open.
 
 Normal, extra and full healing potions now use source BCU amounts, overflow,
 current-body healing, cures, exercise and wounded-leg rules. Blessed full
 healing restores lost levels with C's decreasing restoration ceiling. Level
 gains share the human/monster HP and energy operation; startup records level
 history. Fifty-five potion tests and a fresh C recording of 101 screens and
-2,792 RNG calls cover this work. Full per-message quaff and ability-change
-continuations remain open.
+2,792 RNG calls cover this work. Nineteen additional tests cover saved quaff
+phases, cure and level-gain message boundaries, invalid input, Escape, exactly
+one completed turn and worn stack ownership. Other potion families and the
+complete racial/intrinsic ability-change operation remain open.
 
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
@@ -194,14 +199,16 @@ resident monsters and temple entry drive combat and hostility (11 new tests).
 Five cleric spell effects and the real Sanctum Amulet now follow C (24 further
 tests including spell feedback/visibility). C's paralysis duration also reaches
 its damage caller; that executable behavior is intentionally preserved.
-Canonical serial attack slots now drive 30 of the 42 magic-casting species,
+Canonical serial attack slots now drive 36 of the 42 magic-casting species,
 including physical/cold contact and cleric lightning, with saved inventory,
 landing and death continuations (33 new tests). The driver preserves attack
 armor rolls, protection, sleeping wakeups, occupation interruption and queued
 death-message order. Elemental casting preflight and contact stun, confusion
 and paralysis now use source rules for Angel, Asmodeus, Yeenoghu and abbot,
 with 41 additional tests. Existing Asmodeus bribery tests now use its C 4d4
-claw damage. The remaining 12 caster arrays, polymorph passives,
+claw damage. Canonical special-object theft now preserves target identity,
+equipment removal, artifact levitation loss, saved death recovery and monster
+pickup before relocation (19 tests). The remaining six caster arrays, polymorph passives,
 special weapons and unfinished spell effects require continued source work.
 Twenty more tests cover live attack/death turn resumption and shared sleep
 state. The main loop parks a suspended attack pass and resumes its remaining
@@ -224,14 +231,15 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit ec028bc, passed 50/53
-public sessions (12,654/12,712 screens, 830,380/832,102 RNG calls) and 12/19
-supplemental sessions (3,067/3,346 screens, 136,078/141,728 RNG calls), with
-zero worker errors. That snapshot removes the Sanctum script and restores
-the wizard wishlist and arch-lich recordings. The current dressing-discovery
-correction also restores all 714 screens in seed0014; full corpora will be
-rerun from the committed checkpoint. These
-recording results do not establish full C behavior.
+The last complete recording run, at preceding commit b15107d, passed 49/53
+public sessions (12,499/12,712 screens, 830,226/832,102 RNG calls) and 12/19
+supplemental sessions (3,067/3,346 screens, 136,092/141,728 RNG calls), with
+zero worker errors. Source corrections to Japanese weapon skill identities
+and domestic monster tameness subsequently restore both affected public
+recordings: seed0107 matches 98 screens and 2,902 RNG calls, and seed9161
+matches 105 screens and 5,927 RNG calls. Full corpora will be rerun from the
+next committed checkpoint. These recording results do not establish full C
+behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

@@ -51,8 +51,16 @@ used to mark a subsystem complete.
   A second source review added canonical property/form resistance and delayed
   observation until the C message/zhitu return boundary. Hallucinated beam
   selection uses the core RNG even before the swallowed guard.
-  Complete monster-hit, terrain, hallucinated naming and multiple-blast
-  continuations still require their source passes.
+  `cmd.c:getdir/movecmd` now clears the previous vertical direction on
+  cancellation without applying confusion; release feedback precedes effect
+  RNG and survives a saved message pause. Three live tests initially failed;
+  the additional C recording matches all 30 screens/cursors and 2,044 RNG
+  calls. `zap.c:flash_str` now draws a fresh hallucinated blast name from the
+  canonical 96-entry `mthrowu.c:hallublasts` table at each ray message, using
+  core RNG while retaining the actual ray type in death causes (two tests).
+  Complete monster-hit, terrain, monster naming and multiple-blast
+  continuations still require their source passes. Direction history from
+  non-spell commands and full getdir help/custom bindings remain open.
 - `cfgfiles.c:cnf_line_BINDINGS`, `options.c:parsebindings/txt2key/escapes`,
   and `cmd.c:bind_key/rhack`: parse binding lists and byte/control/Meta
   syntax, preserve right-to-left precedence, ignore invalid bindings, and
