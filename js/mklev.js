@@ -12,7 +12,7 @@ import { docrt, flush_screen, newsym, pline } from './display.js';
 import { cansee } from './vision.js';
 import { vfsDeleteFile, vfsReadFile } from './storage.js';
 import { restoreBonesLevel } from './save.js';
-import { beginBurn, cleanupBurn } from './burn.js';
+import { beginBurn, endBurn, artifactLight, cleanupBurn } from './burn.js';
 import { BURN_OBJECT, MELT_ICE_AWAY, ZOMBIFY_MON, SHRINK_GLOB, TIMER_LEVEL, peekTimer, stopObjectTimers } from './timeout.js';
 import { createGasCloud, createGasCloudSelection } from './region.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, d, rne, rnz, getRngLog } from './rng.js';
@@ -33,6 +33,8 @@ import { QUEST_FILLERS } from './quest_filler_data.js';
 import { ROLE_RANKS, QUEST_ROLE_MONSTERS } from './roles.js';
 import { mkFakeAmuletOfYendor } from './wizard.js';
 import { dressMonster } from './worn.js';
+import { mdropSpecialObjs } from './steal.js';
+import { objectLocations } from './obj_location.js';
 import { selectHwep } from './mhitm.js';
 import { QUEST_LEVELS } from './quest_level_data.js';
 import * as questSpecies from './permonst.js';
@@ -58,7 +60,7 @@ import {
     FOODSHOP, RINGSHOP, WANDSHOP, TOOLSHOP, BOOKSHOP, FODDERSHOP, CANDLESHOP,
     ARMORSHOP, WEAPONSHOP,
     NO_MINVENT, MM_NOGRP, MM_EMIN, MM_ANGRY, MM_NONAME, MM_NOCOUNTBIRTH, MM_NOMSG, MM_ADJACENTOK, MM_NOTAIL, MM_NOWAIT,
-    STRAT_WAITFORU, STRAT_APPEARMSG,
+    STRAT_WAITFORU, STRAT_CLOSE, STRAT_APPEARMSG,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
     DB_EAST, DB_NORTH, DB_SOUTH, DB_UNDER, DB_FLOOR, DB_MOAT, DB_LAVA,
@@ -5090,10 +5092,12 @@ function isCandleMergeObject(obj) {
 function objectHowLostKey(obj) {
     return obj?.how_lost ?? 0;
 }
-function objectMergeableByCMetadata(obj) {
+export function objectMergeableByCMetadata(obj) {
     if (!obj) return false;
     if (obj.ocMerge === false) return false;
     const otyp = obj.otyp;
+    const kind = objectKindKey(obj);
+    if (otyp === BOULDER || otyp === STATUE || kind === 'boulder' || kind === 'statue') return false;
     if (otyp === GOLD_PIECE || otyp === COIN_CLASS || obj.cls === 'coin') return true;
     if (isFoodMergeObject(obj)) return true;
     if (otyp === POTION_CLASS || obj.cls === 'potion') return true;
@@ -5101,7 +5105,8 @@ function objectMergeableByCMetadata(obj) {
     if (otyp === ROCK || otyp === GEM_CLASS || otyp === RUBY || otyp === TOUCHSTONE || obj.cls === 'gem' || obj.cls === 'rock') return true;
     if (isCandleMergeObject(obj)) return true;
     if (otyp >= 230 && otyp < 300) return true;
-    if (['arrow', 'bolt', 'dart', 'dagger', 'knife', 'spear', 'javelin', 'shuriken', 'boomerang'].some(name => objectKindKey(obj).includes(name)))
+    if (['ya', 'athame', 'scalpel', 'stiletto', 'worm tooth'].includes(kind)) return true;
+    if (['arrow', 'bolt', 'dart', 'dagger', 'knife', 'spear', 'javelin', 'shuriken', 'boomerang'].some(name => kind.includes(name)))
         return true;
     return false;
 }
@@ -5142,6 +5147,7 @@ function hasAttachedMergeData(obj) {
 }
 function clearMergedSourceTimers(obj) {
     stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
+    if (obj.lamplit || obj.burning) endBurn(obj, false);
     delete obj.eggHatchTurn;
     delete obj._egg_hatch_seq;
     delete obj._egg_hatch_consumed;
@@ -5151,7 +5157,7 @@ function clearMergedSourceTimers(obj) {
     delete obj.figurineTransformTurn;
     delete obj._figurine_transform_seq;
 }
-function mergeStackableObject(existing, otmp) {
+export function mergeStackableObject(existing, otmp) {
     const existingCount = Math.max(1, Math.trunc(Number(existing.quan || 1)));
     const objCount = Math.max(1, Math.trunc(Number(otmp.quan || 1)));
     if (!otmp.lamplit && (existing.age != null || otmp.age != null)) {
@@ -7108,7 +7114,7 @@ function m_initweap(ptr) {
             game._mongets_target.hasInventory = true;
         }
         mongets(rn2(4) ? SHORT_SWORD : AXE);
-    } else if (ptr.guardian && ptr.name === 'chieftain') {
+    } else if (ptr.guardian && ['chieftain', 'page', 'roshi', 'warrior'].includes(ptr.name)) {
         mongets(rn2(3) ? LONG_SWORD : SHORT_SWORD);
         mongets(rn2(3) ? CHAIN_MAIL : LEATHER_ARMOR);
         if (rn2(2)) mongets(rn2(2) ? LOW_BOOTS : HIGH_BOOTS);
@@ -7117,11 +7123,24 @@ function m_initweap(ptr) {
             mongets(BOW);
             m_initthrow(ARROW, 12);
         }
-    } else if (ptr.guardian && (ptr.name === 'student' || ptr.name === 'apprentice' || ptr.name === 'acolyte')) {
+    } else if (ptr.guardian && ['student', 'attendant', 'abbot', 'acolyte', 'guide', 'apprentice'].includes(ptr.name)) {
         if (rn2(2)) mongets(rn2(3) ? DAGGER : KNIFE);
         if (rn2(5)) mongets(rn2(3) ? LEATHER_JACKET : LEATHER_CLOAK);
         if (rn2(3)) mongets(rn2(3) ? LOW_BOOTS : HIGH_BOOTS);
         if (rn2(3)) mongets(POT_HEALING);
+    } else if (ptr.guardian && ptr.name === 'hunter') {
+        mongets(rn2(3) ? SHORT_SWORD : DAGGER);
+        if (rn2(2)) mongets(rn2(2) ? LEATHER_JACKET : LEATHER_ARMOR);
+        mongets(BOW);
+        m_initthrow(ARROW, 12);
+    } else if (ptr.guardian && ptr.name === 'thug') {
+        mongets(CLUB);
+        mongets(rn2(3) ? DAGGER : KNIFE);
+        if (rn2(2)) mongets(LEATHER_GLOVES);
+        mongets(rn2(2) ? LEATHER_JACKET : LEATHER_ARMOR);
+    } else if (ptr.guardian && ptr.name === 'neanderthal') {
+        mongets(CLUB);
+        mongets(LEATHER_ARMOR);
     } else if (ptr.elf) {
         if (rn2(2)) mongets(rn2(2) ? ELVEN_MITHRIL_COAT : ELVEN_CLOAK);
         if (rn2(2)) mongets(ELVEN_LEATHER_HELM);
@@ -9352,6 +9371,7 @@ function questMonsterData(data) {
         male: is_male(data), female: is_female(data), neuter: questSpecies.is_neuter(data),
         unique: !!(data.geno & questSpecies.G_UNIQ), noCorpse: !!(data.geno & questSpecies.G_NOCORPSE),
         msound: data.sound === questSpecies.MS_LEADER ? 'leader' : data.sound,
+        guardian: data.sound === questSpecies.MS_GUARDIAN,
         nemesis: data.sound === questSpecies.MS_NEMESIS, waiting: !!(data.m3 & questSpecies.M3_WAITFORU),
         alwaysHostile: questSpecies.always_hostile(data), alwaysPeaceful: questSpecies.always_peaceful(data),
         strong: questSpecies.strongmonst(data), nasty: questSpecies.extra_nasty(data),
@@ -9719,8 +9739,50 @@ async function questFillerMonster(spec, area, croom, coord = null) {
         setMonsterPeaceful(mon, typeof spec === 'string' ? null : spec.peaceful);
         if (spec.asleep != null) mon.msleeping = spec.asleep ? 1 : 0;
         if (spec.name) mon.givenName = spec.name;
+        if (ptr?.m3) {
+            if (ptr.m3 & questSpecies.M3_WAITFORU) mon.mstrategy = (mon.mstrategy || 0) | STRAT_WAITFORU;
+            if (ptr.m3 & questSpecies.M3_CLOSE) mon.mstrategy = (mon.mstrategy || 0) | STRAT_CLOSE;
+            if (ptr.m3 & (questSpecies.M3_WAITMASK | questSpecies.M3_COVETOUS))
+                mon.mstrategy = (mon.mstrategy || 0) | STRAT_APPEARMSG;
+        }
+        dressMonster(mon);
     }
     return mon;
+}
+
+// sp_lev.c:create_monster discards the default inventory only after makemon
+// has created it. Invocation objects and this role's quest artifact survive.
+function discardQuestMonsterInventory(mon) {
+    const rescued = new Set(mdropSpecialObjs(mon, {
+        objResists: obj => {
+            const kind = obj.actualKind || obj.kind;
+            const corpse = typeof obj.corpsenm === 'number' ? QUEST_MONSTERS[obj.corpsenm] : obj.corpsenm;
+            if (['Amulet of Yendor', 'Book of the Dead', 'Candelabrum of Invocation', 'Bell of Opening'].includes(kind)
+                || (obj.otyp === CORPSE && ['Death', 'Famine', 'Pestilence'].includes(corpse?.name))) return true;
+            rn2(100); // zap.c:obj_resists still rolls when both chances are zero.
+            return false;
+        },
+        isQuestArtifact: obj => isCurrentRoleQuestArtifact(artifactDefinitionForName(obj.artifact || obj.oartifact)),
+    }));
+    const discarded = [];
+    for (const obj of mon.minvent || []) {
+        if (obj.owornmask && obj.lamplit && artifactLight(obj)) endBurn(obj, false);
+        delete obj.ocarry;
+        obj.owornmask = 0;
+        obj.worn = false;
+        if (rescued.has(obj)) stack_floor_object(place_object(obj, mon.mx, mon.my));
+        else discarded.push(obj);
+    }
+    for (const obj of objectLocations({ inventory: discarded }).keys()) {
+        stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
+        const def = artifactDefinitionForName(obj.artifact || obj.oartifact);
+        if (def) clearArtifactExistence(def.name);
+    }
+    mon.minvent = [];
+    mon.hasInventory = false;
+    mon.misc_worn_check = 0;
+    mon.mw = mon.weapon = null;
+    dressMonster(mon);
 }
 
 // nhlib.lua and nhlsel.c: expressions run when their des statement is reached,
@@ -10019,8 +10081,12 @@ async function questFillerOperations(operations, state, croom = null) {
                 '%': FOOD_CLASS, '!': POTION_CLASS, '?': SCROLL_CLASS, '/': WAND_CLASS, '=': RING_CLASS,
                 '"': AMULET_CLASS, '+': SPBOOK_CLASS };
             const oclass = classes[spec.class || spec.id];
-            if (spec.id && otyp == null && oclass == null) throw new Error(`Unsupported quest object ${spec.id}`);
-            const obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
+            let obj;
+            if (spec.id && otyp == null && oclass == null) {
+                obj = namedEquipment(spec.id, true, !spec.name);
+                if (!obj) throw new Error(`Unsupported quest object ${spec.id}`);
+                place_object(obj, pos.x, pos.y);
+            } else obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
                 : mkobj_at(oclass ?? RANDOM_CLASS, pos.x, pos.y, !spec.name);
             if (otyp === WAN_LIGHTNING) Object.assign(obj, { kind: 'lightning', cls: 'wand', wandIndex: 24,
                 glyph: '/', color: game._object_descriptions?.wands?.[24]?.color ?? CLR_BROWN });
@@ -10037,14 +10103,18 @@ async function questFillerOperations(operations, state, croom = null) {
             else if (spec.buc === 'not-cursed') uncurse(obj);
             if (def && !artifactExists(def.name)) applyArtifactFields(obj, def, { dknown: false });
             else if (spec.name) obj.oname = spec.name;
-            obj.oeroded = obj.oeroded2 = 0;
-            obj.oerodeproof = false;
-            if (spec.quantity > 0 && (otyp === TIN || obj.cls === 'scroll' || obj.cls === 'food'
-                || obj.cls === 'potion' || obj.cls === 'gem' || obj.cls === 'weapon')) {
+            obj.oeroded = spec.eroded > 0 ? spec.eroded % 4 : 0;
+            obj.oeroded2 = spec.eroded > 0 ? (spec.eroded >> 2) % 4 : 0;
+            obj.oerodeproof = spec.eroded < 0;
+            if (spec.quantity > 0 && objectMergeableByCMetadata(obj)) {
                 obj.owt = (obj.owt || 0) / obj.quan * spec.quantity;
                 obj.quan = spec.quantity;
             }
-            stack_floor_object(obj);
+            if (state.carrier) {
+                game.level.objects.splice(game.level.objects.indexOf(obj), 1);
+                add_to_minv(state.carrier, obj);
+                state.carrier.hasInventory = true;
+            } else stack_floor_object(obj);
             break;
         }
         case 'engraving': {
@@ -10096,9 +10166,17 @@ async function questFillerOperations(operations, state, croom = null) {
             else await barFillTrap(kinds[arg] ?? null, () => questFillerLocation(state.area));
             break;
         }
-        case 'monster':
-            await questFillerMonster(arg, state.area, croom, rest.length === 1 ? rest[0] : rest.length ? rest : null);
+        case 'monster': {
+            const mon = await questFillerMonster(arg, state.area, croom, rest.length === 1 ? rest[0] : rest.length ? rest : null);
+            if (mon && (arg.keep_default_invent === false || (arg.inventory && arg.keep_default_invent !== true)))
+                discardQuestMonsterInventory(mon);
+            if (arg.inventory) {
+                await questFillerOperations(arg.inventory.operations, { ...state, carrier: mon,
+                    variables: new Map(state.variables) }, croom);
+                if (mon) dressMonster(mon);
+            }
             break;
+        }
         default:
             throw new Error(`Unsupported quest filler operation: ${operation}`);
         }
@@ -23535,6 +23613,7 @@ export const __mklevTestHooks = {
     flipSpecialLevelRnd,
     questFillerOperations,
     questMonsterData,
+    discardQuestMonsterInventory,
     dressMonster,
     rnd_offensive_item,
     mplayerArmor,

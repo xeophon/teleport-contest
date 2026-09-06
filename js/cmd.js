@@ -4,6 +4,7 @@ import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
 import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind } from './burn.js';
+import { objectMergeableByCMetadata, mergeStackableObject } from './mklev.js';
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
@@ -11,6 +12,7 @@ import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_
 import { AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsAcid } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
+import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
     recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
 
@@ -10065,11 +10067,10 @@ function spellMenuLines(prompt = 'Choose which spell to cast', includeSort = fal
             fail = `${100 - chance}%`;
         }
         const accuracy = skillLevel >= 4 ? 2 : skillLevel === 3 ? 5 : skillLevel === 2 ? 10 : 25;
-        const learnedTurn = item.learnedTurn ?? 1;
-        const turnsLeft = Math.max(0, 20000 - Math.max(0, (game.moves || 1) - learnedTurn));
+        const turnsLeft = item.knowledge ?? 20000;
         const percent = turnsLeft >= 20000 ? 100 : Math.trunc((turnsLeft - 1) / 200) + 1;
         const high = turnsLeft >= 20000 ? 100 : accuracy * (Math.trunc((percent - 1) / accuracy) + 1);
-        const retention = turnsLeft >= 20000 ? '100%' : `${high - accuracy + 1}%-${high}%`;
+        const retention = turnsLeft < 1 ? '(gone)' : turnsLeft >= 20000 ? '100%' : `${high - accuracy + 1}%-${high}%`;
         const letter = String.fromCharCode('a'.charCodeAt(0) + game._spell_menu_spells.length);
         game._spell_menu_spells.push({ letter, name, level, category: skillName, successChance });
         const failGap = fail.length > 3 ? '' : ' ';
@@ -12013,76 +12014,6 @@ export function inventoryItemName(item) {
         .replace(/ \((?:weapon|wielded|alternate weapon|being worn|at the ready|in quiver|on .* hand).*$/, ''));
 }
 
-const ARTIFACT_ALIGN_TYPE = { lawful: 1, neutral: 0, chaotic: -1 };
-const ARTIFACT_TOUCH_METADATA = Object.freeze({
-    Excalibur: { restricted: true, selfWilled: true, alignment: 1, role: 'Knight' },
-    Stormbringer: { restricted: true, selfWilled: true, alignment: -1 },
-    Mjollnir: { restricted: true, alignment: 0 },
-    Cleaver: { restricted: true, alignment: 0 },
-    Grimtooth: { restricted: true, alignment: -1 },
-    Magicbane: { restricted: true, alignment: 0 },
-    'Frost Brand': { restricted: true, alignment: null },
-    'Fire Brand': { restricted: true, alignment: null },
-    Dragonbane: { restricted: true, alignment: null },
-    Demonbane: { restricted: true, alignment: 1 },
-    Werebane: { restricted: true, alignment: null },
-    Grayswandir: { restricted: true, alignment: 1 },
-    Giantslayer: { restricted: true, alignment: 0 },
-    Ogresmasher: { restricted: true, alignment: null },
-    Trollsbane: { restricted: true, alignment: null },
-    'Vorpal Blade': { restricted: true, alignment: 0 },
-    Snickersnee: { restricted: true, alignment: 1 },
-    Sunsword: { restricted: true, alignment: 1 },
-    'The Orb of Detection': { restricted: true, selfWilled: true, alignment: 1, role: 'Archeologist' },
-    'The Heart of Ahriman': { restricted: true, selfWilled: true, alignment: 0, role: 'Barbarian' },
-    'The Sceptre of Might': { restricted: true, selfWilled: true, alignment: 1, role: 'Caveman' },
-    'The Staff of Aesculapius': { restricted: true, selfWilled: true, alignment: 0, role: 'Healer' },
-    'The Magic Mirror of Merlin': { restricted: true, selfWilled: true, alignment: 1, role: 'Knight' },
-    'The Eyes of the Overworld': { restricted: true, selfWilled: true, alignment: 0, role: 'Monk' },
-    'The Mitre of Holiness': { restricted: true, selfWilled: true, alignment: 1, role: 'Priest' },
-    'The Longbow of Diana': { restricted: true, selfWilled: true, alignment: -1, role: 'Ranger' },
-    'The Master Key of Thievery': { restricted: true, selfWilled: true, alignment: -1, role: 'Rogue' },
-    'The Tsurugi of Muramasa': { restricted: true, selfWilled: true, alignment: 1, role: 'Samurai' },
-    'The Platinum Yendorian Express Card': { restricted: true, selfWilled: true, alignment: 0, role: 'Tourist' },
-    'The Orb of Fate': { restricted: true, selfWilled: true, alignment: 0, role: 'Valkyrie' },
-    'The Eye of the Aethiopica': { restricted: true, selfWilled: true, alignment: 0, role: 'Wizard' },
-});
-
-function artifactTouchMetadata(def) {
-    return def ? ARTIFACT_TOUCH_METADATA[def.name] || null : null;
-}
-
-function artifactAlignmentType(def) {
-    if (!def) return null;
-    const explicit = ARTIFACT_ALIGN_TYPE[def.alignment];
-    if (explicit != null) return explicit;
-    return artifactTouchMetadata(def)?.alignment ?? null;
-}
-
-function artifactIsRestricted(def) {
-    return !!def?.restricted || !!def?.questArtifact || !!artifactTouchMetadata(def)?.restricted;
-}
-
-function artifactIsSelfWilled(def) {
-    return !!def?.questArtifact || !!artifactTouchMetadata(def)?.selfWilled;
-}
-
-function artifactTouchRole(def) {
-    return def?.questRole || artifactTouchMetadata(def)?.role || '';
-}
-
-function artifactTouchStatus(def) {
-    if (!def) return { badClass: false, badAlign: false, selfWilled: false };
-    const selfWilled = artifactIsSelfWilled(def);
-    const heroRole = game._startup_role || game.urole?.name?.m || '';
-    const role = artifactTouchRole(def);
-    const badClass = selfWilled && !!role && role !== heroRole;
-    const artifactAlign = artifactAlignmentType(def);
-    const badAlign = artifactIsRestricted(def) && artifactAlign != null
-        && (artifactAlign !== (game.u?.ualign?.type ?? 0) || (game.u?.ualign?.record ?? 0) < 0);
-    return { badClass, badAlign, selfWilled };
-}
-
 function touchArtifact(item) {
     const def = artifactDefinitionForName(item?.artifact);
     const status = artifactTouchStatus(def);
@@ -12305,6 +12236,10 @@ function removeInventoryItem(item, amount = 1) {
     } else {
         setArtifactEquipmentLight(item, false);
         stopCarriedFigurineTimerOnLeave(item);
+        for (const slot of ['uwep', 'uswapwep', 'uquiver', 'uarm', 'uarmc', 'uarmh',
+            'uarms', 'uarmg', 'uarmf', 'uarmu', 'uamul', 'uleft', 'uright', 'ublindf']) {
+            if (game.u?.[slot] === item) game.u[slot] = null;
+        }
         game.inventory = (game.inventory || []).filter(other => other !== item);
     }
     if (wasWornSpeedChanger) syncHeroSpeedState();
@@ -12319,10 +12254,6 @@ function useUpInventoryItem(item, amount = 1) {
     if (usedCount >= quantity) {
         markObjectTreeShopBillsUsedUp(item);
         stopDestroyedObjectTreeTimers(item);
-        for (const slot of ['uwep', 'uswapwep', 'uquiver', 'uarm', 'uarmc', 'uarmh',
-            'uarms', 'uarmg', 'uarmf', 'uarmu', 'uamul', 'uleft', 'uright', 'ublindf']) {
-            if (game.u?.[slot] === item) game.u[slot] = null;
-        }
         item.owornmask = 0;
         item.worn = item.wielded = item.alternate = item.quivered = false;
     }
@@ -19316,10 +19247,10 @@ async function takeOffEquipment(item, options = {}) {
         if (coveredBlocker) return coveredBlocker;
     }
 
-    const selectBlocker = takeOffSelectBlockerResult(item, options);
+    const selectBlocker = !options.force && takeOffSelectBlockerResult(item, options);
     if (selectBlocker) return selectBlocker;
 
-    if (item.cursed) return takeOffCursedBlockerResult(item);
+    if (item.cursed && !options.force) return takeOffCursedBlockerResult(item);
 
     const facewearOff = await takeOffFacewear(item);
     if (facewearOff) return { ...facewearOff, move: 1 };
@@ -19327,7 +19258,7 @@ async function takeOffEquipment(item, options = {}) {
     const baseName = equipmentBaseName(item);
     // C ref: off_msg() only prints "You were wearing ..." with verbose
     // (do_wear.c:1048).
-    const wornOffMessages = game.flags?.verbose !== false ? [`You were wearing ${baseName}.`] : [];
+    const wornOffMessages = !options.force && game.flags?.verbose !== false ? [`You were wearing ${baseName}.`] : [];
     if (wornRingItem(item) || isWornMeatRingItem(item)) {
         const messageName = wornRingOffMessageName(item, baseName);
         item.worn = false;
@@ -19348,7 +19279,7 @@ async function takeOffEquipment(item, options = {}) {
     const slot = armorSlot(item);
     const kind = String(item.kind || '').toLowerCase();
     const delay = ARMOR_WEAR_DELAY[kind] || (/dragon scales?/.test(kind) ? 5 : 0);
-    if (delay) {
+    if (delay && !options.force) {
         const simpleName = pickupObjectName(item);
         game._armor_wear_occupation = {
             action: 'takeoff',
@@ -44315,6 +44246,73 @@ function artifactPowerSourceName(obj) {
     return name.replace(/^The\b/, 'the');
 }
 
+const ARTIFACT_RETOUCH_DEPS = {
+    antimagic: heroHasAntimagic,
+    isSilver: heroTossUpObjectIsSilver,
+    halfPhysical: maybeHalfPhysicalDamage,
+    damageHero: applyChestTrapFireDamage,
+    exercise: exerciseAttribute,
+    invocationBellAllowed: item => isBellOfOpeningItem(item) && heroOnInvocationSquare(),
+    objectName: item => artifactDefinitionForName(item?.artifact || item?.oartifact)?.name.replace(/^The /, 'the ')
+        || `your ${pickupObjectName(item)}`,
+    killerName: item => artifactDefinitionForName(item?.artifact || item?.oartifact)?.name.replace(/^The /, 'the ')
+        || articleFor(pickupObjectName({ ...item, quan: 1, known: true, dknown: true })),
+    isWorn: item => !!(item.owornmask || item.worn || item.wielded || item.alternate || item.quivered
+        || game.u?.uwep === item),
+    unwear: async (item, messages) => {
+        const oldInUse = item.in_use;
+        item.in_use = 1;
+        if (game._armor_wear_occupation?.itemLetter === item.letter) game._armor_wear_occupation = null;
+        const fallout = isWornEquipmentItem(item) ? await takeOffEquipment(item, { force: true }) : null;
+        if (fallout?.messages) messages.push(...fallout.messages);
+        const lightMessage = setArtifactEquipmentLight(item, false);
+        if (lightMessage) messages.push(lightMessage);
+        for (const slot of ['uwep', 'uswapwep', 'uquiver', 'uarm', 'uarmc', 'uarmh',
+            'uarms', 'uarmg', 'uarmf', 'uarmu', 'uamul', 'uleft', 'uright', 'ublindf']) {
+            if (game.u?.[slot] === item) game.u[slot] = null;
+        }
+        item.worn = item.wielded = item.alternate = item.quivered = false;
+        item.owornmask = 0;
+        item.line = normalInventoryLine({ ...item, line: '' });
+        item.in_use = oldInUse;
+        return fallout;
+    },
+};
+
+async function retouchItemForCommand(item, mode) {
+    const cached = game._artifact_retouch_result;
+    if (cached?.item === item) {
+        game._artifact_retouch_result = null;
+        return cached.result;
+    }
+    const result = await retouchArtifactObject(item, ARTIFACT_RETOUCH_DEPS);
+    if (result.pending) game._artifact_retouch_command = { item, mode };
+    return result;
+}
+
+async function resumeArtifactTouchCommand(messages = []) {
+    const command = game._artifact_retouch_command;
+    if (!command) return false;
+    const result = await retouchArtifactObject(command.item, ARTIFACT_RETOUCH_DEPS, { resume: true });
+    result.messages.unshift(...messages);
+    if (result.pending) {
+        await setMessage(result.messages.join('  '), true);
+        applyLifeSavingOrFatalCommandMode(result);
+        game.context.move = 0;
+    } else if ((game.inventory || []).includes(command.item)) {
+        game._artifact_retouch_command = null;
+        game._artifact_retouch_result = { item: command.item, result };
+        game._command_mode = command.mode;
+        await rhack(command.item.letter);
+    } else {
+        game._artifact_retouch_command = null;
+        game._command_mode = null;
+        await setMessage(result.messages.join('  '));
+        game.context.move = 1;
+    }
+    return true;
+}
+
 function containerTakeoutArtifactTouch(obj) {
     const def = artifactDefinitionForName(obj?.artifact);
     if (!def) return { ok: true, skip: false, messages: [] };
@@ -45009,6 +45007,11 @@ function sameStackCorpseEggTinFields(existing, obj) {
 
 function sameMonsterThrownStackObject(existing, obj) {
     if (!existing || !obj || existing === obj) return false;
+    if (existing.nomerge || obj.nomerge || !objectMergeableByCMetadata(obj)
+        || !objectMergeableByCMetadata(existing)) return false;
+    if (!!existing.lamplit !== !!obj.lamplit) return false;
+    if (isCandleObject(obj) && Math.trunc((obj.age || 0) / 25) !== Math.trunc((existing.age || 0) / 25)) return false;
+    if (isPotionOfOil(obj) && obj.lamplit) return false;
     if (existing.hidden || existing.buried || existing.transientProjectile) return false;
     if (existing.ox !== obj.ox || existing.oy !== obj.oy) return false;
     if (!!existing.unpaid !== !!obj.unpaid || !!existing.no_charge !== !!obj.no_charge) return false;
@@ -45044,7 +45047,7 @@ function stackMonsterThrownObject(obj) {
     if (!stack) return obj;
     mergeStackedShopBillEntries(stack, obj);
     copyStackedObjectInstanceNameForMerge(stack, obj);
-    stack.quan = (stack.quan || 1) + (obj.quan || 1);
+    mergeStackableObject(stack, obj);
     return stack;
 }
 
@@ -45064,7 +45067,7 @@ function stackDroppedFloorObject(obj) {
     if (!stack) return obj;
     mergeStackedShopBillEntries(obj, stack);
     copyStackedObjectInstanceNameForMerge(obj, stack);
-    obj.quan = (obj.quan || 1) + (stack.quan || 1);
+    mergeStackableObject(obj, stack);
     stack.quan = 0;
     game.level.objects = objects.filter(existing => existing !== stack);
     newsym(obj.ox, obj.oy);
@@ -46274,6 +46277,7 @@ function enchantArmorScrollEffect(item) {
 }
 
 function loseAmnesiaSpells() {
+    game._spellbook_study_occupation = null;
     const spells = game._known_spells || [];
     const n = spells.length;
     let nzap = rn2(n + 1);
@@ -46284,16 +46288,13 @@ function loseAmnesiaSpells() {
     if (nzap > 1 && !rnl(7)) nzap = rnd(nzap);
     if (!nzap) return;
 
-    const kept = [];
-    for (let i = 0; i < n; i++) {
-        if (nzap > 0 && rn2(n - i) < nzap) {
+    for (let i = 0; nzap > 0; i++) {
+        if (rn2(n - i) < nzap) {
+            spells[i].knowledge = 0;
             exerciseAttribute(A_WIS, false);
             nzap--;
-        } else {
-            kept.push(spells[i]);
         }
     }
-    game._known_spells = kept;
 }
 
 function amnesiaScrollEffect(item) {
@@ -55200,19 +55201,27 @@ function rottenFoodEffect({ adjective = 'Rotten', foodWord = 'food' } = {}) {
         message += heroIsHallucinating()
             ? '  You feel rather trippy.'
             : '  You feel rather light headed.';
-    } else if (!game.u?.blind && !rn2(4)) {
-        d(2, 10);
-        if (game.u) game.u.blind = true;
+    } else if (!rn2(4) && !heroIsBlind()) {
+        game.u._blindTimeout = (game.u._blindTimeout || 0) + d(2, 10);
+        const eyes = (game.inventory || []).some(obj => isWornInventoryItem(obj)
+            && artifactDefinitionForName(obj.artifact || obj.oartifact)?.name === 'The Eyes of the Overworld');
+        game.u.blind = !eyes;
+        if (game.u.blind) addHeroStatusSuffix('Blind');
         message += '  Everything suddenly goes dark.';
+        if (eyes) message += '  Your vision quickly clears.';
+        game.vision_full_recalc = 1;
     } else if (!rn2(3)) {
         rottenSleepDuration = rnd(10);
         game._helpless_time = Math.max(game._helpless_time || 0, rottenSleepDuration);
         game._sleeping_time = Math.max(game._sleeping_time || 0, rottenSleepDuration + 1);
         game._wake_message = 'You are conscious again.';
         game._hear_again_after_wake = 1;
-        if (game.u)
-            game.u._deafTimeout = Math.max(game.u._deafTimeout || 0, Math.max(0, rottenSleepDuration - 1));
-        message += '  The world spins and goes dark.';
+        game.u._deafTimeout = (game.u._deafTimeout || 0) + rottenSleepDuration;
+        const fainting = !heroIsBlind() ? 'goes dark'
+            : game.u.levitating || Is_airlevel(game.u.uz) || Is_waterlevel(game.u.uz)
+                ? 'you lose control of yourself'
+                : `you slap against the ${game.u.usteed ? 'saddle' : polyselfFalloffSurfaceName()}`;
+        message += `  The world spins and ${fainting}.`;
     }
     return { message, rottenSleepDuration };
 }
@@ -60225,14 +60234,15 @@ export async function processSpellbookStudyOccupation() {
 
     let message;
     if (knownSpell) {
-        message = `Your knowledge of the "${name}" spell is keener.`;
+        message = `Your knowledge of the "${name}" spell is ${knownSpell.knowledge === 0 ? 'restored' : 'keener'}.`;
+        knownSpell.knowledge = 20001;
     } else {
         const spellLetter = String.fromCharCode('a'.charCodeAt(0) + (game._known_spells || []).length);
         game._known_spells = [...(game._known_spells || []), {
             name,
             level: study.level || item?.level || item?.spell?.level || 1,
             skill: study.skill || item?.spell?.skill || SPELL_CATEGORIES[name] || 'enchantment',
-            learnedTurn: (game.moves || 1) + 2,
+            knowledge: 20001,
         }];
         message = spellLetter === 'a'
             ? `You learn the "${name}" spell.`
@@ -63457,6 +63467,15 @@ async function rhackInternal(_cmd) {
             applyLifeSavingConLoss();
             if (postContinuationHp == null) restoreLifeSavedBody();
             else if (game.u) game.u.uhp = postContinuationHp;
+            // C done_timeout returns into the same nh_timeout after revival.
+            if (game._resume_turn_tail_after_stoning_death) {
+                game._resume_turn_tail_after_stoning_death = 0;
+                game._resume_turn_tail_now = 1;
+            }
+            if (game._artifact_retouch_command) {
+                await resumeArtifactTouchCommand([lifeSavingMessage]);
+                return;
+            }
             if (['afterDeath', 'afterDismountDamage'].includes(game._water_continuation?.phase)) {
                 await resumeWaterAfterPrompt([lifeSavingMessage]);
                 return;
@@ -65651,19 +65670,19 @@ function tutorialEnterStash() {
 	                        .find(invItem => invItem.letter === game._nymph_steal_after_more.itemLetter);
 	                    if (item) {
 	                        const mon = game._nymph_steal_after_more.mon;
+                        removeInventoryItem(item, item.quan || 1);
 	                        if (mon) {
-                            const stolen = { ...(game._nymph_steal_after_more.item || item) };
+                            const stolen = item;
 	                            delete stolen.line;
 	                            delete stolen.worn;
 	                            delete stolen.wielded;
 	                            delete stolen.alternate;
+                            stolen.owornmask = 0;
 	                            stolen.letter = game._nymph_steal_after_more.itemLetter;
 	                            stolen.wasStolen = true;
-                            stopCarriedFigurineTimerOnLeave(stolen);
                             maybeAttachCarriedFigurineTimeout(stolen);
 	                            add_to_minv(mon, stolen);
 	                        }
-                        removeInventoryItem(item);
                     }
                 }
                 if (game._bullwhip_after_more) {
@@ -65676,16 +65695,15 @@ function tutorialEnterStash() {
                     const item = (game.inventory || [])
                         .find(invItem => invItem.letter === action.itemLetter) || action.item;
                     if (item && action.whereTo) {
-                        const dropped = {
-                            ...item,
+                        removeInventoryItem(item, item.quan || 1);
+                        const dropped = Object.assign(item, {
                             line: undefined,
                             worn: false,
                             wielded: false,
+                            owornmask: 0,
                             glyph: item.glyph || ')',
                             color: item.color ?? NO_COLOR,
-                        };
-                        stopCarriedFigurineTimerOnLeave(dropped);
-                        removeInventoryItem(item);
+                        });
                         if (action.whereTo === 3 && action.mon) {
                             maybeAttachCarriedFigurineTimeout(dropped);
                             add_to_minv(action.mon, dropped);
@@ -67925,6 +67943,10 @@ function tutorialEnterStash() {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
+            if (game._artifact_retouch_command) {
+                await resumeArtifactTouchCommand(survivalMessages);
+                return;
+            }
             if (['afterDeath', 'afterDismountDamage'].includes(game._water_continuation?.phase)) {
                 await resumeWaterAfterPrompt(survivalMessages);
                 return;
@@ -71332,6 +71354,39 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         if (!spell) return;
         game._casting_spell = spell;
         const energy = spell.level * 5;
+        const knowledge = (game._known_spells || []).find(known =>
+            (known.name || known.spellName || known.spell?.name) === spell.name)?.knowledge ?? 20000;
+        if (knowledge <= 0) {
+            // C spell_backfire precedes every hunger, strength and power gate.
+            const duration = (spell.level + 1) * 3;
+            const effect = rn2(10);
+            const confusion = effect < 4 ? duration : effect < 7 ? duration * 2 / 3
+                : effect < 9 ? duration / 3 : 0;
+            const stun = duration - confusion;
+            if (confusion) {
+                game.u._confusionTimeout = (game.u._confusionTimeout || 0) + confusion;
+                addHeroStatusSuffix('Conf');
+            }
+            if (stun) {
+                game.u._stunTimeout = (game.u._stunTimeout || 0) + stun;
+                game.u.stunned = true;
+                addHeroStatusSuffix('Stun');
+            }
+            game.u.uen = Math.max(0, (game.u.uen || 0) - rnd(energy));
+            game._casting_spell = null;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._overlay_hide_status_only = 0;
+            game._command_mode = null;
+            await setPackedToplineMessages(['Your knowledge of this spell is twisted.',
+                'It invokes nightmarish images in your mind...']);
+            game.context.move = 1;
+            return;
+        }
+        const memoryMessage = knowledge <= 100 ? 'You strain to recall the spell.'
+            : knowledge <= 500 ? 'You have difficulty remembering the spell.'
+                : knowledge <= 1000 ? 'Your knowledge of this spell is growing faint.'
+                    : knowledge <= 2000 ? 'Your recall of this spell is gradually fading.' : '';
         // C ref: spell.c:spelleffects_check() — these gates precede the
         // failure roll; failing them consumes neither rnd(100) nor time.
         if ((game.u?.uhunger ?? 900) <= 10 && spell.name !== 'detect food') {
@@ -71339,7 +71394,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._overlay_hide_status_only = 0;
-            await setMessage('You are too hungry to cast that spell.');
+            await setPackedToplineMessages([memoryMessage, 'You are too hungry to cast that spell.']);
             game._command_mode = null;
             return;
         }
@@ -71348,15 +71403,17 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._overlay_hide_status_only = 0;
-            await setMessage('You lack the strength to cast spells.');
+            await setPackedToplineMessages([memoryMessage, 'You lack the strength to cast spells.']);
             game._command_mode = null;
             return;
         }
-        let drainPrefix = '';
+        let drainPrefix = memoryMessage ? memoryMessage + '  ' : '';
+        let amuletDrained = false;
         if (heroHasAmuletOfYendor() && (game.u?.uen || 0) >= energy) {
             // C: the Amulet drains extra energy once per cast attempt.
             game.u.uen = Math.max(0, (game.u.uen || 0) - rnd(2 * energy));
-            drainPrefix = 'You feel the amulet draining your energy away.  ';
+            drainPrefix += 'You feel the amulet draining your energy away.  ';
+            amuletDrained = true;
         }
         if (energy > (game.u?.uen || 0)) {
             game._casting_spell = null;
@@ -71364,9 +71421,9 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._overlay_hide_status = 0;
             game._overlay_hide_status_only = 0;
             const suffix = ((game.u?.uen || 0) < (game.u?.uenmax || 0)) ? '' : ' yet';
-            await setMessage(`${drainPrefix}You don't have enough energy to cast that spell${suffix}.`);
+            await setPackedToplineMessages([drainPrefix.trim(), `You don't have enough energy to cast that spell${suffix}.`]);
             game._command_mode = null;
-            if (drainPrefix) game.context.move = 1; // C ECMD_TIME via the drain
+            if (amuletDrained) game.context.move = 1; // C ECMD_TIME via the drain
             return;
         }
         // C: confused heroes always fail, without consuming the rnd(100).
@@ -76360,8 +76417,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         game._command_mode = null;
         const result = await invokeArtifact(item, {
-            retouch: (obj, definition) => containerTakeoutArtifactTouch(definition && !obj.artifact
-                ? { ...obj, artifact: definition.name } : obj),
+            retouch: obj => retouchItemForCommand(obj, 'invokeObject'),
             isCrystalBallObject, clearHeroSickness, removeHeroStatusSuffix,
             heroHasBlindfold: () => (game.inventory || []).some(obj => isWornInventoryItem(obj)
                 && ['blindfold', 'towel'].includes(objectKindKey(obj))),
@@ -76469,8 +76525,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 }));
             }
         }
-        if (result.messages.length) await setMessage(result.messages.join('  '));
-        if (result.fatal) applyLifeSavingOrFatalCommandMode(result);
+        if (result.messages.length) await setMessage(result.messages.join('  '), !!result.more);
+        if (result.fatal || result.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
         return;
     }
 
@@ -78226,7 +78282,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 game._command_mode = null;
                 return;
             }
-            touchArtifactForWield(item);
+            const retouch = await retouchItemForCommand(item, 'wieldObject');
+            if (!retouch.ok) {
+                await setMessage(retouch.messages.join('  '), !!retouch.more);
+                game._command_mode = null;
+                game.context.move = 1;
+                if (retouch.fatal || retouch.lifeSaving) applyLifeSavingOrFatalCommandMode(retouch);
+                return;
+            }
             const lightMessages = [];
             const previousWielded = (game.inventory || []).find(invItem => invItem !== item
                 && (invItem.wielded || invItem.line?.includes('weapon in') || invItem.line?.includes('(wielded)')));
@@ -78264,7 +78327,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             lightMessages.unshift(`${item.line}.`);
             const lightMessage = setArtifactEquipmentLight(item, true);
             if (lightMessage) lightMessages.push(lightMessage);
-            await setMessage(lightMessages.join('  '));
+            await setMessage([...retouch.messages, ...lightMessages].join('  '));
             game._command_mode = null;
             game.context.move = 1;
             return;

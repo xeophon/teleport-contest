@@ -33808,7 +33808,7 @@ test('#untrap disarms a seen land mine into a floor land mine', async () => {
     assert.equal(game.context.move, 1);
 });
 
-test('#untrap land mine conversion stacks with existing floor land mines', async () => {
+test('#untrap land mine conversion keeps nonmergeable floor land mines separate', async () => {
     const trap = setupUntrapDestinationLandMine({ rng: [0] });
     game.level.objects = [{
         id: 881030,
@@ -33837,8 +33837,9 @@ test('#untrap land mine conversion stacks with existing floor land mines', async
     assert.deepEqual(getRngLog(), ['rn2(3)=0', 'rnd(2)=1']);
     assert.equal(game._pending_message, 'You disarm the land mine.');
     assert.equal(game.level.traps.includes(trap), false);
-    assert.equal(mines.length, 1);
-    assert.equal(mines[0].quan, 3);
+    // C objects.h TOOL("land mine", ...) has mrg=0.
+    assert.equal(mines.length, 2);
+    assert.deepEqual(mines.map(obj => obj.quan).sort(), [1, 2]);
     assert.equal(game.context.move, 1);
 });
 

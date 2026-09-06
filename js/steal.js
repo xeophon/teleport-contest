@@ -460,10 +460,10 @@ function clearStealState(g) {
 function subjectName(mon) { return `The ${mon?.data?.name || mon?.name || 'creature'}`; }
 
 function stripWornState(obj) {
-    const stolen = { ...obj };
-    delete stolen.worn; delete stolen.wielded; delete stolen.alternate;
-    stolen.wasStolen = true;
-    return stolen;
+    delete obj.worn; delete obj.wielded; delete obj.alternate;
+    obj.owornmask = 0;
+    obj.wasStolen = true;
+    return obj;
 }
 
 function removeHeroInventoryItem(g, obj) {

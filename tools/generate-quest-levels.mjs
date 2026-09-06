@@ -3,10 +3,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { parseQuestLua } from './quest-lua-parser.mjs';
 
 const inputs = {
-    Caveman: ['Cav', 'goal', 'loca'], Healer: ['Hea', 'goal', 'loca'],
+    Caveman: ['Cav', 'goal', 'loca', 'strt'], Healer: ['Hea', 'goal', 'loca', 'strt'],
     Ranger: ['Ran', 'goal', 'loca'], Barbarian: ['Bar', 'goal'],
     Rogue: ['Rog', 'loca', 'goal'], Valkyrie: ['Val', 'loca', 'goal'], Knight: ['Kni', 'loca'],
-    Monk: ['Mon', 'goal', 'loca'], Tourist: ['Tou', 'loca', 'goal'], Samurai: ['Sam', 'goal', 'loca'], Wizard: ['Wiz', 'goal'],
+    Monk: ['Mon', 'goal', 'loca'], Tourist: ['Tou', 'loca', 'goal'], Samurai: ['Sam', 'goal', 'loca', 'strt'], Wizard: ['Wiz', 'goal'],
 };
 const programs = {}, copyrights = new Set();
 for (const [role, [prefix, ...stages]] of Object.entries(inputs)) {

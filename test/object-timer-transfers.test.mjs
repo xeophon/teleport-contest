@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM } from '../js/const.js';
+import { ROOM, W_WEP } from '../js/const.js';
 import { initRng } from '../js/rng.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
 import { rhack, holdCaughtThrownObject, __shopBillingTestHooks as shop } from '../js/cmd.js';
@@ -10,7 +10,9 @@ import { beginBurn, processBurnTimers } from '../js/burn.js';
 import { attachEggHatchTimeout } from '../js/egg_timers.js';
 import { BURN_OBJECT, HATCH_EGG, peekTimer } from '../js/timeout.js';
 import { objectLocations } from '../js/obj_location.js';
-import { dropMonsterInventory } from '../js/mklev.js';
+import { dropMonsterInventory, monsterByRndName } from '../js/mklev.js';
+import { processMonsterTurns } from '../js/allmain.js';
+import { stealarm } from '../js/steal.js';
 
 function setup() {
     resetGame();
@@ -190,4 +192,173 @@ test('a cursed bag losing a nested container cancels its eggs timers', async () 
     assert.equal(bag.contents.length, 0);
     assert.equal(peekTimer(HATCH_EGG, eggs), 0);
     assert.equal(eggs.timed, 0);
+});
+
+test('dropping a compatible candle stack retires the old floor timer and light', async () => {
+    // C stackobj keeps the incoming object; merged stops the consumed timer.
+    setup();
+    const floor = { kind: 'tallow candle', cls: 'tool', glyph: '(', otyp: 370, age: 20, quan: 2, ox: 10, oy: 10 };
+    const held = { ...floor, letter: 'a', quan: 1 };
+    game.level.objects.push(floor);
+    game.inventory.push(held);
+    beginBurn(floor);
+    beginBurn(held);
+    await rhack('d'); await rhack('a');
+    assert.deepEqual(game.level.objects, [held]);
+    assert.equal(held.quan, 3);
+    assert.equal(peekTimer(BURN_OBJECT, held), 105);
+    assert.equal(peekTimer(BURN_OBJECT, floor), 0);
+    assert.equal(floor.lamplit, false);
+});
+
+for (const variant of ['different light states', 'different candle fuel bands', 'burning oil', 'oil lamps']) {
+    test(`floor drop refuses merging ${variant}`, async () => {
+        // C invent.c:mergable checks oc_merge, lamplit, candle age and oil.
+        setup();
+        const potion = variant === 'burning oil';
+        const lamp = variant === 'oil lamps';
+        const floor = { kind: potion ? 'potion of oil' : lamp ? 'oil lamp' : 'tallow candle',
+            cls: potion ? 'potion' : 'tool', glyph: potion ? '!' : '(',
+            otyp: potion ? 252 : lamp ? 227 : 370, age: 20, quan: 1, ox: 10, oy: 10 };
+        const held = { ...floor, letter: 'a', age: variant === 'different candle fuel bands' ? 100 : 20 };
+        game.level.objects.push(floor);
+        game.inventory.push(held);
+        if (!lamp) beginBurn(floor);
+        if (variant !== 'different light states' && !lamp) beginBurn(held);
+        await rhack('d'); await rhack('a');
+        assert.equal(game.level.objects.length, 2);
+        assert.ok(game.level.objects.includes(floor));
+        assert.ok(game.level.objects.includes(held));
+    });
+}
+
+test('monster projectile floor merge retires its source timer', () => {
+    setup();
+    const floor = { kind: 'tallow candle', cls: 'tool', glyph: '(', otyp: 370, age: 20, quan: 1, ox: 10, oy: 10 };
+    const incoming = { ...floor, quan: 2 };
+    game.level.objects.push(floor);
+    beginBurn(floor); beginBurn(incoming);
+    assert.equal(shop.stackMonsterThrownObject(incoming), floor);
+    assert.equal(floor.quan, 3);
+    assert.equal(peekTimer(BURN_OBJECT, incoming), 0);
+    assert.equal(incoming.lamplit, false);
+});
+
+for (const route of ['nymph', 'bullwhip']) {
+    test(`deferred ${route} transfer preserves the stolen lamp timer`, async () => {
+        setup();
+        const lamp = { kind: 'oil lamp', cls: 'tool', glyph: '(', otyp: 227, letter: 'a', age: 1, quan: 1, wielded: true, owornmask: W_WEP };
+        const mon = { data: monsterByRndName('water nymph'), mx: 11, my: 10, minvent: [], mhp: 12 };
+        game.inventory.push(lamp);
+        game.u.uwep = lamp;
+        game.level.monsters.push(mon);
+        beginBurn(lamp);
+        game._pending_message = 'The monster disarms you.';
+        game._message_more = 1;
+        game._topline_after_more = 'The monster takes the lamp.';
+        if (route === 'nymph') game._nymph_steal_after_more = {
+            mon, itemLetter: 'a', item: lamp, theftMessage: game._topline_after_more };
+        else game._bullwhip_after_more = { mon, itemLetter: 'a', item: lamp, whereTo: 3 };
+        await rhack(' ');
+        assert.equal(game.inventory.length, 0);
+        assert.equal(mon.minvent[0], lamp);
+        assert.equal(game.u.uwep, null);
+        assert.equal(lamp.owornmask, 0);
+        assert.equal(peekTimer(BURN_OBJECT, lamp), 101);
+        game.moves = 101;
+        await processBurnTimers();
+        assert.equal(mon.minvent[0].lamplit, false);
+    });
+}
+
+test('stealarm hands the original removed armor to the thief', () => {
+    // C steal.c:stealarm calls freeinv then mpickobj on the same pointer.
+    setup();
+    const armor = { id: 55, kind: 'scale mail', cls: 'armor', letter: 'a', quan: 1 };
+    const mon = { m_id: 77, mx: 11, my: 10, mhp: 12, minvent: [],
+        data: { name: 'water nymph', attacks: [{ adtyp: 'steal' }] } };
+    game.inventory.push(armor); game.level.monsters.push(mon);
+    game._stealoid = 55; game._stealmid = 77;
+    const result = stealarm();
+    assert.ok(result);
+    assert.equal(mon.minvent[0], armor);
+});
+
+test('a no-hands pet picking one candle splits its burn timer at the existing deadline', async () => {
+    // C dog_invent calls splitobj when can_carry returns only one object.
+    setup();
+    const candles = { kind: 'tallow candle', cls: 'tool', glyph: '(', otyp: 370, age: 100, quan: 3, ox: 12, oy: 10 };
+    const pet = { data: monsterByRndName('little dog'), mx: 12, my: 10, mux: 10, muy: 10,
+        mhp: 12, mhpmax: 12, movement: 12, mcanmove: true, mcansee: true,
+        pet: true, mtame: 10, mpeaceful: true, minvent: [],
+        mextra: { edog: { apport: 100, hungrytime: 10000, dropdist: 10000, droptime: 0, whistletime: 0 } } };
+    game.level.monsters.push(pet); game.level.objects.push(candles);
+    beginBurn(candles);
+    await processMonsterTurns();
+    assert.equal(pet.minvent.length, 1);
+    const picked = pet.minvent[0];
+    assert.equal(picked.quan, 1);
+    assert.equal(candles.quan, 2);
+    assert.equal(peekTimer(BURN_OBJECT, picked), 125);
+    assert.equal(peekTimer(BURN_OBJECT, candles), 125);
+    assert.equal(picked.timed, 1);
+});
+
+for (const kind of ['ya', 'athame', 'scalpel', 'stiletto', 'worm tooth', 'crysknife']) {
+    test(`the C stackable weapon ${kind} merges when dropped`, async () => {
+        setup();
+        const floor = { kind, cls: 'weapon', glyph: ')', quan: 2, ox: 10, oy: 10 };
+        const held = { ...floor, quan: 1, letter: 'a' };
+        game.level.objects.push(floor); game.inventory.push(held);
+        await rhack('d'); await rhack('a');
+        assert.equal(game.level.objects.length, 1);
+        assert.equal(game.level.objects[0].quan, 3);
+    });
+}
+
+for (const [kind, otyp] of [['boulder', 465], ['statue', 472]]) {
+    test(`the C nonmergeable ${kind} remains separate when dropped`, async () => {
+        setup();
+        const floor = { kind, otyp, cls: 'rock', glyph: '`', quan: 1, ox: 10, oy: 10 };
+        const held = { ...floor, letter: 'a' };
+        game.level.objects.push(floor); game.inventory.push(held);
+        await rhack('d'); await rhack('a');
+        assert.equal(game.level.objects.length, 2);
+    });
+}
+
+test('a no-hands hostile monster taking one potion preserves both burn timers', async () => {
+    // C mon.c:mpickstuff splits can_carry's quantity before mpickobj.
+    setup();
+    const oil = { kind: 'potion of oil', cls: 'potion', glyph: '!', otyp: 252,
+        age: 100, quan: 3, ox: 30, oy: 11 };
+    const mon = { data: monsterByRndName('Ixoth'), mx: 30, my: 11, mux: 10, muy: 10,
+        mhp: 100, mhpmax: 100, movement: 12, mcanmove: true, mcansee: true,
+        mcan: 1, mspec_used: 1000, minvent: [] };
+    game.level.monsters.push(mon); game.level.objects.push(oil);
+    beginBurn(oil);
+    await processMonsterTurns();
+    assert.equal(mon.minvent.length, 1);
+    assert.equal(mon.minvent[0].quan, 1);
+    assert.equal(oil.quan, 2);
+    assert.equal(peekTimer(BURN_OBJECT, mon.minvent[0]), 200);
+    assert.equal(peekTimer(BURN_OBJECT, oil), 200);
+});
+
+test('nymph theft transfers the whole egg stack without leaving a duplicate carried remainder', async () => {
+    setup();
+    const eggs = { kind: 'egg', otyp: 10001, cls: 'food', letter: 'a', quan: 3 };
+    const mon = { data: monsterByRndName('water nymph'), mx: 11, my: 10, minvent: [], mhp: 12 };
+    game.inventory.push(eggs); game.level.monsters.push(mon);
+    attachEggHatchTimeout(eggs, 100);
+    game._pending_message = 'The monster approaches.';
+    game._message_more = 1;
+    game._topline_after_more = 'The monster takes the eggs.';
+    game._nymph_steal_after_more = { mon, itemLetter: 'a', item: eggs, theftMessage: game._topline_after_more };
+    await rhack(' ');
+    assert.equal(game.inventory.length, 0);
+    assert.equal(mon.minvent[0], eggs);
+    assert.equal(eggs.quan, 3);
+    assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+    assert.equal(game.timers.length, 1);
 });

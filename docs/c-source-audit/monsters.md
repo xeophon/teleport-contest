@@ -285,7 +285,27 @@ state test checks that the hero remains in water at the first More prompt and
 that resuming does not repeat escape RNG. The public swimmer session again
 matches all 73 screens and all 3,713 RNG calls.
 
-This is not a complete transfer audit: deferred theft, monster projectile and
-no-hands pickup splits, plus other direct floor-removal destruction callers
-still need review. Full drowning effects between every individual pline also
-remain broader than the successful-crawl continuation implemented here.
+The subsequent ownership slice closes the remaining floor-stack timer
+cleanup, deferred nymph/bullwhip object copies, `steal.c:stealarm:165-193`
+copy, and both no-hands monster pickup splits. Command floor merges now reuse
+the same age/timer/light bookkeeping as monster and container merges, and
+honor C's light-state, candle fuel-band, burning-oil and object merge metadata
+gates (`invent.c:mergable:4379-4470`). Metadata inspection also corrected the
+missing stackable `ya`, athame, scalpel, stiletto and worm tooth cases, while
+keeping boulders, statues, lamps and land mines separate. The old land-mine
+test's merge expectation conflicted with `objects.h:971` (`mrg=0`).
+
+Theft transfers now remove the whole carried stack and clear canonical hero
+equipment references before monster acquisition. Pet fetching and hostile
+monster pickup preserve timers on both split stacks, following
+`mon.c:mpickstuff:1883-1902` and `can_carry:2010-2027`. Twenty further tests
+cover these cases, including live pet pickup and hostile Ixoth pickup;
+seventeen reproduced failures before their fixes. All 31 ownership tests,
+theft/pet/container-merge tests (103 combined), and shop/burn/save tests
+(3,201 combined) pass at this checkpoint.
+
+This is not a complete transfer audit: monster projectile splits and other
+direct floor-removal destruction callers still need review, along with the
+remaining non-timer stack compatibility properties. Full drowning effects
+between every individual pline also remain broader than the successful-crawl
+continuation implemented here.

@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **4,846 passing tests**, with no
+The latest source-driven checkpoint has **4,952 passing tests**, with no
 failures, skips or TODOs. All four generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -35,32 +35,41 @@ The main loop advances the clock at C's turn-setup point, then runs intrinsic
 expiries, timers, regions and regeneration. Melting under the hero suspends the
 remaining queue during controlled teleport, crawl messages, life saving and
 wizard death refusals. Saved continuations retain data and resume the same turn.
-Eleven live-turn tests cover these phases, slow heroes and prayer invulnerability.
+Fourteen live-turn tests cover these phases, slow heroes, prayer invulnerability,
+blocking monster messages and resumption after timed life saving.
 Arrival still needs a complete continuation for timer prompts before the rest
 of the destination-level setup proceeds.
 
 Object transfers now preserve live identity for ordinary drop, pickup and
 caught items; partial floor/container stacks copy timers; monster inventory
-merges and carried-container destruction cancel discarded timers. Some deferred
-theft, floor-merge and monster partial-pickup callers remain to be audited.
+merges and carried-container destruction cancel discarded timers. Deferred theft, floor merges and monster partial pickups now preserve or split
+timers through the shared ownership operations. Monster projectiles and
+landmine scattering remain follow-ups.
 Sunsword and gold dragon armor now start/stop untimed light through ordinary
 wield, swap, removal, dressing, quiver and tool-driven weapon changes. Thirty
 new tests cover equipment state, BCU light radii and welded-weapon refusal.
-Retouch, invoked-property loss and transformation callers remain unfinished.
+Explicit wield/invoke now use source touch/retouch predicates, damage and
+refusal, including death/life-saving continuation (42 new tests). Other touch
+callers, invoked-property loss and transformation retouch remain unfinished.
 
-Quest dispatch is **56/65 maps**: all 26 fillers and 30/39 named stages.
-Monk locate and Tourist locate/goal are newly implemented; nine named start
-maps remain. Source-ordered player-monster equipment, first Astral arrival
+Spell memory now ages per full turn, restores on relearning, survives amnesia
+as an empty retained slot, warns while fading and backfires when forgotten
+(21 new tests). Rotten food now gives full cumulative deafness/blindness
+timeouts and C blindness/fainting behavior (seven new tests).
+
+Quest dispatch is **59/65 maps**: all 26 fillers and 33/39 named stages.
+Caveman, Healer and Samurai starts now execute source-ordered leader
+inventories and cleanup (13 new tests); six named start maps remain. Source-ordered player-monster equipment, first Astral arrival
 population and guardian creation are present. Artificial Astral stair entry
 and later guardian loss under conflict remain follow-ups.
 
-The last complete recording run, at preceding commit f98b4e1, passed 52/53
-public sessions (12,708/12,712 screens, 832,102/832,102 RNG calls) and 12/19
-supplemental sessions (3,070/3,346 screens, 137,929/141,728 RNG calls), with
-zero worker errors. The four public screen mismatches were in swimming:
-messages and hero relocation crossed a More prompt too early. That source
-behavior is now fixed and the individual recording matches 73/73 screens and
-3,713/3,713 RNG calls. The current full corpora will be rerun after this commit.
+The last complete recording run, at preceding commit c9b3194, passed 51/53
+public sessions (11,499/12,712 screens, 774,171/832,102 RNG calls) and 11/19
+supplemental sessions (3,066/3,346 screens, 136,132/141,728 RNG calls), with
+zero worker errors. Source-derived clock, rotten-food and spell-memory fixes
+in this checkpoint resolve the werewolf and Sokoban turn-display regressions
+and restore all 108,275 RNG calls in the Knight recording. Current full
+corpora will be rerun from the committed checkpoint.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched
@@ -139,7 +148,7 @@ for each finding. Major unfinished areas include:
 2. **Timers and arrival:** source ordering between timers, intrinsic expiry, regions and regeneration,
    prompt continuation, automatic light activation, and the complete terrain/region/spot-effects arrival
    pipeline.
-3. **Quest and artifacts:** 12 named quest maps and remaining artifact invocation branches.
+3. **Quest and artifacts:** six named quest maps and remaining artifact invocation branches.
    Existing builder dispatch does not itself prove map parity.
 4. **Regions and movement:** region callbacks, broader level scripting and
    remaining movement/trap ordering beyond the tested pit paths.

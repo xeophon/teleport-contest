@@ -98,9 +98,10 @@ export async function invokeArtifact(item, D) {
     const { definition, power } = artifactInvocation(item);
     const messages = [];
     const result = { messages, power, time: true };
-    const touch = D.retouch(item, definition);
+    const touch = await D.retouch(item, definition);
     messages.push(...(touch.messages || []));
-    if (!touch.ok || touch.skip) return { ...result, fatal: touch.fatal };
+    if (!touch.ok || touch.skip) return { ...result, fatal: touch.fatal,
+        lifeSaving: touch.lifeSaving, pending: touch.pending, more: touch.more };
     if (!power) {
         if (D.isCrystalBallObject(item)) result.action = 'CRYSTAL_BALL';
         else messages.push('Nothing happens.');

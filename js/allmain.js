@@ -55,7 +55,7 @@ import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 import { meltIceAway, removedFromIcebox } from './ice.js';
 import { runObjectBurnTimer } from './cmd.js';
-import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, ROT_ORGANIC, SHRINK_GLOB, MELT_ICE_AWAY, runTimers } from './timeout.js';
+import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, ROT_ORGANIC, SHRINK_GLOB, MELT_ICE_AWAY, runTimers, splitObjectTimers } from './timeout.js';
 import { objectLocations } from './obj_location.js';
 import { restoreLifeSavedBody } from './end.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
@@ -1513,7 +1513,7 @@ function initializeRoleInventory(roleName, raceName) {
         else if (quan === 1) phrase = `${/^[aeiou]/i.test(phrase) ? 'an' : 'a'} ${phrase}`;
         item.line = `${item.letter} - ${phrase}${suffix}`;
     }
-    game._known_spells = state.knownSpells;
+    game._known_spells = state.knownSpells.map(spell => ({ ...spell, knowledge: 20000 }));
     return state.inventory;
 }
 
@@ -10553,53 +10553,7 @@ if (attack.adtyp === 'steal') {
         game._utrack.push({ x: game.u?.ux || 0, y: game.u?.uy || 0 });
         if (game._utrack.length > 100) game._utrack.shift();
     }
-    // C allmain.c:244: all once-per-turn effects observe the new turn.
-    game.moves = (game.moves || 1) + 1;
-    if (game.u?.fumbling) {
-        game.u._fumblingTimeout = Math.max(0, (game.u._fumblingTimeout ?? 0) - 1);
-        if (!game.u._fumblingTimeout) {
-            if (game.u.umoved && !game.u.levitating && !game.u.flying) {
-                const roll = rn2(4);
-                const message = roll === 1 ? 'You trip over your own feet.'
-                    : roll === 2 ? 'You slip and nearly fall.'
-                        : roll === 3 ? 'You flounder.' : 'You stumble.';
-                game._fumble_turn_message_pending = 1;
-                game._last_fumble_turn_message = message;
-                game._last_fumble_turn_move = game.moves || 0;
-                game._last_fumble_from_run = !!(game._running_continuation || game._initial_run_command || game._run_steps_remaining > 0);
-                game._last_fumble_keep_flushes = game._last_fumble_from_run ? 2 : 0;
-                const pendingBeforeFumble = !!game._pending_message;
-                const pendingStartedWithMonsterNoise = !!game._pending_starts_monster_noise_message;
-                if (pendingBeforeFumble && !game._keep_pending_message && !game._message_more)
-                    game._pending_message = '';
-                if (game._pending_fumble_turn_message && game._pending_fumble_message_roll === roll) {
-                    game._pending_fumble_turn_message = 1;
-                    game._pending_fumble_turn_message_starts = 1;
-                    game._keep_pending_message = 1;
-                } else if (addToplineMessage(message)) {
-                    game._pending_fumble_turn_message = 1;
-                    game._pending_fumble_message_roll = roll;
-                    if (!pendingBeforeFumble) game._pending_fumble_turn_message_starts = 1;
-                    if (pendingStartedWithMonsterNoise) game._pending_fumble_after_monster_noise_message = 1;
-                } else {
-                    game._topline_after_more_fumble_turn_message = 1;
-                    game._topline_after_more_fumble_turn_message_starts = 1;
-                    game._topline_after_more_fumble_message_roll = roll;
-                }
-                game._run_steps_remaining = 0;
-                game._travel_keys = [];
-                game._running_continuation = 0;
-                game._initial_run_command = 0;
-                game._pending_time_passed = Math.max(game._pending_time_passed || 0, 2);
-                game._helpless_time = Math.max(game._helpless_time || 0, 2);
-                game._finish_fumble_timeout = 1;
-                if (game._message_more && !game._process_time_with_more && game._topline_after_more === message) {
-                    game._deferred_monster_turn_tail = 1;
-                    return 'defer-tail';
-                }
-            } else game._finish_fumble_timeout = 1;
-        }
-    }
+    game._turn_setup_pending = 1;
 	    if (game._message_more && !game._process_time_with_more && !game._swallow_cold_more_allows_tail) {
 	        game._deferred_monster_turn_tail = 1;
 	        return 'defer-tail';
@@ -10614,6 +10568,57 @@ if (attack.adtyp === 'steal') {
 	}
 
 async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
+    // A More prompt inside movemon must return before C starts a new turn.
+    if (game._turn_setup_pending) {
+        game._turn_setup_pending = 0;
+        // C allmain.c:244: all once-per-turn effects observe the new turn.
+        game.moves = (game.moves || 1) + 1;
+        if (game.u?.fumbling) {
+            game.u._fumblingTimeout = Math.max(0, (game.u._fumblingTimeout ?? 0) - 1);
+            if (!game.u._fumblingTimeout) {
+                if (game.u.umoved && !game.u.levitating && !game.u.flying) {
+                    const roll = rn2(4);
+                    const message = roll === 1 ? 'You trip over your own feet.'
+                        : roll === 2 ? 'You slip and nearly fall.'
+                            : roll === 3 ? 'You flounder.' : 'You stumble.';
+                    game._fumble_turn_message_pending = 1;
+                    game._last_fumble_turn_message = message;
+                    game._last_fumble_turn_move = game.moves || 0;
+                    game._last_fumble_from_run = !!(game._running_continuation || game._initial_run_command || game._run_steps_remaining > 0);
+                    game._last_fumble_keep_flushes = game._last_fumble_from_run ? 2 : 0;
+                    const pendingBeforeFumble = !!game._pending_message;
+                    const pendingStartedWithMonsterNoise = !!game._pending_starts_monster_noise_message;
+                    if (pendingBeforeFumble && !game._keep_pending_message && !game._message_more)
+                        game._pending_message = '';
+                    if (game._pending_fumble_turn_message && game._pending_fumble_message_roll === roll) {
+                        game._pending_fumble_turn_message = 1;
+                        game._pending_fumble_turn_message_starts = 1;
+                        game._keep_pending_message = 1;
+                    } else if (addToplineMessage(message)) {
+                        game._pending_fumble_turn_message = 1;
+                        game._pending_fumble_message_roll = roll;
+                        if (!pendingBeforeFumble) game._pending_fumble_turn_message_starts = 1;
+                        if (pendingStartedWithMonsterNoise) game._pending_fumble_after_monster_noise_message = 1;
+                    } else {
+                        game._topline_after_more_fumble_turn_message = 1;
+                        game._topline_after_more_fumble_turn_message_starts = 1;
+                        game._topline_after_more_fumble_message_roll = roll;
+                    }
+                    game._run_steps_remaining = 0;
+                    game._travel_keys = [];
+                    game._running_continuation = 0;
+                    game._initial_run_command = 0;
+                    game._pending_time_passed = Math.max(game._pending_time_passed || 0, 2);
+                    game._helpless_time = Math.max(game._helpless_time || 0, 2);
+                    game._finish_fumble_timeout = 1;
+                    if (game._message_more && !game._process_time_with_more && game._topline_after_more === message) {
+                        game._deferred_monster_turn_tail = 1;
+                        return 'defer-tail';
+                    }
+                } else game._finish_fumble_timeout = 1;
+            }
+        }
+    }
     const resumeTimers = game._turn_tail_phase === 'timers';
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
@@ -10692,6 +10697,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                     : `petrified by ${articleFor(killer)} ${killer}`;
                 game._death_current_move = 1;
                 if (consumeLifeSavingAmulet({ clearStoning: true })) {
+                    game._resume_turn_tail_after_stoning_death = 1;
                     armHeroLifeSavingMore();
                     return false;
                 }
@@ -10756,6 +10762,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                         clearHeroSickness();
                         u.usick_type = 0;
                         delete u._sicknessCause;
+                        game._resume_turn_tail_after_stoning_death = 1;
                         armHeroLifeSavingMore();
                     } else {
                         game._sickness_expired = 1;
@@ -11031,6 +11038,9 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             applyAccessoryHunger(accessorytime);
         }
     }
+    // C spell.c:age_spells runs once per full turn, including helplessness.
+    for (const spell of game._known_spells || [])
+        spell.knowledge = Math.max(0, (spell.knowledge ?? 20000) - 1);
     if (pendingVaultRoom) {
         let guardX = null, guardY = null;
         for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
@@ -15095,12 +15105,13 @@ function monsterPickStuff(mon, monIndex = null, somebodyCanMove = false, forceMo
     const dragonStack = (mon.data?.mlet === 'D' || mon.data?.glyph === 'D')
         && (cls === GOLD_PIECE || cls === GEM_CLASS);
     const carryAmount = mon.data?.nohands && quan > 1 && !dragonStack ? 1 : quan;
-    const pickedObj = carryAmount < quan ? { ...obj, quan: carryAmount } : obj;
+    const pickedObj = carryAmount < quan ? { ...obj, quan: carryAmount, timed: 0 } : obj;
     if (pickedObj === obj) {
         const idx = objects.indexOf(obj);
         if (idx >= 0) objects.splice(idx, 1);
     } else {
         pickedObj.id = next_ident();
+        splitObjectTimers(obj, pickedObj);
         obj.quan -= carryAmount;
     }
     pickedObj.seen = false;
@@ -16532,13 +16543,14 @@ async function movePet(mon, resumeAfterInventory = false, conflictActive = false
         if (hereFood !== UNDEF && carryAmount > 0 && rn2(20) < (edog.apport || 3) + 3) {
                 if (rn2(udist) || !rn2(edog.apport || 3)) {
                     const pickedObj = carryAmount < (hereObj.quan || 1)
-                        ? { ...hereObj, quan: carryAmount }
+                        ? { ...hereObj, quan: carryAmount, timed: 0 }
                         : hereObj;
                     if (pickedObj === hereObj) {
                         const idx = objects.indexOf(hereObj);
                         if (idx >= 0) objects.splice(idx, 1);
                     } else {
                         pickedObj.id = next_ident();
+                        splitObjectTimers(hereObj, pickedObj);
                         hereObj.quan -= carryAmount;
                     }
                     pickedObj.seen = false;

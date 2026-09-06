@@ -57,6 +57,45 @@ test('C prayer invulnerability skips object timers while regions still advance',
     assert.equal(lamp.lamplit, false);
 });
 
+test('a pending monster message delays turn setup until the monster phase returns', async () => {
+    const lamp = setup(); beginBurn(lamp);
+    game._pending_message = 'The werewolf bites!';
+    game._message_more = 1;
+    assert.equal(await processMonsterTurns(), 'defer-tail');
+    assert.equal(game.moves, 99);
+    assert.equal(lamp.lamplit, true);
+    assert.equal(game.level.regions[0].ttl, 5);
+    await rhack(' ');
+    game._pending_time_passed = 1;
+    game._resume_time_after_more = 1;
+    pushKey('\x1b');
+    await moveloop_core();
+    assert.equal(game.moves, 100);
+    assert.equal(lamp.lamplit, false);
+    assert.equal(game.level.regions[0].ttl, 4);
+});
+
+for (const intrinsic of ['stoning', 'sickness']) test(`${intrinsic} life saving completes the interrupted turn exactly once`, async () => {
+    const lamp = setup(intrinsic === 'stoning' ? { _stonedTimeout: 1 }
+        : { _sickTimeout: 1, usick_type: 2 });
+    game.inventory.push({ letter: 'b', cls: 'amulet', kind: 'amulet of life saving', worn: true, quan: 1 });
+    game._known_spells = [{ name: 'healing', knowledge: 100 }];
+    beginBurn(lamp);
+    assert.equal(await processMonsterTurns(), false);
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.moves, 100);
+    assert.equal(lamp.lamplit, true);
+    assert.equal(game._known_spells[0].knowledge, 100);
+    await rhack(' ');
+    pushKey('\x1b');
+    await moveloop_core();
+    assert.equal(game.moves, 100);
+    assert.equal(lamp.lamplit, false);
+    assert.equal(game.level.regions[0].ttl, 4);
+    assert.equal(game._known_spells[0].knowledge, 99);
+    assert.equal(game._pending_time_passed, 0);
+});
+
 for (const save of [false, true]) test(`melt callback resumes controlled teleport ${save ? 'from a saved game' : 'in the live game'}`, async () => {
     let lamp = setup({ teleportation: true, teleportControl: true });
     // Keep the subsequent callback dry when drowning wets hero inventory.
