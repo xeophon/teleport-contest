@@ -1,8 +1,8 @@
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
 import { setArtifactEquipmentLight } from './artifact.js';
-import { afterMeltHeroSpotEffects } from './cmd.js';
+import { monsterCastSpell, afterMeltHeroSpotEffects } from './cmd.js';
 import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster } from './cmd.js';
-import { AT_BOOM, is_hider } from './permonst.js';
+import { AT_BOOM, AT_MAGC, AD_SPEL, AD_CLRC, is_hider } from './permonst.js';
 // allmain.js — Main game setup and move loop.
 
 // C refs: src/allmain.c:newgame(), moveloop_core().
@@ -15158,282 +15158,24 @@ function monsterPickStuff(mon, monIndex = null, somebodyCanMove = false, forceMo
     return true;
 }
 
-const WIZARD_MONSTER_SPELLS = [
-    { name: 'psiBolt', level: 0, indirect: false, hostile: true, sight: true },
-    { name: 'cureSelf', level: 1, indirect: true },
-    { name: 'hasteSelf', level: 2, indirect: true },
-    { name: 'stunYou', level: 3, indirect: false, hostile: true, sight: true },
-    { name: 'disappear', level: 4, indirect: true },
-    { name: 'weakenYou', level: 6, indirect: false, hostile: true, sight: true },
-    { name: 'destroyArmor', level: 8, indirect: false, hostile: true, sight: true },
-    { name: 'curseItems', level: 10, indirect: false, hostile: true, sight: true },
-    { name: 'aggravation', level: 13, indirect: true, hostile: true, sight: true },
-    { name: 'summonMons', level: 15, indirect: true, hostile: true, sight: true },
-    { name: 'cloneWiz', level: 18, indirect: true, hostile: true, sight: true },
-    { name: 'deathTouch', level: 20, indirect: false, hostile: true, sight: true },
-];
-
 function monsterCastsWizardSpells(data) {
-    return data.name === 'gnomish wizard' || data.mlet === 'L';
+    return monsterPermonstAttacks({ data }).some(attack => attack.aatyp === AT_MAGC && attack.adtyp === AD_SPEL);
 }
 
 function monsterHasMagicAttack(data) {
-    return monsterCastsWizardSpells(data) || data.spellcaster || data.magic || data.priest;
+    return monsterPermonstAttacks({ data }).some(attack => attack.aatyp === AT_MAGC);
 }
 
-function monsterSpellWouldBeUseless(mon, spell) {
-    if (spell.hostile && mon.mpeaceful) return true;
-    if (spell.sight && !couldSeeCoord(mon.mx, mon.my)) return true;
-
-    switch (spell.name) {
-    case 'cloneWiz':
-        // C ref: mcastu.c:941-945 — only the Wizard may clone, and only when
-        // at most one of him exists.
-        return !mon.iswiz || noOfWizards() > 1;
-    case 'cureSelf':
-        return (mon.mhp || 0) >= (mon.mhpmax || 0);
-    case 'disappear':
-        return !!mon.minvis || !!mon.invis_blkd || (!!mon.mpeaceful && !game.u?.seeInvisible);
-    case 'hasteSelf':
-        return mon.permspeed === 'fast';
-    default:
-        return false;
-    }
-}
-
-function chooseWizardMonsterSpell(mon) {
-    const level = Math.max(1, mon.m_lev || mon.data?.hpLevel || mon.data?.mlevel || 1);
-    const maxSpellLevel = WIZARD_MONSTER_SPELLS[WIZARD_MONSTER_SPELLS.length - 1].level;
-    let spellval = rn2(level);
-    if (spellval > maxSpellLevel && rn2(maxSpellLevel))
-        spellval = rn2(maxSpellLevel);
-    for (let i = WIZARD_MONSTER_SPELLS.length - 1; i >= 0; --i) {
-        const spell = WIZARD_MONSTER_SPELLS[i];
-        if (spell.level <= spellval && !monsterSpellWouldBeUseless(mon, spell))
-            return spell;
-    }
-    return WIZARD_MONSTER_SPELLS[0];
-}
-
-function currentLevelInHell() {
-    return game.dungeons?.[game.u?.uz?.dnum]?.name === 'Gehennom';
-}
-
-function alignSign(maligntyp) {
-    return maligntyp > 0 ? 1 : maligntyp < 0 ? -1 : 0;
-}
-
-async function summonNastiesForMonster(summoner) {
-    const before = (game.level?.monsters || []).length;
-    if (!rn2(10) && currentLevelInHell()) {
-        // msummon() demon-prince handling is still unported; this path is rare
-        // and not the current Sanctum summon frontier.
-        return 0;
-    }
-
-    let count = 0;
-    const maxNasties = 10;
-    const summonerClass = summoner.data?.mlet || '';
-    const castalign = alignSign(summoner.data?.maligntyp || 0);
-    let difcap = summoner.data?.difficulty || 0;
-    const outer = rnd((game.u?.ulevel || 1) > 3 ? Math.trunc((game.u?.ulevel || 1) / 3) : 1);
-    for (let i = outer; i > 0 && count < maxNasties; --i) {
-        for (let j = 0; j < 20; ++j) {
-            let makeData = null;
-            let trylimit = 11;
-            do {
-                if (!--trylimit) break;
-                makeData = pickNasty(difcap);
-            } while (makeData
-                && ((difcap > 0 && (makeData.difficulty || 0) >= difcap && monsterHasMagicAttack(makeData))
-                    || (summonerClass === '&' && makeData.mlet === 'A')
-                    || (summonerClass === 'A' && makeData.mlet === '&')));
-            if (!trylimit || !makeData) continue;
-
-            const targetX = summoner.mux ?? game.u?.ux ?? summoner.mx;
-            const targetY = summoner.muy ?? game.u?.uy ?? summoner.my;
-            const spot = enextoMonsterSpot(targetX, targetY, makeData);
-            if (!spot) continue;
-            const mon = await makemon(makeData, spot.x, spot.y, MM_NOMSG);
-            if (!mon) continue;
-            mon.msleeping = 0;
-            mon.mpeaceful = 0;
-            mon.mtame = 0;
-            set_malign(mon);
-            mon.mspec_used = rnd(4);
-            if (mon.data?.name === 'minotaur')
-                mon.data = { ...mon.data, color: CLR_BROWN };
-            newsym(mon.mx, mon.my);
-
-            if (mon.data?.name === 'arch-lich' || mon.data?.name === 'Archon') {
-                const cap = 26;
-                if (!difcap || difcap > cap) difcap = cap;
-            }
-            count = (game.level?.monsters || []).length - before;
-            if (count >= maxNasties
-                || (mon.data?.maligntyp || 0) === 0
-                || alignSign(mon.data?.maligntyp || 0) === castalign)
-                break;
-        }
-    }
-    return count;
-}
-
+// monmove.c:889-917 visits each magic slot when a monster elects to move.
+// castmu selects once in this mode and rejects directed spells immediately.
 async function maybeCastUndirectedMonsterSpell(mon) {
-    const data = mon.data || {};
-    const clericCaster = data.priest || data.name === 'acolyte';
-    const wizardCaster = !clericCaster
-        && (monsterCastsWizardSpells(data) || data.spellcaster || data.magic);
-    const caster = wizardCaster || clericCaster;
-    if (mon.mspec_used || !caster) return false;
-    if ((mon.mx - (game.u?.ux || 0)) ** 2 + (mon.my - (game.u?.uy || 0)) ** 2 > 49) return false;
-    if (wizardCaster) {
-        const spell = chooseWizardMonsterSpell(mon);
-        if (!spell.indirect || monsterSpellWouldBeUseless(mon, spell)) return false;
-        mon.mspec_used = (mon.m_lev || 0) < 8 ? 10 - (mon.m_lev || 0) : 2;
-        if (rn2(Math.max(1, (mon.m_lev || 1) * 10)) < (mon.mconf ? 100 : 20))
-            return false;
-        if (spell.name !== 'summonMons'
-            && couldSeeCoord(mon.mx, mon.my) && !game.u?.blind && !mon.minvis && !mon.mundetected)
-            addToplineMessage(`${monsterDisplayName(mon)} casts a spell!`);
-        if (spell.name === 'summonMons') {
-            const count = await summonNastiesForMonster(mon);
-            if (count) {
-                addToplineMessage(`${count === 1 ? 'A monster appears' : 'Monsters appear'} from nowhere!`);
-                if (game._sanctum_summon_ready) {
-                    game._sanctum_summon_ready = 0;
-                    game._sanctum_summon_script_phase = 'afterSummon';
-                    game._refresh_monsters_for_turn_tail_once = 1;
-                    if (game.u) game.u.uhunger = 899;
-                }
-            }
-            rn2(5);
+    if (mon.mspec_used || (mon.mx - game.u.ux) ** 2 + (mon.my - game.u.uy) ** 2 > 49) return false;
+    for (const attack of monsterPermonstAttacks(mon)) {
+        if (attack.aatyp !== AT_MAGC || (attack.adtyp !== AD_SPEL && attack.adtyp !== AD_CLRC)) continue;
+        if (await monsterCastSpell(mon, { thinksFound: false, found: false, attack })) {
+            rn2(5); // dochug's post-cast distfleeck recalculation.
             return true;
         }
-        if (spell.name === 'disappear') {
-            const wasVisible = couldSeeCoord(mon.mx, mon.my)
-                && !game.u?.blind && !mon.minvis && !mon.mundetected;
-            mon.minvis = 1;
-            if (wasVisible) {
-                addToplineMessage(`${monsterDisplayName(mon)} suddenly ${game.u?.seeInvisible ? 'becomes transparent' : 'disappears'}!`);
-                if (!game.u?.seeInvisible) {
-                    const loc = game.level?.at(mon.mx, mon.my);
-                    if (loc) loc.map_invisible = true;
-                }
-            }
-            newsym(mon.mx, mon.my);
-        } else if (spell.name === 'hasteSelf') {
-            mon.permspeed = 'fast';
-            mon.mspeed = 'fast';
-        } else if (spell.name === 'cureSelf') {
-            mon.mhp = Math.min(mon.mhpmax || mon.mhp || 1, (mon.mhp || 1) + Math.max(1, Math.trunc((mon.m_lev || 1) / 2) + 1));
-        } else if (spell.name === 'cloneWiz') {
-            // C ref: mcastu.c:413-418 (mcast_clone_wiz) — Double Trouble;
-            // clonewiz() may equip the clone with a fake Amulet
-            // (wizard.c:543-560).
-            if (mon.iswiz && noOfWizards() === 1) {
-                addToplineMessage('Double Trouble...');
-                await clonewiz();
-            }
-        } else if (spell.name === 'aggravation') {
-            // C ref: mcastu.c:826-830 (MCAST_AGGRAVATION/wizard.c:522 aggravate).
-            addToplineMessage('You feel that monsters are aware of your presence.');
-            wizardAggravate();
-        }
-        rn2(5);
-        return true;
-    }
-    const level = Math.max(1, mon.m_lev || mon.data?.hpLevel || mon.data?.mlevel || 1);
-    const cleric = clericCaster;
-
-    /* C ref: mcastu.c:130-260 castmu() for a non-attacking (undirected)
-     * AD_CLRC caster, reached from dochug()'s idle-caster gate
-     * (monmove.c:889-907).  Spell selection calls choose_monster_spell()
-     * once (mcastu.c:90-120): rn2(m_lev), then if the roll exceeds the
-     * list's highest spell level (13 — MCAST_GEYSER), optionally one or two
-     * rn2(13) rerolls (mcastu.c:109-110); then the descending scan picks the
-     * highest-level spell that is not useless (MFC hostility vs peaceful,
-     * MCF_SIGHT blocking when the hero is unseen, CURE_SELF useless at full
-     * hp, etc.).  When the selected spell is directed (not MCF_INDIRECT),
-     * castmu() returns without casting (mcastu.c:155-168): the hero never
-     * notices.  On an undirected, useful spell the cast proceeds:
-     * mspec_used = 2 for level >= 8 casters (mcastu.c:180-181), then a
-     * fumble roll rn2(ml*10) vs 20/100 for confused (mcastu.c:206). */
-    if (cleric && mon.ispriest && mon.shrine) {
-        const MCAST_LIST = [ // mon_cleric_spells (mcastu.c:28-31) with levels
-            { name: 'openWounds', level: 0, indirect: false },
-            { name: 'cureSelf', level: 1, indirect: true },
-            { name: 'confuseYou', level: 2, indirect: false },
-            { name: 'paralyzeYou', level: 4, indirect: false },
-            { name: 'blindYou', level: 6, indirect: false },
-            { name: 'insects', level: 8, indirect: true },
-            { name: 'curseItems', level: 10, indirect: false },
-            { name: 'lightning', level: 11, indirect: false },
-            { name: 'firePillar', level: 12, indirect: false },
-            { name: 'geyser', level: 13, indirect: false },
-        ];
-        const spellWouldBeUseless = (name) => {
-            const flags = { // MCF_HOSTILE / MCF_SIGHT from mcastu.h
-                openWounds: true, confuseYou: true, paralyzeYou: true,
-                blindYou: true, insects: true, curseItems: true,
-                lightning: true, firePillar: true, geyser: true, cureSelf: false,
-            };
-            const spectral = { insects: true }; /* MCF_INDIRECT among hostile */
-            const sp = MCAST_LIST.find(entry => entry.name === name);
-            const hostile = !!flags[name];
-            const needsSight = !!flags[name];
-            if (hostile && (mon.mpeaceful || mon.mtame)) return true;
-            if (needsSight && !spectral[name] && name !== 'insects'
-                && !couldSeeCoord(mon.mx, mon.my)) {
-                /* hero invisible to caster — modeled loosely; valley heroities
-                 * are always visible; refine when a recording says otherwise */
-            }
-            if (name === 'cureSelf' && (mon.mhp ?? 1) >= (mon.mhpmax ?? mon.mhp ?? 1)) return true;
-            return false;
-        };
-        let spellval = rn2(level);
-        if (spellval > 13 && rn2(13))
-            spellval = rn2(13);
-        let spell = null;
-        for (let i = MCAST_LIST.length - 1; i >= 0; i--) {
-            if (MCAST_LIST[i].level <= spellval && !spellWouldBeUseless(MCAST_LIST[i].name)) {
-                spell = MCAST_LIST[i];
-                break;
-            }
-        }
-        if (!spell) spell = MCAST_LIST[0];
-        if (!spell.indirect) return false;
-
-        mon.mspec_used = (mon.m_lev || 0) < 8 ? 10 - (mon.m_lev || 0) : 2;
-        if (rn2(Math.max(1, level * 10)) < (mon.mconf ? 100 : 20))
-            return false; /* fumbled — C prints air-crackles only if seen */
-        if (spell.name === 'cureSelf') {
-            if (monsterVisibleToHero(mon))
-                addToplineMessage(`${monsterDisplayName(mon)} casts a spell!`);
-            /* C ref: mcastu.c:300-317 m_cure_self(): healmon(mtmp, d(3,6), 0)
-             * with "looks better." printed when the hero can see the monster. */
-            if ((mon.mhp ?? 1) < (mon.mhpmax ?? mon.mhp ?? 1)) {
-                if (monsterVisibleToHero(mon))
-                    addToplineMessage(`${monsterDisplayName(mon)} looks better.`);
-                const heal = d(3, 6);
-                mon.mhp = Math.min(mon.mhpmax ?? mon.mhp ?? 1, (mon.mhp ?? 1) + heal);
-            }
-        }
-        /* C ref: monmove.c:913-917 — after a cast that sets status =
-         * MMOVE_DONE (castmu returned M_ATTK_HIT), dochug()'s unconditional
-         * status!=MMOVE_DIED branch runs distfleeck() again (the bravegremlin
-         * rn2(5) at monmove.c:544) before the switch(status) tail.  Emit that
-         * recalc roll here so the dochug-level caller's `continue` still
-         * matches C's rng consumption. */
-        rn2(5);
-        return true;
-    }
-    const maxSpellLevel = cleric ? 13 : 20;
-    const attackCount = data.name === 'Arch Priest' ? 2 : 1;
-    for (let i = 0; i < attackCount; i++) {
-        const spellLevel = rn2(level);
-        if (spellLevel > maxSpellLevel && rn2(maxSpellLevel))
-            rn2(maxSpellLevel);
     }
     return false;
 }

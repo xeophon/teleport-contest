@@ -367,8 +367,25 @@ failures reproduced. Both old poisoned-bolt tests now assert the same object
 is unpoisoned and landed, matching `uhitm.c:1528` instead of expecting a stale
 poisoned inventory copy. The 90 ownership and 3,134 shop tests pass together.
 
+Failed catches now follow `dothrow.c:1736-1760` for arm/feet messages,
+polymorph body parts, half physical damage, and landing at the hero's position
+after recoil. Arm damage uses the shared `hack.c:losehp` operation rather than
+the chest fire wrapper's prayer-invulnerability gate. A fatal arm hit retains
+the actual detached weapon until life saving or wizard death refusal returns,
+including across save/restore. The shared HP operation also ends running and
+travel and implements `hack.c:maybe_wail:4211-4245`: the strict warning interval,
+role/race wording, permanent intrinsic power count, deafness, and the
+Unchanging polymorph trigger. Twenty independent tests cover this milestone;
+the 20 return, 90 ownership, 3,134 shop, and 21 cursed-book checks pass together.
+Initial valid failures established the missing half damage, invulnerability,
+post-recoil placement, death suspension, and low-HP warning behavior.
+
 This is not a complete transfer audit: remaining returning-weapon impact
-details (including failed-catch artifact damage and recoil landing location),
+details include failed-catch artifact damage (Mjollnir's per-item shock damage
+can itself suspend before the arm damage), swallowed returns, shipping before
+drop effects, and ordinary recoil death ordering. The curved boomerang's
+pre-flight wizard death refusal and generic return merging still need review.
+Other outstanding areas include
 specialized nonweapon `f` monster impacts, other direct floor-removal destruction callers,
 migration mode variations and the remaining non-timer stack compatibility
 properties still need review. Full drowning effects between every individual

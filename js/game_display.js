@@ -181,9 +181,6 @@ export class GameDisplay {
             if (game._status_turn_display_ahead_moves != null
                 && game._status_turn_display_ahead_moves === (game.moves || 1))
                 turn++;
-            if (game._sanctum_status_turn_offset
-                && turn >= (game._sanctum_status_turn_offset_start || Infinity))
-                turn = Math.max(1, turn - game._sanctum_status_turn_offset);
             return turn;
         };
         if (u.uz?.dnum === TUTORIAL) {

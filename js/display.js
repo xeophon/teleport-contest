@@ -1566,10 +1566,6 @@ function drawGrid() {
             cursorSet = true;
         }
     }
-    if (!cursorSet && game._sanctum_script_cursor && game._pending_message) {
-        d.setCursor(game._sanctum_script_cursor[0], game._sanctum_script_cursor[1]);
-        cursorSet = true;
-    }
     if (!cursorSet && game._cursor_override) {
         d.setCursor(game._cursor_override[0], game._cursor_override[1]);
         cursorSet = true;

@@ -223,10 +223,10 @@ export function strategy(mon) {
 // Aggravation (wizard.c:496-540).
 // ---------------------------------------------------------------------------
 
-// Best-effort In_W_tower: the JS wizard-tower special levels flag the whole
-// level; the C form is rectangle-scoped (dungeon.c On_W_tower_level test).
-function inWizardTowerLevel() {
-    return !!game.level?.flags?.wizard_tower_level;
+function inWizardTower(x, y) {
+    const bounds = game.level?.wizardTowerBounds;
+    return !!(game.level?.flags?.wizard_tower_level && bounds
+        && x >= bounds.lx && x <= bounds.hx && y >= bounds.ly && y <= bounds.hy);
 }
 
 function monIsHelpless(mon) {
@@ -236,10 +236,11 @@ function monIsHelpless(mon) {
 
 // C ref: wizard.c:496-520 (has_aggravatables).
 export function hasAggravatables(mon) {
-    const inTower = !!(mon?.wizardTowerLevel || inWizardTowerLevel());
-    if (inTower !== inWizardTowerLevel()) return false; /* hero/mon tower split */
+    const inTower = inWizardTower(mon?.mx, mon?.my);
+    if (inTower !== inWizardTower(game.u?.ux, game.u?.uy)) return false;
     for (const other of game.level?.monsters || []) {
         if (other.dead || (other.mhp != null && other.mhp <= 0)) continue;
+        if (inTower !== inWizardTower(other.mx, other.my)) continue;
         if ((typeof other.mstrategy === 'number' && (other.mstrategy & STRAT_WAITFORU))
             || other.mstrategy === 'waitforu' || other.waiting
             || monIsHelpless(other))
@@ -250,8 +251,10 @@ export function hasAggravatables(mon) {
 
 // C ref: wizard.c:522-540 (aggravate).
 export function aggravate() {
+    const inTower = inWizardTower(game.u?.ux, game.u?.uy);
     for (const mon of game.level?.monsters || []) {
         if (mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
+        if (inTower !== inWizardTower(mon.mx, mon.my)) continue;
         if (typeof mon.mstrategy === 'number') mon.mstrategy &= ~(STRAT_WAITFORU | STRAT_APPEARMSG);
         else if (mon.mstrategy === 'waitforu') mon.mstrategy = 0;
         mon.waiting = false;
