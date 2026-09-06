@@ -10,6 +10,7 @@ import { attachEggHatchTimeout, killDeadSpeciesEggHatchTimers } from '../js/egg_
 import { processGameTimers } from '../js/allmain.js';
 import { monsterByRndName } from '../js/mklev.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
+import { beginBurn } from '../js/burn.js';
 
 function setup() {
     resetGame(); initRng(1);
@@ -89,3 +90,24 @@ test('genocide cancels timers carried by migrating monsters and stored on other 
     assert.equal(game.timers.length, 0);
     for (const egg of eggs) assert.equal(egg.timed, 0);
 });
+
+for (const figurine of [false, true]) {
+    for (const creatureFirst of [false, true]) {
+        test(`${figurine ? 'figurine' : 'egg'} and burn messages follow callback order when creation is ${creatureFirst ? 'first' : 'last'}`, async () => {
+            setup();
+            const obj = { otyp: figurine ? 795 : 10001, kind: figurine ? 'figurine' : 'egg',
+                corpsenm: monsterByRndName('newt'), quan: 1, ox: 12, oy: 10 };
+            const lamp = { otyp: 227, kind: 'oil lamp', age: 1, quan: 1 };
+            game.inventory = [lamp]; game.level.objects = [obj];
+            if (creatureFirst) startTimer(1, TIMER_OBJECT, figurine ? FIG_TRANSFORM : HATCH_EGG, obj);
+            beginBurn(lamp);
+            if (!creatureFirst) startTimer(1, TIMER_OBJECT, figurine ? FIG_TRANSFORM : HATCH_EGG, obj);
+            game.moves++;
+            const messages = await processGameTimers();
+            assert.equal(messages.length, 2);
+            assert.equal(messages[creatureFirst ? 0 : 1], 'Your lamp has gone out.');
+            assert.match(messages[creatureFirst ? 1 : 0], figurine ? /figurine transform into a newt/ : /a newt hatch/);
+            assert.equal(game.level.objects.includes(obj), false);
+        });
+    }
+}

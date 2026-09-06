@@ -219,3 +219,41 @@ also operate after lethal HP damage, before cleanup removes the monster.
 Artifact `SPFX_ESP` sources and remaining shared rendering/perception callers
 still need the complete `worn.c:recalc_telepat_range` / `display.h` property model;
 this change does not claim global perception parity.
+
+## Hero water entry and drowning
+
+The water continuation now follows the inspected `hack.c:pooleffects:3233-3308`
+and `trap.c:drown:5059-5210` ordering: inventory damage, gremlin/iron-golem
+effects, leash release, aquatic immersion, teleport attempt, crawl/disrobe,
+and death followed by rescue. `water.js` owns the sequence and serializable
+prompt continuation; `cmd.js:heroWaterLandingEffects` binds actual inventory,
+terrain, death and relocation operations. `afterMeltHeroSpotEffects(x,y)` is
+the asynchronous callback for the timer owner. Normal forced movement and
+the shared landing helper now use the same water entry operation.
+
+`trap.c:water_damage:4712-4851` and `water_damage_chain:4855-4890` supply
+per-object luck, grease, containers, towel wetness, blanking, dilution, acid
+destruction, rust and shared nested-chain acid feedback ordering.
+`trap.c:emergency_disrobe:4897-4944` supplies inventory-order random selection
+and worn/cursed retention; `rnd_nextto_goodpos:4947-4972` supplies the complete
+eight-direction shuffle. Crawl positions use `hack.c:crawl_destination:4079`
+geometry and the extracted hero `goodpos` terrain test. Grounded mounted entry
+uses the GENERIC/FELL portions of `steed.c:dismount_steed:574-817`, including
+the distinction between a dead steed and one revived by an amulet.
+
+Twenty-four new independent water tests pass; the first live movement test
+failed because carried scrolls were never damaged. New cursor and mounted
+cases also failed before their fixes. Combined water, teleport-position and
+explosion tests pass 107/107. A valid rock-stack encumbrance case exposed the
+shared missing rock weight; the canonical weight 10 also corrects two older
+scatter expectations to `rnd(3)` for six rocks (`explode.c:824-827`). Both
+scatter regressions pass with that source-derived expectation.
+
+This checkpoint is not complete water parity. Inspected follow-ups include
+the low-level teleport spell fallback and seen-teleport-trap prompts in
+`dotele`, wizard disorientation override, full `spoteffects(TRUE)` pickup and
+terrain-blocked flight behavior, the remaining legacy polymorph/boots/drop-ball
+water callers, shopkeeper diagonal-door blocking, and full generalized steed
+landing/float-down behavior. The existing gremlin split dependency also still
+needs canonical `cloneu` creation and monster-HP field integration. Timer/main
+flow pause/resume integration is pending in the parent work.

@@ -21,7 +21,7 @@ import {
     Is_astralevel, Is_rogue_level, LARGEST_INT,
 } from './const.js';
 import {
-    makemon, monsterByRndName, set_malign, add_to_minv,
+    makemon, mksobj, monsterByRndName, set_malign, add_to_minv,
     enextoMonsterSpot, resurrectWizardOfYendor, NASTY_MONSTER_NAMES,
     pickNasty,
 } from './mklev.js';
@@ -289,9 +289,10 @@ function heroHasAmuletOfYendorLocal() {
 }
 
 // C ref: mksobj(FAKE_AMULET_OF_YENDOR, TRUE, FALSE) — otyp-specific amulet
-// creation consumes no RNG in mkobj.c mksobj_init, so build it directly.
-function mkFakeAmuletOfYendor() {
+// creation uses the normal amulet blessing rolls in mkobj.c:1059-1068.
+export function mkFakeAmuletOfYendor() {
     return {
+        ...mksobj(15, true, false),
         cls: 'amulet',
         glyph: '"',
         kind: 'Amulet of Yendor',

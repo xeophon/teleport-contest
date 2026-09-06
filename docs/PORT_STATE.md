@@ -16,8 +16,8 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 56 JavaScript modules and approximately 155,000 lines;
-about 83% are in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
+The port now has 66 JavaScript modules and approximately 164,000 lines;
+about 79% are in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
 interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **4,674 passing tests**, with no failures,
+The latest source-driven checkpoint has **4,785 passing tests**, with no failures,
 skips or TODOs, up from 4,309 at the previous checkpoint. Public recordings
 remain 53/53 with 12,712/12,712 screens and 832,102/832,102 RNG calls.
 Supplemental recordings remain 12/19 with 3,070/3,346 screens and
@@ -60,11 +60,23 @@ container/migration behavior, source retry and blocked-hatching RNG order,
 genocide cancellation and all creation callers. It also adds ordinary
 player-monster equipment for all 13 roles, retaining C's unused armor draws,
 plus Samurai locate/goal and Wizard goal. Quest dispatch is now 53/65
-(26 fillers and 27/39 named stages). Verification excludes the agents' new,
-unfinished water and artifact-venom test files; those are separate work in progress.
+(26 fillers and 27/39 named stages).
 
-Still open in these slices: migrating the other five timer callbacks into
-the shared queue and remaining object destruction/transfer lifecycle,
+All nine timer callback kinds now use the shared queue. Source-derived
+regressions cover silent floor/container decay, wielded-corpse cleanup,
+migrating and buried globs, organic container rot, revival failure, repeated
+ice adjustment, mixed-family messages and arrival callbacks after delivery.
+Grimtooth uses shared venom throwing and projectile death handling. The water
+entry operation covers inventory damage, controlled teleport, escape and
+disrobing, life-saving continuations and grounded-mounted entry. Its melt
+callback API still needs integration with the main loop's prompt continuation.
+The same checkpoint adds endgame player-monster equipment and creation armor,
+shared role ranks, and first Astral arrival hostility, player population and
+guardian-angel behavior. Artificial Astral stair entry and later guardian
+loss under conflict remain follow-ups.
+
+Still open in these slices: the main turn's timer phase and prompt resumption,
+remaining object destruction/transfer lifecycle,
 automatic artifact light activation, remaining artifact powers and property
 loss, immediate hero water landing after ice melts, and broader
 explosion/hero-death branches. The independent reviews
@@ -141,8 +153,8 @@ for each finding. Major unfinished areas include:
 1. **Spells and combat:** remaining ray
    callbacks, directed cleric spells, wizard death-touch/weakening effects,
    and broader attack/damage dispatch.
-2. **Timers and arrival:** shared ordering across corpse, egg, figurine and organic/glob timers, automatic
-   light activation, and the complete terrain/region/spot-effects arrival
+2. **Timers and arrival:** source ordering between timers, intrinsic expiry, regions and regeneration,
+   prompt continuation, automatic light activation, and the complete terrain/region/spot-effects arrival
    pipeline.
 3. **Quest and artifacts:** 12 named quest maps and remaining artifact invocation branches.
    Existing builder dispatch does not itself prove map parity.

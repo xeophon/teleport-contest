@@ -1,3 +1,5 @@
+import { ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON } from '../js/timeout.js';
+import { scheduleCorpseTimeout, startGlobShrinkTimeout } from '../js/ice.js';
 import { attachEggHatchTimeout } from '../js/egg_timers.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -36177,7 +36179,7 @@ test('deferred hero land mine scatter reprocesses fractured boulder rocks before
         'rnd(16)', 'rn2(35)', 'rn2(35)', 'rn2(2)',
         'rn2(10)', 'rn2(60)', 'rnd(6)',
         'rnd(2)',
-        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(3)',
         'rn2(10)', 'rn2(8)', 'rnd(4)',
         'rn2(5)', 'rn2(6)', 'rnd(6)', 'rn2(2)', 'rn2(2)',
     ]);
@@ -36248,7 +36250,7 @@ test('deferred hero land mine scatter reprocesses fractured statue contents befo
         'rn2(2)',
         'rn2(10)', 'rn2(60)', 'rnd(6)',
         'rnd(2)',
-        'rn2(10)', 'rn2(8)', 'rnd(4)',
+        'rn2(10)', 'rn2(8)', 'rnd(3)',
         'rn2(10)', 'rn2(8)', 'rnd(4)',
         'rn2(10)', 'rn2(8)', 'rnd(4)',
         'rn2(2)',
@@ -47925,6 +47927,7 @@ test('corpse timer used-up tracking ignores stale unpaid fields without bill row
     };
     game.inventory = [corpse];
 
+    scheduleCorpseTimeout(corpse, ROT_CORPSE, corpse.rotAwayTurn - game.moves);
     await processCorpseTimers(game);
 
     assert.equal(game.inventory.includes(corpse), false);
@@ -47947,6 +47950,7 @@ test('corpse timer preserves a real bill row as used-up', async () => {
     shop.addObjectToShopBill(shkp, corpse, 45);
     game.inventory = [corpse];
 
+    scheduleCorpseTimeout(corpse, ROT_CORPSE, corpse.rotAwayTurn - game.moves);
     await processCorpseTimers(game);
 
     assert.equal(game.inventory.includes(corpse), false);
@@ -48056,6 +48060,7 @@ test('corpse timer revival prefers saved monster traits over corpse species', as
     game.level.objects = [body];
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
 
+    scheduleCorpseTimeout(body, REVIVE_MON, body.reviveTurn - game.moves);
     await processCorpseTimers(game);
 
     const revived = game.level.monsters.find(mon => mon.data?.name === 'troll');
@@ -48099,6 +48104,7 @@ test('corpse timer zombification discards saved monster traits', async () => {
     game.level.objects = [body];
     game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
 
+    scheduleCorpseTimeout(body, ZOMBIFY_MON, body.zombifyTurn - game.moves);
     await processCorpseTimers(game);
 
     const zombie = game.level.monsters.find(mon => mon.data?.name === 'human zombie');
@@ -48110,7 +48116,7 @@ test('corpse timer zombification discards saved monster traits', async () => {
     assert.equal(game.level.objects.includes(body), false);
 });
 
-test('glob shrink used-up tracking ignores stale unpaid fields without bill rows', () => {
+test('glob shrink used-up tracking ignores stale unpaid fields without bill rows', async () => {
     const { shkp } = installShopState();
     game.moves = 20;
     const glob = {
@@ -48130,7 +48136,9 @@ test('glob shrink used-up tracking ignores stale unpaid fields without bill rows
     };
     game.inventory = [glob];
 
-    processGlobShrinkTimers(game);
+    startGlobShrinkTimeout(glob, 1);
+    game.moves++;
+    await processGlobShrinkTimers(game);
 
     assert.equal(game.inventory.includes(glob), false);
     assert.equal(shkp.billct, 0);
@@ -48138,7 +48146,7 @@ test('glob shrink used-up tracking ignores stale unpaid fields without bill rows
     assert.equal((game._usedUpShopBills || []).length, 0);
 });
 
-test('glob shrink preserves a real bill row as used-up', () => {
+test('glob shrink preserves a real bill row as used-up', async () => {
     const { shkp } = installShopState();
     game.moves = 20;
     const glob = {
@@ -48157,7 +48165,9 @@ test('glob shrink preserves a real bill row as used-up', () => {
     shop.addObjectToShopBill(shkp, glob, 45);
     game.inventory = [glob];
 
-    processGlobShrinkTimers(game);
+    startGlobShrinkTimeout(glob, 1);
+    game.moves++;
+    await processGlobShrinkTimers(game);
 
     assert.equal(game.inventory.includes(glob), false);
     assert.equal(shkp.billct, 1);
@@ -73108,6 +73118,7 @@ test('hero-thrown acid venom direct hit is harmless against acid resistance', as
 
 test('hero-thrown unpaid acid venom stack direct hit bills the burned unit', async () => {
     const { shkp } = installCommandShopState();
+    game.level.at = () => ({ roomno: ROOMOFFSET, typ: ROOM });
     initRng(2);
     game.u.acurr.a[A_DEX] = 25;
     const venoms = acidVenom(876069, 'a', 2);

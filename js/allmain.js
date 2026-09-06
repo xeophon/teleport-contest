@@ -7,7 +7,7 @@ import { clearHeroSickness, adjustHeroAttribute } from './cmd.js';
 import { game } from './gstate.js';
 import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
 import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
-import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, processCorpseTimers, processGlobShrinkTimers, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
+import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, CORPSE_TIMER_HANDLERS, runOrganicRotTimer, shrinkGlob, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
 import { init_objects } from './o_init.js';
@@ -51,9 +51,9 @@ import { MONS as PERMONST_MONS } from './permonst.js';
 import { queueGasSporeDeathExplosion } from './monster_death.js';
 import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster, fireBreathZapHits } from './fire_breath.js';
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
-import { processBuriedOrganicRot, meltIceAway, removedFromIcebox } from './ice.js';
+import { meltIceAway, removedFromIcebox } from './ice.js';
 import { runObjectBurnTimer } from './cmd.js';
-import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, MELT_ICE_AWAY, runTimers } from './timeout.js';
+import { BURN_OBJECT, HATCH_EGG, FIG_TRANSFORM, ROT_ORGANIC, SHRINK_GLOB, MELT_ICE_AWAY, runTimers } from './timeout.js';
 import { objectLocations } from './obj_location.js';
 import { restoreLifeSavedBody } from './end.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
@@ -4075,17 +4075,19 @@ function hatchedMonsterArticle(mon, plural) {
 }
 
 function reportEggHatch(entry, mon, hatchcount, x, y, yours) {
+    const messages = [];
     const visible = !entry.silent && (cansee(x, y) || !game.viz_array);
     const plural = hatchcount > 1;
     if (entry.source === 'inventory') {
-        if (visible) addToplineMessage(`You see ${hatchedMonsterArticle(mon, plural)} drop out of your pack!`);
-        else addToplineMessage('You feel something drop from your pack!');
-        if (yours) addToplineMessage(`${plural ? 'Their' : 'Its'} crying sounds like "${game.flags?.female ? 'mommy' : 'daddy'}${entry.egg?.spe ? '.' : '?'}"`);
+        if (visible) messages.push(`You see ${hatchedMonsterArticle(mon, plural)} drop out of your pack!`);
+        else messages.push('You feel something drop from your pack!');
+        if (yours) messages.push(`${plural ? 'Their' : 'Its'} crying sounds like "${game.flags?.female ? 'mommy' : 'daddy'}${entry.egg?.spe ? '.' : '?'}"`);
     } else if (entry.source === 'floor' && visible) {
-        addToplineMessage(`You see ${hatchedMonsterArticle(mon, plural)} hatch.`);
+        messages.push(`You see ${hatchedMonsterArticle(mon, plural)} hatch.`);
     } else if (entry.source === 'minvent' && visible) {
-        addToplineMessage(`You see ${hatchedMonsterArticle(mon, plural)} drop out of ${monsterDisplayName(entry.carrier)}'s pack!`);
+        messages.push(`You see ${hatchedMonsterArticle(mon, plural)} drop out of ${monsterDisplayName(entry.carrier)}'s pack!`);
     }
+    return messages;
 }
 
 // C timeout.c hatch_egg: blocked species still consume the ownership and
@@ -4119,17 +4121,19 @@ export async function hatchEgg(egg, timeout, g = game) {
     }
     if (!lastMon) return;
     egg.quan = Math.max(0, (egg.quan || 1) - hatched);
-    reportEggHatch(entry, lastMon, hatched, x, y, yours);
+    const messages = reportEggHatch(entry, lastMon, hatched, x, y, yours);
     g._egg_hatch_processed = (g._egg_hatch_processed || 0) + hatched;
     if (egg.quan > 0) {
         attachEggHatchTimeout(egg, rnd(12), g);
         egg.owt = egg.quan;
     } else removeHatchedEgg(entry);
+    return messages;
 }
 
 export async function processEggHatchTimeouts(g = game) {
-    await runTimers({ [HATCH_EGG]: { run: hatchEgg } }, g,
+    const messages = await runTimers({ [HATCH_EGG]: { run: hatchEgg } }, g,
         timer => timer.func === HATCH_EGG && !objectLocations(g, true).get(timer.arg)?.saved);
+    return messages.flat();
 }
 
 function figurineTransformLocation(entry) {
@@ -4160,17 +4164,19 @@ function removeTransformedFigurine(entry) {
 }
 
 function reportFigurineTransform(entry, mon, x, y, silent) {
-    if (!mon || (silent && entry.source !== 'inventory')) return;
+    const messages = [];
+    if (!mon || (silent && entry.source !== 'inventory')) return messages;
     const article = hatchedMonsterArticle(mon, false);
     if (entry.source === 'inventory') {
-        if (game.u?.blind || mon.minvis) addToplineMessage('You feel something drop from your pack!');
-        else addToplineMessage(`You see ${article} drop out of your pack!`);
+        if (game.u?.blind || mon.minvis) messages.push('You feel something drop from your pack!');
+        else messages.push(`You see ${article} drop out of your pack!`);
     } else if (entry.source === 'floor') {
-        if (cansee(x, y)) addToplineMessage(`You see a figurine transform into ${article}!`);
+        if (cansee(x, y)) messages.push(`You see a figurine transform into ${article}!`);
     } else if (entry.source === 'minvent') {
         if (cansee(x, y))
-            addToplineMessage(`You see ${article} drop out of ${monsterDisplayName(entry.carrier)}'s pack!`);
+            messages.push(`You see ${article} drop out of ${monsterDisplayName(entry.carrier)}'s pack!`);
     }
+    return messages;
 }
 
 export async function transformFigurine(figurine, timeout, g = game) {
@@ -4198,11 +4204,14 @@ export async function transformFigurine(figurine, timeout, g = game) {
     }
     const result = await makeFigurineFamiliar(figurine, x, y, { quietly: true });
     removeTransformedFigurine(entry);
-    reportFigurineTransform(entry, result.mon, x, y, timeout !== g.moves);
+    return reportFigurineTransform(entry, result.mon, x, y, timeout !== g.moves);
 }
 
 export async function processGameTimers(g = game) {
     const handlers = {
+        ...CORPSE_TIMER_HANDLERS,
+        [ROT_ORGANIC]: { run: runOrganicRotTimer },
+        [SHRINK_GLOB]: { run: shrinkGlob },
         [HATCH_EGG]: { run: hatchEgg },
         [FIG_TRANSFORM]: { run: transformFigurine },
         [BURN_OBJECT]: { run: runObjectBurnTimer },
@@ -4218,9 +4227,6 @@ export async function processGameTimers(g = game) {
 
 async function afterMoveTurn(g, includeHeroTime = true) {
     for (const msg of await processGameTimers(g)) addToplineMessage(msg);
-    for (const msg of await processCorpseTimers(g)) addToplineMessage(msg);
-    for (const msg of processGlobShrinkTimers(g)) addToplineMessage(msg);
-    processBuriedOrganicRot(g);
     if (includeHeroTime && g.moves >= (g.context.seer_turn || 0)) {
         if (g._prayer_debug_pleased && (g._prayer_pending_done && (g._pending_time_passed || 0) <= 1
             || (g._pending_prayer_finish_message
