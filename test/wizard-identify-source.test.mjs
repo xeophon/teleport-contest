@@ -59,7 +59,7 @@ for (const keys of ['#wizidentify\n', '\t', 'x']) test(`wizard identify entry ${
     assert.deepEqual(getRngLog(), []);
     await rhack('\x1b');
     assert.deepEqual(item, before);
-    assert.equal(game._wizard_identify, null);
+    assert.equal(game._identification, null);
 });
 
 for (const accept of [false, true]) test(`selecting and ${accept ? 'accepting' : 'cancelling'} one item preserves all other knowledge`, async () => {
@@ -106,7 +106,7 @@ test('save and restore retain selection and inventory identity', async () => {
     await command(); await rhack('b');
     const saved = encodeSaveState(), { coreCtx, displayCtx, rng } = game;
     resetGame(); restoreSaveState(saved); Object.assign(game, { coreCtx, displayCtx, rng });
-    assert.equal(game._wizard_identify.items[1], game.inventory[1]);
+    assert.equal(game._identification.items[1], game.inventory[1]);
     await rhack('\n'); await finish();
     assert.equal(game.inventory[0].known, false);
     assert.equal(objectIsFullyIdentified(game.inventory[1]), true);
@@ -118,7 +118,7 @@ test('partly identified charged objects, containers and artifacts remain selecta
     const box = add('CHEST', 'b', { ...common, cknown: false, lknown: false });
     const artifact = add('LONG_SWORD', 'c', { ...common, artifact: 'Excalibur' });
     game._known_object_types = game.inventory.map(item => item._c_otyp);
-    await command(); assert.equal(game._wizard_identify.items.length, 3);
+    await command(); assert.equal(game._identification.items.length, 3);
     await rhack('_'); await rhack('\n'); await finish();
     assert.equal(objectIsFullyIdentified(wand), true); assert.equal(objectIsFullyIdentified(box), true);
     assert.equal(objectIsFullyIdentified(artifact), true);
@@ -144,20 +144,20 @@ test('identification feedback suspends the remaining inventory loop', async () =
 test('coins never create a wizard identification choice', async () => {
     setup(); add('GOLD_PIECE', '$'); add('LONG_SWORD', 'a');
     await command();
-    assert.deepEqual(game._wizard_identify.items.map(item => item.letter), ['a']);
+    assert.deepEqual(game._identification.items.map(item => item.letter), ['a']);
 });
 
 for (const mode of [0, 1, 2]) test(`C menuinvertmode ${mode} applies to the special all entry only for bulk changes`, async () => {
     setup(); game.iflags = { menuinvertmode: mode };
     add('POT_GAIN_ABILITY', 'a'); add('SCR_GENOCIDE', 'b');
     await command(); await rhack(',');
-    assert.equal(game._wizard_identify.selected.includes('_'), mode === 0);
-    assert.ok(['a', 'b'].every(letter => game._wizard_identify.selected.includes(letter)));
+    assert.equal(game._identification.selected.includes('_'), mode === 0);
+    assert.ok(['a', 'b'].every(letter => game._identification.selected.includes(letter)));
     await rhack('-');
-    assert.deepEqual(game._wizard_identify.selected, []);
+    assert.deepEqual(game._identification.selected, []);
     await rhack('_'); await rhack('@');
-    assert.equal(game._wizard_identify.selected.includes('_'), mode === 2);
-    assert.ok(['a', 'b'].every(letter => game._wizard_identify.selected.includes(letter)));
+    assert.equal(game._identification.selected.includes('_'), mode === 2);
+    assert.ok(['a', 'b'].every(letter => game._identification.selected.includes(letter)));
 });
 
 test('wizard pages keep lowercase inventory letters before uppercase and page selection survives a save', async () => {
@@ -165,11 +165,11 @@ test('wizard pages keep lowercase inventory letters before uppercase and page se
     const letters = 'abcdefghijklmnopqrstuvwxyzAB';
     for (const letter of [...letters].reverse()) add('WAN_WISHING', letter);
     await command();
-    assert.deepEqual(game._wizard_identify.pageLetters, ['_', ...letters.slice(0, 20)]);
+    assert.deepEqual(game._identification.pageLetters, ['_', ...letters.slice(0, 20)]);
     await rhack('.');
-    assert.deepEqual(game._wizard_identify.selected, [...letters.slice(0, 20)]);
+    assert.deepEqual(game._identification.selected, [...letters.slice(0, 20)]);
     await rhack('>');
-    assert.deepEqual(game._wizard_identify.pageLetters, [...letters.slice(20)]);
+    assert.deepEqual(game._identification.pageLetters, [...letters.slice(20)]);
     await rhack('A');
     const saved = encodeSaveState(), { coreCtx, displayCtx, rng } = game;
     resetGame(); restoreSaveState(saved); Object.assign(game, { coreCtx, displayCtx, rng });
@@ -184,7 +184,7 @@ for (const sortpack of [false, true]) test(`wizard sortpack=${sortpack} controls
     add('WAN_WISHING', 'A'); add('POT_GAIN_ABILITY', 'b'); add('SCR_GENOCIDE', 'a');
     await command();
     assert.equal(game._overlay_lines.some(row => row[2] === 'Scrolls'), sortpack);
-    assert.deepEqual(game._wizard_identify.menuOrder.map(item => item.letter), ['a', 'b', 'A']);
+    assert.deepEqual(game._identification.menuOrder.map(item => item.letter), ['a', 'b', 'A']);
     await rhack(','); await rhack('\n');
     assert.equal(game._command_mode, 'wizardIdentifyMore');
     assert.equal(game.inventory[0].known, false, 'menu order identifies the wand last');
@@ -202,14 +202,14 @@ test('full wizard sorting applies source weapon subclasses before displayed name
     setup(); game.flags.sortloot = 'f';
     const sword = add('LONG_SWORD', 'a'), arrow = add('ARROW', 'b'), dagger = add('DAGGER', 'c');
     await command();
-    assert.deepEqual(game._wizard_identify.menuOrder, [arrow, dagger, sword]);
+    assert.deepEqual(game._identification.menuOrder, [arrow, dagger, sword]);
 });
 
 test('a custom pack order controls wizard headings and object choices', async () => {
     setup(); game.flags.packorder = '/!';
     const potion = add('POT_GAIN_ABILITY', 'a'), wand = add('WAN_WISHING', 'b');
     await command();
-    assert.deepEqual(game._wizard_identify.menuOrder, [wand, potion]);
+    assert.deepEqual(game._identification.menuOrder, [wand, potion]);
     const headings = game._overlay_lines.filter(row => row[3] === 1).map(row => row[2]);
     assert.deepEqual(headings, ['Wands', 'Potions']);
 });

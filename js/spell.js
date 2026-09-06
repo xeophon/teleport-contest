@@ -1480,12 +1480,9 @@ function spellIdentifyEffect(spell, D) {
     let identifyLimit = 1;
     if (blessed || !rn2(5)) {
         identifyLimit = rn2(5);
-        if (identifyLimit === 1 && blessed && (game.u?.uluck || 0) > 0) identifyLimit++;
+        if (identifyLimit === 1 && blessed && (game.u?.uluck || 0) + (game.u?.moreluck || 0) > 0) identifyLimit++;
     }
-    const unidentified = D.unidentifiedInventoryItems();
-    const identified = identifyLimit ? unidentified.slice(0, identifyLimit) : unidentified;
-    for (const invItem of identified) D.identifyInventoryItem(invItem);
-    return { messages: [], identifiedItems: identified };
+    return { messages: [], identifyLimit };
 }
 
 // C ref: read.c:seffect_taming() (SPE_CHARM_MONSTER routes through seffects).

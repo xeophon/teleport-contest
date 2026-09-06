@@ -349,9 +349,9 @@ test('identify spell consumes seffects exercise before the cval rolls', async ()
     const result = await castSpellNodirEffect({ name: 'identify' }, deps);
     const trace = rngTrace().map(e => e.split('=')[0]);
     assert.deepEqual(trace.slice(0, 2), ['rn2(19)', 'rn2(5)']);
-    assert.equal(deps.calls.identify.length, 1);
-    assert.equal(game.inventory[0].identified, true);
-    assert.ok((result.identifiedItems || []).length === 1);
+    assert.equal(deps.calls.identify.length, 0);
+    assert.equal(game.inventory[0].identified, false);
+    assert.equal(result.identifyLimit, 0);
 });
 
 test('identify spell with empty inventory says so', async () => {

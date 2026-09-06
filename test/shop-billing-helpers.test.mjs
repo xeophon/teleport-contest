@@ -1,3 +1,4 @@
+import { encodeSaveState, restoreSaveState } from '../js/save.js';
 import { WOUNDED_LEGS, LEFT_SIDE } from '../js/const.js';
 import { ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON } from '../js/timeout.js';
 import { scheduleCorpseTimeout, startGlobShrinkTimeout } from '../js/ice.js';
@@ -8460,14 +8461,14 @@ test('direct quest leader chat completes returned artifact without taking it', a
     assert.match(result.introText, /Take it with you in your quest for the Amulet of Yendor/);
     assert.doesNotMatch(result.introText, /silver bell/);
     assert.equal(!!game._queued_overlay_after_more, false);
-    assert.equal(game.quest_status.got_thanks, true);
-    assert.equal(game.quest_status.qcompleted, true);
-    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(!!game.quest_status.got_thanks, false);
+    assert.equal(!!game.quest_status.qcompleted, false);
+    assert.equal(!!game.u.uevent?.qcompleted, false);
     assert.equal(game.inventory.includes(artifact), true);
     assert.equal(artifact.worn, 'amulet');
-    assert.equal(artifact.known, true);
-    assert.equal(artifact.bknown, true);
-    assert.equal(artifact.dknown, true);
+    assert.equal(!!artifact.known, false);
+    assert.equal(!!artifact.bknown, false);
+    assert.equal(!!artifact.dknown, false);
     assert.equal(result.target.mstrategy, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
 
@@ -8476,7 +8477,13 @@ test('direct quest leader chat completes returned artifact without taking it', a
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(artifact.known, true);
+    assert.equal(artifact.bknown, true);
+    assert.equal(artifact.dknown, true);
 });
 
 test('direct quest leader artifact return warns when Bell is missing', async () => {
@@ -8504,9 +8511,9 @@ test('direct quest leader artifact return warns when Bell is missing', async () 
     assert.equal(game._command_mode, 'questLeaderFollowupMore');
     assert.match(result.introText, /brave service/);
     assert.equal(game.quest_status.cheater, true);
-    assert.equal(game.quest_status.got_thanks, true);
-    assert.equal(game.quest_status.qcompleted, true);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [...QUEST_PAGER_LOAD_RNG, ...QUEST_PAGER_LOAD_RNG]);
+    assert.equal(!!game.quest_status.got_thanks, false);
+    assert.equal(!!game.quest_status.qcompleted, false);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
 
     enableRngLog({ reset: true });
     await rhack(' ');
@@ -8516,12 +8523,14 @@ test('direct quest leader artifact return warns when Bell is missing', async () 
     assert.match(bellText, /The silver bell which was hoarded by the Dark One/);
     assert.match(bellText, /essential in locating the Amulet of Yendor/);
     assert.equal(game.context.move || 0, 0);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
 
     await rhack(' ');
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
 });
 
 test('direct quest leader artifact return with Amulet uses hasamulet and identifies both', async () => {
@@ -8552,13 +8561,13 @@ test('direct quest leader artifact return with Amulet uses hasamulet and identif
     assert.match(result.introText, /take the Amulet to the Astral Plane/);
     assert.doesNotMatch(result.introText, /brave service|silver bell/);
     assert.equal(!!game._queued_overlay_after_more, false);
-    assert.equal(game.quest_status.got_thanks, true);
-    assert.equal(game.quest_status.qcompleted, true);
-    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(!!game.quest_status.got_thanks, false);
+    assert.equal(!!game.quest_status.qcompleted, false);
+    assert.equal(!!game.u.uevent?.qcompleted, false);
     assert.equal(game.inventory.includes(artifact), true);
-    assert.equal(artifact.known, true);
-    assert.equal(amulet.known, true);
-    assert.equal(amulet.dknown, true);
+    assert.equal(!!artifact.known, false);
+    assert.equal(!!amulet.known, false);
+    assert.equal(!!amulet.dknown, false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
 
     enableRngLog({ reset: true });
@@ -8566,7 +8575,13 @@ test('direct quest leader artifact return with Amulet uses hasamulet and identif
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)', 'rn2(19)']);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(artifact.known, true);
+    assert.equal(amulet.known, true);
+    assert.equal(amulet.dknown, true);
 });
 
 test('direct quest leader chat after thanks ignores carried artifact without Amulet', async () => {
@@ -8770,11 +8785,11 @@ test('automatic quest leader artifact return completes without charging another 
     assert.equal(handled, true);
     assert.equal(game._command_mode, 'questLeaderFollowupMore');
     assert.match(questOverlayText(), /Neferet the Green notices the Eye of the Aethiopica in your possession/);
-    assert.equal(game.quest_status.got_thanks, true);
-    assert.equal(game.quest_status.qcompleted, true);
-    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(!!game.quest_status.got_thanks, false);
+    assert.equal(!!game.quest_status.qcompleted, false);
+    assert.equal(!!game.u.uevent?.qcompleted, false);
     assert.equal(game.inventory.includes(artifact), true);
-    assert.equal(artifact.known, true);
+    assert.equal(!!artifact.known, false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), QUEST_PAGER_LOAD_RNG);
 
     enableRngLog({ reset: true });
@@ -8783,7 +8798,11 @@ test('automatic quest leader artifact return completes without charging another 
     assert.equal(game._command_mode, null);
     assert.equal(game.context?.move || 0, 0);
     assert.equal(game._pending_time_passed || 0, 0);
-    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), []);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game.quest_status.qcompleted, true);
+    assert.equal(game.u.uevent.qcompleted, 1);
+    assert.equal(artifact.known, true);
 });
 
 test('automatic quest nemesis first speech uses nemesis_first and advances made_goal', async () => {
@@ -100634,4 +100653,29 @@ test('paying contained used-up portion first lets later container payment clear 
     assert.equal(shop.shopBillEntryForObject(shkp, stack), null);
     assert.equal(stack.unpaid, false);
     assert.equal(bag.contents.includes(stack), true);
+});
+
+test('quest artifact identification waits through saved dialogue and ignores other keys', async () => {
+    const artifact = wizardQuestArtifact(3063800, 'e');
+    const bell = bellOfOpening(3063801, 'b');
+    const { target } = installAutomaticQuestLeader({
+        rngLog: true,
+        setup: () => {
+            game.inventory = [artifact, bell];
+            game.u.uhave = { questart: 1 };
+            game.quest_status = { met_leader: true, met_leader_once: true, met_nemesis: true, got_quest: true };
+        },
+    });
+    assert.equal(maybeQueueQuestLeaderTalk(target), true);
+    const before = getRngLog(); await rhack('x');
+    assert.deepEqual(getRngLog(), before); assert.equal(artifact.known, false);
+    const saved = encodeSaveState(), { coreCtx, displayCtx, rng } = game;
+    resetGame(); restoreSaveState(saved); Object.assign(game, { coreCtx, displayCtx, rng });
+    assert.equal(game._quest_identify_return.artifact, game.inventory[0]);
+    enableRngLog({ reset: true }); await rhack(' ');
+    assert.equal(game.inventory[0].known, true);
+    assert.equal(game.quest_status.got_thanks, true);
+    assert.equal(game._quest_identify_return, null);
+    assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), ['rn2(19)']);
+    assert.equal(game.context.move || 0, 0);
 });

@@ -1,4 +1,4 @@
-import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT } from './inventory_sort.js';
+import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
 import { FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
@@ -5673,19 +5673,27 @@ function finishQuestLeaderArtifactReturn(info) {
     const hasAmulet = heroHasAmuletOfYendor();
     if (!showQuestPager(hasAmulet ? 'hasamulet' : 'offeredit', 'questLeaderFollowupMore'))
         return false;
-    if (!hasAmulet && !heroCarriesBellOfOpening())
-        queueQuestPager('quest_complete_no_bell', 'questLeaderFollowupMore');
+    game._quest_identify_return = { artifact, hasAmulet, missingBell: !hasAmulet && !heroCarriesBellOfOpening() };
+    return true;
+}
+
+function resumeQuestLeaderArtifactReturn() {
+    const state = game._quest_identify_return;
+    if (!state) return false;
+    if (state.missingBell) {
+        state.missingBell = false;
+        if (showQuestPager('quest_complete_no_bell', 'questLeaderFollowupMore')) return true;
+    }
     game.quest_status.got_thanks = true;
-    if (hasAmulet) identifyRealAmuletOfYendorForQuest();
-    if (artifact) {
-        game.u ??= {};
+    if (state.hasAmulet) identifyRealAmuletOfYendorForQuest();
+    if (state.artifact) {
         game.u.uevent ??= {};
         game.u.uevent.qcompleted = 1;
         game.quest_status.qcompleted = true;
-        artifact.dknown = true;
-        identifyInventoryItem(artifact);
+        identifyInventoryItem(state.artifact);
     }
-    return true;
+    game._quest_identify_return = null;
+    return false;
 }
 
 function queueQuestPline(msgid, more = true) {
@@ -5935,10 +5943,7 @@ export function maybeQueueQuestLeaderTalk(mon, { automatic = true } = {}) {
             game._quest_leader_talk_automatic = 0;
             return false;
         }
-        if (hasAmulet) {
-            game.quest_status.got_thanks = true;
-            identifyRealAmuletOfYendorForQuest();
-        }
+        if (hasAmulet) game._quest_identify_return = { hasAmulet: true };
         return true;
     }
     if (game.u?.uhave?.questart) {
@@ -10483,8 +10488,6 @@ function playerSpellEffectDependencies() {
         heroIsVomiting,
         clearHeroSickness,
         clearHeroVomiting,
-        unidentifiedInventoryItems,
-        identifyInventoryItem,
         unturnDeadHeroInventory: unturnDeadHeroInventoryFromBook,
         addHeroStun,
         loseExperienceLevel,
@@ -10552,10 +10555,9 @@ async function finishSpellEffectResult(spell, result) {
         await setMessage(materialize || '');
         return;
     }
-    if (result?.identifiedItems) {
-        const identified = result.identifiedItems || [];
-        if (identified.length) messages.push(...identified.map(invItem => `${invItem.line}.`));
-        else messages.push('You have already identified all of your possessions.');
+    if (result?.identifyLimit != null) {
+        await beginIdentifyPack(result.identifyLimit, false, messages, spell.menuClearedStatus);
+        return;
     }
     if (result?.detectMonstersMore) {
         await setMessage(messages.join('  '), true);
@@ -58036,11 +58038,13 @@ function identifiedInventoryLine(item) {
 
 function identifyInventoryItem(item) {
     if (!item) return;
-    item.known = true;
-    item.bknown = true;
-    item.rknown = true;
-    item.cknown = true;
-    item.lknown = true;
+    fullyIdentifyObject(item, { hallucinating: heroIsHallucinating(), exercise: exerciseAttribute,
+        discover: recordIdentifiedObjectType,
+        learnEgg: egg => {
+            const species = egg.corpsenm?.name ?? egg.corpsenm;
+            game._known_egg_types ??= [];
+            if (!game._known_egg_types.includes(species)) game._known_egg_types.push(species);
+        } });
     if (item.cls === 'scroll' || item.otyp === SCROLL_CLASS) {
         const raw = item.actualKind?.replace(/^scroll of /, '')
             || (item.scrollIndex != null ? IDENTIFIED_SCROLL_NAMES[item.scrollIndex] : '')
@@ -58071,23 +58075,9 @@ function identifyInventoryItem(item) {
     } else if (isChargedTool(item)) {
         item.chargeKnown = true;
     }
-    item.line = identifiedInventoryLine(item);
+    item.line = wizardIdentifiedItemLine(item);
 }
 
-function unidentifiedInventoryItems() {
-    return (game.inventory || []).filter(invItem => {
-        if (invItem.cls === 'scroll' || invItem.otyp === SCROLL_CLASS)
-            return !invItem.known || !invItem.bknown;
-        if (invItem.cls === 'spellbook') return !invItem.known || !invItem.bknown;
-        if (invItem.cls === 'potion' || invItem.otyp === POTION_CLASS)
-            return !invItem.known || !invItem.bknown;
-        if (invItem.cls === 'ring' || invItem.otyp === RING_CLASS)
-            return !invItem.known || !invItem.bknown;
-        if (invItem.cls === 'wand' || invItem.otyp === WAND_CLASS)
-            return !invItem.known || !invItem.chargeKnown;
-        return false;
-    });
-}
 
 function normalInventoryLine(item) {
     const letter = item.letter || '?';
@@ -63729,7 +63719,7 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
                         : item.otyp === RING_CLASS ? 'Rings'
                             : isBoulderObject(item) || item.otyp === STATUE ? 'Boulders/Statues'
                                 : item.otyp === GEM_CLASS ? 'Gems/Stones' : 'Other Items');
-    const rows = wizard ? [
+    const rows = wizard?.ordinary ? [[`What would you like to identify ${wizard.first ? 'first' : 'next'}?`, 1], ['', 0]] : wizard ? [
         [wizard.items.length ? 'Debug Identify -- unidentified or partially identified item' + (wizard.items.length === 1 ? '' : 's') : 'Debug Identify', 0],
         [wizard.items.length ? '_ ' + (wizard.selected.includes('_') ? '+' : '-') + ' select '
             + (wizard.items.length === 1 ? 'it' : 'any or all of them') + ' to permanently identify'
@@ -63737,11 +63727,15 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
     ] : [];
     let lastSection = '';
     const items = sortLoot(game.inventory || [], (game.flags?.sortloot === 'f' ? SORTLOOT_LOOT : SORTLOOT_INVLET)
-        | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies(!!wizard), match);
+        | (game.flags?.sortpack === false ? 0 : SORTLOOT_PACK), inventorySortDependencies(!!wizard && !wizard.ordinary), match);
+    if (wizard?.ordinary) {
+        const order = game.flags?.packorder || DEFAULT_PACK_ORDER;
+        items.sort((a, b) => order.indexOf(OBJECT_CLASS_GLYPHS[a.cls]) - order.indexOf(OBJECT_CLASS_GLYPHS[b.cls]));
+    }
     if (wizard) wizard.menuOrder = items;
     for (const item of items) {
         const section = sectionName(item);
-        if (section !== lastSection && game.flags?.sortpack !== false) {
+        if (section !== lastSection && (wizard?.ordinary || game.flags?.sortpack !== false)) {
             rows.push([section, identify && !wizard ? 0 : 1]);
             lastSection = section;
         }
@@ -63750,7 +63744,7 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
             if (objectIndex + FIRST_DISPLAY_OBJECT === C_RANDOM_CORPSE)
                 rn2_on_display_rng(DISPLAY_MONSTER_GLYPHS.length);
         }
-        let name = wizard ? wizardIdentifiedItemLine(item) : identify ? identifiedInventoryLine(item) : normalInventoryLine(item);
+        let name = wizard?.ordinary ? normalInventoryLine(item) : wizard ? wizardIdentifiedItemLine(item) : identify ? identifiedInventoryLine(item) : normalInventoryLine(item);
         if (wizard && wizard.selected.includes(item.letter)) name = name.replace(' - ', ' + ');
         rows.push([name, 0, item.letter]);
     }
@@ -63801,17 +63795,20 @@ async function beginWizardIdentify() {
         await setMessage('You are not carrying anything.');
         return;
     }
-    game._wizard_identify = { items: game.inventory.filter(item => !objectIsFullyIdentified(item)), selected: [], page: 0 };
-    showWizardIdentify();
+    game._identification = { phase: 'menu', items: game.inventory.filter(item => !objectIsFullyIdentified(item)), selected: [], page: 0 };
+    showIdentificationMenu();
 }
 
-function showWizardIdentify() {
-    const state = game._wizard_identify;
+function showIdentificationMenu() {
+    const state = game._identification;
     const rows = inventoryOverlayLines(state.page, true, item => state.items.includes(item), state);
     const fullScreen = game._inventory_overlay_total_pages > 1 || rows.length >= 24;
     const clearCol = fullScreen ? null : Math.max(0, Math.min(...rows.map(([, col]) => col)) - 1);
     setOverlay(rows, fullScreen ? 24 : rows.length, fullScreen, clearCol);
+    // tty restores the map after a full casting menu; status is drawn when the action returns.
+    game._overlay_hide_status_only = !!state.menuClearedStatus;
     game._command_mode = 'wizardIdentify';
+    game.context.move = 0;
 }
 
 function recordIdentifiedObjectType(item, type) {
@@ -63836,31 +63833,63 @@ function recordIdentifiedObjectType(item, type) {
     else game._discoveries.push({ section, name: fullName, text, known: true, starred: false });
 }
 
-async function finishWizardIdentify() {
-    const state = game._wizard_identify;
-    while (state.index < state.identifying.length) {
-        const item = state.identifying[state.index++];
-        if (objectIsFullyIdentified(item)) continue;
-        fullyIdentifyObject(item, { hallucinating: heroIsHallucinating(), exercise: exerciseAttribute,
-            discover: recordIdentifiedObjectType,
-            learnEgg: egg => {
-                const species = egg.corpsenm?.name ?? egg.corpsenm;
-                game._known_egg_types ??= [];
-                if (!game._known_egg_types.includes(species)) game._known_egg_types.push(species);
-            } });
-        item.chargeKnown = !!objectTypeData(item)?.usesKnown;
-        item.line = wizardIdentifiedItemLine(item);
-        if (!state.skipMessages && !addToplineMessage(item.line + '.')) {
-            state.pendingMessage = game._topline_after_more;
-            game._topline_after_more = '';
-            game._command_mode = 'wizardIdentifyMore';
-            game._process_time_with_more = 0;
-            return;
+// Both wizard identification and identify_pack suspend after the same identify
+// call. The saved phase advances before feedback, so More never repeats it.
+async function finishIdentification() {
+    const state = game._identification;
+    if (state.phase === 'choose') {
+        state.items = game.inventory.filter(item => !objectIsFullyIdentified(item));
+        if (!state.items.length) {
+            state.phase = 'finish';
+            const message = state.first ? `You have already identified ${state.learning ? 'the rest' : 'all'} of your possessions.` : 'That was all.';
+            if (!state.skipMessages && !addToplineMessage(message)) { pauseIdentification(); return; }
+        } else if (state.first && (!state.limit || state.limit >= state.items.length)) {
+            state.identifying = [...state.items]; state.index = 0; state.phase = 'identify';
+            state.all = true;
+        } else {
+            state.selected = []; state.page = 0; state.phase = 'menu';
+            if (game._pending_message && !state.skipMessages) { pauseIdentification(''); return; }
         }
     }
-    game._wizard_identify = null;
+    if (state.phase === 'menu') {
+        await setMessage('');
+        showIdentificationMenu();
+        return;
+    }
+    while (state.phase === 'identify' && state.index < state.identifying.length) {
+        const item = state.identifying[state.index++];
+        if (objectIsFullyIdentified(item)) continue;
+        identifyInventoryItem(item);
+        if (state.ordinary) state.limit--;
+        if (!state.skipMessages && !addToplineMessage(item.line + '.')) { pauseIdentification(); return; }
+    }
+    if (state.ordinary && state.phase === 'identify' && !state.all && state.limit > 0) {
+        state.first = false; state.phase = 'choose';
+        await finishIdentification();
+        return;
+    }
+    game._identification = null;
+    game._overlay_hide_status_only = 0;
     game._command_mode = null;
+    game.context.move = state.ordinary ? 1 : 0;
+}
+
+function pauseIdentification(pending = game._topline_after_more || '') {
+    const state = game._identification;
+    state.pendingMessage = pending;
+    game._topline_after_more = '';
+    game._message_more = 1;
+    game._command_mode = 'wizardIdentifyMore';
+    game._process_time_with_more = 0;
+    game._pending_time_passed = 0;
+    game._process_command_time_now = 0;
     game.context.move = 0;
+}
+
+async function beginIdentifyPack(limit, learning = false, messages = [], menuClearedStatus = false) {
+    game._identification = { ordinary: true, phase: 'choose', limit, learning, first: true, tries: 5, menuClearedStatus };
+    await setMessage(messages.join('  '));
+    await finishIdentification();
 }
 
 function discoveryOverlayLines(page = 0) {
@@ -67093,6 +67122,7 @@ async function rhackInternal(_cmd) {
                 game._command_mode = next.mode || 'questLeaderFollowupMore';
                 return;
             }
+            if (resumeQuestLeaderArtifactReturn()) return;
             game._command_mode = null;
             finishQuestLeaderTalkTurn();
         }
@@ -68226,7 +68256,7 @@ function tutorialEnterStash() {
     }
 
     if (game._command_mode === 'wizardIdentify') {
-        const state = game._wizard_identify;
+        const state = game._identification;
         const allLetters = state.items.map(item => item.letter);
         if (ch === '>' || ch === ' ' && state.page < game._inventory_overlay_total_pages - 1) {
             state.page = Math.min(state.page + 1, game._inventory_overlay_total_pages - 1);
@@ -68235,19 +68265,29 @@ function tutorialEnterStash() {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._command_mode = null;
+            if (state.ordinary && ch !== '\x1b' && !state.selected.length) {
+                state.phase = --state.tries ? 'choose' : 'finish';
+                const message = state.tries ? 'Choose an item; use ESC to decline.' : "That's enough tries!";
+                await setMessage(message);
+                await finishIdentification();
+                return;
+            }
             if (ch === '\x1b' || !state.selected.length) {
-                game._wizard_identify = null;
+                game._identification = null;
+                game._overlay_hide_status_only = 0;
+                game.context.move = state.ordinary ? 1 : 0;
                 return;
             }
             state.identifying = state.selected.includes('_') ? [...game.inventory]
                 : state.menuOrder.filter(item => state.selected.includes(item.letter));
-            state.index = 0;
-            await finishWizardIdentify();
+            if (state.ordinary) state.identifying = state.identifying.slice(0, state.limit);
+            state.index = 0; state.phase = 'identify';
+            await finishIdentification();
             return;
         } else {
             const group = Object.entries(OBJECT_CLASS_GLYPHS).find(([, glyph]) => glyph === ch)?.[0];
-            const letters = ch === '_' || ch === '\t' ? (state.items.length ? ['_'] : [])
-                : [',', '-', '@'].includes(ch) ? ['_', ...allLetters]
+            const letters = !state.ordinary && (ch === '_' || ch === '\t') ? (state.items.length ? ['_'] : [])
+                : [',', '-', '@'].includes(ch) ? (state.ordinary ? allLetters : ['_', ...allLetters])
                     : ['.', '\\', '~'].includes(ch) ? state.pageLetters
                         : allLetters.includes(ch) ? [ch]
                             : group ? state.items.filter(item => item.cls === group).map(item => item.letter) : [];
@@ -68265,19 +68305,19 @@ function tutorialEnterStash() {
             }
             state.selected = [...selected];
         }
-        showWizardIdentify();
+        showIdentificationMenu();
         return;
     }
 
     if (game._command_mode === 'wizardIdentifyMore') {
         if (![' ', '\x1b', '\r', '\n'].includes(ch)) { game._keep_pending_message = 1; return; }
-        const state = game._wizard_identify;
+        const state = game._identification;
         if (ch === '\x1b') state.skipMessages = true;
         game._dismissed_more_this_command = 1;
         await setMessage(state.skipMessages ? '' : state.pendingMessage);
         state.pendingMessage = '';
         game._command_mode = null;
-        await finishWizardIdentify();
+        await finishIdentification();
         return;
     }
 
@@ -74491,6 +74531,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const spell = game._spell_menu_spells.find(item => item.letter === ch
             && Math.floor(item.menuRow / 23) === game._spell_menu_page);
         if (!spell) return;
+        spell.menuClearedStatus = game._overlay_clear_rows > 22;
         closeSpellMenu();
         exerciseAttribute(A_WIS, true);
         mksobj(SPE_HEALING, false, false);
@@ -75481,24 +75522,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             let identifyLimit = 1;
             if (blessed || (!cursed && !rn2(5))) {
                 identifyLimit = rn2(5);
-                if (identifyLimit === 1 && blessed && (game.u?.uluck || 0) > 0) identifyLimit++;
+                if (identifyLimit === 1 && blessed && (game.u?.uluck || 0) + (game.u?.moreluck || 0) > 0) identifyLimit++;
             }
-            const unidentified = unidentifiedInventoryItems();
-            const identified = identifyLimit ? unidentified.slice(0, identifyLimit) : unidentified;
-            for (const invItem of identified) identifyInventoryItem(invItem);
-            if (identified.length) {
-                game._queued_messages_after_more = identified.map((invItem, index) => ({
-                    text: `${invItem.line}.`,
-                    more: index < identified.length - 1,
-                }));
-            } else {
-                game._topline_after_more = `You have already identified ${alreadyKnown ? 'all' : 'the rest'} of your possessions.`;
-            }
-            await setMessage(messages.join('  '), true);
-            game._command_mode = null;
-            game.context.move = 1;
+            await beginIdentifyPack(identifyLimit, !alreadyKnown, messages);
             return;
         }
+
         if (isScroll && (scrollName === 'teleportation' || item.scrollIndex === 10)) {
             const confusedReading = heroIsConfused();
             const debugWizard = !!game.flags?.debug;
