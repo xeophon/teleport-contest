@@ -180,3 +180,26 @@ test('observing an amulet description does not mark its object type known', () =
     assert.equal(game._discoveries[0].known, false);
     assert.equal(game._discoveries[0].text, 'amulet (circular)');
 });
+
+for (const [cls, kind, fields, request] of [
+    ['scroll', 'identify', { scrollIndex: 13 }, 'scroll of identify'],
+    ['potion', 'healing', { potionIndex: 17 }, 'potion of healing'],
+    ['weapon', 'dart', {}, '+0 dart'],
+]) test(`a wished ${cls} merges with starting inventory despite different display representations`, async () => {
+    setup(); const original = { cls, kind, ...fields, id: 10, letter: 'a', quan: 1,
+        spe: 0, known: true, dknown: true, bknown: true, rknown: true };
+    game.inventory = [original];
+    await wish('uncursed ' + request, { wizard: true });
+    assert.equal(game.inventory.length, 1);
+    assert.equal(game.inventory[0], original);
+    assert.equal(original.quan, 2);
+    assert.equal(original.known, true);
+    assert.equal(original.bknown, true);
+});
+
+test('canonical type identity prevents similarly described different scrolls from merging', async () => {
+    setup(); await wish('uncursed scroll of identify');
+    const first = game.inventory[0];
+    await wish('uncursed scroll of enchant weapon');
+    assert.equal(game.inventory.length, 2); assert.equal(first.quan, 1);
+});

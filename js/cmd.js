@@ -45510,15 +45510,20 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.omailcmd || target.oextra?.omailcmd || '') !== (source.omailcmd || source.oextra?.omailcmd || '')) return false;
     if (!stackedObjectInstanceNamesMergeCompatible(target, source)) return false;
     if (shopObjectClassCode(target) !== shopObjectClassCode(source)) return false;
-    const samePotion = target.cls === 'potion' && source.cls === 'potion'
-        && target.potionIndex != null && target.potionIndex === source.potionIndex;
-    if (!samePotion && (target.otyp ?? null) !== (source.otyp ?? null) && pickupMergeName(target) !== pickupMergeName(source)) return false;
-    if ((target.scrollIndex ?? null) !== (source.scrollIndex ?? null)) return false;
-    if ((target.potionIndex ?? null) !== (source.potionIndex ?? null)) return false;
-    if ((target.gemDescription ?? null) !== (source.gemDescription ?? null)) return false;
-    if ((target.actualKind || target.kind || '') !== (source.actualKind || source.kind || '')
-        && !samePotion
-        && pickupMergeName(target) !== pickupMergeName(source)) return false;
+    const targetType = objectTypeData(target), sourceType = objectTypeData(source);
+    if (targetType && sourceType) {
+        if (targetType.id !== sourceType.id) return false;
+    } else {
+        const samePotion = target.cls === 'potion' && source.cls === 'potion'
+            && target.potionIndex != null && target.potionIndex === source.potionIndex;
+        if (!samePotion && (target.otyp ?? null) !== (source.otyp ?? null) && pickupMergeName(target) !== pickupMergeName(source)) return false;
+        if ((target.scrollIndex ?? null) !== (source.scrollIndex ?? null)) return false;
+        if ((target.potionIndex ?? null) !== (source.potionIndex ?? null)) return false;
+        if ((target.gemDescription ?? null) !== (source.gemDescription ?? null)) return false;
+        if ((target.actualKind || target.kind || '') !== (source.actualKind || source.kind || '')
+            && !samePotion
+            && pickupMergeName(target) !== pickupMergeName(source)) return false;
+    }
     if ((isSimpleMergeableFoodObject(target) || isSimpleMergeableFoodObject(source))
         && (!isSimpleMergeableFoodObject(target)
             || !isSimpleMergeableFoodObject(source)

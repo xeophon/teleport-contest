@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,751 passing tests**, with no
+The latest source-driven checkpoint has **6,756 passing tests**, with no
 failures, skips or TODOs. All six generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -72,7 +72,10 @@ ordinary wishes retain C's verbose stack totals. Exact real gems bypass the
 namedesc roll and receive their C initialization. Forty-eight new state tests
 and a fresh 189-screen/2,772-call C recording pass. Globs, general object
 knowledge/observation, full floor/monster merge predicates and the remaining
-addinv intrinsic side effects still require source passes.
+addinv intrinsic side effects still require source passes. Inventory merge
+identity now resolves canonical C types, so differing starting/generated object
+representations and descriptions can still merge. Four new tests and a fresh
+C recording pass (95 screens and 2,740 draws).
 Amulet observation and the worn-item discovery view now share type identity,
 so repeated sightings do not duplicate a row or suppress another amulet type.
 Four new tests pass; the four affected recordings again match all 1,742 screens
