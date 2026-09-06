@@ -27,9 +27,19 @@ const NOT_CLAWS = new Set([pm.S_HUMAN, pm.S_MUMMY, pm.S_ZOMBIE, pm.S_ANGEL,
 function monsterForm(form) {
     const data = form?.data || form;
     if (typeof data === 'number') return pm.MONS[data];
-    if (data?.m1 != null) return data;
+    if (data?.m1 != null) return typeof data.mlet === 'number' ? data
+        : { ...data, mlet: MONSTER_BY_NAME.get(data.name?.toLowerCase())?.mlet };
     const name = typeof data === 'string' ? data : data?.name;
     return MONSTER_BY_NAME.get(String(name || '').toLowerCase()) || pm.MONS[pm.PM_HUMAN];
+}
+
+// steed.c:can_saddle uses species anatomy for applying, creating and retaining
+// saddles; the centaur exception permits its otherwise humanoid anatomy.
+export function canSaddle(form) {
+    const mon = monsterForm(form);
+    return [pm.S_QUADRUPED, pm.S_UNICORN, pm.S_ANGEL, pm.S_CENTAUR, pm.S_DRAGON, pm.S_JABBERWOCK].includes(mon.mlet)
+        && mon.size >= pm.MZ_MEDIUM && (!pm.humanoid(mon) || mon.mlet === pm.S_CENTAUR)
+        && !pm.amorphous(mon) && !pm.noncorporeal(mon) && !pm.is_whirly(mon) && !pm.unsolid(mon);
 }
 
 export function bodyPart(form, part) {
@@ -101,4 +111,3 @@ export function heroLocomotion(defaultVerb, g = game) {
     const form = monsterForm(u?._polyself_form || u?.youmonst?.data || u?.data);
     return locomotion(form, defaultVerb);
 }
-

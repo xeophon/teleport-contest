@@ -4,8 +4,8 @@ import { parseQuestLua } from './quest-lua-parser.mjs';
 
 const inputs = {
     Caveman: ['Cav', 'goal', 'loca', 'strt'], Healer: ['Hea', 'goal', 'loca', 'strt'],
-    Ranger: ['Ran', 'goal', 'loca'], Barbarian: ['Bar', 'goal'],
-    Rogue: ['Rog', 'loca', 'goal'], Valkyrie: ['Val', 'loca', 'goal', 'strt'], Knight: ['Kni', 'loca'],
+    Ranger: ['Ran', 'goal', 'loca', 'strt'], Barbarian: ['Bar', 'goal'],
+    Rogue: ['Rog', 'loca', 'goal', 'strt'], Valkyrie: ['Val', 'loca', 'goal', 'strt'], Knight: ['Kni', 'loca', 'strt'],
     Monk: ['Mon', 'goal', 'loca', 'strt'], Tourist: ['Tou', 'loca', 'goal', 'strt'], Samurai: ['Sam', 'goal', 'loca', 'strt'], Wizard: ['Wiz', 'goal'],
 };
 const programs = {}, copyrights = new Set();

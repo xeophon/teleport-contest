@@ -4,14 +4,14 @@ import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
 import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind } from './burn.js';
-import { objectMergeableByCMetadata, mergeStackableObject } from './mklev.js';
+import { objectMergeableByCMetadata, mergeStackableObject, putSaddleOnMonster } from './mklev.js';
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { hideUnder, maybeUnhideAt } from './monster_hiding.js';
-import { W_ARTI, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP } from './const.js';
-import { AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
+import { W_ARTI, W_ART, LEVITATION, I_SPECIAL, TIMEOUT, M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL, W_WEP } from './const.js';
+import { S_NYMPH, PM_AMOROUS_DEMON, AD_BLND, AD_STCK, AD_DGST, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsAcid } from './mhitm.js';
-import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
+import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
 import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
     recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
@@ -174,7 +174,7 @@ import { COMMAND_KEYS } from './command_keys.js';
 import { IDENTIFIED_AMULET_NAMES } from './o_init.js';
 import { monsterExperienceValue } from './exper.js';
 export { monsterExperienceValue } from './exper.js';
-import { bodyPart, heroLocomotion } from './mondata.js';
+import { bodyPart, heroLocomotion, canSaddle } from './mondata.js';
 import { wizardCussMessage, wizdeadorgone, aggravate as wizardAggravate, clonewiz, noOfWizards } from './wizard.js';
 import { WERE_SPECIES } from './were.js';
 import { MONS, MZ_MEDIUM, amphibious, amorphous, humanoid, is_clinger, is_swimmer, is_whirly, noncorporeal, unsolid, haseyes, throws_rocks } from './permonst.js'; // js port of include/monsters.h rows (natural AC via .ac)
@@ -6740,6 +6740,7 @@ function deliverQueuedImpactDroppedObjects(targetLevel) {
         obj.hidden = false;
         obj.transientProjectile = false;
         if (!impactDropDeliveryLandingIsSoft(spot.x, spot.y) && impactDropObjectBreaks(obj)) {
+            stopDestroyedObjectTreeTimers(obj);
             newsym(spot.x, spot.y);
             continue;
         }
@@ -10101,7 +10102,7 @@ function spellMenuLines(prompt = 'Choose which spell to cast', includeSort = fal
             if (HEALING_SPELLS.has(name)) splcaster += stats.healing;
             if (splcaster > 20) splcaster = 20;
 
-            const statused = game.u?.acurr?.a?.[stats.statIndex] || 10;
+            const statused = currentHeroAttribute(stats.statIndex);
             const spellSkill = Math.max(skillLevel, 1) - 1;
             const difficulty = (level - 1) * 4 - ((spellSkill * 6) + Math.trunc((game.u?.ulevel || 1) / 3) + 1);
             let chance = Math.trunc(11 * statused / 2);
@@ -13214,9 +13215,9 @@ function useUpFloorObject(obj, count, { heroCaused = false } = {}) {
 }
 
 function floorEffectRemoveObject(removeObject, usedUpShopBillOnDestroy = false) {
-    if (!usedUpShopBillOnDestroy) return removeObject;
     return obj => {
-        markObjectTreeShopBillsUsedUp(obj);
+        if (usedUpShopBillOnDestroy) markObjectTreeShopBillsUsedUp(obj);
+        stopDestroyedObjectTreeTimers(obj);
         removeObject(obj);
     };
 }
@@ -15181,11 +15182,6 @@ async function dismountSteed() {
     game.context.move = 1;
 }
 
-// C ref: steed.c:8-11 `steeds[]` — classes that can potentially be ridden:
-// S_QUADRUPED('q'), S_UNICORN('u'), S_ANGEL('A'), S_CENTAUR('C'),
-// S_DRAGON('D'), S_JABBERWOCK('J').
-const STEEDABLE_CLASS_SYMS = new Set(['q', 'u', 'A', 'C', 'D', 'J']);
-
 // Resolve a monster to its full js/permonst.js record (MONS row) so class
 // predicates (mflags) become available for data objects produced by the
 // name tables (mklev.js monsterByRndName()).
@@ -15193,15 +15189,6 @@ function permonstRowForMonster(mon) {
     const name = mon?.data?.name;
     if (!name) return null;
     return MONS.find(entry => entry.name === name) || null;
-}
-
-// C ref: steed.c:27-33 can_saddle()
-function monsterCanBeSaddled(mon) {
-    const row = permonstRowForMonster(mon);
-    if (!row || !STEEDABLE_CLASS_SYMS.has(row.sym)) return false;
-    return row.size >= MZ_MEDIUM
-        && (!humanoid(row) || row.sym === 'C')
-        && !amorphous(row) && !noncorporeal(row) && !is_whirly(row) && !unsolid(row);
 }
 
 // C ref: steed.c:820-841 maybewakesteed() — wake an (intended) steed and
@@ -15268,7 +15255,7 @@ async function heroUseSaddle(item, dx, dy) {
         return;
     }
     // steed.c:87-89
-    if (!monsterCanBeSaddled(mon)) {
+    if (!canSaddle(mon)) {
         await setMessage(`You can't saddle such a creature.`);
         game.context.move = 1;
         return;
@@ -15305,14 +15292,7 @@ async function heroUseSaddle(item, dx, dy) {
         // freeinv(otmp)
         game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
         game._pet_food_scan_inventory = game.inventory;
-        // put_saddle_on_mon() (steed.c:144-163): mpickobj + W_SADDLE flagging
-        (mon.minvent ||= []).push(item);
-        item.ox = mon.mx; item.oy = mon.my;
-        item.owornmask = W_SADDLE;
-        item.worn = true;
-        item.oslot = 'saddle';
-        mon.misc_worn_check = (mon.misc_worn_check || 0) | W_SADDLE;
-        mon.saddled = true;
+        putSaddleOnMonster(mon, item);
     } else {
         await setMessage(`${steedMonnam(mon)} resists!`);
     }
@@ -15446,7 +15426,7 @@ async function mountSteed(mon, { force = false } = {}) {
         game._command_mode = null;
         return false;
     }
-    if (!monsterCanBeSaddled(mon)) {
+    if (!canSaddle(mon)) {
         await setMessage("You can't ride such a creature.");
         game._command_mode = null;
         return false;
@@ -15774,6 +15754,7 @@ async function advanceExperienceLevel(incremental = false) {
     game.u.uhp += hpGain;
     game.u.uhpmax += hpGain;
     game.u.uenmax += powerGain;
+    game.u.uenpeak = Math.max(game.u.uenpeak || 0, game.u.uenmax);
     game.u.uen += powerGain;
     if (role === 'Wizard' && level >= 15) game.u.warning = true;
     if (role === 'Wizard' && level >= 17) game.u.teleportControl = true;
@@ -18548,16 +18529,33 @@ function crystalBallTooBadMessage(item) {
     return `Too bad you can't see the ${crystalBallObjectName(item)}.`;
 }
 
-function crystalBallIntelligence() {
-    return game.u?.acurr?.a?.[A_INT] ?? 10;
+// C attrib.c:acurr includes equipment overrides after bonuses and temporary loss.
+export function currentHeroAttribute(index) {
+    const u = game.u || {};
+    const value = (u.acurr?.a?.[index] ?? 10) + (u.abon?.a?.[index] || 0)
+        + (u.atemp?.a?.[index] || 0);
+    if (index === A_STR) {
+        const gloves = wornGlovesItem();
+        return gloves && (gloves.otyp === GAUNTLETS_OF_POWER || armorKind(gloves) === 'gauntlets of power')
+            ? 125 : Math.min(125, Math.max(3, value));
+    }
+    if (index === A_CHA) {
+        const form = pmOf({ data: heroFormData() }) || {};
+        if (value < 18 && (form.mlet === S_NYMPH || form.pm === PM_AMOROUS_DEMON)) return 18;
+    }
+    if (index === A_CON && (game.inventory || []).some(item =>
+        (item.wielded || item === u.uwep) && (item.artifact || item.oartifact) === 'Ogresmasher')) return 25;
+    if ((index === A_INT || index === A_WIS) && (game.inventory || []).some(item =>
+        isWornArmorItem(item) && (item.otyp === DUNCE_CAP || armorKind(item) === 'dunce cap'))) return 6;
+    return Math.max(3, Math.min(25, value));
 }
 
 function crystalBallBackfire(item, messages) {
     if (!item || (item.spe ?? 0) <= 0) return false;
     const oops = item.artifact ? 8 : item.blessed ? 16 : 20;
-    if (!item.cursed && rnd(oops) <= crystalBallIntelligence()) return false;
+    if (!item.cursed && rnd(oops) <= currentHeroAttribute(A_INT)) return false;
 
-    const impair = rnd(Math.max(1, 100 - 3 * crystalBallIntelligence()));
+    const impair = rnd(Math.max(1, 100 - 3 * currentHeroAttribute(A_INT)));
     const roll = rnd((item.artifact || item.blessed) ? 4 : 5);
     const subject = crystalBallSubject(item);
     if (roll === 1) {
@@ -22798,22 +22796,12 @@ function indefiniteArticle(noun) {
     return /^[aeiou]/i.test(String(noun || '')) ? 'an' : 'a';
 }
 
-function monsterCanWearSaddleData(data = {}) {
-    const mlet = data.mlet || data.glyph;
-    if (!['u', 'C', 'A', 'D', 'J'].includes(mlet)) return false;
-    if (data.verysmall || data.tiny || data.small || data.msize === 'tiny'
-        || data.msize === 'small' || data.size === 'tiny' || data.size === 'small')
-        return false;
-    if (mlet !== 'C' && (data.human || data.humanoid)) return false;
-    return !(data.amorphous || data.noncorporeal || data.whirly || data.unsolid);
-}
-
 function sSuffixText(text) {
     return String(text || '').endsWith('s') ? `${text}'` : `${text}'s`;
 }
 
 function dropInvalidSaddleAfterPolymorph(mon, messages, visible) {
-    if (monsterCanWearSaddleData(mon?.data)) return;
+    if (canSaddle(mon?.data)) return;
     const saddle = monsterWornSaddleForPotionHit(mon);
     if (!saddle) return;
     saddle.worn = false;
@@ -34727,6 +34715,7 @@ function applyTinMonsterSideEffects(tin) {
         if (game.u) game.u.uen = oldEnergy + rnd(3);
         if ((game.u?.uen || 0) > (game.u?.uenmax || 0)) {
             if (!rn2(3) && game.u) game.u.uenmax = (game.u.uenmax || 0) + 1;
+            if (game.u) game.u.uenpeak = Math.max(game.u.uenpeak || 0, game.u.uenmax || 0);
             if (game.u) game.u.uen = game.u.uenmax || 0;
         }
         return (game.u?.uen || 0) !== oldEnergy ? 'You feel a mild buzz.' : '';
@@ -39983,8 +39972,11 @@ function splitKickedFloorObjectForFlight(obj) {
         o_id: undefined,
         _shopBillObjectId: undefined,
         quan: 1,
+        timed: 0,
+        owornmask: 0,
     };
     obj.quan = quantity - 1;
+    splitObjectTimers(obj, kicked);
     return kicked;
 }
 
@@ -40504,6 +40496,7 @@ async function breakKickedFragileFloorObject(obj, x, y, messages) {
     await applyHeroCausedFragileBreakSideEffects(obj, messages, x, y);
     chargeHeroBrokenShopFloorObject(obj, x, y, messages);
     removeFloorObject(obj);
+    stopDestroyedObjectTreeTimers(obj);
     newsym(x, y);
     applyHeroBrokenEggPostRemovalSideEffects(obj, messages, x, y);
     return true;
@@ -40736,6 +40729,7 @@ function maybeShipCarriedDropObject(obj, x, y, messages, options = {}) {
     const breakKind = impactDropObjectBreaks(obj);
     if (breakKind) {
         messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
+        stopDestroyedObjectTreeTimers(obj);
         newsym(x, y);
         return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, where: gate.where, gateText, debt });
     }
@@ -40780,6 +40774,7 @@ function maybeShipRemoteProjectileObject(obj, x, y, messages, options = {}) {
     const breakKind = impactDropObjectBreaks(obj);
     if (breakKind) {
         messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
+        stopDestroyedObjectTreeTimers(obj);
         newsym(x, y);
         return projectileShipObjectResult({ handled: true, broke: true, breakKind, target, where: gate.where, gateText, debt });
     }
@@ -40807,6 +40802,7 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             const shopLanding = convertUnpaidObjectToShopDebt(obj, { ...options, broken: true });
             if (!shopLanding.charged) obj.no_charge = true;
             if (shopLanding.message) messages.push(shopLanding.message);
+            stopDestroyedObjectTreeTimers(obj);
             return {
                 object: null,
                 impact: { loss: 0, broke: false, messages },
@@ -42979,7 +42975,7 @@ function sellobjReturnUnpaidToShop(obj, x, y) {
 export const __steedTestHooks = {
     heroUseSaddle,
     kickSteed,
-    monsterCanBeSaddled,
+    monsterCanBeSaddled: canSaddle,
     heroLegsInNoShapeMessage,
     steedMonNam,
 };
@@ -43393,6 +43389,7 @@ function droppedObjectPitHoleFloorEffects(obj, x, y, messages) {
     const breakKind = impactDropObjectBreaks(obj);
     if (breakKind) {
         messages.push(`You hear a muffled ${shipObjectMuffledBreakResult(breakKind)}.`);
+        stopDestroyedObjectTreeTimers(obj);
         newsym(x, y);
         return { handled: true, consumed: true };
     }
@@ -43957,6 +43954,8 @@ function heroCarriedWeight() {
     let weight = Math.max(0, Math.trunc(((game._goldCount || 0) + 50) / 100));
     for (const item of game.inventory || []) {
         if (isGoldObject(item)) continue;
+        // C inv_weight ignores carried boulders for rock-throwing forms.
+        if (isBoulderObject(item) && heroThrowsRocks()) continue;
         weight += globObjectWeight(item);
     }
     return weight;
@@ -44305,11 +44304,130 @@ function artifactPowerSourceName(obj) {
 const ARTIFACT_PROPERTY_DEPS = {
     heroIsBlind, heroIsHallucinating,
     refreshHero: () => newsym(game.u.ux, game.u.uy),
-    propertySources: power => (game.inventory || []).some(obj => isWornInventoryItem(obj)
-        && (power === 'CONFLICT' ? objectKindKey(obj) === 'ring of conflict'
-            : power === 'INVIS' ? ['ring of invisibility', 'cloak of invisibility'].includes(objectKindKey(obj))
-                : ['ring of levitation', 'levitation boots'].includes(objectKindKey(obj)))),
+    propertySources: (power, { ignoreTimeout = false } = {}) => {
+        if (power === 'LEVITATION') {
+            const form = heroFormData();
+            if (form.floater || is_floater(pmOf({ data: form }) || form)
+                || (!ignoreTimeout && (game.u?._levitationTimeout || 0) > 0)) return true;
+        }
+        return (game.inventory || []).some(obj => isWornInventoryItem(obj)
+            && (power === 'CONFLICT' ? objectKindKey(obj) === 'ring of conflict'
+                : power === 'INVIS' ? ['ring of invisibility', 'cloak of invisibility'].includes(objectKindKey(obj))
+                    : ['ring of levitation', 'levitation boots'].includes(objectKindKey(obj))));
+    },
 };
+
+// C trap.c:float_up/float_down. Water prompts suspend before the remaining
+// landing effects; the owning command must not rerun invocation or drop.
+async function floatArtifact(on, messages, { resume = false } = {}) {
+    const u = game.u;
+    if (on) {
+        if (u.utrap && u.utraptype === TT_PIT) {
+            u.utrap = 0; u.utraptype = 0;
+            messages.push('You float up, out of the pit!');
+            const boulder = (game.level?.objects || []).find(obj => obj.ox === u.ux && obj.oy === u.uy
+                && (obj.otyp === BOULDER || obj.kind === 'boulder'));
+            if (boulder) earthBoulderPitHoleEffects(boulder, u.ux, u.uy, messages, 'settle');
+        } else if (u.utrap) messages.push('You float up slightly, but your leg is still stuck.');
+        else if (heroIsHallucinating()) messages.push("Up, up, and awaaaay!  You're walking on air!");
+        else if (Is_airlevel(u.uz)) messages.push('You gain control over your movements.');
+        else messages.push('You start to float in the air!');
+        vision_recalc(0);
+        return {};
+    }
+    const state = resume ? game._artifact_float_continuation : { phase: 'start', noMessage: false };
+    if (state.phase === 'start') {
+        const prop = u.uprops?.[LEVITATION];
+        if (prop) {
+            prop.intrinsic &= ~(I_SPECIAL | TIMEOUT);
+            prop.extrinsic &= ~(W_ARTI | W_ART);
+        }
+        u._levitationTimeout = 0;
+        u.levitating = u.levitation = u.Levitation = false;
+        u.BFlying = (u.BFlying || 0) & ~I_SPECIAL;
+        if (u.BLevitation) {
+            if (u.BLevitation === I_SPECIAL && u.utrap) messages.push(`You are no longer trying to float up from the ${
+                u.utraptype === TT_BEARTRAP ? "trap's jaws" : u.utraptype === TT_WEB ? 'web'
+                    : u.utraptype === TT_BURIEDBALL ? 'chain' : u.utraptype === TT_LAVA ? 'lava' : 'ground'}.`);
+            state.phase = 'done';
+        } else {
+            game.multi = 0; game._run_steps_remaining = 0; game._run_stop_now = 1;
+            const props = heroWaterProperties();
+            if (props.flying) {
+                messages.push('You have stopped levitating and are now flying.');
+                state.phase = 'done';
+            } else if (u.uswallow) {
+                const data = pmOf(u.ustuck) || u.ustuck?.data;
+                const digests = (data?.attacks || []).some(attack => attack.adtyp === AD_DGST);
+                messages.push(`You float down, but you are still ${digests ? 'swallowed' : 'engulfed'}.`);
+                state.phase = 'done';
+            } else {
+                if (u.ustuck) {
+                    const name = monsterNameForWaterHit(u.ustuck);
+                    messages.push(heroFormSticks() ? `You aren't able to maintain your hold on ${name}.`
+                        : `Startled, ${name} can no longer hold you!`);
+                    u.ustuck = null;
+                }
+                state.phase = 'afterWater';
+                if (movementIsPoolAt(u.ux, u.uy) && !props.waterWalking && !props.swimming && !u.uinwater) {
+                    const water = await heroWaterLandingEffects({ deferCrawl: true });
+                    messages.push(...water.messages);
+                    state.noMessage = true;
+                    if (water.pending) {
+                        game._artifact_float_continuation = state;
+                        return { ...water, messages, more: true };
+                    }
+                }
+            }
+        }
+    }
+    if (state.phase === 'afterWater') {
+        state.phase = 'afterLava';
+        if (movementIsLavaAt(u.ux, u.uy) && !game._in_lava_effects) {
+            state.noMessage = true;
+            const lava = heroLavaEntryEffect(movementSurfaceTerrain(game.level.at(u.ux, u.uy)));
+            messages.push(...lava.messages);
+            if (lava.fatal || lava.lifeSaving) {
+                game._artifact_float_continuation = state;
+                return { ...lava, messages, pending: true };
+            }
+        }
+    }
+    if (state.phase === 'afterLava') {
+        state.phase = 'afterTrap';
+        if (Is_airlevel(u.uz)) messages.push('You begin to tumble in place.');
+        else if (!state.noMessage && Is_waterlevel(u.uz)) messages.push('You feel heavier.');
+        else if (!state.noMessage && !u.uinwater) messages.push(heroIsHallucinating()
+            ? `Bummer!  You've ${movementIsPoolAt(u.ux, u.uy) ? 'splashed down' : 'hit the ground'}.`
+            : `You float gently to the ${polyselfFalloffSurfaceName(u.ux, u.uy)}.`);
+        const encumbrance = encumberMsg();
+        if (encumbrance) messages.push(encumbrance);
+        const trap = heroTrapAt(u.ux, u.uy);
+        if (trap && trap.ttyp !== STATUE_TRAP && !u.utrap) {
+            const landing = await heroLandingTrapEffectAt(u.ux, u.uy, messages);
+            state.more = !!landing.more;
+            if (landing.trapResult) {
+                game._artifact_float_continuation = state;
+                return { ...landing.trapResult, messages, pending: true };
+            }
+        }
+    }
+    if (state.phase === 'done') {
+        const encumbrance = encumberMsg();
+        if (encumbrance) messages.push(encumbrance);
+    }
+    game._artifact_float_continuation = null;
+    vision_recalc(0);
+    return { more: !!state.more };
+}
+
+async function resumeArtifactFloatCommand(messages = []) {
+    const result = await floatArtifact(false, messages, { resume: true });
+    if (messages.length) await setMessage(messages.join('  '), !!(result.pending || result.more));
+    game.context.move = result.pending ? 0 : 1;
+    if ((result.fatal || result.lifeSaving) && !result.lavaDeath) applyLifeSavingOrFatalCommandMode(result);
+    return result;
+}
 
 const ARTIFACT_RETOUCH_DEPS = {
     antimagic: heroHasAntimagic,
@@ -58054,7 +58172,7 @@ function mountedHeroPolyTrapSteedResult(messages) {
     steed.mx = game.u?.ux ?? steed.mx;
     steed.my = game.u?.uy ?? steed.my;
     const changed = polymorphTrapHitMonster(steed, messages);
-    if (game.u?.usteed === steed && (!steed.saddled || !monsterCanWearSaddleData(steed.data))) {
+    if (game.u?.usteed === steed && (!steed.saddled || !canSaddle(steed.data))) {
         messages.push(`You can no longer ride ${polyTrapDismountName(steed)}.`);
         game.u.usteed = null;
         if (!game.level.monsters.includes(steed)) game.level.monsters.push(steed);
@@ -62992,6 +63110,11 @@ export async function rhack(_cmd) {
     await rhackInternal(_cmd);
     if (game._level_arrival_continuation && game._water_operation_resumed)
         await finishLevelArrival();
+    if (game._artifact_float_continuation?.phase === 'afterWater'
+        && game._water_operation_resumed && !game._water_continuation) {
+        game._water_operation_resumed = 0;
+        await resumeArtifactFloatCommand();
+    }
     const invocation = game._artifact_untrap;
     if (!invocation) return;
     invocation.spent ||= !!game.context?.move;
@@ -63555,6 +63678,10 @@ async function rhackInternal(_cmd) {
                 game._resume_turn_tail_after_stoning_death = 0;
                 game._resume_turn_tail_now = 1;
             }
+            if (game._artifact_float_continuation?.phase === 'afterTrap') {
+                await resumeArtifactFloatCommand([lifeSavingMessage]);
+                return;
+            }
             if (game._artifact_retouch_command) {
                 await resumeArtifactTouchCommand([lifeSavingMessage]);
                 return;
@@ -63620,6 +63747,10 @@ async function rhackInternal(_cmd) {
                         return;
                     }
                 }
+            }
+            if (game._artifact_float_continuation?.phase === 'afterLava') {
+                await resumeArtifactFloatCommand([game._pending_message || lifeSavingMessage]);
+                return;
             }
             game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
             game._suppress_monster_attack_messages = 1;
@@ -68020,6 +68151,10 @@ function tutorialEnterStash() {
                 return;
             }
             const survivalMessages = ["OK, so you don't die."];
+            if (game._artifact_float_continuation?.phase === 'afterTrap') {
+                await resumeArtifactFloatCommand(survivalMessages);
+                return;
+            }
             if (game._artifact_retouch_command) {
                 await resumeArtifactTouchCommand(survivalMessages);
                 return;
@@ -68100,6 +68235,10 @@ function tutorialEnterStash() {
                         game._command_mode = null;
                     return;
                 }
+            }
+            if (game._artifact_float_continuation?.phase === 'afterLava' && !landing?.trapResult) {
+                await resumeArtifactFloatCommand(survivalMessages);
+                return;
             }
             /* mhitu.c:763-946 + end.c:1108-1116 — the interrupted attack
              * chain resumes from its fatal slot right after "OK, so you
@@ -71475,13 +71614,23 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._command_mode = null;
             return;
         }
-        if ((game.u?.acurr?.a?.[A_STR] ?? 10) < 4 && spell.name !== 'restore ability') {
+        if (currentHeroAttribute(A_STR) < 4 && spell.name !== 'restore ability') {
             game._casting_spell = null;
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._overlay_hide_status_only = 0;
             await setPackedToplineMessages([memoryMessage, 'You lack the strength to cast spells.']);
             game._command_mode = null;
+            return;
+        }
+        if (heroEncumbranceForWeight(heroCarriedWeight()) >= 4) {
+            game._casting_spell = null;
+            game._overlay_lines = null;
+            game._overlay_hide_status = 0;
+            game._overlay_hide_status_only = 0;
+            await setPackedToplineMessages([memoryMessage, 'Your concentration falters while carrying so much stuff.']);
+            game._command_mode = null;
+            game.context.move = 1;
             return;
         }
         let drainPrefix = memoryMessage ? memoryMessage + '  ' : '';
@@ -71497,11 +71646,45 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._overlay_lines = null;
             game._overlay_hide_status = 0;
             game._overlay_hide_status_only = 0;
-            const suffix = ((game.u?.uen || 0) < (game.u?.uenmax || 0)) ? '' : ' yet';
+            const suffix = (game.u.uen || 0) < (game.u.uenmax || 0) ? ''
+                : energy > (game.u.uenpeak ?? game.u.uenmax ?? 0) ? ' yet' : ' anymore';
             await setPackedToplineMessages([drainPrefix.trim(), `You don't have enough energy to cast that spell${suffix}.`]);
             game._command_mode = null;
             if (amuletDrained) game.context.move = 1; // C ECMD_TIME via the drain
             return;
+        }
+        // C charges nutrition before success is known and excludes detect food.
+        if (spell.name !== 'detect food') {
+            const intelligence = heroRoleName() === 'Wizard' ? currentHeroAttribute(A_INT) : 10;
+            let hunger = energy * 2;
+            if (intelligence >= 17) hunger = 0;
+            else if (intelligence === 16) hunger = Math.trunc(hunger / 4);
+            else if (intelligence === 15) hunger = Math.trunc(hunger / 2);
+            const previous = game.u.uhunger ?? 900;
+            const oldState = game.u.uhs ?? (previous > 1000 ? 0 : previous > 150 ? 1 : previous > 50 ? 2 : 3);
+            game.u.uhunger = Math.max(3, previous - hunger);
+            const remaining = game.u.uhunger;
+            const state = remaining > 1000 ? 0 : remaining > 150 ? 1 : remaining > 50 ? 2 : 3;
+            game.u.uhs = state;
+            for (const status of ['Satiated', 'Hungry', 'Weak']) removeHeroStatusSuffix(status);
+            if (state !== 1) addHeroStatusSuffix(['Satiated', '', 'Hungry', 'Weak'][state]);
+            if (state !== oldState && state >= 2) {
+                // Casting's nutrition floor keeps newuhs above fainting.
+                if (state === 3 && oldState < 3) {
+                    game.u.atemp ??= { a: [0, 0, 0, 0, 0, 0] };
+                    game.u.atemp.a[A_STR] = -1;
+                }
+                const role = heroRoleName();
+                const message = state === 2
+                    ? heroIsHallucinating() ? 'You are getting the munchies.'
+                        : remaining < 145 ? 'You feel hungry.' : 'You are beginning to feel hungry.'
+                    : heroIsHallucinating() ? 'The munchies are interfering with your motor capabilities.'
+                        : ['Wizard', 'Valkyrie'].includes(role) ? `${role} needs food, badly!`
+                            : String(game._startup_race || '').toLowerCase() === 'elf' ? 'Elf needs food, badly!'
+                                : remaining < 45 ? 'You feel weak.' : 'You are beginning to feel weak.';
+                drainPrefix += `${message}  `;
+                interruptPositiveMulti();
+            }
         }
         // C: confused heroes always fail, without consuming the rnd(100).
         const failureRoll = heroIsConfused() ? 101 : rnd(100); // C spelleffects_check: spell failure roll.
@@ -76202,8 +76385,18 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             const droppedName = inventoryItemName(item);
+            const heart = artifactInvocation(item).power === 'LEVITATION';
+            const levhack = heart && !game.u.uswallow && finesseAhriman(item, ARTIFACT_PROPERTY_DEPS);
+            const propertyMessages = [];
+            if (levhack) game.u.uprops[LEVITATION].extrinsic = W_ART;
+            else if (heart && (game.u.uprops?.[LEVITATION]?.extrinsic & W_ARTI)) {
+                const loss = toggleArtifactProperty(item, ARTIFACT_PROPERTY_DEPS);
+                propertyMessages.push(...loss.messages);
+                if (loss.action === 'FLOAT_ARTIFACT')
+                    await floatArtifact(false, propertyMessages);
+            }
             const stoppedLight = setArtifactEquipmentLight(item, false);
-            const propertyMessages = removeInventoryItem(item, item.quan || 1);
+            propertyMessages.push(...removeInventoryItem(item, item.quan || 1));
             const dropped = Object.assign(item, {
                 invlet: item.invlet ?? item.letter,
                 letter: undefined,
@@ -76226,6 +76419,9 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             if (Array.isArray(dropped.cobj)) dropped.cobj = [...dropped.cobj];
             normalizeContainedObjectParents(dropped);
             const floorMessages = [];
+            if (levhack && !IS_SOFT(movementSurfaceTerrain(game.level.at(dropped.ox, dropped.oy)))
+                && game.level.at(dropped.ox, dropped.oy).typ !== ALTAR && !game.u.uinwater)
+                floorMessages.push(`The Heart of Ahriman hits the ${polyselfFalloffSurfaceName(dropped.ox, dropped.oy)}.`);
             let shopSale = null;
             const shipObject = maybeShipCarriedDropObject(dropped, dropped.ox, dropped.oy, floorMessages);
             let consumedByFloor = false;
@@ -76246,10 +76442,16 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 objectIceEffect(dropped, dropped.ox, dropped.oy);
                 if (!shopSale?.prompt) stackDroppedFloorObject(dropped);
             }
+            let landing = {};
+            if (levhack) {
+                item._invokedProperty = null;
+                delete game.u._artifactInvokeBaseline?.LEVITATION;
+                landing = await floatArtifact(false, floorMessages);
+            }
             newsym(game.u?.ux || 0, game.u?.uy || 0);
             game._message_more = 0;
             const dropMessages = [...(stoppedLight ? [stoppedLight] : []), ...propertyMessages];
-            if (item.cls === 'weapon' || item.kind === 'chest') {
+            if (item.cls === 'weapon' || item.kind === 'chest' || heart) {
                 if (game.flags?.verbose === false) {
                     dropMessages.push(...floorMessages);
                 } else {
@@ -76257,6 +76459,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 }
             } else {
                 dropMessages.push(...floorMessages);
+            }
+            if (landing.pending) {
+                await setMessage(dropMessages.join('  '), true);
+                game.context.move = 0;
+                if ((landing.fatal || landing.lifeSaving) && !landing.lavaDeath)
+                    applyLifeSavingOrFatalCommandMode(landing);
+                return;
             }
             if (shopSale?.prompt) {
                 const declineMessage = dropMessages.length ? dropMessages.join('  ') : `You drop ${droppedName}.`;
@@ -76499,41 +76708,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             heroHasBlindfold: () => (game.inventory || []).some(obj => isWornInventoryItem(obj)
                 && ['blindfold', 'towel'].includes(objectKindKey(obj))),
             ...ARTIFACT_PROPERTY_DEPS,
-            floatArtifact: async (on, messages) => {
-                const u = game.u;
-                if (on) {
-                    if (u.utrap && u.utraptype === TT_PIT) {
-                        u.utrap = 0;
-                        u.utraptype = 0;
-                        messages.push('You float up, out of the pit!');
-                        const boulder = (game.level?.objects || []).find(obj => obj.ox === u.ux && obj.oy === u.uy
-                            && (obj.otyp === BOULDER || obj.kind === 'boulder'));
-                        if (boulder) earthBoulderPitHoleEffects(boulder, u.ux, u.uy, messages, 'settle');
-                    } else if (u.utrap) {
-                        messages.push('You float up slightly, but your leg is still stuck.');
-                    } else if (heroIsHallucinating()) messages.push("Up, up, and awaaaay!  You're walking on air!");
-                    else if (Is_airlevel(u.uz)) messages.push('You gain control over your movements.');
-                    else messages.push('You start to float in the air!');
-                } else {
-                    u._levitationTimeout = 0;
-                    u.levitation = u.Levitation = false;
-                    if (u.flying || u.Flying) messages.push('You have stopped levitating and are now flying.');
-                    else {
-                        messages.push(Is_airlevel(u.uz) ? 'You begin to tumble in place.'
-                            : Is_waterlevel(u.uz) ? 'You feel heavier.'
-                                : `You float gently to the ${polyselfFalloffSurfaceName(u.ux, u.uy)}.`);
-                        const result = await heroLandingTrapEffectAt(u.ux, u.uy, messages);
-                        if (result?.fatal) applyLifeSavingOrFatalCommandMode(result);
-                    }
-                }
-                vision_recalc(0);
-            },
+            floatArtifact,
             refreshVision: () => { vision_recalc(0); game._redraw_level_after_more = 1; },
             createArrows: () => mksobj(ARROW, true, false),
             holdArrows: addAppliedHornObjectToInventory,
             migrateMonster: migrateMonsterToLevelRandom,
         });
-        game.context.move = result.time ? 1 : 0;
+        game.context.move = result.pending ? 0 : result.time ? 1 : 0;
         if (result.action === 'CRYSTAL_BALL') {
             await beginCrystalBallUse(item);
             return;
@@ -76598,7 +76779,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             }
         }
         if (result.messages.length) await setMessage(result.messages.join('  '), !!result.more);
-        if (result.fatal || result.lifeSaving) applyLifeSavingOrFatalCommandMode(result);
+        if ((result.fatal || result.lifeSaving) && !result.lavaDeath) applyLifeSavingOrFatalCommandMode(result);
         return;
     }
 
@@ -81016,6 +81197,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
 	                        if (game.u) game.u.uen = oldEnergy + rnd(3);
 	                        if ((game.u?.uen || 0) > (game.u?.uenmax || 0)) {
 	                            if (!rn2(3) && game.u) game.u.uenmax = (game.u.uenmax || 0) + 1;
+	                            if (game.u) game.u.uenpeak = Math.max(game.u.uenpeak || 0, game.u.uenmax || 0);
 	                            if (game.u) game.u.uen = game.u.uenmax || 0;
 	                        }
 	                        if ((game.u?.uen || 0) !== oldEnergy) newtBuzzMessage = '  You feel a mild buzz.';

@@ -3,7 +3,7 @@
 import { game } from './gstate.js';
 import { d, rnz, rnd, rn2 } from './rng.js';
 import { artifactDefinitionForName, rlocNoMsg, enextoMonsterSpot } from './mklev.js';
-import { CONFLICT, LEVITATION, INVIS, W_ARTI, In_quest, In_endgame } from './const.js';
+import { CONFLICT, LEVITATION, INVIS, W_ARTI, I_SPECIAL, TIMEOUT, In_quest, In_endgame } from './const.js';
 import { pmOf } from './mhitm.js';
 import { is_demon, S_IMP, MS_NEMESIS, M2_LORD, M2_PRINCE } from './permonst.js';
 import { couldsee, objectLightRadius } from './vision.js';
@@ -26,6 +26,17 @@ export function artifactInvocation(item) {
     const identity = item?.artifact || item?.oartifact;
     const definition = artifactDefinitionForName(identity);
     return { definition, power: INVOCATIONS.get(definition?.name) || null };
+}
+
+// C artifact.c:finesse_ahriman probes the state float_down will leave.
+// do.c uses this to land the dropped artifact before bringing the hero down.
+export function finesseAhriman(item, D) {
+    if (artifactInvocation(item).power !== 'LEVITATION') return false;
+    const u = game.u;
+    const prop = u.uprops?.[LEVITATION];
+    if (u.BLevitation || !(prop?.extrinsic & W_ARTI)) return false;
+    return !((prop.intrinsic & ~(I_SPECIAL | TIMEOUT)) || (prop.extrinsic & ~W_ARTI)
+        || u._artifactInvokeBaseline?.LEVITATION || D.propertySources('LEVITATION', { ignoreTimeout: true }));
 }
 
 // C: wield.c:setuwep/ready_weapon and do_wear.c:Armor_on/off/gone.

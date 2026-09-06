@@ -9,8 +9,8 @@ import { artifactDefinitionForName } from './mklev.js';
 import { W_WEP, COLNO, ROWNO, ZAP_POS, DOOR, D_CLOSED, D_LOCKED,
     M_AP_TYPE, M_AP_OBJECT, M_AP_MONSTER } from './const.js';
 
-// include/defsym.h: defsyms[].explanation, including furniture disguises.
-export const FLASH_CMAP_EXPLANATIONS = ["stone","wall","wall","wall","wall","wall","wall","wall","wall","wall","wall","wall","doorway","open door","open door","closed door","closed door","iron bars","tree","floor of a room","dark part of a room","engraving","corridor","lit corridor","engraving","staircase up","staircase down","ladder up","ladder down","branch staircase up","branch staircase down","branch ladder up","branch ladder down","altar","grave","opulent throne","sink","fountain","water","ice","molten lava","wall of lava","lowered drawbridge","lowered drawbridge","raised drawbridge","raised drawbridge","air","cloud","water","arrow trap","dart trap","falling rock trap","squeaky board","bear trap","land mine","rolling boulder trap","sleeping gas trap","rust trap","fire trap","pit","spiked pit","hole","trap door","teleportation trap","level teleporter","magic portal","web","statue trap","magic trap","anti-magic field","polymorph trap","vibrating square","trapped door","trapped chest","","","","","","","","","","","","","poison cloud","valid position","","","","","","","","","","","","","","","","",""];
+import { CMAP_EXPLANATIONS as FLASH_CMAP_EXPLANATIONS } from './defsym.js';
+export { FLASH_CMAP_EXPLANATIONS };
 
 export function resolveFlashDirection(direction, D) {
     const form = game.u._polyself_form || MONS[game.u.umonnum ?? PM_HUMAN];

@@ -16881,6 +16881,8 @@ test('self-cast stone to flesh preserves worn meat ring hand and skips merge', a
 
 test('self-cast stone to flesh turns carried boulder into enormous meatball', async () => {
     installCommandShopState();
+    // Rock-throwing forms can carry a boulder without blocking spellcasting.
+    game.u._polyself_form = { name: 'stone giant', mlet: 'H', strong: true };
     initRng(1);
     game.level.flags = { sokoban_rules: true };
     game.u.uluck = 2;
@@ -16915,6 +16917,7 @@ test('self-cast stone to flesh turns carried boulder into enormous meatball', as
 
 test('self-cast stone to flesh respects ordinary object resistance', async () => {
     installCommandShopState();
+    game.u._polyself_form = { name: 'stone giant', mlet: 'H', strong: true };
     initRng(40);
     enableRngLog({ reset: true });
     game.level.flags = { sokoban_rules: true };
@@ -24281,7 +24284,7 @@ test('generated weapon-class dart carries persisted non-erosion roll state', () 
     assert.equal(obj.cls, 'weapon');
     assert.equal(obj.kind, 'dart');
     assert.equal(obj.actualKind, 'dart');
-    assert.equal(obj.owt, 1);
+    assert.equal(obj.owt, 6); // mkobj.c:weight stores the total stack weight.
     assert.equal(obj.quan, 6);
     assert.equal(obj.opoisoned, false);
     assert.equal(obj.oerodeproof || false, false);

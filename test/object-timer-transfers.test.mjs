@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM, W_WEP, LANDMINE } from '../js/const.js';
-import { initRng } from '../js/rng.js';
+import { ROOM, W_WEP, LANDMINE, LAVAPOOL, LADDER, HOLE } from '../js/const.js';
+import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
-import { rhack, holdCaughtThrownObject, landMonsterThrownObject, __shopBillingTestHooks as shop } from '../js/cmd.js';
+import { rhack, holdCaughtThrownObject, landMonsterThrownObject, earthFloorEffects, queueImpactDroppedObjects,
+    __shopBillingTestHooks as shop } from '../js/cmd.js';
 import { beginBurn, processBurnTimers } from '../js/burn.js';
 import { attachEggHatchTimeout } from '../js/egg_timers.js';
 import { BURN_OBJECT, HATCH_EGG, peekTimer } from '../js/timeout.js';
@@ -461,3 +462,136 @@ test('live landmine scatter exploding burning oil retires the burn callback', as
     assert.equal(oil.timed, 0);
     assert.equal(game.timers.length, 0);
 });
+
+test('a monster-thrown egg burning in lava cancels its hatch timer', () => {
+    // C do.c:flooreffects -> trap.c:lava_damage -> delobj/dealloc_obj.
+    setup();
+    game.level.at(12, 10).typ = LAVAPOOL;
+    const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1 };
+    attachEggHatchTimeout(egg, 100);
+    const result = landMonsterThrownObject(egg, 12, 10);
+    assert.equal(result.floorEffects.consumed, true);
+    assert.equal(egg.timed, 0);
+    assert.equal(peekTimer(HATCH_EGG, egg), 0);
+});
+
+for (const protectedEgg of [false, true]) {
+    test(`lava destroys a thrown container and ${protectedEgg ? 'preserves' : 'deletes'} its spilled egg timer`, () => {
+        // C fire_damage extracts contents before flooreffects and container deletion.
+        setup();
+        game.level.at(12, 10).typ = LAVAPOOL;
+        const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1, oerodeproof: protectedEgg };
+        const sack = { kind: 'sack', cls: 'tool', quan: 1, contents: [egg] };
+        attachEggHatchTimeout(egg, 100);
+        const result = landMonsterThrownObject(sack, 12, 10);
+        assert.equal(result.floorEffects.consumed, true);
+        assert.equal(game.level.objects.includes(egg), protectedEgg);
+        assert.equal(peekTimer(HATCH_EGG, egg), protectedEgg ? 200 : 0);
+        assert.equal(game.timers.length, protectedEgg ? 1 : 0);
+    });
+}
+
+for (const carried of [false, true]) {
+    test(`${carried ? 'dropping' : 'monster landing'} a hatching egg down a ladder deletes its timer when it breaks`, async () => {
+        // C dokick.c:ship_object calls obfree when breaktest succeeds.
+        setup();
+        const x = carried ? 10 : 12;
+        game.level.at(x, 10).typ = LADDER;
+        game.stairs = { sx: x, sy: 10, up: false, isladder: true, tolev: { dnum: 0, dlevel: 2 } };
+        const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1, letter: 'a' };
+        attachEggHatchTimeout(egg, 100);
+        if (carried) {
+            game.inventory.push(egg);
+            await rhack('d'); await rhack('a');
+        } else {
+            const result = landMonsterThrownObject(egg, x, 10);
+            assert.equal(result.shipObject.broke, true);
+        }
+        assert.equal(game.inventory.includes(egg), false);
+        assert.equal(egg.timed, 0);
+        assert.equal(game.timers.length, 0);
+        assert.equal(game._impact_drop_migrations?.size || 0, 0);
+    });
+}
+
+test('shipping a thrown container preserves its identity and the timers of surviving contents', () => {
+    setup();
+    game.level.at(12, 10).typ = LADDER;
+    game.stairs = { sx: 12, sy: 10, up: false, isladder: true, tolev: { dnum: 0, dlevel: 2 } };
+    const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1 };
+    const sack = { kind: 'sack', cls: 'tool', quan: 1, contents: [egg] };
+    attachEggHatchTimeout(egg, 100);
+    const result = landMonsterThrownObject(sack, 12, 10);
+    assert.equal(result.shipObject.handled, true);
+    assert.equal(result.shipObject.broke, false);
+    assert.equal(game._impact_drop_migrations.get('0:2')[0], sack);
+    assert.equal(objectLocations().get(egg)?.source, 'migrating');
+    assert.equal(peekTimer(HATCH_EGG, egg), 200);
+});
+
+test('an egg breaking at migration delivery retires its hatch callback', () => {
+    // C dokick.c:obj_delivery calls delobj after impact breaktest.
+    setup();
+    const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1 };
+    attachEggHatchTimeout(egg, 100);
+    queueImpactDroppedObjects(game.u.uz, [egg]);
+    shop.deliverQueuedImpactDroppedObjectsForTest(game.u.uz);
+    assert.equal(game.level.objects.includes(egg), false);
+    assert.equal(game._impact_drop_migrations.size, 0);
+    assert.equal(game.timers.length, 0);
+    assert.equal(egg.timed, 0);
+});
+
+test('a hatching egg falling through a hole beneath the hero loses its timer on shipping breakage', () => {
+    // C do.c:flooreffects delegates escaped-shaft landing to ship_object.
+    setup();
+    initRng(167);
+    game.level.traps.push({ tx: 10, ty: 10, ttyp: HOLE, tseen: true });
+    const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1 };
+    attachEggHatchTimeout(egg, 100);
+    const messages = [];
+    const consumed = earthFloorEffects(egg, 10, 10, messages);
+    assert.equal(consumed, true);
+    assert.match(messages.join(' '), /muffled splat/);
+    assert.equal(game.timers.length, 0);
+    assert.equal(egg.timed, 0);
+});
+
+test('hero projectile hard-floor breakage retires the thrown egg hatch callback', () => {
+    // C dothrow.c:throwit invokes breakobj before flooreffects/ship_object.
+    setup();
+    const egg = { kind: 'egg', cls: 'food', otyp: 10001, quan: 1 };
+    attachEggHatchTimeout(egg, 100);
+    const landing = shop.landProjectileObjectWithShopHandling(egg, 12, 10, { breakRoll: 1 });
+    assert.equal(landing.topBreak.broke, true);
+    assert.equal(game.timers.length, 0);
+    assert.equal(egg.timed, 0);
+});
+
+for (const resistsBreak of [false, true]) {
+    test(`kicking hatching eggs ${resistsBreak ? 'splits the timer when one egg survives flight' : 'cancels the timer when the stack splats'}`, async () => {
+        // C dokick.c:kick_object breaks first, then splits the surviving stack.
+        setup();
+        initRng(resistsBreak ? 167 : 1);
+        game.u.acurr.a[0] = 18;
+        const eggs = { kind: 'egg', cls: 'food', otyp: 10001, quan: 3, ox: 11, oy: 10 };
+        game.level.objects.push(eggs);
+        attachEggHatchTimeout(eggs, 100);
+        enableRngLog();
+        await rhack('\x04'); await rhack('l');
+        assert.deepEqual(getRngLog(), resistsBreak ? ['rn2(100)=0', 'rnd(2)=1'] : ['rn2(100)=45']);
+        if (resistsBreak) {
+            const kicked = game.level.objects.find(obj => obj !== eggs && obj.kind === 'egg');
+            assert.ok(kicked);
+            assert.equal(eggs.quan, 2);
+            assert.equal(kicked.quan, 1);
+            assert.equal(peekTimer(HATCH_EGG, kicked), 200);
+            assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+            assert.equal(game.timers.length, 2);
+        } else {
+            assert.equal(game.level.objects.length, 0);
+            assert.equal(eggs.timed, 0);
+            assert.equal(game.timers.length, 0);
+        }
+    });
+}

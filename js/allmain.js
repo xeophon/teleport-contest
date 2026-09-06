@@ -1552,6 +1552,7 @@ function initializeHero() {
     game.u.uhpmax = game._initialHp;
     game.u.uen = game._initialEnergy;
     game.u.uenmax = game._initialEnergy;
+    game.u.uenpeak = game._initialEnergy;
     // C ref: u_init.c:995-998 — the initial hero values come from newhp()/
     // newpw() with u.ulevel == 0, which also store u.uhpinc[0]/u.ueninc[0]
     // (attrib.c:1130-1131, exper.c:70-71); newman() subtracts them again as
@@ -17819,6 +17820,7 @@ export function processEatingOccupationTick(g = game) {
                 if (g.u) g.u.uen = oldEnergy + rnd(3);
                 if ((g.u?.uen || 0) > (g.u?.uenmax || 0)) {
                     if (!rn2(3) && g.u) g.u.uenmax = (g.u.uenmax || 0) + 1;
+                    if (g.u) g.u.uenpeak = Math.max(g.u.uenpeak || 0, g.u.uenmax || 0);
                     if (g.u) g.u.uen = g.u.uenmax || 0;
                 }
                 if ((g.u?.uen || 0) !== oldEnergy) addToplineMessage('You feel a mild buzz.');

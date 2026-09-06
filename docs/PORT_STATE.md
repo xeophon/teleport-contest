@@ -16,8 +16,8 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 66 JavaScript modules and approximately 164,000 lines;
-about 79% are in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
+The port now has 68 JavaScript modules and approximately 172,000 lines;
+most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
 interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
@@ -25,8 +25,8 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,014 passing tests**, with no
-failures, skips or TODOs. All four generated-data/source-inventory checks pass.
+The latest source-driven checkpoint has **5,103 passing tests**, with no
+failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
 All nine object/level timer kinds now share C's deadline ordering, including
@@ -47,28 +47,37 @@ merges and carried-container destruction cancel discarded timers. Deferred theft
 timers through the shared ownership operations. Monster projectile and landmine scatter splits now copy timers; surviving
 missiles retain identity, and destroyed missiles cancel their timers. Burning
 oil is extracted before its explosion, preventing self-reignition (seven tests).
-Projectile shipping and terrain destruction remain follow-ups.
+Projectile shipping, kicked-stack splitting and terrain destruction now retain
+or cancel timers correctly (11 further tests). Hero throw/fire transfers remain.
 Sunsword and gold dragon armor now start/stop untimed light through ordinary
 wield, swap, removal, dressing, quiver and tool-driven weapon changes. Thirty
 new tests cover equipment state, BCU light radii and welded-weapon refusal.
 Explicit wield/invoke now use source touch/retouch predicates, damage and
 refusal, including death/life-saving continuation (42 new tests). Invoked conflict/invisibility now clear on inventory detachment, with cooldown,
 messages and independent property sources retained (27 new tests). Other touch
-callers, Heart of Ahriman landing and transformation retouch remain unfinished.
+callers and transformation retouch remain unfinished. Heart of Ahriman drop and
+invocation now follow C's floor-first special case, cooldown rules, independent
+sources and suspended water/lava/trap landings (22 tests). Other Heart transfers
+and the remaining float-down branches are still open.
 
 Spell memory now ages per full turn, restores on relearning, survives amnesia
 as an empty retained slot, warns while fading and backfires when forgotten
 (21 new tests). Rotten food now gives full cumulative deafness/blindness
 timeouts and C blindness/fainting behavior (seven new tests).
+Casting now uses C's effective attributes, role/intelligence nutrition costs,
+hunger-state transitions, load gate and peak-energy messages (43 tests).
+General hunger processing and complete occupation timing remain to be audited.
 
-Quest dispatch is **62/65 maps**: all 26 fillers and 36/39 named stages.
-Monk, Tourist and Valkyrie starts now execute their source operations; feature
-flags, solid-fill bounds, food weights and fixed entrance trap cleanup have
-11 new tests. Knight, Ranger and Rogue starts remain. Source-ordered player-monster equipment, first Astral arrival
+Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
+Knight, Ranger and Rogue starts now execute their source operations, including
+map alignment, mimic furniture and saddle ownership (13 new tests). Generated
+C map symbols are shared by disguises and flash messages. This dispatch count
+does not establish every level-generation branch or seed matches C.
+Source-ordered player-monster equipment, first Astral arrival
 population and guardian creation are present. Artificial Astral stair entry
 and later guardian loss under conflict remain follow-ups.
 
-The last complete recording run, at preceding commit 147c183, passed 52/53
+The last complete recording run, at preceding commit 1ba9cd5, passed 52/53
 public sessions (12,711/12,712 screens, 832,102/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,132/141,728 RNG calls), with
 zero worker errors. One Knight spell-retention screen still differs. Current
@@ -151,7 +160,7 @@ for each finding. Major unfinished areas include:
 2. **Timers and arrival:** source ordering between timers, intrinsic expiry, regions and regeneration,
    prompt continuation, automatic light activation, and the complete terrain/region/spot-effects arrival
    pipeline.
-3. **Quest and artifacts:** three named quest maps and remaining artifact invocation branches.
+3. **Quest and artifacts:** remaining level-script branches and artifact invocation/transfer behavior.
    Existing builder dispatch does not itself prove map parity.
 4. **Regions and movement:** region callbacks, broader level scripting and
    remaining movement/trap ordering beyond the tested pit paths.
@@ -176,11 +185,13 @@ npm test
 node tools/audit-c-sources.mjs --check
 node tools/generate-command-keys.mjs --check
 node tools/generate-quest-fillers.mjs --check
+node tools/generate-quest-levels.mjs --check
+node tools/generate-defsym.mjs --check
 npm run progress -- --baseline .cache/port-progress/sept06/baseline.json
 node frozen/playability_runner.mjs sessions
 ```
 
-The three generated-data checks and `git diff --check` pass. The progress
+The five generated-data/source-inventory checks and `git diff --check` pass. The progress
 runner writes `.cache/port-progress/latest.json` and separates test, session,
 screen, RNG and worker-error counts. It exits 1 while supplemental recordings
 remain incomplete. The local baseline is

@@ -316,8 +316,20 @@ in the floor pile and its own explosion reignited it. Scatter now removes the
 breaking object before side effects, and oil stops burning before damage dice,
 matching `explode.c:scatter:769` and `explode_oil:974-985`.
 
-This is not a complete transfer audit: remote projectile shipping, terrain
-consumption and other direct floor-removal destruction callers still need
-review, along with the remaining non-timer stack compatibility properties.
-Full drowning effects between every individual pline also remain broader than
-the successful-crawl continuation implemented here.
+The next bounded deletion audit covers `dokick.c:ship_object:1718-1740`,
+`obj_delivery:1827-1848`, `do.c:flooreffects:274-299`, and
+`trap.c:fire_damage:4455` / `lava_damage:4576`. Shipping breakage now cancels
+timers for remote missiles, carried drops and escaped-shaft floor effects;
+destination breakage does the same. Shared fire/water/lava deletion stops timers
+after contents spill, preserving protected surviving contents. Hero hard-floor
+projectile breakage and kicked-egg breakage now cancel their timers, while a
+surviving kicked stack duplicates the timer before flight. Eleven additional
+tests cover these boundaries, including live drop and kick commands; eight
+reproduced failures before their fixes. Controls verify that surviving shipped
+containers and protected spilled eggs keep their timers.
+
+This is not a complete transfer audit: hero throw/fire object copies, other
+direct floor-removal destruction callers, migration mode variations and the
+remaining non-timer stack compatibility properties still need review. Full
+drowning effects between every individual pline also remain broader than the
+successful-crawl continuation implemented here.

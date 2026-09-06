@@ -2745,6 +2745,451 @@ export const QUEST_LEVELS = {
           }
         ]
       ]
+    },
+    "x-strt": {
+      "source": "Ran-strt.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": "."
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "noteleport",
+          "hardfloor",
+          "arboreal"
+        ],
+        [
+          "level_init",
+          {
+            "style": "mines",
+            "fg": ".",
+            "bg": ".",
+            "smoothed": true,
+            "joined": true,
+            "lit": 1,
+            "walled": false
+          }
+        ],
+        [
+          "replace_terrain",
+          {
+            "region": [
+              0,
+              0,
+              76,
+              19
+            ],
+            "fromterrain": ".",
+            "toterrain": "T",
+            "chance": 5
+          }
+        ],
+        [
+          "map",
+          {
+            "halign": "left",
+            "valign": "center",
+            "map": "                                       xx\n   ...................................  x\n  ..                                 ..  \n ..  ...............F...............  .. \n .  ..             .F.             ..  . \n . ..  .............F.............  .. . \n . .  ..                         ..  . . \n . . ..  .......................  .. ... \n . . .  ..                     ..  .     \n ... . ..  .|..................... ......\n FFF . .  ..S..................          \n ... . ..  .|.................  .... ... \n . . .  ..                     ..  . . . \n . . ..  .......................  .. . . \n . .  ..                         ..  . . \n . ..  .............F.............  .. . \n .  ..             .F.             ..  . \n ..  ...............F...............  .. \n  ..                                 ..  \n   ...................................  x\n                                       xx"
+          }
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              40,
+              20
+            ]
+          },
+          "lit"
+        ],
+        [
+          "stair",
+          "down",
+          10,
+          10
+        ],
+        [
+          "levregion",
+          {
+            "region": [
+              51,
+              2,
+              77,
+              18
+            ],
+            "region_islev": 1,
+            "type": "branch"
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "Orion",
+            "coord": [
+              20,
+              10
+            ],
+            "inventory": {
+              "operations": [
+                [
+                  "object",
+                  {
+                    "id": "leather armor",
+                    "spe": 4
+                  }
+                ],
+                [
+                  "object",
+                  {
+                    "id": "yumi",
+                    "spe": 4
+                  }
+                ],
+                [
+                  "object",
+                  {
+                    "id": "ya",
+                    "spe": 4,
+                    "quantity": 50
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        [
+          "object",
+          "chest",
+          20,
+          10
+        ],
+        [
+          "monster",
+          "hunter",
+          19,
+          9
+        ],
+        [
+          "monster",
+          "hunter",
+          20,
+          9
+        ],
+        [
+          "monster",
+          "hunter",
+          21,
+          9
+        ],
+        [
+          "monster",
+          "hunter",
+          19,
+          10
+        ],
+        [
+          "monster",
+          "hunter",
+          21,
+          10
+        ],
+        [
+          "monster",
+          "hunter",
+          19,
+          11
+        ],
+        [
+          "monster",
+          "hunter",
+          20,
+          11
+        ],
+        [
+          "monster",
+          "hunter",
+          21,
+          11
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              40,
+              20
+            ]
+          }
+        ],
+        [
+          "trap",
+          "arrow",
+          30,
+          9
+        ],
+        [
+          "trap",
+          "arrow",
+          30,
+          10
+        ],
+        [
+          "trap",
+          "pit",
+          40,
+          9
+        ],
+        [
+          "trap",
+          "spiked pit"
+        ],
+        [
+          "trap",
+          "bear"
+        ],
+        [
+          "trap",
+          "bear"
+        ],
+        [
+          "monster",
+          {
+            "id": "minotaur",
+            "x": 33,
+            "y": 9,
+            "peaceful": 0,
+            "asleep": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 19,
+            "y": 3,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 19,
+            "y": 4,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 19,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 21,
+            "y": 3,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 21,
+            "y": 4,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 21,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 1,
+            "y": 9,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 2,
+            "y": 9,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 3,
+            "y": 9,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 1,
+            "y": 11,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 2,
+            "y": 11,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 3,
+            "y": 11,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 19,
+            "y": 15,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 19,
+            "y": 16,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 19,
+            "y": 17,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 21,
+            "y": 15,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 21,
+            "y": 16,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "forest centaur",
+            "x": 21,
+            "y": 17,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "plains centaur",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "plains centaur",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "plains centaur",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "plains centaur",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "plains centaur",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "plains centaur",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "scorpion",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "scorpion",
+            "peaceful": 0
+          }
+        ]
+      ]
     }
   },
   "Barbarian": {
@@ -3891,6 +4336,744 @@ export const QUEST_LEVELS = {
             "y": 10,
             "peaceful": 0
           }
+        ]
+      ]
+    },
+    "x-strt": {
+      "source": "Rog-strt.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": " "
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "noteleport",
+          "hardfloor",
+          "nommap"
+        ],
+        [
+          "map",
+          "---------------------------------.------------------------------------------\n|.....|.||..........|....|......|.|.........|.......+............---.......|\n|.....|..+..........+....---....S.|...-S-----.-----.|............+.+.......|\n|.....+.||........---......|....|.|...|.....|.|...|.---.....------.--------|\n|-----|.-------|..|........------.-----.....|.--..|...-------..............|\n|.....|........------+------..........+.....|..--S---.........------.-----..\n|.....|.------...............-----.}}.--------.|....-------.---....|.+...--|\n|..-+--.|....|-----.--------.|...|.....+.....|.|....|.....+.+......|.--....|\n|..|....|....|....+.|......|.|...-----.|.....|.--...|.....|.|......|..|....|\n|..|.-----S----...|.+....-----...|...|.----..|..|.---....--.---S-----.|----|\n|..|.|........|...------.|.S.....|...|....-----.+.|......|..|.......|.|....|\n|---.-------..|...|....|.|.|.....|...----.|...|.|---.....|.|-.......|.---..|\n...........|..S...|....---.----S----..|...|...+.|..-------.---+-....|...--+|\n|---------.---------...|......|....S..|.---...|.|..|...........----.---....|\n|........|.........|...+.------....|---.---...|.--+-.----.----....|.+...--+|\n|........|.---+---.|----.--........|......-----......|..|..|.--+-.|.-S-.|..|\n|........|.|.....|........----------.----.......---.--..|-.|....|.-----.|..|\n|----....+.|.....----+---............|..|--------.+.|...SS.|....|.......|..|\n|...--+-----.....|......|.------------............---...||.------+--+----..|\n|..........S.....|......|.|..........S............|.....||...|.....|....|..|\n-------------------------.--------------------------------------------------"
+        ],
+        [
+          "@local",
+          "streets",
+          {
+            "selection": "floodfill",
+            "args": [
+              0,
+              12
+            ]
+          }
+        ],
+        [
+          "@local",
+          "place",
+          [
+            [
+              33,
+              0
+            ],
+            [
+              0,
+              12
+            ],
+            [
+              25,
+              20
+            ],
+            [
+              75,
+              5
+            ]
+          ]
+        ],
+        [
+          "@call",
+          {
+            "lua": "call",
+            "name": "shuffle",
+            "args": [
+              {
+                "lua": "var",
+                "name": "place"
+              }
+            ]
+          }
+        ],
+        [
+          "stair",
+          {
+            "dir": "down",
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": 1
+            }
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "giant mimic",
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": 2
+            },
+            "appear_as": "ter:staircase down"
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "large mimic",
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": 3
+            },
+            "appear_as": "ter:staircase down"
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "small mimic",
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": 4
+            },
+            "appear_as": "ter:staircase down"
+          }
+        ],
+        [
+          "levregion",
+          {
+            "region": [
+              19,
+              9,
+              19,
+              9
+            ],
+            "type": "branch"
+          }
+        ],
+        [
+          "door",
+          "locked",
+          32,
+          2
+        ],
+        [
+          "door",
+          "locked",
+          63,
+          9
+        ],
+        [
+          "door",
+          "locked",
+          27,
+          10
+        ],
+        [
+          "door",
+          "locked",
+          31,
+          12
+        ],
+        [
+          "door",
+          "locked",
+          35,
+          13
+        ],
+        [
+          "door",
+          "locked",
+          69,
+          15
+        ],
+        [
+          "door",
+          "locked",
+          56,
+          17
+        ],
+        [
+          "door",
+          "locked",
+          57,
+          17
+        ],
+        [
+          "door",
+          "locked",
+          11,
+          19
+        ],
+        [
+          "door",
+          "locked",
+          37,
+          19
+        ],
+        [
+          "door",
+          "locked",
+          39,
+          2
+        ],
+        [
+          "door",
+          "locked",
+          49,
+          5
+        ],
+        [
+          "door",
+          "locked",
+          10,
+          9
+        ],
+        [
+          "door",
+          "locked",
+          14,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          52,
+          1
+        ],
+        [
+          "door",
+          "closed",
+          9,
+          2
+        ],
+        [
+          "door",
+          "closed",
+          20,
+          2
+        ],
+        [
+          "door",
+          "closed",
+          65,
+          2
+        ],
+        [
+          "door",
+          "closed",
+          67,
+          2
+        ],
+        [
+          "door",
+          "closed",
+          6,
+          3
+        ],
+        [
+          "door",
+          "closed",
+          21,
+          5
+        ],
+        [
+          "door",
+          "closed",
+          38,
+          5
+        ],
+        [
+          "door",
+          "closed",
+          69,
+          6
+        ],
+        [
+          "door",
+          "closed",
+          4,
+          7
+        ],
+        [
+          "door",
+          "closed",
+          39,
+          7
+        ],
+        [
+          "door",
+          "closed",
+          58,
+          7
+        ],
+        [
+          "door",
+          "closed",
+          60,
+          7
+        ],
+        [
+          "door",
+          "closed",
+          18,
+          8
+        ],
+        [
+          "door",
+          "closed",
+          20,
+          9
+        ],
+        [
+          "door",
+          "closed",
+          48,
+          10
+        ],
+        [
+          "door",
+          "closed",
+          46,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          62,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          74,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          23,
+          14
+        ],
+        [
+          "door",
+          "closed",
+          23,
+          14
+        ],
+        [
+          "door",
+          "closed",
+          50,
+          14
+        ],
+        [
+          "door",
+          "closed",
+          68,
+          14
+        ],
+        [
+          "door",
+          "closed",
+          74,
+          14
+        ],
+        [
+          "door",
+          "closed",
+          14,
+          15
+        ],
+        [
+          "door",
+          "closed",
+          63,
+          15
+        ],
+        [
+          "door",
+          "closed",
+          9,
+          17
+        ],
+        [
+          "door",
+          "closed",
+          21,
+          17
+        ],
+        [
+          "door",
+          "closed",
+          50,
+          17
+        ],
+        [
+          "door",
+          "closed",
+          6,
+          18
+        ],
+        [
+          "door",
+          "closed",
+          65,
+          18
+        ],
+        [
+          "door",
+          "closed",
+          68,
+          18
+        ],
+        [
+          "monster",
+          {
+            "id": "Master of Thieves",
+            "coord": [
+              36,
+              11
+            ],
+            "inventory": {
+              "operations": [
+                [
+                  "object",
+                  {
+                    "id": "leather armor",
+                    "spe": 5
+                  }
+                ],
+                [
+                  "object",
+                  {
+                    "id": "silver dagger",
+                    "spe": 4
+                  }
+                ],
+                [
+                  "object",
+                  {
+                    "id": "dagger",
+                    "spe": 2,
+                    "quantity": {
+                      "lua": "call",
+                      "name": "d",
+                      "args": [
+                        2,
+                        4
+                      ]
+                    },
+                    "buc": "not-cursed"
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        [
+          "object",
+          "chest",
+          36,
+          11
+        ],
+        [
+          "monster",
+          "thug",
+          28,
+          10
+        ],
+        [
+          "monster",
+          "thug",
+          29,
+          11
+        ],
+        [
+          "monster",
+          "thug",
+          30,
+          9
+        ],
+        [
+          "monster",
+          "thug",
+          31,
+          7
+        ],
+        [
+          "monster",
+          "thug",
+          31,
+          13
+        ],
+        [
+          "monster",
+          "thug",
+          33,
+          14
+        ],
+        [
+          "monster",
+          "thug",
+          30,
+          15
+        ],
+        [
+          "monster",
+          "thug",
+          35,
+          9
+        ],
+        [
+          "monster",
+          "thug",
+          36,
+          13
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              75,
+              20
+            ]
+          }
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "x": 1,
+            "y": 12,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "water nymph",
+            "x": 2,
+            "y": 12,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "water nymph",
+            "x": 33,
+            "y": 1,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "x": 33,
+            "y": 2,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "water nymph",
+            "x": 74,
+            "y": 5,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "x": 74,
+            "y": 4,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "x": 25,
+            "y": 19,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "water nymph",
+            "x": 25,
+            "y": 18,
+            "peaceful": 0
+          }
+        ],
+        [
+          "@for",
+          "i",
+          1,
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              4,
+              7
+            ]
+          },
+          1,
+          [
+            [
+              "monster",
+              {
+                "id": "water nymph",
+                "coord": {
+                  "lua": "method",
+                  "value": {
+                    "lua": "var",
+                    "name": "streets"
+                  },
+                  "name": "rndcoord",
+                  "args": [
+                    1
+                  ]
+                },
+                "peaceful": 0
+              }
+            ],
+            [
+              "monster",
+              {
+                "id": "leprechaun",
+                "coord": {
+                  "lua": "method",
+                  "value": {
+                    "lua": "var",
+                    "name": "streets"
+                  },
+                  "name": "rndcoord",
+                  "args": [
+                    1
+                  ]
+                },
+                "peaceful": 0
+              }
+            ]
+          ]
+        ],
+        [
+          "@for",
+          "i",
+          1,
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              7,
+              10
+            ]
+          },
+          1,
+          [
+            [
+              "monster",
+              {
+                "id": "chameleon",
+                "coord": {
+                  "lua": "method",
+                  "value": {
+                    "lua": "var",
+                    "name": "streets"
+                  },
+                  "name": "rndcoord",
+                  "args": [
+                    1
+                  ]
+                },
+                "peaceful": 0
+              }
+            ]
+          ]
         ]
       ]
     }
@@ -5539,6 +6722,501 @@ export const QUEST_LEVELS = {
             "class": "j",
             "peaceful": 0
           }
+        ]
+      ]
+    },
+    "x-strt": {
+      "source": "Kni-strt.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": "."
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "noteleport",
+          "hardfloor"
+        ],
+        [
+          "level_init",
+          {
+            "style": "mines",
+            "fg": ".",
+            "bg": ".",
+            "smoothed": false,
+            "joined": false,
+            "lit": 1,
+            "walled": false
+          }
+        ],
+        [
+          "map",
+          "..................................................\n.-----......................................-----.\n.|...|......................................|...|.\n.--|+-------------------++-------------------+|--.\n...|...................+..+...................|...\n...|.|-----------------|++|-----------------|.|...\n...|.|.................|..|.........|.......|.|...\n...|.|...\\.............+..+.........|.......|.|...\n...|.|.................+..+.........+.......|.|...\n...|.|.................|..|.........|.......|.|...\n...|.|--------------------------------------|.|...\n...|..........................................|...\n.--|+----------------------------------------+|--.\n.|...|......................................|...|.\n.-----......................................-----.\n.................................................."
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              49,
+              15
+            ]
+          },
+          "lit"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              4,
+              4,
+              45,
+              11
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "region",
+          {
+            "region": [
+              6,
+              6,
+              22,
+              9
+            ],
+            "lit": 1,
+            "type": "throne",
+            "filled": 2
+          }
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              27,
+              6,
+              43,
+              9
+            ]
+          },
+          "lit"
+        ],
+        [
+          "levregion",
+          {
+            "region": [
+              20,
+              14,
+              20,
+              14
+            ],
+            "type": "branch"
+          }
+        ],
+        [
+          "stair",
+          "down",
+          40,
+          7
+        ],
+        [
+          "door",
+          "locked",
+          24,
+          3
+        ],
+        [
+          "door",
+          "locked",
+          25,
+          3
+        ],
+        [
+          "door",
+          "closed",
+          23,
+          4
+        ],
+        [
+          "door",
+          "closed",
+          26,
+          4
+        ],
+        [
+          "door",
+          "locked",
+          24,
+          5
+        ],
+        [
+          "door",
+          "locked",
+          25,
+          5
+        ],
+        [
+          "door",
+          "closed",
+          23,
+          7
+        ],
+        [
+          "door",
+          "closed",
+          26,
+          7
+        ],
+        [
+          "door",
+          "closed",
+          23,
+          8
+        ],
+        [
+          "door",
+          "closed",
+          26,
+          8
+        ],
+        [
+          "door",
+          "closed",
+          36,
+          8
+        ],
+        [
+          "door",
+          "closed",
+          4,
+          3
+        ],
+        [
+          "door",
+          "closed",
+          45,
+          3
+        ],
+        [
+          "door",
+          "closed",
+          4,
+          12
+        ],
+        [
+          "door",
+          "closed",
+          45,
+          12
+        ],
+        [
+          "monster",
+          {
+            "id": "King Arthur",
+            "coord": [
+              9,
+              7
+            ],
+            "inventory": {
+              "operations": [
+                [
+                  "object",
+                  {
+                    "id": "long sword",
+                    "spe": 4,
+                    "buc": "blessed",
+                    "name": "Excalibur"
+                  }
+                ],
+                [
+                  "object",
+                  {
+                    "id": "plate mail",
+                    "spe": 4
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        [
+          "object",
+          "chest",
+          9,
+          7
+        ],
+        [
+          "monster",
+          {
+            "id": "knight",
+            "x": 4,
+            "y": 2,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "knight",
+            "x": 4,
+            "y": 13,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "knight",
+            "x": 45,
+            "y": 2,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "knight",
+            "x": 45,
+            "y": 13,
+            "peaceful": 1
+          }
+        ],
+        [
+          "monster",
+          "page",
+          16,
+          6
+        ],
+        [
+          "monster",
+          "page",
+          18,
+          6
+        ],
+        [
+          "monster",
+          "page",
+          20,
+          6
+        ],
+        [
+          "monster",
+          "page",
+          16,
+          9
+        ],
+        [
+          "monster",
+          "page",
+          18,
+          9
+        ],
+        [
+          "monster",
+          "page",
+          20,
+          9
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              49,
+              15
+            ]
+          }
+        ],
+        [
+          "trap",
+          "sleep gas",
+          24,
+          4
+        ],
+        [
+          "trap",
+          "sleep gas",
+          25,
+          4
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 14,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 16,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 18,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 20,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 22,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 24,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 26,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 28,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 30,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 32,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 34,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "quasit",
+            "x": 36,
+            "y": 0,
+            "peaceful": 0
+          }
+        ],
+        [
+          "@for",
+          "i",
+          1,
+          {
+            "lua": "binary",
+            "op": "+",
+            "left": 2,
+            "right": {
+              "lua": "call",
+              "name": "nh.rn2",
+              "args": [
+                3
+              ]
+            }
+          },
+          1,
+          [
+            [
+              "monster",
+              {
+                "id": "warhorse",
+                "peaceful": 1,
+                "inventory": {
+                  "operations": [
+                    [
+                      "@if",
+                      {
+                        "lua": "call",
+                        "name": "percent",
+                        "args": [
+                          50
+                        ]
+                      },
+                      [
+                        [
+                          "object",
+                          "saddle"
+                        ]
+                      ],
+                      []
+                    ]
+                  ]
+                }
+              }
+            ]
+          ]
         ]
       ]
     }

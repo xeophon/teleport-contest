@@ -38,6 +38,9 @@ import { objectLocations } from './obj_location.js';
 import { clearConjoinedPits } from './dig.js';
 import { selectHwep } from './mhitm.js';
 import { QUEST_LEVELS } from './quest_level_data.js';
+import { DEFSYMS } from './defsym.js';
+import { canSaddle } from './mondata.js';
+import { heroProtectionFromShapeChangers } from './were.js';
 import * as questSpecies from './permonst.js';
 import { MONS as QUEST_MONSTERS, is_swimmer, amphibious, is_flyer, is_floater,
     passes_walls, noncorporeal, is_male, is_female } from './permonst.js';
@@ -53,7 +56,7 @@ import {
     F_LOOTED, F_WARNED, S_LPUDDING, S_LDWASHER, S_LRING, T_LOOTED, TREE_LOOTED, TREE_SWARM,
     DIR_N, DIR_S, DIR_E, DIR_W, DIR_180,
     IS_WALL, IS_STWALL, IS_DOOR, IS_ROOM, IS_OBSTRUCTED, IS_FURNITURE, IS_POOL, IS_LAVA,
-    ACCESSIBLE, IN_SIGHT, W_ARMH, W_ARMS,
+    ACCESSIBLE, IN_SIGHT, W_ARMH, W_ARMS, W_SADDLE, M_AP_FURNITURE,
     SPACE_POS, ZAP_POS, isok, W_RANDOM, W_NORTH, W_SOUTH, W_EAST, W_WEST, W_ANY,
     W_NONDIGGABLE, W_NONPASSWALL, FILL_NORMAL,
     ICE, MOAT, POOL, WATER, LAVAPOOL, LAVAWALL, DBWALL, DRAWBRIDGE_UP, DRAWBRIDGE_DOWN, DB_DIR, DB_WEST, TREE, CLOUD,
@@ -4874,11 +4877,42 @@ function makeEquipment(oclass, roll, init, artif) {
                 cls: 'weapon',
                 kind: appearance || name,
                 actualKind: name,
-                owt: weight,
+                owt: weight * otmp.quan,
             });
         }
         return otmp;
     }
+}
+
+function makeTool(roll, init = true, artif = false) {
+    game._mkobj_tool_roll = roll;
+    const otmp = mksobj(TOOL_CLASS, init, artif);
+    otmp.toolRoll = roll;
+    const nameEntry = TOOL_ROLL_NAMES.find(([upper]) => roll <= upper);
+    if (nameEntry) {
+        otmp.cls = 'tool';
+        otmp.kind = nameEntry[1];
+        otmp.actualKind = nameEntry[2] || nameEntry[1];
+    }
+    if (otmp.kind === 'saddle') otmp.owt = 150 * otmp.quan; // objects.h:SADDLE
+    otmp._display_color = objectColorForRoll(roll, TOOL_ROLL_COLORS);
+    return otmp;
+}
+
+// steed.c:put_saddle_on_mon also serves default makemon equipment and des
+// inventory callbacks, so every saddle has the same carrier and worn links.
+export function putSaddleOnMonster(mon, saddle = null) {
+    if (!canSaddle(mon) || (mon.minvent || []).some(obj => obj.owornmask & W_SADDLE)) return false;
+    if (!saddle) {
+        saddle = makeTool(615);
+        Object.assign(saddle, { known: true, dknown: true, bknown: true, rknown: true });
+    }
+    add_to_minv(mon, saddle);
+    Object.assign(saddle, { owornmask: W_SADDLE, leashmon: mon.m_id, worn: true, oslot: 'saddle' });
+    mon.misc_worn_check = (mon.misc_worn_check || 0) | W_SADDLE;
+    mon.saddled = true;
+    mon.hasInventory = true;
+    return true;
 }
 
 export function mkobj(oclass, artif) {
@@ -4978,20 +5012,7 @@ export function mkobj(oclass, artif) {
         rnd(1000);
         return mksobj(GOLD_PIECE, true, artif);
     }
-    if (oclass === TOOL_CLASS) {
-        const roll = rnd(1000);
-        game._mkobj_tool_roll = roll;
-        const otmp = mksobj(TOOL_CLASS, true, artif);
-        otmp.toolRoll = roll;
-        const nameEntry = TOOL_ROLL_NAMES.find(([upper]) => roll <= upper);
-        if (nameEntry) {
-            otmp.cls = 'tool';
-            otmp.kind = nameEntry[1];
-            otmp.actualKind = nameEntry[2] || nameEntry[1];
-        }
-        otmp._display_color = objectColorForRoll(roll, TOOL_ROLL_COLORS);
-        return otmp;
-    }
+    if (oclass === TOOL_CLASS) return makeTool(rnd(1000), true, artif);
     if (oclass === SPBOOK_CLASS || oclass === SPBOOK_no_NOVEL) {
         const includeNovel = oclass === SPBOOK_CLASS;
         const roll = rnd(includeNovel ? 1000 : 999);
@@ -7909,7 +7930,10 @@ export async function makemon(mdat, x, y, mmflags) {
                 mkmonmoney(mon, d(level_difficulty(), mon.minvent?.length ? 5 : 10));
             }
         }
-        rn2(100);
+        if (!rn2(100)) {
+            const species = QUEST_MONSTERS.find(species => species.name === ptr.name);
+            if (species && questSpecies.is_domestic(species)) putSaddleOnMonster(mon);
+        }
     }
 
     // C ref: makemon.c:1370-1375 — every makemon() of the Wizard of Yendor is
@@ -9756,6 +9780,13 @@ async function questFillerMonster(spec, area, croom, coord = null) {
     if (!pos || (croom && !splevInsideRoom(croom, pos.x, pos.y))) return;
     const mon = mplayer ? await mk_mplayer(ptr, pos.x, pos.y) : await makemon(ptr, pos.x, pos.y, 0);
     if (mon) {
+        // create_monster applies this after makemon's ordinary mimic choice.
+        if (spec.appear_as?.startsWith('ter:') && (pm?.mlet === questSpecies.S_MIMIC || ptr?.mlet === 'm')
+            && !heroProtectionFromShapeChangers(game)) {
+            const index = DEFSYMS.findIndex(symbol => symbol.explanation === spec.appear_as.slice(4));
+            if (index >= 0) Object.assign(mon, { m_ap_type: M_AP_FURNITURE, mappearance: index,
+                appearObj: null, appearGlyph: DEFSYMS[index].ch, appearColor: DEFSYMS[index].color });
+        }
         mon.female = !!gender;
         setMonsterPeaceful(mon, typeof spec === 'string' ? null : spec.peaceful);
         if (spec.asleep != null) mon.msleeping = spec.asleep ? 1 : 0;
@@ -9802,6 +9833,8 @@ function discardQuestMonsterInventory(mon) {
     mon.minvent = [];
     mon.hasInventory = false;
     mon.misc_worn_check = 0;
+    mon.saddled = false;
+    delete mon.saddle;
     mon.mw = mon.weapon = null;
     dressMonster(mon);
 }
@@ -9964,6 +9997,7 @@ async function questFillerOperations(operations, state, croom = null) {
         case '@call':
             break;
         case 'level_init': {
+            state.initialized = true;
             const fg = SPECIAL_TERRAIN[arg.fg];
             if (arg.style === 'mines') {
                 splevMinesLevelInit(fg, SPECIAL_TERRAIN[arg.bg], { ...arg, icedpools: state.icedpools });
@@ -9982,7 +10016,7 @@ async function questFillerOperations(operations, state, croom = null) {
         case 'level_flags':
             for (const flag of [arg, ...rest]) {
                 if (flag === 'mazelevel') game.level.flags.is_maze_lev = true;
-                else if (['noteleport', 'hardfloor', 'shortsighted', 'arboreal'].includes(flag)) game.level.flags[flag] = true;
+                else if (['noteleport', 'hardfloor', 'shortsighted', 'arboreal', 'nommap'].includes(flag)) game.level.flags[flag] = true;
                 else state[flag] = true;
             }
             break;
@@ -9993,11 +10027,24 @@ async function questFillerOperations(operations, state, croom = null) {
             await makecorridors();
             break;
         case 'map': {
-            const rows = typeof arg === 'string' ? arg.split('\n') : arg;
+            const spec = typeof arg === 'string' || Array.isArray(arg) ? { map: arg, halign: 'center', valign: 'center' } : arg;
+            const rows = typeof spec.map === 'string' ? spec.map.split('\n') : spec.map;
             const width = Math.max(...rows.map(row => row.length)), height = rows.length;
-            const lx = (2 + Math.trunc((COLNO - 4 - width) / 2)) | 1;
-            let ly = (2 + Math.trunc((ROWNO - 3 - height) / 2)) | 1;
-            if (ly < 0 || ly + height > ROWNO) ly = height === ROWNO ? 0 : Math.max(0, ly - 2);
+            const xmax = (COLNO - 1) & ~1, ymax = (ROWNO - 1) & ~1;
+            let lx = spec.coord?.[0] ?? spec.x, ly = spec.coord?.[1] ?? spec.y;
+            if ((spec.halign && spec.halign !== 'none') || (spec.valign && spec.valign !== 'none')) {
+                lx = ({ left: state.initialized ? 1 : 3, 'half-left': 2 + Math.trunc((xmax - 2 - width) / 4),
+                    center: 2 + Math.trunc((xmax - 2 - width) / 2), 'half-right': 2 + Math.trunc((xmax - 2 - width) * 3 / 4),
+                    right: xmax - width - 1 })[spec.halign] ?? state.area.lx;
+                ly = ({ top: 3, center: 2 + Math.trunc((ymax - 2 - height) / 2), bottom: ymax - height - 1 })[spec.valign] ?? state.area.ly;
+                if (!(lx % 2)) lx++;
+                if (!(ly % 2)) ly++;
+            } else if (croom) { lx += croom.lx; ly += croom.ly; }
+            if (!Number.isInteger(lx) || !Number.isInteger(ly)) throw new Error('Quest map needs alignment or coordinates');
+            if (ly < 0 || ly + height > ROWNO) {
+                ly += ly > 0 ? -2 : 2;
+                if (height === ROWNO || ly < 0 || ly + height > ROWNO) ly = 0;
+            }
             state.area = { lx, ly, hx: lx + width - 1, hy: ly + height - 1 };
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
@@ -10007,7 +10054,7 @@ async function questFillerOperations(operations, state, croom = null) {
                     state.map.add(`${lx + x},${ly + y}`);
                     Object.assign(loc, {
                         typ: splevMapCharToTyp(ch),
-                        doormask: ch === 'S' ? D_CLOSED : D_NODOOR, lit: ch === 'L', flags: 0,
+                        doormask: ch === 'S' ? D_CLOSED : D_NODOOR, lit: ch === 'L' || !!spec.lit, flags: 0,
                         horizontal: ch === '-' || ch === 'F', roomno: 0, edge: 0,
                     });
                     if ('+S'.includes(ch) && x && (IS_WALL(game.level.at(lx + x - 1, ly + y).typ)
@@ -10128,6 +10175,8 @@ async function questFillerOperations(operations, state, croom = null) {
             let obj;
             if (spec.id && otyp == null && oclass == null) {
                 obj = namedEquipment(spec.id, true, !spec.name);
+                const tool = TOOL_ROLL_NAMES.find(([, name, actual]) => spec.id === (actual || name));
+                if (!obj && tool) obj = makeTool(tool[0], true, !spec.name);
                 if (!obj) throw new Error(`Unsupported quest object ${spec.id}`);
                 place_object(obj, pos.x, pos.y);
             } else obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
@@ -10156,7 +10205,8 @@ async function questFillerOperations(operations, state, croom = null) {
             }
             if (state.carrier) {
                 game.level.objects.splice(game.level.objects.indexOf(obj), 1);
-                add_to_minv(state.carrier, obj);
+                if (obj.kind === 'saddle' && canSaddle(state.carrier)) putSaddleOnMonster(state.carrier, obj);
+                else add_to_minv(state.carrier, obj);
                 state.carrier.hasInventory = true;
             } else stack_floor_object(obj);
             break;
