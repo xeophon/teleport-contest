@@ -32,6 +32,7 @@ import { useSkill, loseWeaponSkill, initializeSkills, skillMenuEntries, advanceS
 import { recordWizardSpellbookDiscoveries, appendAfterMoreMessage } from './allmain.js';
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
+import { clearBypasses } from './worn.js';
 import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind } from './burn.js';
 import { AMULET_OF_YENDOR, objectMergeableByCMetadata, mergeStackableObject, putSaddleOnMonster, arriveMigratingMonsters } from './mklev.js';
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
@@ -56773,7 +56774,7 @@ function shopPaymentMenuRows(entries, width) {
     return rows;
 }
 
-function shopPaymentTraditionalStyle() {
+function traditionalMenuStyle() {
     const style = game.flags?.menu_style ?? game.flags?.menustyle ?? game.flags?.menuStyle;
     return style === 0 || String(style || '').toLowerCase() === 'traditional';
 }
@@ -57096,7 +57097,7 @@ async function finishPayCommandForShopkeeper(shkp, resident, { requestMenu = fal
         if (debitPayment.paid) game.context.move = 1;
         return;
     }
-    let viaMenu = !shopPaymentTraditionalStyle();
+    let viaMenu = !traditionalMenuStyle();
     if (requestMenu) viaMenu = !viaMenu;
     if (viaMenu) {
         openShopPaymentMenu(shkp, entries, {
@@ -63755,7 +63756,7 @@ function inventoryOverlayLines(page = 0, identify = false, match = null, wizard 
     game._inventory_overlay_total_pages = Math.max(1, Math.ceil(rows.length / 23));
     const footer = rows.length > start + 23 ? `(${page + 1} of ${game._inventory_overlay_total_pages})` : game._inventory_overlay_total_pages > 1 ? `(${page + 1} of ${game._inventory_overlay_total_pages})` : '(end)';
     const width = Math.max(footer.length, ...pageRows.map(([text]) => String(text).length));
-    const col = rows.length >= 23 ? 1 : Math.max(0, 78 - width);
+    const col = rows.length >= 23 ? 1 : Math.max(0, Math.min(41, 78 - width));
     const slice = pageRows.map(([text, attr], row) => [row, col, text, attr]);
     slice.push([slice.length, col, footer]);
     return slice;
@@ -63847,10 +63848,12 @@ async function finishIdentification() {
             state.identifying = [...state.items]; state.index = 0; state.phase = 'identify';
             state.all = true;
         } else {
-            state.selected = []; state.page = 0; state.phase = 'menu';
+            state.selected = []; state.page = 0;
+            state.phase = state.traditional ? 'traditionalStart' : 'menu';
             if (game._pending_message && !state.skipMessages) { pauseIdentification(''); return; }
         }
     }
+    if (state.phase.startsWith('traditional') && await finishTraditionalIdentification()) return;
     if (state.phase === 'menu') {
         await setMessage('');
         showIdentificationMenu();
@@ -63874,6 +63877,111 @@ async function finishIdentification() {
     game.context.move = state.ordinary ? 1 : 0;
 }
 
+// invent.c:ggetobj/askchain: the category prompt and each object question are
+// separate input boundaries. Walk the saved sorted chain again for each class,
+// rechecking knowledge because identifying one object can reveal another type.
+async function finishTraditionalIdentification() {
+    const state = game._identification;
+    while (state.phase.startsWith('traditional')) {
+        if (state.phase === 'traditionalStart') {
+            const items = game.inventory.filter(item => !objectIsFullyIdentified(item));
+            if (!items.length) { state.phase = 'finish'; break; }
+            let letters = [...new Set(items.map(item => OBJECT_CLASS_GLYPHS[item.cls]))].join('') + ' ';
+            if (game.inventory.some(item => shopObjectOrContentsUnpaid(item))) letters += 'u';
+            if ((game._startup_role || game.urole?.name?.m) === 'Priest')
+                for (const item of game.inventory) item.bknown = item.cls !== 'coin';
+            for (const category of 'BUCX')
+                if (items.some(item => !objectIsFullyIdentified(item)
+                    && (!item.bknown ? 'X' : item.blessed ? 'B' : item.cursed ? 'C' : 'U') === category)) letters += category;
+            if (game.inventory.some(item => item.pickup_prev)) letters += 'P';
+            state.categoryPrompt = `What kinds of thing do you want to identify? [${letters}aim]`;
+            state.categoryInput = ''; state.phase = 'traditionalCategory';
+            if (game._pending_message && !state.skipMessages) { pauseIdentification(''); return true; }
+        }
+        if (state.phase === 'traditionalCategory') {
+            state.skipMessages = false;
+            await setMessage(state.categoryPrompt + ' ' + state.categoryInput);
+            game._command_mode = 'identifyCategory'; game.context.move = 0;
+            return true;
+        }
+        if (state.phase === 'traditionalParse') {
+            while (state.categoryIndex < state.categoryInput.length) {
+                const ch = state.categoryInput[state.categoryIndex++];
+                if (ch === ' ' || ch === 'A') continue;
+                if (ch === 'a') state.askAll = true;
+                else if (ch === 'm') state.menuRequested = true;
+                else if ('uBUCXP'.includes(ch)) state.categories += ch;
+                else if (Object.values(OBJECT_CLASS_GLYPHS).includes(ch)) {
+                    if (!state.classes.includes(ch)) state.classes += ch;
+                } else if (!state.skipMessages && !addToplineMessage(`You don't have any ${ch}'s.`)) {
+                    pauseIdentification(); return true;
+                }
+            }
+            if (state.menuRequested) {
+                state.traditional = false;
+                state.items = game.inventory.filter(item => !objectIsFullyIdentified(item));
+                state.selected = []; state.page = 0; state.phase = state.items.length ? 'menu' : 'finish';
+                if (game._pending_message && !state.skipMessages) { pauseIdentification(''); return true; }
+                break;
+            }
+            state.askItems = sortLoot(game.inventory, SORTLOOT_INVLET, inventorySortDependencies());
+            state.askClass = 0; state.askCount = 0; state.askDud = 0;
+            state.phase = 'traditionalClass';
+        }
+        if (state.phase === 'traditionalClass') {
+            for (const item of game.inventory) item.bypass = 0;
+            state.askIndex = 0;
+            state.askLetter = game.inventory[0]?.cls === 'coin' ? '_' : '`';
+            state.phase = 'traditionalScan';
+        }
+        if (state.phase === 'traditionalScan') {
+            state.askItem = null;
+            while (state.askIndex < state.askItems.length) {
+                const item = state.askItems[state.askIndex++];
+                if (!game.inventory.includes(item) || item.bypass) continue;
+                item.bypass = 1; game.context.bypasses = true;
+                state.askLetter = state.askLetter === 'z' ? 'A' : state.askLetter === 'Z' ? '#'
+                    : String.fromCharCode(state.askLetter.charCodeAt(0) + 1);
+                if (state.classes && OBJECT_CLASS_GLYPHS[item.cls] !== state.classes[state.askClass]) continue;
+                if (objectIsFullyIdentified(item)) continue;
+                if (state.categories.includes('u') && !shopObjectOrContentsUnpaid(item)) continue;
+                if (/[BUCX]/.test(state.categories) && !state.categories.includes(
+                    !item.bknown ? 'X' : item.blessed ? 'B' : item.cursed ? 'C' : 'U')) continue;
+                if (state.categories.includes('P') && !item.pickup_prev) continue;
+                state.askItem = item; break;
+            }
+            if (state.askItem) {
+                state.phase = state.askAll ? 'traditionalIdentify' : 'traditionalQuestion';
+                if (!state.askAll && game._pending_message && !state.skipMessages) { pauseIdentification(''); return true; }
+            } else if (++state.askClass < state.classes.length) state.phase = 'traditionalClass';
+            else {
+                clearBypasses(); state.phase = 'traditionalStart';
+                if (!state.skipMessages && !addToplineMessage(state.askDud || state.askCount ? 'That was all.' : 'No applicable objects.')) {
+                    pauseIdentification(); return true;
+                }
+            }
+        }
+        if (state.phase === 'traditionalQuestion') {
+            state.skipMessages = false;
+            let line = normalInventoryLine(state.askItem);
+            if (game.flags?.invlet_constant === false && state.askItem.cls !== 'coin')
+                line = state.askLetter + line.slice(1);
+            await setMessage(line + '? [ynaq] (n)');
+            game._command_mode = 'identifyQuestion'; game.context.move = 0;
+            return true;
+        }
+        if (state.phase === 'traditionalIdentify') {
+            identifyInventoryItem(state.askItem);
+            state.askCount++; state.limit--;
+            state.phase = state.limit ? 'traditionalScan' : 'traditionalDone';
+            if (state.limit) state.askDud++;
+            if (!state.skipMessages && !addToplineMessage(state.askItem.line + '.')) { pauseIdentification(); return true; }
+        }
+        if (state.phase === 'traditionalDone') { clearBypasses(); state.phase = 'finish'; }
+    }
+    return false;
+}
+
 function pauseIdentification(pending = game._topline_after_more || '') {
     const state = game._identification;
     state.pendingMessage = pending;
@@ -63887,7 +63995,8 @@ function pauseIdentification(pending = game._topline_after_more || '') {
 }
 
 async function beginIdentifyPack(limit, learning = false, messages = [], menuClearedStatus = false) {
-    game._identification = { ordinary: true, phase: 'choose', limit, learning, first: true, tries: 5, menuClearedStatus };
+    game._identification = { ordinary: true, phase: 'choose', limit, learning, first: true, tries: 5,
+        traditional: traditionalMenuStyle(), menuClearedStatus };
     await setMessage(messages.join('  '));
     await finishIdentification();
 }
@@ -68252,6 +68361,75 @@ function tutorialEnterStash() {
         state.pendingMessage = '';
         game._command_mode = null;
         await resumeWishedArtifact();
+        return;
+    }
+
+    if (game._command_mode === 'identifyCategory') {
+        const state = game._identification;
+        if (ch === '\x1b' && state.categoryInput) state.categoryInput = '';
+        else if (ch === '\x1b' || ch === '\n' || ch === '\r') {
+            await setMessage('');
+            if (ch === '\x1b') state.phase = 'traditionalStart';
+            else if (state.categoryInput.includes('i')) {
+                state.previewLetters = [...new Set(game.inventory.filter(item => !objectIsFullyIdentified(item)).map(item => item.letter))];
+                state.page = 0;
+                if (state.previewLetters.length === 1 && !game.iflags?.force_invmenu && !game.iflags?.menu_requested) {
+                    const item = game.inventory.find(item => item.letter === state.previewLetters[0]);
+                    await setMessage(normalInventoryLine(item) + '.', true);
+                    game._command_mode = 'identifyPreviewOne';
+                    game._process_time_with_more = 0;
+                    return;
+                }
+                showInventoryOverlay(0, false, item => state.previewLetters.includes(item.letter));
+                game._command_mode = 'identifyPreview';
+                return;
+            } else {
+                state.classes = ''; state.categories = ''; state.askAll = false; state.menuRequested = false;
+                state.categoryIndex = 0; state.phase = 'traditionalParse';
+            }
+        } else if (ch === '\b' || ch === '\x7f') state.categoryInput = state.categoryInput.slice(0, -1);
+        else if (ch === '\x15') state.categoryInput = '';
+        else if (ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127 && state.categoryInput.length < 80) state.categoryInput += ch;
+        await finishIdentification();
+        return;
+    }
+
+    if (game._command_mode === 'identifyPreviewOne') {
+        const state = game._identification;
+        if (![' ', '\x1b', '\n', '\r', ...state.previewLetters].includes(ch)) { game._keep_pending_message = 1; return; }
+        await setMessage('');
+        state.categoryInput = ''; state.phase = ch === '\x1b' ? 'traditionalStart' : 'traditionalCategory';
+        await finishIdentification();
+        return;
+    }
+
+    if (game._command_mode === 'identifyPreview') {
+        const state = game._identification;
+        if (ch === '>' || ch === ' ' && state.page < game._inventory_overlay_total_pages - 1) {
+            state.page = Math.min(state.page + 1, game._inventory_overlay_total_pages - 1);
+        } else if (ch === '<') state.page = Math.max(0, state.page - 1);
+        else if (['\x1b', '\n', '\r', ' '].includes(ch) || state.previewLetters.includes(ch)) {
+            game._overlay_lines = null; game._overlay_hide_status = 0;
+            state.categoryInput = ''; state.phase = ch === '\x1b' ? 'traditionalStart' : 'traditionalCategory';
+            await finishIdentification();
+            return;
+        }
+        showInventoryOverlay(state.page, false, item => state.previewLetters.includes(item.letter));
+        return;
+    }
+
+    if (game._command_mode === 'identifyQuestion') {
+        const state = game._identification;
+        const answer = ch === '\x1b' ? 'q' : [' ', '\n', '\r'].includes(ch) ? 'n' : ch.toLowerCase();
+        if (!'ynaq'.includes(answer)) { game._keep_pending_message = 1; return; }
+        await setMessage(answer === 'q' ? game._pending_message : '');
+        if (answer === 'q') state.phase = 'traditionalDone';
+        else if (answer === 'n') { state.askDud++; state.phase = 'traditionalScan'; }
+        else {
+            if (answer === 'a') state.askAll = true;
+            state.phase = 'traditionalIdentify';
+        }
+        await finishIdentification();
         return;
     }
 
@@ -75877,7 +76055,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         if (rejection) await setMessage(rejection);
         else {
             game._spell_view = null;
-            if (shopPaymentTraditionalStyle()) {
+            if (traditionalMenuStyle()) {
                 const count = game._known_spells.length;
                 const range = count === 1 ? 'a' : count <= 26 ? `a-${String.fromCharCode(96 + count)}`
                     : count === 27 ? 'a-zA' : `a-zA-${String.fromCharCode(64 + count - 26)}`;

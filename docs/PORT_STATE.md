@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,780 passing tests**, with no
+The latest source-driven checkpoint has **6,814 passing tests**, with no
 failures, skips or TODOs. All six generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -135,8 +135,14 @@ Blessed count adjustment includes stone luck. Quest completion now identifies
 items after the final dialogue returns, including deferred Bell advice and
 first-discovery Wisdom exercise. Twenty-one new state tests pass; three fresh
 C recordings match 314 screens and 8,245 random calls. Traditional ggetobj
-selection, complete naming under hallucination and the remaining discovery
-callers still need source passes.
+identification now follows category and inventory-letter order, combined
+class/unpaid/BUC/novelty filters, per-item choices, repeated prompts, menu
+fallback and inventory preview. Saved questions preserve the identification
+allowance and live object identities; askchain clears live object bypass flags
+and current-level worm polymorph markers. Twenty-nine new state tests and five
+fresh C recordings pass (514 screens, including cursors, and 13,739 random
+calls). General inventory actions, complete naming under hallucination and
+remaining discovery callers still need source passes.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

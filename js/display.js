@@ -1415,6 +1415,9 @@ function drawGrid() {
             if (game._command_mode === 'extendedCommand') {
                 d.setCursor(2 + String(game._extended_command || '').length, 0);
                 cursorSet = true;
+            } else if (game._command_mode === 'identifyCategory') {
+                setCursorAfter(0, pendingMessage.length, '');
+                cursorSet = true;
             } else if (game._command_mode === 'instrumentTuneText'
                        || game._command_mode === 'wizardWish'
                        || game._command_mode === 'wizGenesisMonster'
@@ -1518,6 +1521,9 @@ function drawGrid() {
             cursorSet = true;
         } else if (game._command_mode === 'extendedCommand' && !extendedWrap) {
             d.setCursor(2 + String(game._extended_command || '').length, 0);
+            cursorSet = true;
+        } else if (game._command_mode === 'identifyCategory') {
+            setCursorAfter(0, displayMessage.length, '');
             cursorSet = true;
         } else if (game._command_mode === 'instrumentTuneText'
                    || game._command_mode === 'wizardWish'
