@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { rhack } from '../js/cmd.js';
+import { rhack, __shopBillingTestHooks } from '../js/cmd.js';
+import { mkobj } from '../js/mklev.js';
 import { game, resetGame } from '../js/gstate.js';
 import { COULD_SEE, IN_SIGHT, ROOM, STONE, P_ATTACK_SPELL, P_SKILLED, WEB, POOL, ICE, DOOR, D_CLOSED, D_NODOOR, M_SEEN_FIRE, M_SEEN_COLD, MSLOW } from '../js/const.js';
 import { MONS } from '../js/permonst.js';
@@ -307,4 +308,125 @@ test('fire-resistant monster takes no HP damage from its burning scroll stack', 
     await directional('fireball');
     assert.ok(scroll.quan < 100, 'inventory burns despite fire resistance');
     assert.equal(mon.mhp, 1000, 'burning paper is fire damage, unlike exploding potions');
+});
+
+for (const level of [0, 1, 10, 20]) {
+    test(`C savelife raises low maximum HP to max(level,10) at level ${level}`, async () => {
+        setup();
+        Object.assign(game.u, { uhp: 1, uhpmax: 5, uhppeak: 5, ulevel: level });
+        game.inventory.push({ cls: 'amulet', kind: 'amulet of life saving', worn: true });
+        await directional('cone of cold', '.');
+        assert.equal(game._command_mode, 'lifeSavingMore');
+        assert.equal(game.u.ulevel, Math.max(level, 1));
+        assert.equal(game.u.uhpmax, Math.max(level, 10));
+        assert.equal(game.u.uhp, Math.max(level, 10));
+        assert.equal(game.u.uhppeak, Math.max(level, 10));
+    });
+}
+
+test('a generated unidentified life-saving amulet works after the real put-on command', async () => {
+    setup();
+    let amulet;
+    for (let i = 0; i < 1000; i++) {
+        const item = mkobj(15, false); // objclass.h: AMULET_CLASS
+        if (item.amuletIndex === 1) { amulet = item; break; }
+    }
+    assert.ok(amulet);
+    assert.equal(amulet.kind, undefined);
+    Object.assign(amulet, { letter: 'a', cursed: false });
+    game.inventory.push(amulet);
+    await rhack('P');
+    await rhack('a');
+    assert.equal(amulet.worn, true);
+    game.u.uhp = 1;
+    await directional('cone of cold', '.');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.u.uhp, 90, 'Con 10 falls to 9 before calculating 50+10*(Con/2)');
+    assert.ok(!game.inventory.includes(amulet));
+    assert.ok(game._discoveries.some(row => row.name === 'amulet of life saving' && row.known));
+});
+
+test('life saving revives an Unchanging monster form and clears only the intrinsic property', async () => {
+    setup();
+    const form = MONS.find(row => row.name === 'wolf');
+    Object.assign(game.u, { _polyself_form: form, mh: 1, mhmax: 200, unchanging: true });
+    game.inventory.push({ cls: 'amulet', amuletIndex: 1, worn: true });
+    await directional('cone of cold', '.');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+    assert.equal(game.u._polyself_form, form);
+    assert.equal(game.u.mh, 90);
+    assert.equal(game.u.uhp, 90);
+    assert.equal(game.u.unchanging, false);
+    await rhack(' ');
+    assert.equal(game.u.mh, 90);
+    assert.equal(game.u.uhp, 90);
+});
+
+test('an unidentified worn Unchanging amulet prevents rehumanization through fatal elemental damage', async () => {
+    setup();
+    const form = MONS.find(row => row.name === 'wolf');
+    Object.assign(game.u, { _polyself_form: form, mh: 1, mhmax: 20 });
+    game.inventory.push({ cls: 'amulet', amuletIndex: 6, worn: true });
+    await directional('cone of cold', '.');
+    assert.equal(game.u._polyself_form, form);
+    assert.equal(game.u.mh, 0);
+    assert.equal(game._death_cause, 'killed while stuck in creature form');
+});
+
+test('ordinary deferred life saving applies the post-Con healing cap and minimum maximum HP', async () => {
+    for (const maxHp of [5, 200]) {
+        setup();
+        Object.assign(game.u, { uhp: 0, uhpmax: maxHp, unchanging: true });
+        game._life_saving_refresh_con = 1;
+        game._command_mode = 'lifeSavingMore';
+        await rhack(' ');
+        assert.equal(game.u.acurr.a[4], 9);
+        assert.equal(game.u.uhpmax, Math.max(10, maxHp));
+        assert.equal(game.u.uhp, Math.min(Math.max(10, maxHp), 90));
+        assert.equal(game.u.unchanging, false);
+    }
+});
+
+test('wizard refusal restores low base HP and monster HP while keeping worn Unchanging', async () => {
+    setup();
+    game.flags.debug = true;
+    const form = MONS.find(row => row.name === 'wolf');
+    const amulet = { cls: 'amulet', amuletIndex: 6, worn: true };
+    game.inventory.push(amulet);
+    Object.assign(game.u, { uhp: 0, uhpmax: 5, _polyself_form: form, mh: 0, mhmax: 200, unchanging: true });
+    game._command_mode = 'wizardDieConfirm';
+    await rhack('n');
+    assert.equal(game.u.uhpmax, 10);
+    assert.equal(game.u.uhp, 10);
+    assert.equal(game.u.mh, 100);
+    assert.equal(game.u.unchanging, false);
+    assert.equal(amulet.worn, true);
+    game.u.mh = 1;
+    await directional('cone of cold', '.');
+    assert.equal(game.u._polyself_form, form, 'extrinsic Unchanging remains active');
+});
+
+test('polymorph fire resistance shields HP from burning paper while the scrolls still burn', async () => {
+    setup();
+    game.u._polyself_form = MONS.find(row => row.name === 'hell hound');
+    game.u.mh = game.u.mhmax = 100;
+    const scroll = { cls: 'scroll', kind: 'scroll of identify', quan: 100 };
+    game.inventory.push(scroll);
+    await directional('fireball', '.');
+    assert.ok(scroll.quan < 100);
+    assert.equal(game.u.mh, 100);
+});
+
+test('worn fire resistance shields burning-paper damage even when inventory protection fails', () => {
+    let witnessedDestruction = false;
+    for (let seed = 1; seed <= 100 && !witnessedDestruction; seed++) {
+        setup(seed);
+        game.inventory.push({ cls: 'ring', kind: 'ring of fire resistance', worn: true });
+        for (let i = 0; i < 20; i++)
+            game.inventory.push({ cls: 'scroll', kind: 'scroll of identify', quan: 100 });
+        const result = __shopBillingTestHooks.fireDamageInventoryForTest(100, true);
+        witnessedDestruction = game.inventory.some(item => item.cls === 'scroll' && item.quan < 100);
+        assert.equal(result.damage, 0);
+    }
+    assert.ok(witnessedDestruction, 'exercise the 1% inventory-protection failure');
 });

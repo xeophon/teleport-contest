@@ -2,7 +2,7 @@
 // Command prompts and shared terrain/combat operations are supplied by cmd.js.
 import { game } from './gstate.js';
 import { d, rnz, rnd, rn2 } from './rng.js';
-import { ARTIFACT_DEFS, artifactDefinitionForName, rlocNoMsg, enextoMonsterSpot } from './mklev.js';
+import { artifactDefinitionForName, rlocNoMsg, enextoMonsterSpot } from './mklev.js';
 import { CONFLICT, LEVITATION, INVIS, W_ARTI, In_quest, In_endgame } from './const.js';
 import { pmOf } from './mhitm.js';
 import { is_demon, S_IMP, MS_NEMESIS, M2_LORD, M2_PRINCE } from './permonst.js';
@@ -23,8 +23,7 @@ const INVOCATIONS = new Map([
 
 export function artifactInvocation(item) {
     const identity = item?.artifact || item?.oartifact;
-    const definition = typeof identity === 'number' ? ARTIFACT_DEFS[identity - 1]
-        : artifactDefinitionForName(identity);
+    const definition = artifactDefinitionForName(identity);
     return { definition, power: INVOCATIONS.get(definition?.name) || null };
 }
 

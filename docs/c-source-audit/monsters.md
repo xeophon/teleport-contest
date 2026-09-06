@@ -160,3 +160,37 @@ inventory using `steal.c:mdrop_special_objs:852` and `zap.c:obj_resists:1458`; s
 filtering would discard required items and omit RNG. `fixuporacle:306` additionally
 repairs or relocates the Oracle within her original room. Death-time
 `can_make_bones` and the `save_dlevel` override are distinct remaining call paths.
+
+## Hero spell explosions and survival checkpoint
+
+Checkpoint `d84f90d` added the shared fire/cold explosion kernel in `explode.js`
+and routed ordinary and skilled hero fireball/cone-of-cold casting through it.
+Inspected sources were `spell.c:1419-1468,1655-1740`, `zap.c:zapyourself/buzz`,
+and `explode.c:explode`. The port includes fixed fireball impact dice, self and
+vertical casts, swallowed rays, skilled target/count/scatter order, elemental
+resistance and inventory damage, golem effects, floor fire/freezing, shop damage,
+and killed/life-saved engulfers. The shared projectile kill boundary now respects
+the fire golem no-corpse flag before random treasure generation and releases a
+killed engulfer. All 22 independent explosion cases passed; the parent checkpoint
+reported 4,520 unit cases passing. This does not establish all zap/explosion parity.
+
+The following survival slice compares `end.c:savelife:704-758`, the amulet branch
+at `end.c:1080-1104`, `attrib.c:minuhpmax/setuhpmax:1147-1170`, and
+`zap.c:maybe_destroy_item:5824-5828`. Shared `end.js:restoreLifeSavedBody` now
+applies the level/minimum maximum-HP floor, post-Constitution healing cap, monster
+HP restoration, and intrinsic Unchanging reset. The command, trap-continuation,
+genocide, prayer-refusal, wizard-refusal and monster-turn recovery sites use it.
+Generated life-saving and Unchanging amulets are recognized by their canonical
+index; lethal Unchanging elemental damage enters ordinary amulet rescue.
+Burning-paper HP damage now uses polymorph and equipment fire resistance.
+Eleven new independent cases first failed and then passed, including actual
+amulet generation/put-on, low maximum HP at four levels, extrinsic versus
+intrinsic form locks, and the inventory-protection failure branch. The combined
+explosion, endgame, shop/combat and monster-spell tests passed 3,211/3,211.
+
+Remaining inspected follow-ups include sensed unseen skilled-spell targets,
+non-fire/cold explosion types and their scroll/wand/monster callers, and the
+status/expulsion/message portions of `savelife` outside the spell continuation.
+The existing Constitution adjustment helper also lacks the full `adjattrib`
+fixed-ability and minimum-attribute rules; the HP recovery helper assumes that
+the caller has applied the applicable adjustment.

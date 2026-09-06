@@ -2673,6 +2673,452 @@ export const QUEST_LEVELS = {
           }
         ]
       ]
+    },
+    "x-goal": {
+      "source": "Rog-goal.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": " "
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "noteleport"
+        ],
+        [
+          "map",
+          "-----      -------.......................................|-----------------|\n|...|  -----.....|.......................................|.................|\n|...----...|.....|.......................................|....---------....|\n|.---......---..--.................................------------.......|....|\n|...............|..................................|..|...|...----........-|\n|.....-----....--.................................|-..--..-|.....----S----| \n|--S---...|....|.................................|-........-|....|........| \n|.........---------.............................|-....}}....-|...|...|....| \n|....|.....S......|............................|-.....}}.....-|..--.------| \n|-----.....--.....|...........................|-...}}}}}}}}...-|....|.....--\n|...........--....------S-----...............|-....}}}}}}}}....-|..........|\n|............--........|...| |..............--.....}}.}}........----------S-\n|.............|........|...| |..............|......}}}}}}}}......|...|.....|\n|S-.---.---.---.---.---|...| ------------...--........}}.}}.....--..---....|\n|.---.---.---.---.-S-..----- |....|.....|....|-....}}}}}}}}....---..S.|--..|\n|...|.......|..........|...---....---...S.....|-...}}}}}}}}...-|.S..|...|..|\n|...|..|....|..........|............|..--..----|-.....}}.....-|..----...-S--\n|...|---....----.......|----- ......|...---|    |-....}}....-|...|..--.--..|\n-----.....---.....--.---....--...--------..|     |-........-|....|.........|\n    |.............|..........|.............S...   |S-------|.....|..-----..|\n    ----------------------------------------  ......       ----------   ----"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              75,
+              20
+            ]
+          },
+          "lit"
+        ],
+        [
+          "levregion",
+          {
+            "region": [
+              1,
+              0,
+              15,
+              20
+            ],
+            "region_islev": 1,
+            "exclude": [
+              1,
+              18,
+              4,
+              20
+            ],
+            "type": "stair-up"
+          }
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              75,
+              20
+            ]
+          }
+        ],
+        [
+          "trap",
+          "spiked pit",
+          37,
+          7
+        ],
+        [
+          "object",
+          {
+            "id": "skeleton key",
+            "x": 38,
+            "y": 10,
+            "buc": "blessed",
+            "spe": 0,
+            "name": "The Master Key of Thievery"
+          }
+        ],
+        [
+          "object",
+          {
+            "id": "tin",
+            "x": 26,
+            "y": 12,
+            "montype": "chameleon"
+          }
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          {
+            "id": "Master Assassin",
+            "x": 38,
+            "y": 10,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "leprechaun",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "l",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "l",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "guardian naga",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "N",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "N",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "N",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "chameleon",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "chameleon",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "chameleon",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "chameleon",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "chameleon",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "shark",
+            "x": 51,
+            "y": 14,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "shark",
+            "x": 53,
+            "y": 9,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "shark",
+            "x": 55,
+            "y": 15,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "shark",
+            "x": 58,
+            "y": 10,
+            "peaceful": 0
+          }
+        ]
+      ]
     }
   },
   "Valkyrie": {
@@ -2924,6 +3370,357 @@ export const QUEST_LEVELS = {
           "monster",
           {
             "id": "fire giant",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "class": "H",
+            "peaceful": 0
+          }
+        ]
+      ]
+    },
+    "x-goal": {
+      "source": "Val-goal.lua",
+      "operations": [
+        [
+          "level_init",
+          {
+            "style": "solidfill",
+            "fg": "L"
+          }
+        ],
+        [
+          "level_flags",
+          "mazelevel",
+          "icedpools"
+        ],
+        [
+          "level_init",
+          {
+            "style": "mines",
+            "fg": ".",
+            "bg": "L",
+            "smoothed": true,
+            "joined": true,
+            "lit": 1,
+            "walled": false
+          }
+        ],
+        [
+          "map",
+          "xxxxxx.....................xxxxxxxx\nxxxxx.......LLLLL.LLLLL......xxxxxx\nxxxx......LLLLLLLLLLLLLLL......xxxx\nxxxx.....LLL|---------|LLL.....xxxx\nxxxx....LL|--.........--|LL.....xxx\nx......LL|-...LLLLLLL...-|LL.....xx\n.......LL|...LL.....LL...|LL......x\n......LL|-..LL.......LL..-|LL......\n......LL|.................|LL......\n......LL|-..LL.......LL..-|LL......\n.......LL|...LL.....LL...|LL.......\nxx.....LL|-...LLLLLLL...-|LL......x\nxxx.....LL|--.........--|LL.....xxx\nxxxx.....LLL|---------|LLL...xxxxxx\nxxxxx.....LLLLLLLLLLLLLLL...xxxxxxx\nxxxxxx......LLLLL.LLLLL.....xxxxxxx\nxxxxxxxxx..................xxxxxxxx"
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              34,
+              16
+            ]
+          },
+          "lit"
+        ],
+        [
+          "replace_terrain",
+          {
+            "region": [
+              44,
+              9,
+              46,
+              11
+            ],
+            "fromterrain": "L",
+            "toterrain": ".",
+            "chance": 50
+          }
+        ],
+        [
+          "stair",
+          "up",
+          45,
+          10
+        ],
+        [
+          "non_diggable",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              34,
+              16
+            ]
+          }
+        ],
+        [
+          "drawbridge",
+          {
+            "x": 17,
+            "y": 2,
+            "dir": "south",
+            "state": "random"
+          }
+        ],
+        [
+          "@if",
+          {
+            "lua": "call",
+            "name": "percent",
+            "args": [
+              75
+            ]
+          },
+          [
+            [
+              "drawbridge",
+              {
+                "x": 17,
+                "y": 14,
+                "dir": "north",
+                "state": "open"
+              }
+            ]
+          ],
+          [
+            [
+              "drawbridge",
+              {
+                "x": 17,
+                "y": 14,
+                "dir": "north",
+                "state": "random"
+              }
+            ]
+          ]
+        ],
+        [
+          "object",
+          {
+            "id": "crystal ball",
+            "x": 17,
+            "y": 8,
+            "buc": "blessed",
+            "spe": 5,
+            "name": "The Orb of Fate"
+          }
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "trap",
+          "board",
+          13,
+          8
+        ],
+        [
+          "trap",
+          "board",
+          21,
+          8
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "board"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          "Lord Surtur",
+          17,
+          8
+        ],
+        [
+          "monster",
+          "fire ant"
+        ],
+        [
+          "monster",
+          "fire ant"
+        ],
+        [
+          "monster",
+          "fire ant"
+        ],
+        [
+          "monster",
+          "fire ant"
+        ],
+        [
+          "monster",
+          "a"
+        ],
+        [
+          "monster",
+          "a"
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 10,
+            "y": 6,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 10,
+            "y": 7,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 10,
+            "y": 8,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 10,
+            "y": 9,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 10,
+            "y": 10,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 24,
+            "y": 6,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 24,
+            "y": 7,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 24,
+            "y": 8,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 24,
+            "y": 9,
+            "peaceful": 0
+          }
+        ],
+        [
+          "monster",
+          {
+            "id": "fire giant",
+            "x": 24,
+            "y": 10,
             "peaceful": 0
           }
         ],
@@ -3562,6 +4359,274 @@ export const QUEST_LEVELS = {
             "class": "j",
             "peaceful": 0
           }
+        ]
+      ]
+    }
+  },
+  "Monk": {
+    "x-goal": {
+      "source": "Mon-goal.lua",
+      "operations": [
+        [
+          "level_flags",
+          "mazelevel"
+        ],
+        [
+          "level_init",
+          {
+            "style": "mines",
+            "fg": "L",
+            "bg": ".",
+            "smoothed": false,
+            "joined": false,
+            "lit": 0,
+            "walled": false
+          }
+        ],
+        [
+          "map",
+          "xxxxxx..xxxxxx...xxxxxxxxx\nxxxx......xx......xxxxxxxx\nxx.xx.............xxxxxxxx\nx....................xxxxx\n......................xxxx\n......................xxxx\nxx........................\nxxx......................x\nxxx................xxxxxxx\nxxxx.....x.xx.......xxxxxx\nxxxxx...xxxxxx....xxxxxxxx"
+        ],
+        [
+          "@local",
+          "place",
+          [
+            [
+              14,
+              4
+            ],
+            [
+              13,
+              7
+            ]
+          ]
+        ],
+        [
+          "@local",
+          "placeidx",
+          {
+            "lua": "call",
+            "name": "math.random",
+            "args": [
+              1,
+              {
+                "lua": "unary",
+                "op": "#",
+                "operand": {
+                  "lua": "var",
+                  "name": "place"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          "region",
+          {
+            "selection": "area",
+            "args": [
+              0,
+              0,
+              25,
+              10
+            ]
+          },
+          "unlit"
+        ],
+        [
+          "stair",
+          "up",
+          20,
+          5
+        ],
+        [
+          "object",
+          {
+            "id": "lenses",
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": {
+                "lua": "var",
+                "name": "placeidx"
+              }
+            },
+            "buc": "blessed",
+            "spe": 0,
+            "name": "The Eyes of the Overworld"
+          }
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "object"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap",
+          "fire"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "trap"
+        ],
+        [
+          "monster",
+          "Master Kaen",
+          {
+            "lua": "index",
+            "value": {
+              "lua": "var",
+              "name": "place"
+            },
+            "index": {
+              "lua": "var",
+              "name": "placeidx"
+            }
+          }
+        ],
+        [
+          "altar",
+          {
+            "coord": {
+              "lua": "index",
+              "value": {
+                "lua": "var",
+                "name": "place"
+              },
+              "index": {
+                "lua": "var",
+                "name": "placeidx"
+              }
+            },
+            "align": "noalign",
+            "type": "altar"
+          }
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "earth elemental"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
+        ],
+        [
+          "monster",
+          "xorn"
         ]
       ]
     }

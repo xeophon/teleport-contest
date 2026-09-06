@@ -12,6 +12,8 @@ import { docrt, flush_screen, newsym, pline } from './display.js';
 import { cansee } from './vision.js';
 import { vfsDeleteFile, vfsReadFile } from './storage.js';
 import { restoreBonesLevel } from './save.js';
+import { beginBurn, cleanupBurn } from './burn.js';
+import { BURN_OBJECT, stopObjectTimers } from './timeout.js';
 import { createGasCloud, createGasCloudSelection } from './region.js';
 import { rn2, rn2_on_display_rng, rnd, rn1, d, rne, rnz, getRngLog } from './rng.js';
 import {
@@ -54,7 +56,7 @@ import {
     STRAT_WAITFORU, STRAT_APPEARMSG,
     CORPSTAT_FEMALE, CORPSTAT_MALE, CORPSTAT_NEUTER, CORPSTAT_HISTORIC,
     LR_DOWNSTAIR, LR_UPSTAIR, LR_PORTAL, LR_TELE, LR_UPTELE, LR_DOWNTELE, LR_BRANCH,
-    DB_EAST, DB_UNDER, DB_FLOOR, DB_MOAT,
+    DB_EAST, DB_NORTH, DB_SOUTH, DB_UNDER, DB_FLOOR, DB_MOAT, DB_LAVA,
     WM_MASK, WM_W_LEFT, WM_W_RIGHT, WM_W_TOP, WM_W_BOTTOM,
     WM_T_LONG, WM_T_BL, WM_T_BR,
     WM_C_OUTER, WM_C_INNER,
@@ -5120,6 +5122,7 @@ function hasAttachedMergeData(obj) {
     return !!(obj?.omonst || obj?.omid || obj?.oextra?.omonst || obj?.oextra?.omid);
 }
 function clearMergedSourceTimers(obj) {
+    stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
     delete obj.eggHatchTurn;
     delete obj._egg_hatch_seq;
     delete obj._egg_hatch_consumed;
@@ -9270,8 +9273,9 @@ async function make_bar_loca_level() {
 // sp_lev.c:get_location and is_ok_location, shared by the declarative fillers.
 function questFillerLocation(area, croom = null, humidity = DRY, stairs = false, coord = null) {
     const bounds = croom || area;
-    if (coord && coord[0] >= 0 && coord[1] >= 0)
-        return { x: bounds.lx + coord[0], y: bounds.ly + coord[1] };
+    const point = parseSelectionPoint(coord);
+    if (point && point.x >= 0 && point.y >= 0)
+        return { x: bounds.lx + point.x, y: bounds.ly + point.y };
     const good = (x, y) => {
         const typ = game.level.at(x, y)?.typ;
         if (stairs) return typ === ROOM || typ === CORR || typ === ICE;
@@ -9368,6 +9372,96 @@ async function questFillerMonster(spec, area, croom, coord = null) {
     return mon;
 }
 
+// nhlib.lua and nhlsel.c: expressions run when their des statement is reached,
+// so geometry choices and generated inhabitants consume one ordered RNG stream.
+function questLuaValue(value, state, croom) {
+    if (value == null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(item => questLuaValue(item, state, croom));
+    if (value.operations) return value;
+    const vars = state.variables;
+    const bounds = croom || state.area;
+    if (value.lua === 'var') {
+        if (!vars.has(value.name)) throw new Error(`Unknown quest variable ${value.name}`);
+        return vars.get(value.name);
+    }
+    if (value.lua === 'index') {
+        const table = questLuaValue(value.value, state, croom), key = questLuaValue(value.index, state, croom);
+        return table[Array.isArray(table) ? key - 1 : key];
+    }
+    if (value.lua === 'unary') {
+        const operand = questLuaValue(value.operand, state, croom);
+        return value.op === '#' ? operand.length : -operand;
+    }
+    if (value.lua === 'binary') {
+        const left = questLuaValue(value.left, state, croom), right = questLuaValue(value.right, state, croom);
+        if (value.op === '|') return left.or(right);
+        return value.op === '+' ? left + right : left - right;
+    }
+    if (value.lua === 'call') {
+        const args = value.args.map(arg => questLuaValue(arg, state, croom));
+        if (value.name === 'nh.rn2') return rn2(args[0]);
+        if (value.name === 'math.random') return args.length === 1 ? 1 + rn2(args[0]) : args[0] + rn2(args[1] + 1 - args[0]);
+        if (value.name === 'percent') return rn2(100) < args[0];
+        if (value.name === 'd') {
+            const count = args.length === 1 ? 1 : args[0], sides = args.at(-1);
+            let sum = 0;
+            for (let i = 0; i < count; i++) sum += 1 + rn2(sides);
+            return sum;
+        }
+        if (value.name === 'shuffle') {
+            const list = args[0];
+            for (let i = list.length; i > 1; i--) {
+                const j = rn2(i);
+                [list[i - 1], list[j]] = [list[j], list[i - 1]];
+            }
+            return;
+        }
+        throw new Error(`Unsupported quest call ${value.name}`);
+    }
+    if (value.selection || value.lua === 'method') {
+        const name = value.selection || value.name;
+        const receiver = value.lua === 'method' ? questLuaValue(value.value, state, croom) : null;
+        const args = value.args.map(arg => questLuaValue(arg, state, croom));
+        if (receiver) args.unshift(receiver);
+        if (name === 'area') return SplevSelection.area(args[0] + bounds.lx, args[1] + bounds.ly, args[2] + bounds.lx, args[3] + bounds.ly);
+        if (name === 'new') return new SplevSelection();
+        if (name === 'negate') return SplevSelection.area(0, 0, COLNO - 1, ROWNO - 1).subtract(args[0] || new SplevSelection());
+        if (name === 'clone') return args[0].clone();
+        if (name === 'grow') return args[0].grow(args[1]);
+        if (name === 'filter_mapchar') return args[0].filterMapchar(args[1], args[2]);
+        if (name === 'floodfill') return new SplevSelection(barFloodfillSelection(bounds.lx + args[0], bounds.ly + args[1]));
+        if (name === 'rndcoord') {
+            const pos = args[0].rndcoord(!!args[1]);
+            return pos.x < 0 ? pos : { x: pos.x - bounds.lx, y: pos.y - bounds.ly };
+        }
+        if (name === 'set') {
+            const sel = args[0] instanceof SplevSelection ? args.shift() : new SplevSelection();
+            const pos = args.length ? { x: bounds.lx + args[0], y: bounds.ly + args[1] }
+                : { x: bounds.lx + rn2(bounds.hx - bounds.lx + 1), y: bounds.ly + rn2(bounds.hy - bounds.ly + 1) };
+            return sel.set(pos.x, pos.y, args[2] ?? true);
+        }
+        throw new Error(`Unsupported quest selection ${name}`);
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, questLuaValue(item, state, croom)]));
+}
+
+// dbridge.c:create_drawbridge: the span points toward its adjacent portcullis.
+function createSpecialDrawbridge(x, y, dir, open) {
+    const dx = dir === DB_EAST ? 1 : dir === DB_WEST ? -1 : 0;
+    const dy = dir === DB_SOUTH ? 1 : dir === DB_NORTH ? -1 : 0;
+    const span = game.level.at(x, y), wall = game.level.at(x + dx, y + dy);
+    if (!wall || !IS_WALL(wall.typ)) return false;
+    const lava = span.typ === LAVAPOOL;
+    span.typ = open ? DRAWBRIDGE_DOWN : DRAWBRIDGE_UP;
+    span.horizontal = !!dx;
+    span.flags = dir | (lava ? DB_LAVA : DB_MOAT);
+    wall.typ = open ? DOOR : DBWALL;
+    if (open) wall.doormask = D_NODOOR;
+    else wall.wall_info = W_NONDIGGABLE;
+    wall.horizontal = !dx;
+    return true;
+}
+
 // Ordered des operations extracted from the upstream Lua source. Existing
 // room, cavern, object, trap and monster builders own the generated entities.
 async function make_quest_filler_level(program) {
@@ -9377,7 +9471,7 @@ async function make_quest_filler_level(program) {
     clear_level_structures();
     l_nhcore_init();
     const state = { area: { lx: 1, ly: 0, hx: COLNO - 1, hy: ROWNO - 1 },
-        map: new Set(), noflip: false, icedpools: false };
+        map: new Set(), variables: new Map(), levregions: [], noflip: false, icedpools: false };
     await questFillerOperations(program.operations, state);
     // sp_lev.c removes temporary room boundaries and objects/traps on liquid
     // after the Lua program has finished, before wallification and flipping.
@@ -9391,7 +9485,12 @@ async function make_quest_filler_level(program) {
     game.level.traps = game.level.traps.filter(trap => undestroyable_trap(trap.ttyp) || !liquid(trap.tx, trap.ty));
     game.level.engravings = (game.level.engravings || []).filter(engr => !liquid(engr.x, engr.y));
     wallification(1, 0, COLNO - 1, ROWNO - 1);
-    if (!state.noflip) flipSpecialLevelRnd();
+    const flips = state.noflip ? null : flipSpecialLevelRnd();
+    for (const region of state.levregions) {
+        const include = flipLevregionCoords(flips, ...region.include);
+        const exclude = flipLevregionCoords(flips, ...region.exclude);
+        place_lregion(...include, ...exclude, region.type, region.target);
+    }
     for (const room of game.level.rooms) {
         await fill_special_room(room);
         // FILL_SPECIAL requests level flags without adding inhabitants.
@@ -9407,8 +9506,29 @@ async function make_quest_filler_level(program) {
 }
 
 async function questFillerOperations(operations, state, croom = null) {
-    for (const [operation, arg, ...rest] of operations) {
+    for (const [operation, ...raw] of operations) {
+        if (operation === '@local' || operation === '@assign') {
+            state.variables.set(raw[0], questLuaValue(raw[1], state, croom));
+            continue;
+        }
+        if (operation === '@if') {
+            const branch = questLuaValue(raw[0], state, croom) ? raw[1] : raw[2];
+            await questFillerOperations(branch, { ...state, variables: new Map(state.variables) }, croom);
+            continue;
+        }
+        if (operation === '@for') {
+            const [name, from, to, step, body] = raw;
+            const start = questLuaValue(from, state, croom), end = questLuaValue(to, state, croom), stride = questLuaValue(step, state, croom);
+            for (let i = start; stride > 0 ? i <= end : i >= end; i += stride) {
+                const variables = new Map(state.variables); variables.set(name, i);
+                await questFillerOperations(body, { ...state, variables }, croom);
+            }
+            continue;
+        }
+        const [arg, ...rest] = raw.map(value => questLuaValue(value, state, croom));
         switch (operation) {
+        case '@call':
+            break;
         case 'level_init': {
             const fg = SPECIAL_TERRAIN[arg.fg];
             if (arg.style === 'mines') {
@@ -9459,7 +9579,12 @@ async function questFillerOperations(operations, state, croom = null) {
             break;
         }
         case 'region': {
-            const bounds = arg.selection === 'area' ? arg.args : arg.region || arg;
+            if (arg instanceof SplevSelection) {
+                const selection = rest[0] === 'lit' ? arg.grow('all') : arg;
+                selection.iterate((x, y) => { game.level.at(x, y).lit = IS_LAVA(game.level.at(x, y).typ) || rest[0] === 'lit'; });
+                break;
+            }
+            const bounds = arg.region || arg;
             const [lx, ly, hx, hy] = [bounds[0] + state.area.lx, bounds[1] + state.area.ly,
                 bounds[2] + state.area.lx, bounds[3] + state.area.ly];
             if (!arg.region) spDesSelectionLit(lx, ly, hx, hy, rest[0] === 'lit');
@@ -9476,34 +9601,68 @@ async function questFillerOperations(operations, state, croom = null) {
         }
         case 'non_diggable':
         case 'non_passwall': {
-            const bounds = arg.args;
-            spDesWallProperty(state.area.lx + bounds[0], state.area.ly + bounds[1],
-                state.area.lx + bounds[2], state.area.ly + bounds[3], operation === 'non_diggable' ? W_NONDIGGABLE : W_NONPASSWALL);
+            const selection = arg || SplevSelection.area(0, 0, COLNO - 1, ROWNO - 1);
+            selection.iterate((x, y) => spDesWallProperty(x, y, x, y, operation === 'non_diggable' ? W_NONDIGGABLE : W_NONPASSWALL));
             break;
         }
         case 'wallify':
             wallify_map(state.area.lx - 1, state.area.ly - 1, state.area.hx + 2, state.area.hy + 2);
             break;
+        case 'replace_terrain': {
+            const bounds = arg.region;
+            replaceDesTerrain({ ...arg, region: bounds && [bounds[0] + state.area.lx, bounds[1] + state.area.ly,
+                bounds[2] + state.area.lx, bounds[3] + state.area.ly] });
+            break;
+        }
+        case 'terrain': {
+            const selection = arg instanceof SplevSelection ? arg : null;
+            const typ = splevMapCharToTyp(rest[0]);
+            if (selection) selection.iterate((x, y) => setSpecialTerrainLit(x, y, typ));
+            else {
+                const pos = questFillerLocation(state.area, croom, DRY, false, arg);
+                setSpecialTerrainLit(pos.x, pos.y, typ);
+            }
+            break;
+        }
+        case 'levregion': {
+            const types = { 'stair-up': LR_UPSTAIR, 'stair-down': LR_DOWNSTAIR, branch: LR_BRANCH, portal: LR_PORTAL };
+            if (types[arg.type] == null) throw new Error(`Unsupported quest levregion ${arg.type}`);
+            const include = arg.region.map((coord, i) => coord + (arg.region_islev ? 0 : i % 2 ? state.area.ly : state.area.lx));
+            const exclude = arg.exclude ? arg.exclude.map((coord, i) => coord + (arg.exclude_islev ? 0 : i % 2 ? state.area.ly : state.area.lx)) : [-1, -1, -1, -1];
+            const target = arg.name ? game.specialLevels.find(level => level.name === arg.name) : null;
+            state.levregions.push({ include, exclude, type: types[arg.type], target });
+            break;
+        }
+        case 'drawbridge': {
+            const pos = questFillerLocation(state.area, croom, DRY | WET | HOT, false, arg.coord || [arg.x, arg.y]);
+            const dir = ({ north: DB_NORTH, south: DB_SOUTH, west: DB_WEST, east: DB_EAST })[arg.dir];
+            const open = arg.state === 'random' || arg.state == null ? !rn2(2) : arg.state === 'open';
+            if (dir == null || !createSpecialDrawbridge(pos.x, pos.y, dir, open)) throw new Error('Cannot create quest drawbridge');
+            state.map.add(`${pos.x},${pos.y}`);
+            break;
+        }
         case 'door': {
             const doorState = arg === 'random' ? ['nodoor', 'broken', 'open', 'closed', 'locked'][rn2(5)] : arg;
             spDesDoor(doorState, state.area.lx + rest[0], state.area.ly + rest[1]);
             break;
         }
         case 'stair': {
-            const pos = questFillerLocation(state.area, croom, DRY, true, rest.length ? rest : null);
+            const coord = typeof arg === 'object' ? arg.coord || [arg.x, arg.y] : rest.length === 1 ? rest[0] : rest.length ? rest : null;
+            const dir = typeof arg === 'object' ? arg.dir : arg;
+            const pos = questFillerLocation(state.area, croom, DRY, true, coord);
             if (pos) {
                 game.level.traps = game.level.traps.filter(trap => trap.tx !== pos.x || trap.ty !== pos.y);
-                mkstairs(pos.x, pos.y, arg === 'up', croom);
+                mkstairs(pos.x, pos.y, dir === 'up', croom);
             }
             break;
         }
         case 'object': {
-            const spec = typeof arg === 'string' ? { id: arg, coord: rest.length ? rest : null } : arg || {};
+            const spec = typeof arg === 'string' ? { id: arg, coord: rest.length === 1 ? rest[0] : rest.length ? rest : null } : arg || {};
             const coord = spec.coord || (spec.x != null ? [spec.x, spec.y] : null);
             const pos = questFillerLocation(state.area, croom, DRY, false, coord);
             if (!pos) break;
             const def = artifactDefinitionForName(spec.name);
-            const types = { chest: CHEST, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
+            const types = { chest: CHEST, tin: TIN, 'wand of lightning': WAN_LIGHTNING, 'scroll of teleportation': SCR_TELEPORTATION };
             const otyp = def?.otyp ?? types[spec.id];
             if (spec.id && otyp == null) throw new Error(`Unsupported quest object ${spec.id}`);
             const obj = otyp != null ? mksobj_at(otyp, pos.x, pos.y, true, !spec.name)
@@ -9511,6 +9670,10 @@ async function questFillerOperations(operations, state, croom = null) {
             if (otyp === WAN_LIGHTNING) Object.assign(obj, { kind: 'lightning', cls: 'wand', wandIndex: 24,
                 glyph: '/', color: game._object_descriptions?.wands?.[24]?.color ?? CLR_BROWN });
             if (otyp === SCR_TELEPORTATION) Object.assign(obj, { kind: 'scroll of teleportation', cls: 'scroll', scrollIndex: 10 });
+            if (otyp === TIN) {
+                Object.assign(obj, { kind: 'tin', cls: 'food', singular: 'tin', plural: 'tins', spe: spec.montype === 'spinach' ? 1 : 0 });
+                if (spec.montype) obj.corpsenm = ['spinach', 'empty'].includes(spec.montype) ? null : monsterByRndName(spec.montype);
+            }
             if (spec.spe != null) obj.spe = spec.spe;
             if (spec.buc === 'blessed') bless(obj);
             else if (spec.buc === 'cursed') curse(obj);
@@ -9551,7 +9714,7 @@ async function questFillerOperations(operations, state, croom = null) {
                 'vibrating square': VIBRATING_SQUARE };
             if (arg != null && kinds[arg] == null) throw new Error(`Unsupported quest trap ${arg}`);
             if (rest.length) {
-                const pos = questFillerLocation(state.area, croom, DRY, false, rest);
+                const pos = questFillerLocation(state.area, croom, DRY, false, rest.length === 1 ? rest[0] : rest);
                 await spDesFixedTrap(kinds[arg], pos.x, pos.y);
             }
             else if (croom) await oracleRoomTrap(croom);
@@ -9559,7 +9722,7 @@ async function questFillerOperations(operations, state, croom = null) {
             break;
         }
         case 'monster':
-            await questFillerMonster(arg, state.area, croom, rest.length ? rest : null);
+            await questFillerMonster(arg, state.area, croom, rest.length === 1 ? rest[0] : rest.length ? rest : null);
             break;
         default:
             throw new Error(`Unsupported quest filler operation: ${operation}`);
@@ -15484,8 +15647,17 @@ function flipSpecialLevelRnd(xminArg = null, yminArg = null, xmaxArg = null, yma
         for (let y = ymin; y <= ymax; y++)
             refs.set(`${x},${y}`, map.locations[x][y]);
     for (let x = xmin; x <= xmax; x++)
-        for (let y = ymin; y <= ymax; y++)
+        for (let y = ymin; y <= ymax; y++) {
             map.locations[x][y] = refs.get(`${fx(x)},${fy(y)}`);
+            const loc = map.locations[x][y];
+            // sp_lev.c:flip_dbridge_* rotates the span's portcullis direction.
+            if (loc.typ === DRAWBRIDGE_UP || loc.typ === DRAWBRIDGE_DOWN) {
+                let dir = loc.flags & DB_DIR;
+                if (flipY && (dir === DB_NORTH || dir === DB_SOUTH)) dir ^= 1;
+                if (flipX && (dir === DB_EAST || dir === DB_WEST)) dir ^= 1;
+                loc.flags = (loc.flags & ~DB_DIR) | dir;
+            }
+        }
 
     const point = (obj, xkey, ykey) => {
         if (!obj || obj[xkey] < xmin || obj[xkey] > xmax || obj[ykey] < ymin || obj[ykey] > ymax) return;
@@ -22839,7 +23011,7 @@ function themeroom_light_source(croom) {
     const pos = { x: 0, y: 0 };
     if (!somexyspace(croom, pos)) return null;
     const lamp = mksobj_at(OIL_LAMP, pos.x, pos.y, true, false);
-    lamp.lamplit = true;
+    beginBurn(lamp);
     lamp.lit = true;
     return lamp;
 }
@@ -22986,6 +23158,7 @@ async function themeroom_storeroom(croom) {
 }
 
 export const __mklevTestHooks = {
+    questFillerOperations,
     mkmap_init,
     mkmap_run_passes,
     mkmap_finish,

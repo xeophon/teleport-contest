@@ -1,12 +1,14 @@
 import { monsterResistsMagic, interruptPositiveMulti, clearActiveDelayedOccupations, migrateMonsterToLevelRandom } from './allmain.js';
 import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
 import { monCatchupElapsedTime } from './dog.js';
-import { beginBurn, endBurn, processBurnTimers } from './burn.js';
+import { beginBurn, endBurn, cleanupBurn, processBurnTimers } from './burn.js';
+import { BURN_OBJECT, splitObjectTimers, stopObjectTimers } from './timeout.js';
 import { maybeUnhideAt } from './monster_hiding.js';
 import { M_SEEN_MAGR, M_SEEN_FIRE, M_SEEN_COLD, MFAST, MSLOW, P_ATTACK_SPELL } from './const.js';
-import { AD_BLND, AD_STCK, AT_HUGS, AT_ENGL, perceives } from './permonst.js';
+import { AD_BLND, AD_STCK, AT_HUGS, AT_ENGL, perceives, PM_GREMLIN } from './permonst.js';
 import { pmOf, resistsFire } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, openArtifactPortal } from './artifact.js';
+import { flashRay, flashBurnHero, lightDamageHero, lightHitsGremlin } from './flash.js';
 
 // mondata.c:1558-1583 and vision.h:m_canseeu: this observation is shared by
 // every monster in line of sight, including one other than the caster.
@@ -176,7 +178,7 @@ import { ACCESSIBLE, A_CHA, A_CHAOTIC, A_CON, A_DEX, A_INT, A_LAWFUL, A_MAX, A_N
 import { d, rn1, rn2, rn2_on_display_rng, rnd, rnl, rnz, getRngLog } from './rng.js';
 import { CLR_BLACK, CLR_BLUE, CLR_BRIGHT_BLUE, CLR_BRIGHT_CYAN, CLR_BRIGHT_GREEN, CLR_BRIGHT_MAGENTA, CLR_BROWN, CLR_CYAN, CLR_GRAY, CLR_GREEN, CLR_MAGENTA, CLR_ORANGE, CLR_RED, CLR_YELLOW, CLR_WHITE, NO_COLOR } from './terminal.js';
 import { vfsDeleteFile, vfsReadFile, vfsWriteFile } from './storage.js';
-import { an, deathSummary, escapedSummaryLines, quitSummaryLines } from './end.js';
+import { an, deathSummary, escapedSummaryLines, quitSummaryLines, restoreLifeSavedBody } from './end.js';
 import { deathGraveLines } from './rip.js';
 import { deathScoreLines } from './topten.js';
 import { encodeBonesLevel, encodeSaveState } from './save.js';
@@ -1048,7 +1050,7 @@ function applyChestTrapElectricPayload(messages) {
 }
 
 function heroHasFireResistance() {
-    if (game.u?.fireResistance) return true;
+    if (game.u?.fireResistance || resistsFire({ data: game.u?._polyself_form })) return true;
     return (game.inventory || []).some(item => activeInventoryResistanceKind(item) === 'fire');
 }
 
@@ -1105,9 +1107,7 @@ function applyChestTrapFireDamage(messages, damage, deathCause) {
         game.u[polyselfHp.hpKey] = Math.max(0, (game.u[polyselfHp.hpKey] || 0) - damage);
         if ((game.u[polyselfHp.hpKey] || 0) > 0) return {};
         if (heroHasUnchanging()) {
-            game._death_cause = 'killed while stuck in creature form';
-            messages.push('You die...');
-            return { lifeSaving: false, fatal: true, more: true };
+            return heroDartTrapFatalResult(messages, 'killed while stuck in creature form');
         }
         const result = rehumanizeAfterPolyselfDeath();
         appendRehumanizeDeathResultMessages(messages, result, { allowLifeSaving: true });
@@ -12342,14 +12342,22 @@ function useUpInventoryItem(item, amount = 1) {
     if (!item) return false;
     const usedCount = Math.max(1, Math.trunc(Number(amount || 1)));
     const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
-    if (usedCount >= quantity) markObjectTreeShopBillsUsedUp(item);
+    if (usedCount >= quantity) {
+        markObjectTreeShopBillsUsedUp(item);
+        stopObjectTimers(item, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
+        if (item.lamplit || item.burning) endBurn(item, false);
+        item.owornmask = 0;
+        item.worn = item.wielded = item.alternate = item.quivered = false;
+    }
     removeInventoryItem(item, usedCount);
     return true;
 }
 
 function splitOneCarriedInventoryItem(item) {
     if (!item || (item.quan || 1) <= 1) return item;
-    const split = { ...item, id: next_ident(), quan: 1, line: '' };
+    const split = { ...item, id: next_ident(), quan: 1, line: '', timed: 0,
+        owornmask: 0, worn: false, wielded: false, alternate: false, quivered: false };
+    splitObjectTimers(item, split);
     delete split.o_id;
     delete split._shopBillObjectId;
     split.letter = nextInventoryLetter();
@@ -12369,7 +12377,9 @@ function splitCarriedInventoryItemCount(item, count) {
     const quantity = Math.max(1, Math.trunc(Number(item.quan || 1)));
     const splitCount = Math.max(1, Math.trunc(Number(count || 1)));
     if (splitCount >= quantity) return item;
-    const split = { ...item, id: next_ident(), quan: splitCount, line: '' };
+    const split = { ...item, id: next_ident(), quan: splitCount, line: '', timed: 0,
+        owornmask: 0, worn: false, wielded: false, alternate: false, quivered: false };
+    splitObjectTimers(item, split);
     delete split.o_id;
     delete split._shopBillObjectId;
     split.letter = nextInventoryLetter();
@@ -12436,8 +12446,10 @@ function finishCreamPieSplat(item) {
 
 export function consumeLifeSavingAmulet({ clearStoning = false } = {}) {
     const lifesaving = (game.inventory || []).find(item =>
-        item.worn && String(item.kind || item.actualKind || item.line || '').includes('life saving'));
+        item.worn && (item.amuletIndex != null ? item.amuletIndex === 1
+            : String(item.actualKind || item.kind || item.line || '').includes('life saving')));
     if (!lifesaving) return false;
+    recordKnownAmuletDiscovery('amulet of life saving', lifesaving);
     rn2(19);
     removeInventoryItem(lifesaving);
     game._life_saving_refresh_con = 1;
@@ -12451,24 +12463,14 @@ function applyLifeSavingConLoss() {
     game._life_saving_refresh_con = 0;
 }
 
-// C ref: end.c:2040-2068 savelife() — same synchronous-heal helper as
-// allmain.js's restoreHeroHpForUnresolvedWizardDeath(); duplicated here because
-// cmd.js is the deferred-damage application site ((mhitu.c mdamageu path).
+// Deferred commands preserve C's synchronous savelife HP restoration while
+// the separate wizard/explore death prompt waits for input.
 function restoreHeroHpForUnresolvedWizardDeath() {
     if (!(game.flags?.debug || game.flags?.explore)) return;
     const u = game.u;
     if (!u || !('uhp' in u)) return;
-    const con = u.acurr?.a?.[A_CON] ?? 10;
-    const givehp = 50 + 10 * Math.trunc(con / 2);
-    u.uhp = Math.min(u.uhpmax || 1, givehp);
+    restoreLifeSavedBody(u);
     game._death_pending_confirm = true; // cleared when the Die? prompt resolves
-}
-
-function restoreHeroHpAfterLifeSaving() {
-    if (!game.u) return;
-    const con = game.u.acurr?.a?.[A_CON] ?? 10;
-    const givehp = 50 + 10 * Math.trunc(con / 2);
-    game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
 }
 
 function clearUnsafePetrifyingCorpseWieldAfterLifeSaving() {
@@ -12642,7 +12644,7 @@ function isGreenSlimeGlobItem(item) {
 function fireInventoryItemDamage(item, cls) {
     if (cls === 'potion') return rnd(6);
     if (cls === 'slime') return Math.trunc(((item.owt || 20) + 19) / 20);
-    return game.u?.fireResistance ? 0 : 1;
+    return heroHasFireResistance() ? 0 : 1;
 }
 
 function fireInventoryDeathCause(cls, item, plural) {
@@ -13201,7 +13203,8 @@ function splitFloorObjectForUseUp(obj, count) {
     const usedCount = Math.max(1, Math.trunc(Number(count || 1)));
     const quantity = Math.max(1, Math.trunc(Number(obj?.quan || 1)));
     if (!obj || quantity <= usedCount) return obj;
-    const split = { ...obj, id: next_ident(), quan: usedCount };
+    const split = { ...obj, id: next_ident(), quan: usedCount, timed: 0, owornmask: 0 };
+    splitObjectTimers(obj, split);
     obj.quan = quantity - usedCount;
     game.level.objects ??= [];
     game.level.objects.push(split);
@@ -13234,6 +13237,8 @@ function useUpFloorObject(obj, count, { heroCaused = false } = {}) {
         : null;
     const usedObj = splitFloorObjectForUseUp(obj, count);
     if (heroCaused) billHeroCausedFloorUseUp(usedObj, precomputedPrice);
+    stopObjectTimers(usedObj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
+    if (usedObj.lamplit || usedObj.burning) endBurn(usedObj, false);
     removeFloorObject(usedObj);
     return usedObj;
 }
@@ -13904,7 +13909,7 @@ function fireDamageInventory(origDamage, forceDestroyItems = false, rollIgniteIt
             event.damage = itemDamage;
             damage += itemDamage;
             deathCause = fireInventoryDeathCause(cls, item, plural);
-        } else if (cls !== 'potion' && !game.u?.fireResistance) {
+        } else if (cls !== 'potion' && !heroHasFireResistance()) {
             event.damage = 1;
             damage += 1;
             deathCause = fireInventoryDeathCause(cls, item, plural);
@@ -18402,32 +18407,128 @@ function refreshLightSourceLine(item) {
 }
 
 async function applyLamp(item) {
-    const noun = lampNoun(item);
+    const candle = isCandleObject(item);
+    const noun = candle ? null : lampNoun(item);
+    const many = (item.quan || 1) > 1;
+    const name = pickupObjectName({ ...item, line: '' }).replace(/ \(lit\)$/, '');
     const messages = [];
     if (item.lamplit || item.burning) {
         endWishedBurn(item);
         refreshLightSourceLine(item);
-        messages.push(`Your ${noun} is now off.`);
+        messages.push(candle ? `You snuff out your ${name}.` : `Your ${noun} is now off.`);
     } else if (game.u?.underwater || game.u?.uunderwater) {
-        messages.push('This is not a diving lamp.');
-    } else if ((item.age ?? 1500) === 0
+        messages.push(candle ? "Sorry, fire and water don't mix." : 'This is not a diving lamp.');
+    } else if ((!candle && (item.age ?? 1500) === 0)
         || ((item.otyp === MAGIC_LAMP || objectKindKey(item) === 'magic lamp') && (item.spe ?? 1) <= 0)) {
         messages.push(noun === 'lantern'
-            ? (game.u?.blind ? 'Nothing happens.' : 'Your lantern is out of power.')
+            ? (game.u?.blind ? 'Nothing seems to happen.' : 'Your lantern is out of power.')
             : `This ${pickupObjectName({ ...item, line: '' })} has no oil.`);
     } else if (item.cursed && !rn2(2)) {
         if (noun === 'lamp' && !rn2(3)) {
             addHeroGlibTimeout(d(2, 10));
             messages.push(`The lamp spills and covers your ${fingersOrGloves()} with oil.`);
         } else {
-            messages.push(game.u?.blind ? 'Nothing happens.' : `${sentenceCase(pickupObjectName({ ...item, line: '' }))} flickers for a moment, then dies.`);
+            messages.push(game.u?.blind ? 'Nothing seems to happen.'
+                : `The ${name} flicker${many ? '' : 's'} for a moment, then ${many ? 'die' : 'dies'}.`);
         }
     } else {
-        checkUnpaidUsage(item, messages, { chargeCount: lampUsageChargeCount(item) });
+        if (candle) {
+            messages.push(`Your ${name}${name.endsWith('s') ? "'" : "'s"} flame${many ? 's burn' : ' burns'}${game.u?.blind ? '.' : ' brightly!'}`);
+            if (item.unpaid && shopkeeperForCostlySpot(game.u?.ux, game.u?.uy)
+                && (item.age ?? candleDefaultAge(item)) === candleDefaultAge(item)) {
+                const pronoun = many ? 'them' : 'it';
+                if (!heroIsDeaf()) messages.push(`"You burn ${pronoun}, you bought ${pronoun}!"`);
+                billDummyAlteredCarriedObject(item);
+            }
+        } else {
+            checkUnpaidUsage(item, messages, { chargeCount: lampUsageChargeCount(item) });
+            messages.push(`Your ${noun} is now on.`);
+        }
         beginWishedBurn(item);
         refreshLightSourceLine(item);
-        messages.push(`Your ${noun} is now on.`);
     }
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+}
+
+// C apply.c use_candelabrum: lighting away from the invocation square spends
+// half the fuel immediately, rounded upward so the last turn remains usable.
+async function applyCandelabrum(item) {
+    const many = item.spe !== 1;
+    const candles = many ? 'candles' : 'candle';
+    const name = pickupObjectName({ ...item, line: '' }).replace(/ \(lit\)$/, '');
+    const messages = [];
+    if (item.lamplit || item.burning) {
+        messages.push(`You snuff the ${candles}.`);
+        endBurn(item);
+    } else if (!(item.spe > 0)) {
+        messages.push(`This ${name} has no ${candles}.`);
+        if ((game.inventory || []).some(isCandleObject))
+            messages.push(`To attach candles, apply them instead of the ${name}.`);
+    } else if (game.u?.underwater || game.u?.uunderwater) {
+        messages.push('You cannot make fire under water.');
+    } else if (game.u?.uswallow || item.cursed) {
+        if (!game.u?.blind) messages.push(`The ${candles} flicker${many ? '' : 's'} for a moment, then ${many ? 'die' : 'dies'}.`);
+    } else {
+        if (item.spe < 7) {
+            messages.push(`There ${many ? 'are' : 'is'} only ${item.spe} ${candles} in the ${name}.`);
+            if (!game.u?.blind) messages.push(`${many ? 'They are' : 'It is'} lit.  The ${name} shines dimly.`);
+        } else messages.push(`The ${name}'s candles burn${game.u?.blind ? '.' : ' brightly!'}`);
+        if (!heroOnInvocationSquare()) {
+            messages.push(`The ${candles} ${many ? 'are' : 'is'} being rapidly consumed!`);
+            item.age = Math.max(1, Math.trunc(((item.age || 0) + 1) / 2));
+        } else {
+            if (item.spe === 7) messages.push(game.u?.blind
+                ? `The ${name} radiates a strange warmth!`
+                : `The ${name} glows with a strange light!`);
+            item.known = true;
+        }
+        beginBurn(item);
+    }
+    refreshLightSourceLine(item);
+    await setMessage(messages.join('  '), messages.length > 1);
+    game.context.move = 1;
+}
+
+async function applyCandle(item) {
+    if (game.u?.uswallow) {
+        await setMessage("You don't have enough elbow-room to maneuver.");
+        game.context.move = 1;
+        return;
+    }
+    const holder = (game.inventory || []).find(isCandelabrumOfInvocationItem);
+    if (!holder || holder.spe === 7) {
+        await applyLamp(item);
+        return;
+    }
+    game._attach_candles = { candle: item, holder };
+    await setMessage(`Attach ${ownedEquipmentName(item)} to ${ownedEquipmentName(holder)}? [yn] (n)`);
+    game._command_mode = 'attachCandles';
+}
+
+async function attachCandles(candle, holder) {
+    const obj = splitCarriedInventoryItemCount(candle, 7 - (holder.spe || 0));
+    const wasLit = obj.lamplit || obj.burning;
+    if (wasLit) endBurn(obj);
+    const many = (obj.quan || 1) > 1;
+    const noun = many ? 'candles' : 'candle';
+    const name = pickupObjectName({ ...holder, line: '' }).replace(/ \(lit\)$/, '');
+    const messages = [`You attach ${obj.quan || 1}${holder.spe ? ' more' : ''} ${noun} to the ${name}.`];
+    // C changes the reserved fuel without restarting an already lit holder.
+    if (!holder.spe || holder.age > obj.age) holder.age = obj.age ?? candleDefaultAge(obj);
+    holder.spe = (holder.spe || 0) + (obj.quan || 1);
+    if (holder.lamplit && !wasLit) messages.push(`The new ${noun} magically ignite${many ? '' : 's'}!`);
+    else if (!holder.lamplit && wasLit) messages.push(`${many ? 'They go' : 'It goes'} out.`);
+    if (obj.unpaid && !heroIsDeaf()) {
+        const pronoun = many ? 'them' : 'it';
+        messages.push(`"You ${holder.lamplit ? 'burn' : 'use'} ${pronoun}, you bought ${pronoun}!"`);
+    }
+    if ((obj.quan || 1) < 7 && holder.spe === 7)
+        messages.push(`The ${name} now has seven${holder.lamplit ? ' lit' : ''} candles attached.`);
+    useUpInventoryItem(obj, obj.quan || 1);
+    holder.owt = wishedObjectFinalWeight(holder);
+    if (holder.lamplit) game.vision_full_recalc = 1;
+    refreshLightSourceLine(holder);
     await setMessage(messages.join('  '), messages.length > 1);
     game.context.move = 1;
 }
@@ -35921,7 +36022,7 @@ function finishHeroGenocide(messages, cause = 'scroll of genocide') {
     messages.push('You feel much better!');
     messages.push('The medallion crumbles to dust!');
     applyLifeSavingConLoss();
-    restoreHeroHpAfterLifeSaving();
+    restoreLifeSavedBody();
     messages.push('Unfortunately you are still genocided...');
 }
 
@@ -42184,6 +42285,7 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.oeaten ?? 0) !== (source.oeaten ?? 0) || (target.orotten ?? 0) !== (source.orotten ?? 0)) return false;
     if ((target.obroken ?? false) !== (source.obroken ?? false)) return false;
     if ((target.lamplit ?? false) !== (source.lamplit ?? false)) return false;
+    if (isPotionOfOil(source) && source.lamplit) return false;
     if (!sameStackCorpseEggTinFields(target, source)) return false;
     if ((isSpecialFoodMergeObject(target) || isSpecialFoodMergeObject(source))
         && !specialFoodInstanceNamesMergeCompatible(target, source))
@@ -42226,9 +42328,7 @@ function findPickedObjectInventoryMergeTarget(source, sourcePrice = null) {
 function mergePickedObjectIntoInventory(source, target) {
     const pickedCount = Math.max(1, Math.trunc(Number(source?.quan || 1)));
     const targetCount = Math.max(1, Math.trunc(Number(target.quan || 1)));
-    const ageAveragedMerge = (isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source))
-        || (isSpecialFoodMergeObject(target) && isSpecialFoodMergeObject(source));
-    if (ageAveragedMerge) {
+    if (!source.lamplit && !isGlobbyObject(source)) {
         const targetAge = Number.isFinite(Number(target.age)) ? Number(target.age) : 0;
         const sourceAge = Number.isFinite(Number(source.age)) ? Number(source.age) : 0;
         if (target.age != null || source.age != null)
@@ -42252,6 +42352,9 @@ function mergePickedObjectIntoInventory(source, target) {
     const pickedPhrase = isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)
         ? normalInventoryLine({ ...target, line: '', quan: pickedCount }).replace(/^[^ ]+ - /, '')
         : pickupObjectPhrase({ ...source, line: '', quan: pickedCount });
+    stopObjectTimers(source, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
+    if (source.lamplit || source.burning) endBurn(source, false);
+    if (target.lamplit) game.vision_full_recalc = 1;
     return `${target.letter} - ${pickedPhrase} (${target.quan} in total).`;
 }
 
@@ -54934,7 +55037,7 @@ function applyGlobCpostfxIntrinsic(monsterName) {
 
 function heroHasUnchanging() {
     return !!game.u?.unchanging || (game.inventory || []).some(item =>
-        item.worn && /amulet of unchanging|unchanging/i.test(String(item.kind || item.actualKind || item.line || '')));
+        item.worn && isAmuletOfUnchangingObject(item));
 }
 
 function adjustHeroStrengthFromRoyalJelly(cursed) {
@@ -56484,7 +56587,8 @@ function heroDartTrapFatalResult(messages, deathCause) {
 }
 
 function restoreLifeSavedHeroForContinuation() {
-    if (game.u) game.u.uhp = game.u.uhpmax || 1;
+    applyLifeSavingConLoss();
+    restoreLifeSavedBody();
 }
 
 function queueKickOuchLifeSavingRecoil(dir) {
@@ -63036,8 +63140,6 @@ async function rhackInternal(_cmd) {
             game._message_more = 0;
             game._keep_pending_message = 1;
             game._command_mode = null;
-            if (!stoningLifeSaved && game.u)
-                game.u.uhp = postContinuationHp == null ? (game.u.uhpmax || 1) : postContinuationHp;
             if (stoningLifeSaved) {
                 game._life_saving_clear_stoning = 0;
                 if (game.u) {
@@ -63049,11 +63151,8 @@ async function rhackInternal(_cmd) {
             }
             clearLifeSavedDeathState();
             applyLifeSavingConLoss();
-            if (stoningLifeSaved && game.u) {
-                const con = game.u.acurr?.a?.[A_CON] ?? 10;
-                const givehp = 50 + 10 * Math.trunc(con / 2);
-                game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
-            }
+            if (postContinuationHp == null) restoreLifeSavedBody();
+            else if (game.u) game.u.uhp = postContinuationHp;
             const boomerangPreRecoilContinuation = game._life_saving_boomerang_pre_recoil || null;
             game._life_saving_boomerang_pre_recoil = null;
             if (boomerangPreRecoilContinuation) {
@@ -67471,7 +67570,7 @@ function tutorialEnterStash() {
             // end.c:1108-1116 — savelife() healed synchronously at the fatal
             // slot already (restoreHeroHpForUnresolvedWizardDeath); healing
             // again here would erase the chain's post-refusal damage.
-            if (!healedAtChainCrossing) restoreHeroHpAfterLifeSaving();
+            if (!healedAtChainCrossing) restoreLifeSavedBody();
             clearLifeSavedDeathState();
             // C ref: timeout.c:684-685 done_timeout() -> done() -> die() ->
             // savelife() (end.c:2040-2068) all run synchronously inside
@@ -68451,12 +68550,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         // C ref: end.c:2040-2068 savelife() — restore hp synchronously at
         // the refusal ("OK, so you don't die." prints from done()'s resume).
-        const con = game.u?.acurr?.a?.[A_CON] ?? 10;
-        const givehp = 50 + 10 * Math.trunc(con / 2);
-        if (game.u) {
-            game.u.uhp = Math.min(game.u.uhpmax || 1, givehp);
-            if (game.u._polyself_form) game.u.mh = Math.min(game.u.mhmax || 1, givehp);
-        }
+        restoreLifeSavedBody();
         game._death_pending_confirm = false;
         if (game._prayer_godzap_stage === 'refuse1') {
             // pray.c:639-651 — done() returns into god_zaps_you(): the god
@@ -70579,10 +70673,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         // spell. Keep its final HP for the later life-saving message.
         clearLifeSavedDeathState();
         applyLifeSavingConLoss();
-        restoreHeroHpAfterLifeSaving();
-        const hp = heroPolyselfFireHpState();
-        const con = game.u.acurr?.a?.[A_CON] ?? 10;
-        if (hp) game.u[hp.hpKey] = Math.min(game.u[hp.maxKey], 50 + 10 * Math.trunc(con / 2));
+        restoreLifeSavedBody();
         if (game.u.uhunger < 500) { game.u.uhunger = 900; game.u.uhs = 1; }
         if ((game.u._sickTimeout || game.u._sicknessTimeout) === 1) clearHeroSickness();
         if (game.u.utraptype === TT_LAVA) { game.u.utrap = 0; game.u.utraptype = null; }
@@ -73815,6 +73906,20 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
+    if (game._command_mode === 'attachCandles') {
+        const answer = ch.toLowerCase();
+        if (!['y', 'n', ' ', '\r', '\n', '\x1b'].includes(answer)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const { candle, holder } = game._attach_candles;
+        delete game._attach_candles;
+        game._command_mode = null;
+        if (answer === 'y') await attachCandles(candle, holder);
+        else await applyLamp(candle);
+        return;
+    }
+
     if (game._command_mode === 'applyObject') {
         if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
             await setMessage('Never mind.');
@@ -74126,6 +74231,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game.context.move = 1;
             return;
         }
+        if (isCandleObject(item)) {
+            await applyCandle(item);
+            return;
+        }
+        if (isCandelabrumOfInvocationItem(item)) {
+            await applyCandelabrum(item);
+            return;
+        }
         if (isLampObject(item)) {
             await applyLamp(item);
             return;
@@ -74291,6 +74404,79 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         return;
     }
 
+    const ARTIFACT_INVOKE_DEPS = {
+        heroIsBlind, damageHero: applyChestTrapFireDamage, halfPhysical: maybeHalfPhysicalDamage,
+        name: spellMonsterTheName, kill: killMonsterFromHeroProjectileHit,
+        visible: mon => !heroIsBlind() && !mon.mundetected
+            && (!mon.minvis || game.u?.seeInvisible) && couldsee(mon.mx, mon.my),
+        seeSquare: couldsee, newsym, mapInvisible: bullwhipMapInvisibleAt,
+        wake: wakeNearbyMonstersAt, anger: setHeroObjectHitMonsterAngry, flee: directMeleeMonflee,
+        blindHero(duration) {
+            game.u._blindTimeout = duration;
+            const eyes = (game.inventory || []).some(obj => isWornInventoryItem(obj)
+                && artifactDefinitionForName(obj.artifact || obj.oartifact)?.name === 'The Eyes of the Overworld');
+            game.u.blind = !eyes;
+            if (game.u.blind) addHeroStatusSuffix('Blind');
+            else removeHeroStatusSuffix('Blind');
+            vision_recalc(0);
+        },
+        revealMimic(mon, messages) {
+            const explanation = mon.appearDescription || (mon.appearGlyph === '+' ? 'closed door'
+                : mon.appearGlyph === '>' ? 'staircase down' : mon.appearGlyph === '<' ? 'staircase up'
+                    : mon.appearGlyph === '_' ? 'altar' : 'something');
+            const wasVisible = !heroIsBlind() && couldsee(mon.mx, mon.my) && (!mon.minvis || game.u?.seeInvisible);
+            revealHeroProjectileHitMimicAppearance(mon);
+            if (wasVisible) messages.push(`That ${explanation} is really ${mon.mtame ? 'your ' + mon.data.name : articleFor(mon.data.name)}${mon.mtame ? '.' : '!'}`);
+        },
+    };
+
+    if (game._command_mode === 'invokeFlashDirection') {
+        const item = game._invoking_artifact;
+        if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
+            item.age = game.moves || 0;
+            game._invoking_artifact = null;
+            game._command_mode = null;
+            game.context.move = 0;
+            await setMessage('Never mind.');
+            return;
+        }
+        const dir = commandDirection(ch);
+        if (!dir) return;
+        game._invoking_artifact = null;
+        game._command_mode = null;
+        const messages = [];
+        if (dir.dx || dir.dy) await flashRay(item, dir, messages, ARTIFACT_INVOKE_DEPS);
+        else if (dir.dz) {
+            const ux = game.u.ux, uy = game.u.uy;
+            const loc = game.level.at(ux, uy);
+            const waslit = loc.waslit;
+            const noOp = lightScrollNoOpLevel();
+            if (!heroIsBlind()) {
+                if (game.u.uswallow) messages.push(`${fireScrollMonsterName(game.u.ustuck)}'s ${bodyPart(game.u.ustuck, 'stomach')} is lit.`);
+                else if (!(Is_rogue_level(game.u.uz) || game.level.flags?.rogue_level) || loc.typ !== CORR)
+                    messages.push(`A lit field ${noOp ? 'briefly ' : ''}surrounds you!`);
+            }
+            if (!noOp) {
+                if (Is_rogue_level(game.u.uz) || game.level.flags?.rogue_level) applyLightScrollArea(true, item);
+                else loc.lit = true;
+                vision_recalc(2);
+                game.vision_full_recalc = 1;
+            }
+            messages.push(!heroIsBlind() && loc.lit && !waslit ? 'It is lit here now.' : 'Nothing seems to happen.');
+        } else {
+            const damage = item.blessed ? 15 : item.cursed ? 5 : 10;
+            const form = pmOf({ data: game.u._polyself_form }) || game.u._polyself_form;
+            const gremlin = form?.name === 'gremlin' || game.u.umonnum === PM_GREMLIN;
+            if (gremlin) lightDamageHero(item, 2 * damage, messages, ARTIFACT_INVOKE_DEPS);
+            if (!flashBurnHero(damage + rnd(damage), messages, ARTIFACT_INVOKE_DEPS) && !gremlin)
+                messages.push('Nothing seems to happen.');
+        }
+        game.context.move = 1;
+        if (messages.length) await setMessage(messages.join('  '), messages.length > 1);
+        applyLifeSavingOrFatalCommandMode(messages);
+        return;
+    }
+
     if (game._command_mode === 'cameraDirection') {
         const item = (game.inventory || []).find(invItem => invItem.letter === game._apply_camera_letter);
         if (ch === '\x1b' || ch === ' ' || ch === '\r' || ch === '\n') {
@@ -74317,39 +74503,22 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             return;
         }
         const flashHero = item.cursed && !rn2(2);
-        if (flashHero || selfZap) {
-            const duration = 5 + rnd(25);
-            if (game.u) {
-                game.u.blind = true;
-                game.u._blindTimeout = (game.u._blindTimeout || 0) + duration;
-            }
-            messages.push('You are blinded by the flash!');
+        if (flashHero) {
+            const damage = lightDamageHero(item, 5, messages, ARTIFACT_INVOKE_DEPS);
+            flashBurnHero(damage + rnd(25), messages, ARTIFACT_INVOKE_DEPS);
+        } else if (game.u.uswallow) {
+            messages.push(`You take a picture of ${possessiveMonsterName(spellMonsterTheName(game.u.ustuck))} ${bodyPart(game.u.ustuck, 'stomach')}.`);
         } else if (verticalDir) {
-            messages.push(`You take a picture of the ${verticalDir.dz > 0 ? 'floor' : 'ceiling'}.`);
+            messages.push(`You take a picture of the ${verticalDir.dz > 0 ? polyselfFalloffSurfaceName(game.u.ux, game.u.uy) : heroThrowCeilingName()}.`);
+        } else if (selfZap) {
+            const damage = lightDamageHero(item, 5, messages, ARTIFACT_INVOKE_DEPS);
+            flashBurnHero(damage + rnd(25), messages, ARTIFACT_INVOKE_DEPS);
         } else if (dir) {
-            let x = game.u?.ux || 0;
-            let y = game.u?.uy || 0;
-            let target = null;
-            for (let range = 0; range < COLNO; range++) {
-                x += dir.dx;
-                y += dir.dy;
-                if (x <= 0 || x >= COLNO || y < 0 || y >= ROWNO) break;
-                target = game.level?.monsters?.find(mon =>
-                    mon.mx === x && mon.my === y && (mon.mhp == null || mon.mhp > 0));
-                if (target) break;
-                const loc = game.level?.at?.(x, y);
-                if (!ZAP_POS(loc?.typ ?? STONE)) break;
-            }
-            if (target) {
-                target.msleeping = 0;
-                target.mcansee = false;
-                target.mblinded = Math.max(target.mblinded || 0, rnd(20));
-                if (!game.u?.blind && (game.viz_array?.[target.my]?.[target.mx] & IN_SIGHT))
-                    messages.push(`The ${target.data?.name || 'monster'} is blinded by the flash!`);
-            }
+            await flashRay(item, dir, messages, ARTIFACT_INVOKE_DEPS);
         }
         await setMessage(messages.join('  '), messages.length > 1);
         game.context.move = 1;
+        applyLifeSavingOrFatalCommandMode(messages);
         return;
     }
 
@@ -75878,6 +76047,13 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         if (result.action === 'SNOWSTORM' || result.action === 'FIRESTORM') {
             await beginArtifactStormSpell(result.action === 'SNOWSTORM' ? 'cone of cold' : 'fireball');
+            return;
+        }
+        if (result.action === 'BLINDING_RAY') {
+            game._invoking_artifact = item;
+            game.context.move = 0;
+            await setMessage([...result.messages, 'In what direction?'].join('  '));
+            game._command_mode = 'invokeFlashDirection';
             return;
         }
         if (result.action === 'CREATE_PORTAL') {

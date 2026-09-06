@@ -53,6 +53,7 @@ import { advanceFireBreathRay, finishHeroTargetedBreath, fireBreathDamageMonster
 import { attachFigurineTransformTimeout, figurineLocationCheck, isFigurineObject, makeFigurineFamiliar, stopFigurineTransformTimeout } from './figurine.js';
 import { processBuriedOrganicRot, processMeltIceTimers, removedFromIcebox } from './ice.js';
 import { processObjectBurnTimers } from './cmd.js';
+import { restoreLifeSavedBody } from './end.js';
 import { SLIME_MOLD_OTYP, applySlimeMoldFruitFields } from './fruit.js';
 import { applyMeltedIceMonsterLiquidEffects } from './monster_liquid.js';
 import { eggHatchMonsterData, eggHasHatchTimer, isEggObject, killEggHatchTimer } from './egg_timers.js';
@@ -2647,9 +2648,7 @@ function restoreHeroHpForUnresolvedWizardDeath() {
     if (!(game.flags?.debug || game.flags?.explore)) return;
     const u = game.u;
     if (!u || !('uhp' in u)) return;
-    const con = u.acurr?.a?.[A_CON] ?? 10;
-    const givehp = 50 + 10 * Math.trunc(con / 2);
-    u.uhp = Math.min(u.uhpmax || 1, givehp);
+    restoreLifeSavedBody(u);
     game._death_pending_confirm = true; // cleared when the Die? prompt resolves
 }
 

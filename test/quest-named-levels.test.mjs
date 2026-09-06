@@ -137,8 +137,8 @@ test('named quest programs regenerate exactly from upstream source', () => {
 test('quest compiler preserves ordered nested tables and rejects unsupported executable Lua', () => {
     assert.deepEqual(parseQuestLua('des.object({id="bow",coord={02,10}}); des.monster("Scorpius", 2, 10)'),
         [['object', { id: 'bow', coord: [2, 10] }], ['monster', 'Scorpius', 2, 10]]);
-    assert.throws(() => parseQuestLua('des.object(); os.execute("true")'), /Expected des/);
-    assert.throws(() => parseQuestLua('des.object({quan=nh.rn2(4)})'), /Unsupported quest value/);
+    assert.throws(() => parseQuestLua('des.object(); os.execute("true")'), /Unsupported quest call/);
+    assert.throws(() => parseQuestLua('des.object({quan=nh.exit(4)})'), /Unsupported quest call/);
 });
 
 test('an extinct unique nemesis is omitted while its source artifact remains', async () => {

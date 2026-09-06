@@ -4,6 +4,25 @@
 
 import { game } from './gstate.js';
 import { depth as depthOfLevel } from './hacklib.js';
+import { A_CON } from './const.js';
+
+// end.c:savelife and attrib.c:minuhpmax/setuhpmax. Callers apply any amulet
+// Constitution loss first and handle status cures, expulsion and messages.
+export function restoreLifeSavedBody(u = game.u) {
+    if (!u) return;
+    u.ulevel = Math.max(1, u.ulevel || 1);
+    const minimum = Math.max(u.ulevel, 10);
+    if ((u.uhpmax || 0) < minimum) {
+        u.uhpmax = minimum;
+        u.uhppeak = Math.max(u.uhppeak || 0, minimum);
+    }
+    const con = u.acurr?.a?.[A_CON] ?? 10;
+    const givehp = 50 + 10 * Math.trunc(con / 2);
+    u.uhp = Math.min(u.uhpmax, givehp);
+    if ((u._polyself_form || u.Upolyd || u.polymorphed) && u.mhmax != null)
+        u.mh = Math.min(u.mhmax, givehp);
+    u.unchanging = false; // HUnchanging only; worn amulets remain active.
+}
 
 const GOLD_PIECE = 466; // object id for gold zorkmids (mirrors allmain.js/cmd.js)
 

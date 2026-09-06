@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The next source-driven checkpoint has **4,520 passing tests**, with no failures,
+The next source-driven checkpoint has **4,589 passing tests**, with no failures,
 skips or TODOs, up from 4,309 at the previous checkpoint. Public recordings
 remain 53/53 with 12,712/12,712 screens and 832,102/832,102 RNG calls.
 Supplemental recordings remain 12/19 with 3,070/3,346 screens and
@@ -39,10 +39,18 @@ and artifact invocation cooldown, healing, energy, ammunition, charging,
 untrap, property toggles, banishment and dungeon portals. It also adds ten
 named quest maps: Barbarian/Caveman/Healer/Ranger goals and
 Caveman/Healer/Knight/Ranger/Rogue/Valkyrie locates. All 26 fillers and 21 of
-39 named stages now dispatch, leaving 18 named maps.
+39 named stages dispatched at that checkpoint. The next group adds Rogue, Monk
+and Valkyrie goals, bringing dispatch to 50/65 (26 fillers and 24/39 named
+stages), with 15 named maps still absent.
+
+The next group also adds candle/Candelabrum application, timer-preserving
+stack splits and merge cleanup, shared camera/Sunsword flash combat, and C
+life-saving HP restoration including generated amulets, Unchanging and
+fire-resistant paper damage. Its combined suite passes 4,589/4,589. The
+recording counts above were last rerun at the preceding 4,520-test checkpoint.
 
 Still open in these slices: migrating the other eight timer callbacks into
-the shared queue, candle/Candelabrum application and stack lifecycle,
+the shared queue and remaining object destruction/transfer lifecycle,
 automatic artifact light activation, remaining artifact powers and property
 loss, and broader explosion/hero-death branches. The independent reviews
 found and fixed bulk timer cancellation, inactive level ownership, numeric
@@ -121,7 +129,7 @@ for each finding. Major unfinished areas include:
 2. **Timers and arrival:** shared ordering across corpse, egg, figurine and terrain timers, automatic
    light activation and candle application, and the complete terrain/region/spot-effects arrival
    pipeline.
-3. **Quest and artifacts:** 18 named quest maps and remaining artifact invocation branches.
+3. **Quest and artifacts:** 15 named quest maps and remaining artifact invocation branches.
    Existing builder dispatch does not itself prove map parity.
 4. **Regions and movement:** region callbacks, broader level scripting and
    remaining movement/trap ordering beyond the tested pit paths.
