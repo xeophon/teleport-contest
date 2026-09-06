@@ -63671,7 +63671,7 @@ function discoveryOverlayLines(page = 0) {
             || game._object_descriptions?.amulets?.[item.amuletIndex]
             || (lineAppearance && lineAppearance !== 'an' && lineAppearance !== 'a' ? lineAppearance : '');
         if (appearance)
-            addDiscovery('Amulets', `amulet (${appearance})`, `amulet (${appearance})`);
+            addDiscovery('Amulets', String(item.actualKind || item.kind || `amulet (${appearance})`).toLowerCase(), `amulet (${appearance})`);
     }
     const body = [];
     for (const section of sectionOrder) {

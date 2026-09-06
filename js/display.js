@@ -617,7 +617,7 @@ export function recordObservedObjectDiscovery(obj) {
     }
     if (obj.cls === 'amulet' || obj.glyph === '"') {
         const appearance = String(obj.appearance || '').trim();
-        if (appearance) addObservedDiscovery('Amulets', 'amulet', `amulet (${appearance})`);
+        if (appearance) addObservedDiscovery('Amulets', String(obj.actualKind || obj.kind || `amulet (${appearance})`).toLowerCase(), `amulet (${appearance})`);
         return;
     }
     if (obj.cls === 'ring' || obj.glyph === '=') {

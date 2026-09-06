@@ -7,6 +7,7 @@ import { initRng } from '../js/rng.js';
 import { vision_reset } from '../js/vision.js';
 import { ROOM, W_QUIVER, W_WEP } from '../js/const.js';
 import { ROT_CORPSE, peekTimer } from '../js/timeout.js';
+import { recordObservedObjectDiscovery } from '../js/display.js';
 
 function setup() {
     resetGame();initRng(41);
@@ -141,4 +142,33 @@ test('merging a wished corpse keeps the original decay timer and cancels the new
     assert.equal(game.inventory.length,1);assert.equal(original.quan,2);
     assert.equal(peekTimer(ROT_CORPSE,original),deadline);
     assert.equal(game.timers.filter(timer=>timer.func===ROT_CORPSE).length,1);
+});
+
+test('repeated amulet observations retain one discovery per object type',()=>{
+    setup();const item={cls:'amulet',kind:'circular amulet',actualKind:'amulet of reflection',appearance:'circular'};
+    recordObservedObjectDiscovery(item);recordObservedObjectDiscovery({...item});
+    assert.equal(game._discoveries.length,1);
+    assert.equal(game._discoveries[0].name,'amulet of reflection');
+    assert.equal(game._discoveries[0].text,'amulet (circular)');
+});
+
+test('distinct unknown amulet types retain separate discovery entries',()=>{
+    setup();
+    for(const [actualKind,appearance] of [['amulet of reflection','circular'],['amulet of life saving','square']])
+        recordObservedObjectDiscovery({cls:'amulet',actualKind,appearance});
+    assert.equal(game._discoveries.length,2);
+    assert.deepEqual(game._discoveries.map(entry=>entry.text),['amulet (circular)','amulet (square)']);
+});
+
+test('the worn-amulet discovery path uses the same type identity as observation',async()=>{
+    setup();const item={letter:'a',cls:'amulet',kind:'amulet of reflection',actualKind:'amulet of reflection',
+        appearance:'circular',worn:true,known:false,quan:1};
+    game.inventory=[item];recordObservedObjectDiscovery(item);await rhack('\\');
+    assert.equal(game._overlay_lines.filter(row=>row[2].includes('amulet (circular)')).length,1);
+});
+
+test('observing an identified amulet preserves its learned discovery text',()=>{
+    setup();const entry={section:'Amulets',name:'amulet of reflection',text:'amulet of reflection (circular)',known:true};
+    game._discoveries=[entry];recordObservedObjectDiscovery({cls:'amulet',actualKind:entry.name,appearance:'circular'});
+    assert.deepEqual(game._discoveries,[entry]);assert.equal(entry.known,true);
 });

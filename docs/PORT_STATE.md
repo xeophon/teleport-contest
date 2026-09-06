@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,550 passing tests**, with no
+The latest source-driven checkpoint has **6,554 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -73,6 +73,10 @@ namedesc roll and receive their C initialization. Forty-eight new state tests
 and a fresh 189-screen/2,772-call C recording pass. Globs, general object
 knowledge/observation, full floor/monster merge predicates and the remaining
 addinv intrinsic side effects still require source passes.
+Amulet observation and the worn-item discovery view now share type identity,
+so repeated sightings do not duplicate a row or suppress another amulet type.
+Four new tests pass; the four affected recordings again match all 1,742 screens
+and 241,544 random calls.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and
