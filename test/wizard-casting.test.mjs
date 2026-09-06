@@ -105,7 +105,7 @@ test('direct known-spell call reports an absent spell without opening a menu', a
     assert.deepEqual(getRngLog(), []);
 });
 
-for (const name of ['wizard-casting', 'spell-wizard-death', 'spell-rays', 'spell-direction-cancel', 'spell-explosions', 'armor-callbacks', 'effective-attributes']) test(`fresh C oracle: ${name}`, () => {
+for (const name of ['wizard-casting', 'spell-wizard-death', 'spell-rays', 'spell-direction-cancel', 'spell-explosions', 'armor-callbacks', 'effective-attributes', 'wounded-legs']) test(`fresh C oracle: ${name}`, () => {
     const path = fileURLToPath(new URL(`./fixtures/oracles/${name}.session.json`, import.meta.url));
     const child = spawnSync(process.execPath, ['frozen/ps_test_runner.mjs', `--worker-session=${path}`],
         { cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });

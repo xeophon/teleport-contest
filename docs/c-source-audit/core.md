@@ -134,3 +134,15 @@ used to mark a subsystem complete.
 These interface scans locate ownership and known gaps across all 40 files.
 Named function-body comparisons above are deeper than the remaining table
 entries. The inventory must not be reported as exhaustive branch review.
+
+## Wounded-leg state and expiry
+
+`js/do.js` now owns `do.c:2428–2447 set_wounded_legs`: one ATEMP Dexterity
+penalty, longest timeout, preserved intrinsic flags and accumulated side bits.
+Kick, welded digging, bear traps, ball release, land mines and riding call it.
+`cmd.js` owns the split `heal_legs` operation; healing messages precede clearing
+and load recomputation. Timeout expiry saves its continuation before timers and
+regions, then stops occupation; stoning uses the silent non-mounted gate.
+The 29 source tests include saved and live-loop continuations. A fresh C
+kick/wait recording matches 23 screens and 3,097 RNG calls. General timeout
+property ordering and suspended wound-producing messages remain separate work.

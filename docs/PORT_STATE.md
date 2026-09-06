@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 77 JavaScript modules and approximately 172,000 lines;
+The port now has 78 JavaScript modules and approximately 172,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,333 passing tests**, with no
+The latest source-driven checkpoint has **6,363 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -36,8 +36,16 @@ digging, shops and status use that owner. Power gloves preserve changes to
 base Strength, and spell accuracy uses Dexterity. Carrying capacity now applies
 compressed Strength, monster weight/size, strong mounts, wounded sides, flight
 and delayed levitation boots. Fifty-two new source-state tests pass; a fresh C
-recording matches all 119 screens and 2,949 random calls. Attribute mutation,
-wound production and the remaining combat branches still need source passes.
+recording matches all 119 screens and 2,949 random calls. Attribute mutation and the remaining combat branches still need source passes.
+
+Wound producers now share `do.c:set_wounded_legs`, preserving base Dexterity,
+accumulating sides and extending a shared timeout. Healing restores temporary
+Dexterity before feedback and clears wounds afterward. Timeout healing retains
+a saved continuation before object timers/regions and stops occupations after
+load feedback. Mounted healing, petrification and actual remaining encumbrance
+follow their C gates. Twenty-nine new tests pass; a fresh ordinary C kick/wait
+recording matches 23 screens and 3,097 random calls. Message suspension inside
+wound-producing attacks and other general intrinsic expiry order remain open.
 
 All nine object/level timer kinds now share C's deadline ordering, including
 newest-first ties, cancellation, object identity, inactive levels, and catch-up.

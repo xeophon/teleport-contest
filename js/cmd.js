@@ -1,3 +1,4 @@
+import { hasWoundedLegs, setWoundedLegs } from './do.js';
 import { strongmonst, MZ_HUMAN } from './permonst.js';
 import { FLYING } from './const.js';
 import { LEFT_SIDE, RIGHT_SIDE, WT_WOUNDEDLEG_REDUCT } from './const.js';
@@ -10902,7 +10903,7 @@ function buildGenericAttributesPage2Rows() {
     if (statusSuffix.includes('Deaf')) rows.push([row++, 0, '  You are deaf.']);
     if (statusSuffix.includes('Hallu')) rows.push([row++, 0, '  You are hallucinating.']);
     if (game.u?.uball || isBuriedBallTrapActive()) rows.push([row++, 0, '  You are chained to a heavy iron ball.']);
-    if (game.u?._woundedLegTurns) {
+    if (hasWoundedLegs()) {
         const side = game.u._woundedLegSide === 'left' ? 'left '
             : game.u._woundedLegSide === 'right' ? 'right ' : '';
         rows.push([row++, 0, `  You have a wounded ${side}leg.`]);
@@ -16428,17 +16429,6 @@ async function heroUseSaddle(item, dx, dy) {
     game.context.move = 1;
 }
 
-// C ref: do.c:2428-2448 set_wounded_legs(BOTH_SIDES, ...) — wizard session's
-// thrown-off leg damage; rn1(5,5) roll consumed at steed.c:614.
-function heroSetWoundedLegsBothSides(extraTurns) {
-    if (!(game.u?._woundedLegTurns || 0) && game.u?.acurr?.a && !game.u._woundedDexPenalty) {
-        game.u._woundedDexPenalty = 1;
-        game.u.acurr.a[A_DEX] = Math.max(1, game.u.acurr.a[A_DEX] - 1);
-    }
-    game.u._woundedLegTurns = Math.max(game.u?._woundedLegTurns || 0, extraTurns || 0);
-    if (game.u) game.u._woundedLegSide = '';
-}
-
 // C ref: steed.c:565-816 dismount_steed(DISMOUNT_THROWN), restricted to the
 // "thrown off" case reached from kick_steed()/steed.c:434-447.
 // The landing spot is chosen first (steed.c:591 -> 479-560 landing_spot),
@@ -16469,7 +16459,7 @@ function finishSteedThrownDismount(spot) {
     const steed = game.u?.usteed;
     if (!steed) return;
     // steed.c:614 — set_wounded_legs(BOTH_SIDES, HWounded_legs + rn1(5,5))
-    heroSetWoundedLegsBothSides((game.u?._woundedLegTurns || 0) + (rn2(5) + 5));
+    setWoundedLegs(BOTH_SIDES, (game.u?.uprops?.[WOUNDED_LEGS]?.intrinsic || 0) + rn1(5, 5));
     const steedX = game.u.ux;
     const steedY = game.u.uy;
     // steed.c:657-662 — release the steed (usteed = NULL, ugallop = 0,
@@ -16523,7 +16513,7 @@ async function mountSteed(mon, { force = false } = {}) {
     // Wounded legs (steed.c:224-247): print legs_in_no_shape("riding", ...)
     // first (do.c:2408-2425); the "Heal your leg?" y_n only fires when the
     // mount is a forced one in wizard mode.
-    if ((game.u?._woundedLegTurns || 0) > 0) {
+    if (hasWoundedLegs()) {
         if (force && (game.flags?.debug || game.flags?.explore)) {
             game._ride_heal_steed = { mon, spot: { x: mon.mx, y: mon.my } };
             await setMessage(heroLegsInNoShapeMessage('riding'), true);
@@ -16593,24 +16583,21 @@ async function mountSteed(mon, { force = false } = {}) {
 
 // C ref: do.c:2408-2425 legs_in_no_shape("riding", FALSE)
 function heroLegsInNoShapeMessage(verb) {
-    const side = game.u?._woundedLegSide === 'left' ? 'left '
-        : game.u?._woundedLegSide === 'right' ? 'right ' : '';
-    return `Your ${side}leg${side ? '' : 's'} ${side ? 'is' : 'are'} in no shape for ${verb}.`;
+    const sides = (game.u?.uprops?.[WOUNDED_LEGS]?.extrinsic || 0) & BOTH_SIDES;
+    const side = sides === LEFT_SIDE ? 'left ' : sides === RIGHT_SIDE ? 'right ' : '';
+    const leg = bodyPart(heroFormData(), 'leg');
+    const both = sides === BOTH_SIDES;
+    return `Your ${side}${both ? pluralizeMonsterName(leg) : leg} ${both ? 'are' : 'is'} in no shape for ${verb}.`;
 }
 
 // C ref: do.c:2449-2484 heal_legs(0) joined with the forced-mount path.
 async function finishRideHealLegsAndMount() {
     const info = game._ride_heal_steed;
     game._ride_heal_steed = null;
-    if (game.u?.acurr?.a && game.u._woundedDexPenalty) {
-        game.u.acurr.a[A_DEX]++;       // ATEMP(A_DEX)++ via acurr mirror
-        game.u._woundedDexPenalty = 0;
-    } else if (game.u?.acurr?.a) {
-        game.u._woundedDexPenalty = 0;
-    }
-    game.u._woundedLegTurns = 0;
-    game.u._woundedLegSide = '';
-    await setMessage('Your legs feel better.');
+    const message = beginHeroLegHealing();
+    if (message) await setMessage(message);
+    const loadMessage = finishHeroLegHealing();
+    if (loadMessage) addToplineMessage(loadMessage);
     if (info?.mon) await mountSteed(info.mon, { force: true });
 }
 
@@ -23072,24 +23059,24 @@ function clearHeroHallucination(messages) {
 
 // do.c:heal_legs restores temporary Dexterity before its message, then
 // clears wound properties and checks carrying capacity after pline returns.
-function beginHeroLegHealing() {
+export function beginHeroLegHealing(how = 0) {
+    if (!hasWoundedLegs()) return '';
     const u = game.u, prop = u.uprops?.[WOUNDED_LEGS];
-    const both = prop ? ((prop.extrinsic || 0) & BOTH_SIDES) === BOTH_SIDES
-        : !['left', 'right'].includes(u._woundedLegSide);
+    const both = ((prop.extrinsic || 0) & BOTH_SIDES) === BOTH_SIDES;
     if (u.atemp?.a?.[A_DEX] < 0) ++u.atemp.a[A_DEX];
-    else if (u._woundedDexPenalty && u.acurr?.a) ++u.acurr.a[A_DEX];
     (game.disp ??= {}).botl = true;
-    if (u.usteed) return '';
+    if (u.usteed || how === 2) return '';
     const leg = bodyPart(heroFormData(), 'leg');
     return `Your ${both ? pluralizeMonsterName(leg) : leg} ${both ? 'feel' : 'feels'} better.`;
 }
 
-function finishHeroLegHealing() {
-    const u = game.u, prop = u.uprops?.[WOUNDED_LEGS];
+export function finishHeroLegHealing(how = 0) {
+    const prop = game.u.uprops?.[WOUNDED_LEGS];
     if (prop) prop.intrinsic = prop.extrinsic = 0;
-    u._woundedDexPenalty = u._woundedLegTurns = 0;
-    u._woundedLegSide = '';
-    return encumberMsg();
+    game.u._woundedLegTurns = 0;
+    game.u._woundedLegSide = '';
+
+    return how === 0 ? encumberMsg() : '';
 }
 
 // A false result means pline has not returned yet. The phase is advanced
@@ -23194,7 +23181,7 @@ async function resumeHealingPotion() {
         case 'legs': {
             const eligible = (extra && item.blessed && !u.usteed)
                 || (full && (item.blessed || !item.cursed && !u.usteed));
-            state.healLegs = eligible && !!(u.uprops?.[WOUNDED_LEGS]?.intrinsic || u._woundedLegTurns);
+            state.healLegs = eligible && hasWoundedLegs();
             const message = state.healLegs ? beginHeroLegHealing() : '';
             if (!publishHealingPotionMessage(state, message, 'legsCommit')) return;
             break;
@@ -27452,8 +27439,8 @@ async function dismountHeroForLanding(messages, fell, continuation = null) {
     }
     if (state.phase === 'afterDamage') {
         game._water_dismount_continuation = null;
-        if (state.woundLegs) heroSetWoundedLegsBothSides((game.u._woundedLegTurns || 0) + rn1(5, 5));
-        else if (game.u._woundedLegTurns) healWoundedLegsFromRoyalJelly();
+        if (state.woundLegs) setWoundedLegs(BOTH_SIDES, (game.u.uprops?.[WOUNDED_LEGS]?.intrinsic || 0) + rn1(5, 5));
+        else if (hasWoundedLegs()) healWoundedLegsFromRoyalJelly();
         game.u.usteed = null;
         game.u.ugallop = 0;
         steed.mx = game.u.ux;
@@ -27709,7 +27696,9 @@ function heroDropBallReleaseTrapMessages(x, y) {
         const side = rn2(3) ? 'left' : 'right';
         const duration = rn1(1000, 500);
         messages.push('The ball pulls you out of the bear trap!');
-        applyHeroBearTrapLegWound(side, duration);
+        setWoundedLegs(side === 'right' ? RIGHT_SIDE : LEFT_SIDE, duration);
+        const loadMessage = encumberMsg();
+        if (loadMessage) messages.push(loadMessage);
         if (!game.u?.usteed) {
             messages.push(`Your ${side} leg is severely damaged.`);
             if (game.u) {
@@ -42458,12 +42447,9 @@ function applyKickOuchDamage(x, y, messages, { kickObjectName = '', dir = null }
     }
     if (!rn2(3)) {
         const woundDuration = 5 + rnd(5);
-        if (!game.u._woundedLegTurns && !game.u._woundedDexPenalty) {
-            game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] || 9) - 1);
-            game.u._woundedDexPenalty = 1;
-        }
-        game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, woundDuration);
-        game.u._woundedLegSide = 'right';
+        setWoundedLegs(RIGHT_SIDE, woundDuration);
+        const loadMessage = encumberMsg();
+        if (loadMessage) messages.push(loadMessage);
     }
     const damage = maybeHalfPhysicalDamage(rnd((stats[A_CON] ?? 10) > 15 ? 3 : 5));
     if (game.u) game.u.uhp = Math.max(0, (game.u?.uhp || 0) - damage);
@@ -46532,12 +46518,7 @@ function syncHeroEncumbranceStatus(level) {
 
 // C ref: encumber_msg() (pickup.c:1978) — when the encumbrance tier changed
 // since the last check, print the report and flag the status line.
-function encumberMsg() {
-    // While polymorphed, encumbrance follows the transformation-time fallout
-    // (do_wear.c off paths); capacity scales with the new form's body weight
-    // (hack.c weight_cap:4303-4311), which the generic inventory-weight math
-    // does not model, so leave the status as the polyself path set it.
-    if (game.u?._polyself_form) return '';
+export function encumberMsg() {
     const newcap = heroEncumbranceForWeight(heroCarriedWeight());
     const oldcap = game._encumbrance_level ?? 0;
     game._encumbrance_level = newcap;
@@ -58432,12 +58413,11 @@ function adjustHeroStrengthFromRoyalJelly(cursed) {
 }
 
 function healWoundedLegsFromRoyalJelly() {
-    if (!game.u) return;
-    if (game.u._woundedDexPenalty && game.u.acurr?.a)
-        game.u.acurr.a[A_DEX] = (game.u.acurr.a[A_DEX] || 9) + 1;
-    game.u._woundedDexPenalty = 0;
-    game.u._woundedLegTurns = 0;
-    game.u._woundedLegSide = '';
+    if (!hasWoundedLegs()) return;
+    const message = beginHeroLegHealing();
+    if (message) addToplineMessage(message);
+    const loadMessage = finishHeroLegHealing();
+    if (loadMessage) addToplineMessage(loadMessage);
 }
 
 function postRehumanizePetrifyingSelfTouchMessage(lostStoneResistance) {
@@ -61104,24 +61084,6 @@ function possessiveName(name) {
     return String(name || 'it').endsWith('s') ? `${name}'` : `${name}'s`;
 }
 
-function applyHeroBearTrapLegWound(side, duration) {
-    if (!game.u) return;
-    if (game.u.acurr?.a && !game.u._woundedDexPenalty) {
-        game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] ?? 9) - 1);
-        game.u._woundedDexPenalty = 1;
-    }
-    game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, duration);
-    game.u._woundedLegSide = side;
-}
-
-function maybeQueueBearTrapLoadMessage() {
-    const capacity = heroCarryCapacity() - 100;
-    if (heroCarriedWeight() <= capacity || (game.u?._statusSuffix || '').includes('Burdened')) return;
-    game.u._statusSuffix = `${game.u._statusSuffix || ''} Burdened`;
-    game._queued_message_after_more = 'Your movements are slowed slightly because of your load.';
-    game._queued_message_process_time_after_more = 1;
-}
-
 function bearTrapExerciseDex(deferAfterMore) {
     if (deferAfterMore) game._bear_trap_exercise_after_more = 1;
     else exerciseAttribute(A_DEX, false);
@@ -61170,8 +61132,14 @@ function heroBearTrapResult(trap, prefix = '', { deferAfterMore = false } = {}) 
         messages.push(`${subject} bear trap closes on your foot!`);
         const woundedSide = rn2(2) ? 'right' : 'left';
         const woundDuration = rn1(10, 10);
-        applyHeroBearTrapLegWound(woundedSide, woundDuration);
-        if (deferAfterMore) maybeQueueBearTrapLoadMessage();
+        setWoundedLegs(woundedSide === 'right' ? RIGHT_SIDE : LEFT_SIDE, woundDuration);
+        const loadMessage = encumberMsg();
+        if (loadMessage) {
+            if (deferAfterMore) {
+                game._queued_message_after_more = loadMessage;
+                game._queued_message_process_time_after_more = 1;
+            } else messages.push(loadMessage);
+        }
         if (game.u) {
             if (deferAfterMore) game._bear_trap_damage_after_more = maybeHalfPhysicalDamage(damage);
             else game.u.uhp = Math.max(0, (game.u.uhp || 1) - maybeHalfPhysicalDamage(damage));
@@ -61460,10 +61428,12 @@ function landmineRecursivePitTrap(trap, messages) {
 
 function woundHeroLandmineLegs() {
     if (!game.u) return;
-    const left = rn1(35, 41);
-    const right = rn1(35, 41);
-    game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, left, right);
-    game.u._woundedLegSide = '';
+    setWoundedLegs(LEFT_SIDE, rn1(35, 41));
+    const firstLoad = encumberMsg();
+    if (firstLoad) addToplineMessage(firstLoad);
+    setWoundedLegs(RIGHT_SIDE, rn1(35, 41));
+    const secondLoad = encumberMsg();
+    if (secondLoad) addToplineMessage(secondLoad);
 }
 
 function mountedHeroLandmineSteedResult(messages) {
@@ -83070,12 +83040,9 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             await setMessage('Dumb move!  You strain a muscle.');
             exerciseAttribute(A_STR, false);
             const woundDuration = 5 + rnd(5);
-            if (!game.u._woundedLegTurns && !game.u._woundedDexPenalty && game.u?.acurr?.a) {
-                game.u.acurr.a[A_DEX] = Math.max(3, (game.u.acurr.a[A_DEX] || 9) - 1);
-                game.u._woundedDexPenalty = 1;
-            }
-            game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, woundDuration);
-            game.u._woundedLegSide = 'right';
+            setWoundedLegs(RIGHT_SIDE, woundDuration);
+            const loadMessage = encumberMsg();
+            if (loadMessage) addToplineMessage(loadMessage);
         }
         game._command_mode = null;
         game.context.move = 1;
@@ -83182,10 +83149,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             game._command_mode = 'kickSteedConfirm';
             return;
         }
-        if (game.u?._woundedLegTurns) {
-            const side = game.u._woundedLegSide === 'left' ? 'left '
-                : game.u._woundedLegSide === 'right' ? 'right ' : '';
-            await setMessage(`Your ${side}leg is in no shape for kicking.`, true);
+        if (hasWoundedLegs()) {
+            await setMessage(heroLegsInNoShapeMessage('kicking'));
             return;
         }
         await setMessage('In what direction?');

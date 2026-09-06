@@ -76,11 +76,11 @@ for(const name of ['healing','extra healing','full healing']) for(const canonica
     assert.equal(getRngLog().filter(x=>x.startsWith('rn2(19)')).length,0,'polymorph suppresses physical exercise');
 });
 for(const name of ['extra healing','full healing']) for(const buc of [-1,0,1]) for(const mounted of [false,true]) test(`${name} leg cure BCU=${buc}, mounted=${mounted}`,async()=>{
-    setup(name,buc); Object.assign(game.u,{_woundedLegTurns:50,_woundedLegSide:'both',_woundedDexPenalty:1});
-    game.u.acurr.a[3]=11; game.u.uprops[WOUNDED_LEGS]={intrinsic:50,extrinsic:BOTH_SIDES};
+    setup(name,buc); Object.assign(game.u,{_woundedLegTurns:50,_woundedLegSide:'both'});
+    game.u.acurr.a[3]=12;game.u.atemp={a:[0,0,0,-1,0,0]}; game.u.uprops[WOUNDED_LEGS]={intrinsic:50,extrinsic:BOTH_SIDES};
     if(mounted) game.u.usteed={m_id:2,data:{name:'horse'}};
     await drink(); const cure=name==='extra healing'?buc>0&&!mounted:buc>0||buc===0&&!mounted;
-    assert.equal(game.u._woundedLegTurns,cure?0:50); assert.equal(game.u.acurr.a[3],cure?12:11);
+    assert.equal(game.u._woundedLegTurns,cure?0:50); assert.equal(game.u.acurr.a[3],12);assert.equal(game.u.atemp.a[3],cure?0:-1);
     assert.equal(game.u.uprops[WOUNDED_LEGS].extrinsic,cure?0:BOTH_SIDES);
     assert.equal(messages().includes('Your legs feel better.'),cure&&!mounted);
 });

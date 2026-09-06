@@ -36907,8 +36907,9 @@ test('hero bear trap movement wounds and traps hero', async () => {
     assert.equal(game.u.utraptype, 'beartrap');
     assert.equal(game.u._woundedLegSide, 'right');
     assert.equal(game.u._woundedLegTurns, 13);
-    assert.equal(game.u.acurr.a[A_DEX], 9);
-    assert.equal(game.u._woundedDexPenalty, 1);
+    assert.equal(game.u.acurr.a[A_DEX], 10);
+    assert.equal(game.u.atemp.a[A_DEX], -1);
+    assert.equal(game.u.uprops[WOUNDED_LEGS].extrinsic !== 0, true);
     assert.equal(trap.tseen, true);
 });
 
@@ -37097,8 +37098,9 @@ test('object list bear trap delays damage until more is dismissed', async () => 
     assert.equal(game._pending_message, 'A bear trap closes on your foot!');
     assert.equal(game._message_more, 1);
     assert.equal(game.u.uhp, 20);
-    assert.equal(game.u.acurr.a[A_DEX], 9);
-    assert.equal(game.u._woundedDexPenalty, 1);
+    assert.equal(game.u.acurr.a[A_DEX], 10);
+    assert.equal(game.u.atemp.a[A_DEX], -1);
+    assert.equal(game.u.uprops[WOUNDED_LEGS].extrinsic !== 0, true);
     assert.equal(game.u._woundedLegSide, 'right');
     assert.equal(game.u._woundedLegTurns, 13);
     assert.match(game.u._statusSuffix || '', /Burdened/);
@@ -37141,8 +37143,9 @@ test('sitting on seen bear trap does not use seen-trap escape roll', async () =>
     assert.equal(game.u.utraptype, 'beartrap');
     assert.equal(game.u._woundedLegSide, 'right');
     assert.equal(game.u._woundedLegTurns, 13);
-    assert.equal(game.u.acurr.a[A_DEX], 9);
-    assert.equal(game.u._woundedDexPenalty, 1);
+    assert.equal(game.u.acurr.a[A_DEX], 10);
+    assert.equal(game.u.atemp.a[A_DEX], -1);
+    assert.equal(game.u.uprops[WOUNDED_LEGS].extrinsic !== 0, true);
 });
 
 test('hero arrow trap miss creates and drops a generated arrow', async () => {
@@ -52271,7 +52274,8 @@ test('command kicked fragile stack resistance thumps before split at low range',
     assert.equal(game.u.uhp, 46);
     assert.equal(game.u._woundedLegTurns, 7);
     assert.equal(game.u._woundedLegSide, 'right');
-    assert.equal(game.u.acurr.a[A_DEX], 9);
+    assert.equal(game.u.acurr.a[A_DEX], 10);
+    assert.equal(game.u.atemp.a[A_DEX], -1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rn2(100)', 'rn2(3)', 'rn2(2)', 'rn2(2)', 'rn2(3)', 'rnd(5)', 'rnd(5)',
     ]);
@@ -77571,8 +77575,9 @@ test('mounted attached ball throw pulls hero out of bear trap without HP loss', 
     assert.equal(game.u.usteed, pony);
     assert.equal(pony.mx, 5);
     assert.equal(pony.my, 5);
-    assert.equal(game.u._woundedDexPenalty, 1);
-    assert.equal(game.u.acurr.a[A_DEX], 9);
+    assert.equal(game.u.uprops[WOUNDED_LEGS].extrinsic !== 0, true);
+    assert.equal(game.u.acurr.a[A_DEX], 10);
+    assert.equal(game.u.atemp.a[A_DEX], -1);
     assert.equal(['left', 'right'].includes(game.u._woundedLegSide), true);
     assert.equal(game.u._woundedLegTurns >= 500 && game.u._woundedLegTurns <= 1499, true);
     assert.equal(ball.ox, 10);

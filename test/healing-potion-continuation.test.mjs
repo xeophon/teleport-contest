@@ -82,8 +82,8 @@ test('sickness clears type bits before its message but clears timeout after it',
 });
 
 test('wounded-leg message precedes wound clearing and encumbrance recomputation',async()=>{
-    setup({width:60});Object.assign(game.u,{_woundedLegTurns:30,_woundedLegSide:'both',_woundedDexPenalty:1});
-    game.u.acurr.a[3]=11;game.u.uprops[WOUNDED_LEGS]={intrinsic:30,extrinsic:BOTH_SIDES};
+    setup({width:60});Object.assign(game.u,{_woundedLegTurns:30,_woundedLegSide:'both'});
+    game.u.acurr.a[3]=12;game.u.atemp={a:[0,0,0,-1,0,0]};game.u.uprops[WOUNDED_LEGS]={intrinsic:30,extrinsic:BOTH_SIDES};
     await drink();assert.equal(game._message_more,1);assert.equal(game.u.acurr.a[3],12);
     assert.equal(game.u._woundedLegTurns,30);assert.equal(game.u.uprops[WOUNDED_LEGS].intrinsic,30);
     saveRoundTrip();await drain();assert.equal(game.u._woundedLegTurns,0);assert.equal(game.u.acurr.a[3],12);

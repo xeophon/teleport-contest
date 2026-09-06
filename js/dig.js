@@ -1,3 +1,5 @@
+import { setWoundedLegs } from './do.js';
+import { RIGHT_SIDE } from './const.js';
 import { currentHeroAttribute, currentHeroStrength } from './attrib.js';
 // js/dig.js — pick-axe / dwarvish mattock wall & floor digging core.
 // C ref: nethack-c/upstream/src/dig.c — dig_typ(), dig_check(),
@@ -789,7 +791,7 @@ export function digFumblingResult(item) {
     case 0: {
         const welded = !!(item && (item.welded || (item.cursed && item.wielded)));
         if (!welded) return { message: `You fumble and drop your ${toolName}.`, dropItem: true };
-        game.u && (game.u._woundedLegTurns = Math.max(game.u._woundedLegTurns || 0, 5 + rnd(5)));
+        setWoundedLegs(RIGHT_SIDE, 5 + rnd(5));
         const steed = game.u?.usteed;
         return {
             message: steed

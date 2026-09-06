@@ -1,3 +1,6 @@
+import { hasWoundedLegs } from './do.js';
+import { beginHeroLegHealing, finishHeroLegHealing, encumberMsg } from './cmd.js';
+import { WOUNDED_LEGS } from './const.js';
 import { heroCarryCapacity } from './cmd.js';
 import { currentHeroAttribute } from './attrib.js';
 import { findAc, setArmorWorn } from './do_wear.js';
@@ -3437,14 +3440,9 @@ function stopStoningOccupations() {
 }
 
 function silentlyHealHeroWoundedLegsForStoning() {
-    if (!game.u || game.u.usteed || !(game.u._woundedLegTurns || 0)) return;
-    game.u._woundedLegTurns = 0;
-    game.u._woundedLegSide = '';
-    if (game.u._woundedDexPenalty && game.u.acurr?.a) {
-        game.u.acurr.a[A_DEX]++;
-        game.u._woundedDexPenalty = 0;
-    }
-    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Burdened', '');
+    if (!game.u || game.u.usteed || !hasWoundedLegs()) return;
+    beginHeroLegHealing(2);
+    finishHeroLegHealing(2);
 }
 
 function applyStoningDialogueSideEffects(timeout) {
@@ -3563,7 +3561,7 @@ function processAttributeExercise() {
         if (u.regenerating) exerciseAttribute(A_STR, true);
         if (u.sick || u.vomiting || status.includes('Sick')) exerciseAttribute(A_CON, false);
         if (status.includes('Conf') || status.includes('Hallu')) exerciseAttribute(A_WIS, false);
-        if ((u._woundedLegTurns || 0) > 0 || u.fumbling || status.includes('Stun')) exerciseAttribute(A_DEX, false);
+        if ((hasWoundedLegs() && !u.usteed) || u.fumbling || status.includes('Stun')) exerciseAttribute(A_DEX, false);
     }
     if (!skipPeriodicExercise) game._last_periodic_exercise_turn = turn;
     if (oneShotExerciseTurnOffset) game._exercise_turn_offset = 0;
@@ -3899,6 +3897,8 @@ export async function processPickDigOccupation() {
         if (fumble.dropItem) pickDigDropItem(item);
         if (fumble.wake) wakeNearbyForDig();
         addToplineMessage(fumble.message);
+        const loadMessage = encumberMsg();
+        if (loadMessage) addToplineMessage(loadMessage);
         return;
     }
 
@@ -4334,7 +4334,7 @@ function maybeShapeshiftVampire(mon) {
 
 export async function processMonsterTurns() {
     if (game._monster_attack_continuation) return false;
-    if (game._turn_tail_phase === 'timers') {
+    if (['timers', 'legs'].includes(game._turn_tail_phase)) {
         game._deferred_monster_turn_tail = 0;
         return await finishMonsterTurnTail();
     }
@@ -10648,7 +10648,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             }
         }
     }
-    const resumeTimers = game._turn_tail_phase === 'timers';
+    const resumeTimers = ['timers', 'legs'].includes(game._turn_tail_phase);
     const resumeAfterSounds = !!game._resume_monster_turn_tail_after_sounds;
     game._resume_monster_turn_tail_after_sounds = 0;
     let sleepingHunger = false;
@@ -10910,16 +10910,41 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 if (!game.u._deafTimeout)
                     game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Deaf', '');
             }
-            if ((game.u?._woundedLegTurns || 0) > 0) {
-                game.u._woundedLegTurns--;
-                if (!game.u._woundedLegTurns && game.u._woundedDexPenalty && game.u.acurr?.a) {
-                    const wasBurdened = (game.u._statusSuffix || '').includes('Burdened');
-                    game.u.acurr.a[3]++;
-                    game.u._woundedDexPenalty = 0;
-                    game.u._statusSuffix = (game.u._statusSuffix || '').replace(' Burdened', '');
-                    addToplineMessage('Your leg feels better.');
-                    if (wasBurdened) addToplineMessage('Your movements are now unencumbered.');
+            const wounds = game.u?.uprops?.[WOUNDED_LEGS];
+            if (wounds?.intrinsic & TIMEOUT) {
+                wounds.intrinsic--;
+                game.u._woundedLegTurns = wounds.intrinsic & TIMEOUT;
+                if (!game.u._woundedLegTurns) {
+                    game._turn_tail_phase = 'legs';
+                    game._leg_healing_tail = { cleared: false };
+                    const message = beginHeroLegHealing();
+                    if (message && !addToplineMessage(message)) {
+                        game._deferred_monster_turn_tail = 1;
+                        game._resume_time_after_more = 1;
+                        game._process_time_with_more = 0;
+                        return 'defer-tail';
+                    }
                 }
+            }
+        }
+        if (game._turn_tail_phase === 'legs') {
+            if (!game._leg_healing_tail.cleared) {
+                game._leg_healing_tail.cleared = true;
+                const message = finishHeroLegHealing();
+                if (message && !addToplineMessage(message)) {
+                    game._deferred_monster_turn_tail = 1;
+                    game._resume_time_after_more = 1;
+                    game._process_time_with_more = 0;
+                    return 'defer-tail';
+                }
+            }
+            game._leg_healing_tail = null;
+            game._turn_tail_phase = 'timers';
+            stopHeroOccupation();
+            if (game._message_more && !game._process_time_with_more) {
+                game._deferred_monster_turn_tail = 1;
+                game._resume_time_after_more = 1;
+                return 'defer-tail';
             }
         }
         if (!game.u?.uinvulnerable || resumeTimers) {

@@ -1,3 +1,4 @@
+import { WOUNDED_LEGS, BOTH_SIDES, LEFT_SIDE } from '../js/const.js';
 // steed-kick.test.mjs — behavioral tests for the steed.c port slice
 // (sessions-extra/seed9161-wiz-steed coverage):
 //   * use_saddle() apply-a-saddle roll/order (steed.c:36-141)
@@ -161,9 +162,9 @@ test('kick_steed gallop: tameness-- then either buck or rn1(20,30) (steed.c:433-
 
 test('legs_in_no_shape message wording (do.c:2408-2425)', () => {
     installState(7);
-    game.u._woundedLegTurns = 5;
-    game.u._woundedLegSide = '';
+    game.u.uprops = [];
+    game.u.uprops[WOUNDED_LEGS] = { intrinsic: 5, extrinsic: BOTH_SIDES };
     assert.equal(steed.heroLegsInNoShapeMessage('riding'), 'Your legs are in no shape for riding.');
-    game.u._woundedLegSide = 'left';
+    game.u.uprops[WOUNDED_LEGS].extrinsic = LEFT_SIDE;
     assert.equal(steed.heroLegsInNoShapeMessage('riding'), 'Your left leg is in no shape for riding.');
 });
