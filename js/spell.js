@@ -15,6 +15,7 @@
 // through the `D` (deps) argument so this module stays cycle-free.
 
 import { game } from './gstate.js';
+import { findAc } from './do_wear.js';
 import { d, rn1, rn2, rnd } from './rng.js';
 import {
     A_DEX, A_STR, A_WIS, BOLT_LIM, COLNO, ROWNO, CORR, DOOR, D_CLOSED,
@@ -26,6 +27,8 @@ import {
 import { newsym } from './display.js';
 import { cansee, couldsee } from './vision.js';
 import { explodeSpell } from './explode.js';
+import { lightDamageHero } from './flash.js';
+import { fallAsleep } from './timeout.js';
 import { findMac, resistsFire, resistsCold } from './mhitm.js';
 import { aggravate } from './wizard.js';
 import { newWere, isWereData, isWereHumanForm } from './were.js';
@@ -211,9 +214,9 @@ async function spellZapYourself(spell, D) {
             push('You bash yourself!');
             const damage = D.maybeHalfPhysicalDamage(d(2, 12));
             D.exerciseAttribute(A_STR, false);
-            const dead = D.loseHeroHp(damage,
+            const result = D.damageHero(messages, damage,
                 `zapped ${game.flags?.female ? 'herself' : 'himself'} with a spell`);
-            if (dead) return { messages, fatal: true };
+            return { messages, ...result };
         }
         return { messages };
     }
@@ -222,9 +225,9 @@ async function spellZapYourself(spell, D) {
         else {
             const damage = D.maybeHalfPhysicalDamage(d(4, 6));
             push('Idiot!  You\'ve shot yourself!');
-            const dead = D.loseHeroHp(damage,
+            const result = D.damageHero(messages, damage,
                 `zapped ${game.flags?.female ? 'herself' : 'himself'} with a spell`);
-            if (dead) return { messages, fatal: true };
+            return { messages, ...result };
         }
         return { messages };
     }
@@ -233,9 +236,7 @@ async function spellZapYourself(spell, D) {
         else {
             push('The sleep ray hits you!');
             const sleepTime = rnd(50); // C fall_asleep(-rnd(50), TRUE)
-            game._helpless_time = Math.max(game._helpless_time || 0, sleepTime);
-            game._sleeping_time = Math.max(game._sleeping_time || 0, sleepTime + 1);
-            game._wake_message = 'You wake up.';
+            fallAsleep(-sleepTime, true, D.stopHeroOccupation);
             return { messages, sleepTurns: sleepTime };
         }
         return { messages };
@@ -343,10 +344,12 @@ async function spellZapUpDown(spell, dz, D) {
             messages.push('You loosen a rock from the ceiling.');
             messages.push('It falls on your head!');
             const dmg = rnd(D.heroWearsHardHelmet() ? 2 : 6);
-            const dead = D.loseHeroHp(D.maybeHalfPhysicalDamage(dmg), 'falling rock');
+            const result = D.damageHero(messages, D.maybeHalfPhysicalDamage(dmg), 'falling rock');
+            if (result.fatal || result.lifeSaving || result.genocideDeathArmed)
+                return { messages, ...result, afterHeroDamage: { kind: 'fallingRock' } };
             D.dropRockAt(x, y); // C mksobj_at(ROCK, ...) consumes next_ident()
             newsym(x, y);
-            if (dead) return { messages, fatal: true };
+            return { messages, ...result };
         } else {
             const result = await D.zapDigDownwardResult();
             messages.push(result.message);
@@ -360,10 +363,12 @@ async function spellZapUpDown(spell, dz, D) {
             && !heroSwallowedOrUnderwater()) {
             messages.push('A rock is dislodged from the ceiling and falls on your head.');
             const dmg = rnd(D.heroWearsHardHelmet() ? 2 : 6);
-            const dead = D.loseHeroHp(D.maybeHalfPhysicalDamage(dmg), 'falling rock');
+            const result = D.damageHero(messages, D.maybeHalfPhysicalDamage(dmg), 'falling rock');
+            if (result.fatal || result.lifeSaving || result.genocideDeathArmed)
+                return { messages, ...result, afterHeroDamage: { kind: 'fallingRock', x, y } };
             D.dropRockAt(x, y);
             newsym(x, y);
-            if (dead) return { messages, fatal: true };
+            return { messages, ...result };
         }
         return { messages };
     }
@@ -1142,23 +1147,6 @@ export async function castSpellExplosionEffect(spell, target, D) {
     return { ...result, messages, lifeSaving: !result.fatal && lifeSaving };
 }
 
-// C ref: zap.c:zapnodir() case SPE_LIGHT + read.c:litroom(on=TRUE).
-function spellLightEffect(spell, D) {
-    const messages = [];
-    D.lightScrollLitroom(true, { blessed: false, cursed: false }, messages);
-    // C zap.c:lightdamage(obj, TRUE, 5): only harms gremlin polyself.
-    if (String(game.u?._polyself_form?.name || '').toLowerCase() === 'gremlin') {
-        let dmg = rnd(5);
-        if (dmg > 10) dmg = 10 + rnd(dmg - 10);
-        if (dmg > 20) dmg = 20;
-        messages.push(`Ow, that light hurts${dmg > 2 || (game.u?.umh || 100) <= 5 ? '!' : '.'}`);
-        const dead = D.loseHeroHp(D.maybeHalfPhysicalDamage(dmg),
-            `blasted ${game.flags?.female ? 'herself' : 'himself'} with a spell of light`);
-        if (dead) return { messages, fatal: true };
-    }
-    return { messages };
-}
-
 // C ref: detect.c:findit() via zap.c:zapnodir() case SPE_DETECT_UNSEEN.
 function spellDetectUnseenEffect(D) {
     const ux = game.u?.ux || 0;
@@ -1457,7 +1445,7 @@ function spellInvisibilityEffect(spell, D) {
 
 // C ref: spell.c:spelleffects() case SPE_CURE_BLINDNESS: healup(0,0,FALSE,TRUE).
 function spellCureBlindnessEffect(D) {
-    const cure = D.cureHeroBlindness();
+    const cure = D.healHero(0, 0, { cureBlind: true });
     return { messages: cure ? [cure] : [] };
 }
 
@@ -1465,9 +1453,8 @@ function spellCureBlindnessEffect(D) {
 function spellCureSicknessEffect(D) {
     const wasSick = D.heroIsSick();
     const wasSlimed = D.heroIsSlimed();
-    D.clearHeroVomiting();
-    D.clearHeroSickness();
-    const messages = [];
+    const cure = D.healHero(0, 0, { cureSick: true });
+    const messages = cure ? [cure] : [];
     if (wasSick || !wasSlimed) messages.push(`You are ${wasSick ? 'no longer' : 'not'} ill.`);
     if (wasSlimed) {
         D.clearHeroSlime();
@@ -1526,7 +1513,7 @@ function spellProtectionEffect(spell, D) {
             }
         }
         u.uspellprot = (u.uspellprot || 0) + gain;
-        u.uac = (u.uac ?? 10) - gain; // C find_ac() factors spell protection in
+        findAc();
         u.uspmtime = D.spellRoleSkillLevel(spell) >= 4 ? 20 : 10;
         if (!u.usptime) u.usptime = u.uspmtime;
     } else {
@@ -1553,7 +1540,14 @@ export async function castSpellNodirEffect(spell, D) {
     if (SEFFECTS_SPELLS.has(name) || WEFFECTS_NODIR_SPELLS.has(name))
         D.exerciseAttribute(A_WIS, true);
     switch (name) {
-    case 'light': return spellLightEffect(spell, D);
+    case 'light': {
+        // C zapnodir lights the room before lightdamage harms a gremlin.
+        const messages = [];
+        D.lightScrollLitroom(true, { blessed: false, cursed: false }, messages);
+        await lightDamageHero(spell, 5, messages, { damageHero: D.damageHero, halfPhysical: D.maybeHalfPhysicalDamage });
+        return { messages, fatal: !!messages.fatal, lifeSaving: !!messages.lifeSaving,
+            genocideDeathArmed: !!messages.genocideDeathArmed };
+    }
     case 'detect unseen': return spellDetectUnseenEffect(D);
     case 'detect monsters': return spellDetectMonstersEffect(spell, D);
     case 'detect treasure': return spellDetectTreasureEffect(spell, D);

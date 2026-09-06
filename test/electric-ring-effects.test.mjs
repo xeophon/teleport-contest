@@ -228,6 +228,7 @@ for (const kind of ['gain strength', 'protection']) test(`known ${kind} ring rev
 
 test('electrical dust removes the same protection armor bonus that wearing granted', async () => {
     setup([0, 0, 0]); game.u.uac = 5;
+    game.inventory.push({ id: 3, letter: 'c', cls: 'armor', kind: 'chain mail', worn: true, quan: 1 });
     const obj = { id: 2, letter: 'b', cls: 'ring', kind: 'ring of protection', quan: 1, spe: 3, dknown: true, known: false };
     game.inventory.push(obj);
     await rhack('P'); await rhack('b'); await rhack('l');

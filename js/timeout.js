@@ -2,6 +2,20 @@
 // callback functions belong to the runtime and are never serialized.
 import { game } from './gstate.js';
 
+// timeout.c:fall_asleep uses a negative nomul duration. The disabled deafness
+// block is deliberately absent; sleeping is tracked separately from hearing.
+export function fallAsleep(howLong, wakeupMessage, stopOccupation) {
+    stopOccupation();
+    const previous = Math.min(game.multi || 0, -(game._helpless_time || 0));
+    if (previous >= howLong) game.u.uinvulnerable = false;
+    game.multi = Math.min(previous, howLong);
+    game._helpless_time = -game.multi;
+    game._sleeping_time = game._helpless_time + 1;
+    game.multi_reason = 'sleeping';
+    game.u.usleep = game.moves;
+    game._wake_message = wakeupMessage ? 'You wake up.' : 'You can move again.';
+}
+
 export const TIMER_LEVEL = 1, TIMER_GLOBAL = 2, TIMER_OBJECT = 3, TIMER_MONSTER = 4;
 export const ROT_ORGANIC = 0, ROT_CORPSE = 1, REVIVE_MON = 2, ZOMBIFY_MON = 3,
     BURN_OBJECT = 4, HATCH_EGG = 5, FIG_TRANSFORM = 6, SHRINK_GLOB = 7, MELT_ICE_AWAY = 8;

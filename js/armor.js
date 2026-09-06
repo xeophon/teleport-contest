@@ -117,3 +117,21 @@ export const ARMOR_AC_BONUS = {
     'hawaiian shirt': 0,
     't-shirt': 0,
 };
+
+// include/hack.h:ARM_BONUS: erosion removes base armor, never enchantment.
+export function armorBonus(item, kind = String(item?.actualKind || item?.kind || '').toLowerCase()) {
+    const base = ARMOR_AC_BONUS[kind] ?? item?.a_ac ?? item?.acBonus ?? 0;
+    return base + (item?.spe || 0) - Math.min(Math.max(item?.oeroded || 0, item?.oeroded2 || 0), base);
+}
+
+export function armorSlot(item) {
+    const name = String(item?.actualKind || item?.kind || '').toLowerCase();
+    if (/\b(?:cloak|robe|wrapping|mantelet|pall|cape|cope|cloth|smock|apron)\b/.test(name)) return 'cloak';
+    if (/\b(?:mail|armor|jacket|coat|dragon scales?)\b/.test(name)) return 'body';
+    if (/\bshirt\b/.test(name)) return 'shirt';
+    if (/\b(?:helm|helmet|hat|fedora|cornuthaum|cap|pot)\b/.test(name)) return 'helm';
+    if (/\b(?:gloves|gauntlets)\b/.test(name)) return 'gloves';
+    if (/\b(?:boots|shoes)\b/.test(name)) return 'boots';
+    if (/\bshield\b/.test(name)) return 'shield';
+    return '';
+}

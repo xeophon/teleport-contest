@@ -1,8 +1,9 @@
+import { findAc, setArmorWorn } from './do_wear.js';
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
 import { setArtifactEquipmentLight } from './artifact.js';
 import { monsterCastSpell, afterMeltHeroSpotEffects, runMonsterAttackTurn } from './cmd.js';
 import { supportsMonsterAttackSlots } from './mhitu.js';
-import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster } from './cmd.js';
+import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster, heroIsBlind, hcolor } from './cmd.js';
 import { AT_BOOM, AT_MAGC, AD_SPEL, AD_CLRC, is_hider } from './permonst.js';
 // allmain.js — Main game setup and move loop.
 
@@ -3407,6 +3408,24 @@ export function clearActiveDelayedOccupations(options = {}) {
     if (options.clearPrayerDebug) game._prayer_debug_pleased = 0;
     if (options.clearPrayerTrouble) game._prayer_nearby_trouble = 0;
     if (options.clearInvulnerability && game.u) game.u.uinvulnerable = false;
+}
+
+// allmain.c:stop_occupation preserves negative multi (existing helplessness).
+export function stopHeroOccupation() {
+    const activity = game._pick_lock_occupation ? (game._pick_lock_occupation.action || 'picking the lock')
+        : game._force_lock_occupation ? 'forcing the lock'
+        : game._pick_dig_occupation ? 'digging' : game._tin_opening_occupation ? 'opening the tin' : null;
+    stopCountedSearchOccupationOnHeroHit();
+    clearActiveDelayedOccupations({ interruptEating: true, addEatingMessage: true, interruptibleOnly: true });
+    if (activity) addToplineMessage(`You stop ${activity}.`);
+    interruptPositiveMulti();
+    game.multi = Math.min(game.multi || 0, -(game._helpless_time || 0));
+    if (game.multi >= 0) {
+        game.multi = 0;
+        game.u.usleep = 0;
+        game.u.uinvulnerable = false;
+        game.multi_reason = null;
+    }
 }
 
 // C ref: timeout.c:150-166 stoned_dialogue() stages 4 ("limbs
@@ -10652,6 +10671,20 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     // C resumes nh_timeout after a refused death or a suspended timer.
     // Neither continuation repeats the earlier intrinsic decrements.
     if (!resumeTimers && !resumeAfterStoningDeath) {
+        // timeout.c:650: spell protection decays before property timeouts,
+        // so blindness expiring later this turn still hides the haze change.
+        if (!game.u?.uinvulnerable && game.u.usptime) {
+            if (--game.u.usptime === 0 && game.u.uspellprot) {
+                game.u.usptime = game.u.uspmtime;
+                game.u.uspellprot--;
+                findAc();
+                if (!heroIsBlind()) {
+                    const message = `The ${hcolor('golden')} haze around you ${
+                        game.u.uspellprot ? 'becomes less dense' : 'disappears'}.`;
+                    if (game._norep_prevmsg !== message) addToplineMessage(message);
+                }
+            }
+        }
         // C ref: allmain.c:273-274 — nh_timeout() runs BEFORE run_regions()
         // in moveloop_core; its BLINDED expiry (timeout.c:744-750 ->
         // make_blinded(0L, TRUE), potion.c) decrements the timeout and, on
@@ -11279,7 +11312,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             if (occupationItem && !occupationItem.worn && game._armor_wear_occupation.acBonus != null) {
                 occupationItem.worn = true;
                 if (game._armor_wear_occupation.wornLine) occupationItem.line = game._armor_wear_occupation.wornLine;
-                if (game.u) game.u.uac = (game.u.uac ?? 10) - game._armor_wear_occupation.acBonus;
+                if (game.u) setArmorWorn(occupationItem, true);
                 if (game._armor_wear_occupation.reflecting && game.u) game.u.reflecting = true;
             }
         }
@@ -11301,7 +11334,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
                 } else if (item && item.worn && occupation.acBonus != null) {
                     item.worn = false;
                     item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
-                    if (game.u) game.u.uac = (game.u.uac ?? 10) + occupation.acBonus;
+                    if (game.u) setArmorWorn(item, false);
                     if (occupation.kind === 'speed boots' && game.u) {
                         game.u.veryfast = false;
                         syncHeroSpeedState(game);
@@ -11330,7 +11363,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             } else if (item && !item.worn && occupation.acBonus != null) {
                 item.worn = true;
                 if (occupation.wornLine) item.line = occupation.wornLine;
-                if (game.u) game.u.uac = (game.u.uac ?? 10) - occupation.acBonus;
+                if (game.u) setArmorWorn(item, true);
                 if (occupation.reflecting && game.u) game.u.reflecting = true;
                 updateGauntletsOfPowerStrength(occupation.kind, true);
                 if (occupation.kind === 'gauntlets of power') {
@@ -11435,6 +11468,7 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
     // turns reached recursively before the hero earns another action.
     if (game._helpless_time > 0) {
         game._helpless_time--;
+        game.multi = -game._helpless_time || 0;
         if (game._sleeping_time > 0) game._sleeping_time--;
         if (!game._helpless_time && game._wake_message) {
             game._sleeping_time = 0;
@@ -11447,6 +11481,11 @@ async function finishMonsterTurnTail(resumeAfterStoningDeath = false) {
             }
             const wakeMessage = game._wake_message;
             const shown = addToplineMessage(wakeMessage);
+            // hack.c:unmul clears these after its pline returns.
+            if (shown) {
+                game.u.usleep = 0;
+                game.multi_reason = null;
+            } else game._unmul_after_more = wakeMessage;
             if (!shown && game._message_more && game._topline_after_more === wakeMessage)
                 game._turn_tail_topline_more = 1;
             game._wake_message = '';
@@ -17952,6 +17991,15 @@ export async function moveloop_core() {
         if (process.env.WEREDBG) console.error(`WEREDBG pre-monsters moves=${g.moves} skip=${skipMonsterTurnsThisPass} rng=${getRngLog().length}`);
         const wasHelpless = g._helpless_time > 0;
         const movedMonsters = skipMonsterTurnsThisPass || armorTailOnly ? false : await processMonsterTurns();
+        if (g._monster_attack_continuation) {
+            // allmain.c:203-216: pline/done suspend inside movemon. The
+            // retained attack owns this pass until it returns; neither the
+            // turn tail nor another hero movement debit can run meanwhile.
+            if (normalHalluDisplay && !armorTailOnly) g._display_hallucinated_normal = 0;
+            g._pending_time_passed = 0;
+            g._resume_time_after_more = 1;
+            break;
+        }
         // C ref: allmain.c:203-216 + 495-507 — movemon() runs at the top of
         // the moveloop iteration and the occupation/stop step after it, so
         // "You stop searching." follows the turn's monster messages.
@@ -18008,7 +18056,7 @@ export async function moveloop_core() {
                     if (item && item.worn && occupation.acBonus != null) {
                         item.worn = false;
                         item.line = `${item.letter || occupation.itemLetter || '?'} - ${occupation.baseName || pickupObjectName(item)}`;
-                        if (g.u) g.u.uac = (g.u.uac ?? 10) + occupation.acBonus;
+                        if (g.u) setArmorWorn(item, false, g);
                         if (occupation.kind === 'speed boots' && g.u) {
                             g.u.veryfast = false;
                             syncHeroSpeedState(g);
@@ -18037,7 +18085,7 @@ export async function moveloop_core() {
                 } else if (item && !item.worn && occupation.acBonus != null) {
                     item.worn = true;
                     if (occupation.wornLine) item.line = occupation.wornLine;
-                    if (g.u) g.u.uac = (g.u.uac ?? 10) - occupation.acBonus;
+                    if (g.u) setArmorWorn(item, true, g);
                     if (occupation.reflecting && g.u) g.u.reflecting = true;
                     updateGauntletsOfPowerStrength(occupation.kind, true);
                     if (occupation.kind === 'gauntlets of power') {

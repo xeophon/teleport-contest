@@ -21,10 +21,28 @@ used to mark a subsystem complete.
   selection preserve their prompts. Two fresh C recordings verify every
   screen, cursor and RNG call for sorting/swapping and traditional invalid
   selection/retry limits; 34 independent tests exercise additional branches.
-  The wizard turns-column indexing quirk is preserved. Menu search and the
-  debug `#wizcast` path are still separate work, as are remaining spell-effect
-  and HP/life-saving continuations. The old stone-golem self-casting assertion
+  The wizard turns-column indexing quirk is preserved. `#wizcast` now lists
+  all 41 spells with C's per-page accelerators, bypasses knowledge and normal
+  casting gates, and uses actual skill levels. Direct known-spell calls repeat
+  casting rejection before forgotten-memory backfire. Fifteen further tests
+  include two fresh C recordings of debug menus and wizard death refusal;
+  all 44 screens, cursors and 5,656 RNG calls match. Menu search is still open.
+  The old stone-golem self-casting assertion
   was corrected: the C monster is silent and cannot chant an incantation.
+- `spell.c:spelleffects`, `zap.c:zapyourself/zap_updown`, and
+  `potion.c:healup/make_blinded/make_deaf`: physical self-spells and falling
+  rocks use shared current-form damage, life saving and low-HP warnings.
+  Falling-rock creation waits for saved death recovery. Healing uses the
+  active HP pool, preserves the human lifetime peak, cures hearing after
+  vision, and retains permanent blindness, blindfolds and eyeless forms.
+  C's Eyes of the Overworld feedback is preserved; book blindness shares the
+  same timeout setter. Cure sickness preserves healup's vomiting/sickness
+  feedback before spell feedback, and light shares the existing gremlin
+  damage owner. Self-sleep uses C's shared sleep/occupation state, including
+  the timestamp used by combat wakeups. Twenty-four new tests cover these branches, with 13 initial
+  failures demonstrating missing behavior. Reflected-ray and multiple-blast
+  HP/inventory continuation, skill practice, and broader healing-potion
+  consumers still need their source passes.
 - `cfgfiles.c:cnf_line_BINDINGS`, `options.c:parsebindings/txt2key/escapes`,
   and `cmd.c:bind_key/rhack`: parse binding lists and byte/control/Meta
   syntax, preserve right-to-left precedence, ignore invalid bindings, and

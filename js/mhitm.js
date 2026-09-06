@@ -36,7 +36,7 @@
 
 import { rn2, rnd, rn1, d, getRngLog } from './rng.js';
 import { game } from './gstate.js';
-import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION } from './armor.js';
+import { ARMOR_AC_BONUS, ARMOR_MAGIC_NEGATION, armorBonus } from './armor.js';
 import { IDENTIFIED_AMULET_NAMES } from './o_init.js';
 import {
     Is_stronghold, STRAT_WAITMASK, STRAT_WAITFORU,
@@ -210,8 +210,7 @@ export function findMac(mon) {
             : obj.worn && (obj.cls === 'armor' || obj.armor || Object.hasOwn(ARMOR_AC_BONUS, kind) || kind === 'amulet of guarding');
         if (!worn) continue;
         if (kind === 'amulet of guarding') { base -= 2; continue; }
-        const ac = ARMOR_AC_BONUS[kind] ?? obj.a_ac ?? obj.acBonus ?? 0;
-        base -= ac + (obj.spe || 0) - Math.min(Math.max(obj.oeroded || 0, obj.oeroded2 || 0), ac);
+        base -= armorBonus(obj, kind);
     }
     return Math.max(-99, Math.min(99, base));
 }

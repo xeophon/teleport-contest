@@ -72,6 +72,7 @@ test('life saving resumes the next priest attack without replaying the first hit
     const amulet = { cls: 'amulet', kind: 'amulet of life saving', amuletIndex: 1, worn: true, quan: 1 };
     g.inventory.push(amulet);
     await cmd.runMonsterAttackTurn(mon);
+    await drain(g);
     assert.equal(g._command_mode, 'lifeSavingMore'); assert.equal(g.inventory.includes(amulet), false);
     assert.equal(getRngLog().some(e => e.startsWith('rnd(21)=')), false);
     await cmd.rhack(' '); await drain(g);
@@ -104,6 +105,7 @@ for (const rescue of ['amulet', 'wizard']) test(`cold potion destruction resumes
     g.inventory.push(potion);
     if (rescue === 'amulet') g.inventory.push({ cls: 'amulet', kind: 'amulet of life saving', amuletIndex: 1, worn: true, quan: 1 });
     await cmd.runMonsterAttackTurn(mon);
+    await drain(g);
     assert.equal(g._command_mode, rescue === 'amulet' ? 'lifeSavingMore' : 'deathDieMore');
     assert.equal(g._monster_attack_continuation.phase, 'effect');
     assert.equal(g._monster_attack_continuation.effect.phase, 'exercise');
@@ -195,11 +197,9 @@ for (const width of [70, 800]) test(`life-saving recovery follows the visible de
     const { g, mon } = setup('high cleric', 42, width); g.u.uhp = 1;
     g.inventory.push({ cls: 'amulet', kind: 'amulet of life saving', amuletIndex: 1, worn: true, quan: 1 });
     await cmd.runMonsterAttackTurn(mon);
-    if (width === 70) {
-        assert.equal(g._command_mode || null, null, 'pline overflow must be acknowledged before the death prompt');
-        assert.doesNotMatch(g._pending_message, /You die/);
-        await cmd.rhack(' ');
-    }
+    assert.equal(g._command_mode || null, null, 'tty puts death on its own line even when it would fit');
+    assert.doesNotMatch(g._pending_message, /You die/);
+    await cmd.rhack(' ');
     assert.equal(g._command_mode, 'lifeSavingMore'); assert.match(g._pending_message, /You die.*medallion/s);
     await cmd.rhack(' '); await drain(g);
     assert.ok(g.u.uhp > 0); assert.equal(g._monster_attack_continuation, null);

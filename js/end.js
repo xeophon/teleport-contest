@@ -24,6 +24,17 @@ export function restoreLifeSavedBody(u = game.u) {
     u.unchanging = false; // HUnchanging only; worn amulets remain active.
 }
 
+// end.c:727-736: done returns into its caller, with unmul due this turn.
+export function scheduleLifeSavingRecovery() {
+    game.context ??= {};
+    game.context.move = 0;
+    game.multi = -1;
+    game._helpless_time = 1;
+    game._wake_message = 'You survived that attempt on your life.';
+    game.multi_reason = game._startup_role === 'Tourist'
+        ? 'being toyed with by Fate' : 'attempting to cheat Death';
+}
+
 const GOLD_PIECE = 466; // object id for gold zorkmids (mirrors allmain.js/cmd.js)
 
 // C ref: enum game_end_types (hack.h:481-498).

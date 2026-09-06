@@ -80,7 +80,10 @@ for (const spell of ['force bolt', 'turn undead']) {
 for (const resist of [false, true]) {
     test(`cancellation ${resist ? 'resistance preserves' : 'sets'} mcan without clearing invisibility or cooldown`, async () => {
         installState();
-        const mon = monster('wolf', { minvis: true, mspec_used: 17, mr: resist ? 200 : 0 });
+        const mon = monster(resist ? 'gnomish wizard' : 'wolf', { minvis: true, mspec_used: 17 });
+        if (resist) {
+            game.coreCtx.r = [0n, 0n, 0n]; game.coreCtx.n = 3;
+        }
         const wand = { cls: 'wand', kind: 'wand of digging', spe: 4, blessed: true };
         mon.minvent.push(wand);
         await cast('cancellation');
@@ -189,6 +192,8 @@ test('Medusa response consumes hero life saving and enters the shared revival fl
     await cast('slow monster');
     assert.ok(!game.inventory.includes(amulet));
     assert.ok(game._life_saving_clear_stoning);
+    assert.ok(game._queued_messages_after_more.some(entry => entry.lifeSaving));
+    await rhack(' ');
     assert.equal(game._command_mode, 'lifeSavingMore');
 });
 

@@ -252,7 +252,7 @@ export function hasAggravatables(mon) {
 // C ref: wizard.c:522-540 (aggravate).
 export function aggravate() {
     const inTower = inWizardTower(game.u?.ux, game.u?.uy);
-    for (const mon of game.level?.monsters || []) {
+    for (const mon of [...(game.level?.monsters || [])].reverse()) {
         if (mon.dead || (mon.mhp != null && mon.mhp <= 0)) continue;
         if (inTower !== inWizardTower(mon.mx, mon.my)) continue;
         if (typeof mon.mstrategy === 'number') mon.mstrategy &= ~(STRAT_WAITFORU | STRAT_APPEARMSG);

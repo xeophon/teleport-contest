@@ -272,6 +272,12 @@ test('fireball ends before a solid obstacle and destroys adjacent closed doors',
     assert.equal(outside.mhp, 1000);
 });
 
+async function showLifeSavingMessage() {
+    assert.ok(game._queued_messages_after_more.some(message => message.lifeSaving));
+    for (let i = 0; i < 20 && game._command_mode !== 'lifeSavingMore'; i++) await rhack(' ');
+    assert.equal(game._command_mode, 'lifeSavingMore');
+}
+
 test('life saving between skilled cold explosions restores HP before the remaining explosions', async () => {
     setup();
     game.u.uhp = 1;
@@ -281,8 +287,9 @@ test('life saving between skilled cold explosions restores HP before the remaini
     enableRngLog();
     await rhack('.');
     const count = Number(getRngLog().find(row => row.startsWith('rnd(8)=')).split('=')[1]) + 1;
-    assert.equal((game._pending_message.match(/Boom!/g) || []).length, count);
-    assert.equal(game._command_mode, 'lifeSavingMore');
+    const messages = [game._pending_message, ...(game._queued_messages_after_more || []).map(message => message.text)].join('  ');
+    assert.equal((messages.match(/Boom!/g) || []).length, count);
+    await showLifeSavingMessage();
     const survivedHp = game.u.uhp;
     assert.ok(survivedHp > 0 && survivedHp < 100);
     await rhack(' ');
@@ -317,7 +324,7 @@ for (const level of [0, 1, 10, 20]) {
         Object.assign(game.u, { uhp: 1, uhpmax: 5, uhppeak: 5, ulevel: level });
         game.inventory.push({ cls: 'amulet', kind: 'amulet of life saving', worn: true });
         await directional('cone of cold', '.');
-        assert.equal(game._command_mode, 'lifeSavingMore');
+        await showLifeSavingMessage();
         assert.equal(game.u.ulevel, Math.max(level, 1));
         assert.equal(game.u.uhpmax, Math.max(level, 10));
         assert.equal(game.u.uhp, Math.max(level, 10));
@@ -341,7 +348,7 @@ test('a generated unidentified life-saving amulet works after the real put-on co
     assert.equal(amulet.worn, true);
     game.u.uhp = 1;
     await directional('cone of cold', '.');
-    assert.equal(game._command_mode, 'lifeSavingMore');
+    await showLifeSavingMessage();
     assert.equal(game.u.uhp, 90, 'Con 10 falls to 9 before calculating 50+10*(Con/2)');
     assert.ok(!game.inventory.includes(amulet));
     assert.ok(game._discoveries.some(row => row.name === 'amulet of life saving' && row.known));
@@ -353,7 +360,7 @@ test('life saving revives an Unchanging monster form and clears only the intrins
     Object.assign(game.u, { _polyself_form: form, mh: 1, mhmax: 200, unchanging: true });
     game.inventory.push({ cls: 'amulet', amuletIndex: 1, worn: true });
     await directional('cone of cold', '.');
-    assert.equal(game._command_mode, 'lifeSavingMore');
+    await showLifeSavingMessage();
     assert.equal(game.u._polyself_form, form);
     assert.equal(game.u.mh, 90);
     assert.equal(game.u.uhp, 90);

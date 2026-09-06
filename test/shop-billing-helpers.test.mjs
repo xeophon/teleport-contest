@@ -14045,7 +14045,8 @@ test('genociding current polyself form rehumanizes instead of ignoring form', as
     assert.equal(game.u.mhmax, null);
     assert.equal(game.u.uhp, 12);
     assert.equal(game.u.uhpmax, 18);
-    assert.equal(game.u.uac, 7);
+    // C find_ac uses current equipment; this naked hero no longer has the cached AC.
+    assert.equal(game.u.uac, 10);
 });
 
 test('genocide pluralizes homunculus with C one-off suffix', async () => {
@@ -35149,7 +35150,7 @@ test('mounted hero polymorph trap checks steed before hero system shock', async 
         uhpmax: 20,
     });
     game.u.acurr.a[A_CON] = 0;
-    const pony = mountBearTrapPony(10, { mr: 100, data: { mlet: 'u' } });
+    const steed = mountBearTrapPony(10, { data: { name: 'ki-rin', mlet: 'A' } });
     game.inventory = [];
     const trap = { ttyp: POLY_TRAP, tx: 6, ty: 5, tseen: false };
     game.level.traps = [trap];
@@ -35161,15 +35162,15 @@ test('mounted hero polymorph trap checks steed before hero system shock', async 
     assert.deepEqual(getRngLog().map(rngCallName), [
         'rn2(109)', 'rn2(20)', 'rnd(30)', 'rn2(2)',
     ]);
-    assert.equal(game._pending_message, 'You lead the pony onto a polymorph trap!  You feel a change coming over you.  You shudder for a moment.');
+    assert.equal(game._pending_message, 'You lead the ki-rin onto a polymorph trap!  You feel a change coming over you.  You shudder for a moment.');
     assert.equal(game.level.traps.includes(trap), false);
     assert.equal(game.u.uhp, 15);
-    assert.equal(pony.data.name, 'pony');
-    assert.equal(pony.mhp, 10);
-    assert.equal(pony.mx, 6);
-    assert.equal(pony.my, 5);
-    assert.equal(!!(pony.mtrapseen & (1 << (POLY_TRAP - 1))), true);
-    assert.equal(game.u.usteed, pony);
+    assert.equal(steed.data.name, 'ki-rin');
+    assert.equal(steed.mhp, 10);
+    assert.equal(steed.mx, 6);
+    assert.equal(steed.my, 5);
+    assert.equal(!!(steed.mtrapseen & (1 << (POLY_TRAP - 1))), true);
+    assert.equal(game.u.usteed, steed);
     assert.equal(game.u._polyself_form || null, null);
     assert.equal(trap.tseen, true);
 });
@@ -41259,12 +41260,14 @@ test('lateral wand polymorph uses wand-class monster resistance', async () => {
     installNonShopFloorState();
     initRng(1);
     const wand = polymorphWand(32027, 'w');
-    const goblin = ordinaryThrowTarget('goblin', 5, 6, { mr: 100 });
+    const wizard = ordinaryThrowTarget('gnomish wizard', 5, 6);
     const ration = { ...foodRation(32030), ox: 5, oy: 6, letter: undefined, line: undefined };
     game.inventory = [wand];
-    game.level.monsters = [goblin];
+    game.level.monsters = [wizard];
     game.level.objects = [ration];
     enableRngLog({ reset: true });
+    // After wisdom and beam length, roll below the species' natural MR 10.
+    game.coreCtx.r[game.coreCtx.n - 3] = 0n;
 
     await rhack('z');
     await rhack('w');
@@ -41272,9 +41275,9 @@ test('lateral wand polymorph uses wand-class monster resistance', async () => {
 
     assert.equal(game._command_mode, null);
     assert.equal(game.context.move, 1);
-    assert.equal(goblin.data.name, 'goblin');
-    assert.equal(goblin.msleeping, 0);
-    assert.equal(goblin.mpeaceful, false);
+    assert.equal(wizard.data.name, 'gnomish wizard');
+    assert.equal(wizard.msleeping, 0);
+    assert.equal(wizard.mpeaceful, false);
     assert.equal(game.level.objects.includes(ration), false);
     assert.equal(game.u.uconduct.polypiles, 1);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')).slice(0, 3), [
@@ -87739,7 +87742,8 @@ test('wielded blessed water potion bash vapor rehumanizes lycanthrope after mons
     assert.equal(game.u.uhpmax, 18);
     assert.equal(game.u.uen, 3);
     assert.equal(game.u.uenmax, 5);
-    assert.equal(game.u.uac, 7);
+    // C find_ac uses current equipment; this naked hero no longer has the cached AC.
+    assert.equal(game.u.uac, 10);
     assert.equal(game.urole.rank.m, 'Wizard');
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
@@ -90958,7 +90962,8 @@ test('upward hero-thrown blessed water vapor lycanthropy rehumanize old form dea
     assert.equal(game.u.uhpmax, 18);
     assert.equal(game.u.uen, 3);
     assert.equal(game.u.uenmax, 5);
-    assert.equal(game.u.uac, 7);
+    // C find_ac uses current equipment; this naked hero no longer has the cached AC.
+    assert.equal(game.u.uac, 10);
     assert.equal(game.urole.rank.m, 'Wizard');
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
@@ -92470,7 +92475,8 @@ test('upward hero-thrown tin opener fatal polyself self-hit rehumanizes after la
     assert.equal(game.u.uhpmax, 18);
     assert.equal(game.u.uen, 3);
     assert.equal(game.u.uenmax, 5);
-    assert.equal(game.u.uac, 7);
+    // C find_ac uses current equipment; this naked hero no longer has the cached AC.
+    assert.equal(game.u.uac, 10);
     assert.equal(game.urole.rank.m, 'Wizard');
     assert.equal(game.inventory.includes(opener), false);
     assert.equal(game.level.objects.length, 1);
@@ -92580,7 +92586,8 @@ test('upward hero-thrown tin opener polyself old form too weak to survive', asyn
     assert.equal(game.u.uhpmax, 18);
     assert.equal(game.u.uen, 3);
     assert.equal(game.u.uenmax, 5);
-    assert.equal(game.u.uac, 7);
+    // C find_ac uses current equipment; this naked hero no longer has the cached AC.
+    assert.equal(game.u.uac, 10);
     assert.equal(game.urole.rank.m, 'Wizard');
     assert.equal(game.inventory.includes(opener), false);
     assert.equal(game.level.objects.length, 1);
@@ -96958,7 +96965,8 @@ test('adjacent hero-thrown blessed water potion vapor rehumanizes lycanthrope af
     assert.equal(game.u.uhpmax, 18);
     assert.equal(game.u.uen, 3);
     assert.equal(game.u.uenmax, 5);
-    assert.equal(game.u.uac, 7);
+    // C find_ac uses current equipment; this naked hero no longer has the cached AC.
+    assert.equal(game.u.uac, 10);
     assert.equal(game.urole.rank.m, 'Wizard');
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
@@ -97318,21 +97326,21 @@ test('hero-thrown acid potion can be blocked by potion resistance', async () => 
     game.u.acurr.a[A_DEX] = 25;
     const potion = acidPotion(8816, 'a');
     potion.dknown = true;
-    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mr: 100 });
+    const wizard = ordinaryThrowTarget('gnomish wizard', 7, 5);
     game.inventory = [potion];
-    game.level.monsters = [goblin];
+    game.level.monsters = [wizard];
     enableRngLog({ reset: true });
 
     await rhack('t');
     await rhack('a');
-    markSquareVisible(goblin.mx, goblin.my);
+    markSquareVisible(wizard.mx, wizard.my);
     await rhack('l');
 
     assert.match(game._pending_message, /The potion of acid evaporates\./);
     assert.doesNotMatch(game._pending_message, /shrieks|writhes|in pain|peculiar odor/);
-    assert.equal(goblin.mhp, 4);
-    assert.equal(goblin.msleeping, 0);
-    assert.equal(goblin.mpeaceful, false);
+    assert.equal(wizard.mhp, 4);
+    assert.equal(wizard.msleeping, 0);
+    assert.equal(wizard.mpeaceful, false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(105)',
     ]);
@@ -97407,22 +97415,22 @@ test('hero-thrown polymorph potion can be resisted by potion-class resistance', 
     game.u.acurr.a[A_DEX] = 25;
     const potion = polymorphPotion(8825, 'p');
     potion.dknown = true;
-    const goblin = ordinaryThrowTarget('goblin', 7, 5, { mr: 100 });
+    const wizard = ordinaryThrowTarget('gnomish wizard', 7, 5);
     game.inventory = [potion];
-    game.level.monsters = [goblin];
+    game.level.monsters = [wizard];
     enableRngLog({ reset: true });
 
     await rhack('t');
     await rhack('p');
-    markSquareVisible(goblin.mx, goblin.my);
+    markSquareVisible(wizard.mx, wizard.my);
     await rhack('l');
 
     assert.match(game._pending_message, /The potion of polymorph evaporates\./);
     assert.doesNotMatch(game._pending_message, /turns into|shudders|peculiar odor|misses/);
-    assert.equal(goblin.data.name, 'goblin');
-    assert.equal(goblin.mhp, 4);
-    assert.equal(goblin.msleeping, 0);
-    assert.equal(goblin.mpeaceful, false);
+    assert.equal(wizard.data.name, 'gnomish wizard');
+    assert.equal(wizard.mhp, 4);
+    assert.equal(wizard.msleeping, 0);
+    assert.equal(wizard.mpeaceful, false);
     assert.equal(game.inventory.includes(potion), false);
     assert.equal(game.level.objects.length, 0);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
@@ -98142,13 +98150,13 @@ test('hero-thrown sleeping potion can be resisted by potion resistance', async (
     initRng(2);
     game.u.acurr.a[A_DEX] = 25;
     const potion = sleepingPotion(8769, 's', 1, { dknown: true });
-    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+    const wizard = ordinaryThrowTarget('gnomish wizard', 7, 5, {
         mcanmove: true,
-        mr: 999,
     });
     game.inventory = [potion];
-    game.level.monsters = [goblin];
+    game.level.monsters = [wizard];
     enableRngLog({ reset: true });
+    installCoreRngValues([13, 7, 1, 1, 3, 0]);
 
     await rhack('t');
     await rhack('s');
@@ -98156,10 +98164,10 @@ test('hero-thrown sleeping potion can be resisted by potion resistance', async (
 
     assert.match(game._pending_message, /The potion of sleeping evaporates\./);
     assert.doesNotMatch(game._pending_message, /falls asleep|rather tired/);
-    assert.equal(goblin.mcanmove, true);
-    assert.equal(goblin.mfrozen || 0, 0);
-    assert.equal(goblin.msleeping, 0);
-    assert.equal(goblin.mpeaceful, false);
+    assert.equal(wizard.mcanmove, true);
+    assert.equal(wizard.mfrozen || 0, 0);
+    assert.equal(wizard.msleeping, 0);
+    assert.equal(wizard.mpeaceful, false);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rnd(12)', 'rn2(105)',
@@ -98260,23 +98268,23 @@ test('hero-thrown blindness potion reduces bonus duration when resisted', async 
     initRng(2);
     game.u.acurr.a[A_DEX] = 25;
     const potion = blindnessPotion(8773, 'b', 1, { dknown: true });
-    const goblin = ordinaryThrowTarget('goblin', 7, 5, {
+    const wizard = ordinaryThrowTarget('gnomish wizard', 7, 5, {
         mcansee: true,
-        mr: 999,
     });
     game.inventory = [potion];
-    game.level.monsters = [goblin];
+    game.level.monsters = [wizard];
     enableRngLog({ reset: true });
+    installCoreRngValues([13, 7, 1, 1, 15, 23, 0]);
 
     await rhack('t');
     await rhack('b');
     await rhack('l');
 
     assert.match(game._pending_message, /The potion of blindness evaporates\./);
-    assert.equal(goblin.mcansee, false);
-    assert.equal(goblin.mblinded, 79);
-    assert.equal(goblin.msleeping, 0);
-    assert.equal(goblin.mpeaceful, false);
+    assert.equal(wizard.mcansee, false);
+    assert.equal(wizard.mblinded, 79);
+    assert.equal(wizard.msleeping, 0);
+    assert.equal(wizard.mpeaceful, false);
     assert.equal(game.inventory.includes(potion), false);
     assert.deepEqual(getRngLog().map(entry => entry.replace(/=.*/, '')), [
         'rnd(20)', 'rnd(25)', 'rn2(7)', 'rn2(5)', 'rn2(32)', 'rn2(32)', 'rn2(105)',

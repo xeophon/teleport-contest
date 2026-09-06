@@ -446,3 +446,38 @@ to 308/308 screens and 13,878/13,878 RNG entries. The Knight replay again reache
 its previously documented later Sanctum divergence, with 1,760/1,814 screens
 and 106,553/108,275 RNG entries matched; that separate monster-driver gap is
 not claimed resolved here.
+
+## Priest and Knight undead turning
+
+`js/pray.js` now implements `pray.c:doturn:2414-2490` and
+`maybe_turn_mon_iter:2347-2410`, with command-owned message and landing
+continuations. Tests cover known and forgotten non-cleric spell fallback;
+religious conduct before speech failure; speech, form, anger and hellish
+dungeon gates; display-RNG deity selection; geometric visibility and range;
+hostile undead, vampire shapechangers and level-16 demon eligibility;
+confused wake/unfreeze/unflee; both resistance rolls; all six class-level
+thresholds; chaotic peacefulness/malign; ordinary killing and life saving;
+and the five level-dependent paralysis durations, including a real turn loop.
+
+The iterator retains monster references and source phases through `--More--`
+and saves. `mon.c:xkilled:3478-3530` HP/conduct precedes the kill message;
+inventory and experience cleanup follow its dismissal. Unseen kills use
+"it". Shared magic resistance reads the canonical species MR, with the C
+defender-level bounds. Seven older resistance fixtures now use actual
+resistant species and explicit draws instead of impossible goblin/pony MR
+overrides. `wizard.c:aggravate` visits reverse creation order, matching fmon.
+
+The required `monmove.c:monflee:462-549` branches include held-hero release,
+sticky-form retention, untimed flight, immobile feedback, track clearing and
+the vrock gas cloud. `mon.c:unstuck:3438-3469` preserves existing cooldowns
+and returns ball/chain identities to the floor. Fog-cloud expulsion resumes
+water/death/life-saving and automatic-pickup operations before flight, with
+live and saved drowning tests. Numeric vampire shapechanger identities now
+work in the shared monster life-saving helper.
+
+All 50 new command tests pass; the combined command, immediate-spell and
+shop suite passes 3,213/3,213. This verifies the listed command branches,
+not every inherited helper: full `do_name.c:x_monnam` hallucinated monster
+names, shield animations and expulsion's monster-telecontrol/overcrowding
+branches remain outside this checkpoint. Other prayer/sacrifice operations
+are separate from `#turn` and are not claimed complete.

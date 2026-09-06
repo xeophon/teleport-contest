@@ -16,7 +16,7 @@ function or branch has been reviewed or implemented. Three parallel agents
 worked through subsystem audits, implementations, new tests, and independent
 reviews over several rounds.
 
-The port now has 72 JavaScript modules and approximately 172,000 lines;
+The port now has 74 JavaScript modules and approximately 172,000 lines;
 most handwritten behavior is in `cmd.js`, `allmain.js`, and `mklev.js`. Missing filenames do
 not establish missing behavior: many C subsystems live inside these modules.
 Runtime entry points are `jsmain.js` for recorded segments, `nethack.js` for
@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,649 passing tests**, with no
+The latest source-driven checkpoint has **5,805 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -125,14 +125,34 @@ all 52 casting letters, tty pages, current trained skills, sorting, retained
 ordering and full spell-slot swaps. Thirty-four independent tests cover these
 branches; two additional freshly recorded C fixtures match all 41 screens,
 cursors and RNG calls across sorting/swapping and traditional retry prompts.
-C's wizard-only turns-column indexing quirk remains intact. Menu search,
-debug casting and remaining effect/HP continuations are further work.
+C's wizard-only turns-column indexing quirk remains intact. Debug casting now
+offers all 41 spells with C's per-page accelerators, bypassing normal casting
+gates while using current skills. Two more fresh C recordings verify all 44
+screens, cursors and 5,656 RNG calls for debug selection and fatal self-casting;
+13 independent tests cover debug gates, saving and direct known-spell calls.
+Twenty-four new spell-health tests cover current-form HP, life saving, saved
+falling-rock recovery, hearing/vision cures, sickness and permanent blindness
+sources; light uses the shared gremlin damage owner, and self-sleep uses C's
+shared occupation and combat-wakeup state.
+Reflected-ray/multiple-blast continuations, menu search and skill practice
+remain further work.
 
 Shared ring on/off/gone handling now owns property masks, charged bonuses,
 recharging and discovery. Electrical destruction retains the worn object
 through float-down, trap/water landings and saved death continuations before
-using it up (35 new tests). Full AC recomputation, sink/shapechanger/mimic
-callbacks and older aggregate electrical consumers remain separate work.
+using it up (35 new tests). Shared AC recomputation now uses current-form
+base AC, seven armor slots, erosion, protection rings, guarding, intrinsic and
+spell protection before C's ±99 clamp (47 new tests). Wear/removal, equipment
+changes and polymorphs use this owner; spell protection decays on C's clock.
+Startup and per-input recalculation, sink/shapechanger/mimic callbacks and
+older aggregate electrical consumers remain separate work.
+
+The role `#turn` ability now follows C's conduct, chanting/divine rejection,
+confusion, monster ordering, resistance, thresholds, fleeing, pacification,
+killing and paralysis. Fifty new tests include known-spell fallback for other
+roles, saved messages, expulsion, drowning, life saving and pickup. Shared
+monster resistance uses canonical species data; synthetic per-instance MR
+overrides in older tests were replaced with source-valid species and draws.
 
 The scripted Sanctum combat sequence and display clock offsets have been
 removed. Canonical wizard/cleric spell selection now shares a source owner;
@@ -146,6 +166,12 @@ landing and death continuations (33 new tests). The driver preserves attack
 armor rolls, protection, sleeping wakeups, occupation interruption and queued
 death-message order. The remaining 16 caster arrays, polymorph passives,
 special weapons and unfinished spell effects require continued source work.
+Twenty more tests cover live attack/death turn resumption and shared sleep
+state. The main loop parks a suspended attack pass and resumes its remaining
+sweep without taking a second movement debit; death messages get C's separate
+line. Genuine sleep sets the combat-wakeup timestamp while rotten-food
+unconsciousness remains separate. The arch-lich recording's worker hang is
+fixed; its later counted-search timing mismatch remains next work.
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
 Knight, Ranger and Rogue starts now execute their source operations, including

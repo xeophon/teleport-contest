@@ -26,6 +26,8 @@ function makeDeps(overrides = {}) {
         },
         healHero: (...args) => { calls.healHero.push(args); return ''; },
         loseHeroHp: () => false,
+        damageHero: () => ({}),
+        stopHeroOccupation: () => {},
         maybeHalfPhysicalDamage: x => x,
         heroHasAntimagic: () => false,
         heroHasSleepResistance: () => false,
@@ -115,7 +117,6 @@ function makeDeps(overrides = {}) {
         heroBlockedInvisByMummyWrapping: () => false,
         mummyWrappingName: () => 'mummy wrapping',
         heroBlocksInvis: () => false,
-        cureHeroBlindness: () => 'You can see again.',
         rolePetTypeName: () => 'kitten',
         rndmonstAdj: () => null,
         heroBlocksClairvoyance: () => false,
@@ -466,6 +467,10 @@ test('confuse monster spell starts the red glow with scroll-like RNG but spell i
 test('cure blindness routes through healup(0,0,FALSE,TRUE)', async () => {
     installGame(83);
     const deps = makeDeps();
+    deps.healHero = (amount, extra, options) => {
+        assert.deepEqual([amount, extra, options], [0, 0, { cureBlind: true }]);
+        return 'You can see again.';
+    };
     const result = await castSpellNodirEffect({ name: 'cure blindness' }, deps);
     assert.deepEqual(result.messages, ['You can see again.']);
 });
