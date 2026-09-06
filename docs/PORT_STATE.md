@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,501 passing tests**, with no
+The latest source-driven checkpoint has **6,550 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -52,14 +52,27 @@ gold identity. Comparison, landing and load feedback have saved continuations
 before divine notice; accepted missiles/ammunition follow C's autoquiver gates.
 Missing ordinary weapon wishes reuse the class generator's source tables.
 Twenty-nine new state tests pass, including save/restore and ignored More keys.
-Three fresh C recordings match all 138 screens and 8,270 random calls. General
-wish stack merging, artifact touch, levitated/swallowed drops and full serial
-floor effects remain open. Weapon name/quantity edge cases need a wider pass.
+Three fresh C recordings match all 138 screens and 8,270 random calls. Artifact
+touch, levitated/swallowed drops and full serial floor effects remain open.
+Weapon name/quantity edge cases need a wider pass.
 Load status now commits after its report returns, as `encumber_msg` does;
 this restores both affected recordings (612 screens and 14,068 random calls).
 Coins independently invalidate status in `addinv_core1`, so their new burden
 can already be displayed during that pause; the accepted-gold oracle and a
 separate ordinary-object test cover that distinction.
+
+Wish stacks now use the common inventory merge gates across weapons, food,
+gems, scrolls, potions and candles, including quiver preference, impaired
+knowledge, attached data, names and worn stacks. Merging copies knowledge,
+names and bypass state, updates weight, and retains the original timer while
+cancelling the incoming timer. Rejected split children keep no worn slot.
+Wish delivery preserves the generated object pointer so timers remain attached
+to the carried object. Wizard wishes temporarily suppress verbose output;
+ordinary wishes retain C's verbose stack totals. Exact real gems bypass the
+namedesc roll and receive their C initialization. Forty-eight new state tests
+and a fresh 189-screen/2,772-call C recording pass. Globs, general object
+knowledge/observation, full floor/monster merge predicates and the remaining
+addinv intrinsic side effects still require source passes.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

@@ -2344,7 +2344,11 @@ function useUpDustWand(item) {
     return `The ${name} turns to dust.`;
 }
 
-async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For what do you wish?' } = {}) {
+async function beginWishPrompt({ moveCost = 0, dustItem = null, message = 'For what do you wish?', wizard = false } = {}) {
+    if (wizard) {
+        game._wish_restore_verbose = game.flags.verbose ?? true;
+        game.flags.verbose = false;
+    }
     game._wish_text = '';
     game._wish_tries = 0;
     game._wish_move_cost = moveCost;
@@ -2366,6 +2370,21 @@ async function setWishResultMessage(message, more = false) {
         text = text ? `${text}  ${dustMessage}` : dustMessage;
     }
     await setMessage(text, more);
+    // wiz_wish restores verbose and calls encumber_msg after makewish.
+    if (game._wish_restore_verbose !== undefined) {
+        game.flags.verbose = game._wish_restore_verbose;
+        delete game._wish_restore_verbose;
+        const loadMessage = encumberMsg(false);
+        if (loadMessage && !addToplineMessage(loadMessage)) {
+            game._wizard_wish_load = { message: game._topline_after_more, moveCost };
+            game._topline_after_more = '';
+            game._command_mode = 'wizardWishLoadMore';
+            game._process_time_with_more = 0;
+            game.context.move = 0;
+            return;
+        }
+        encumberMsg();
+    }
 }
 const GROWNUP_MONSTERS = new Map([
     ['chickatrice', 'cockatrice'],
@@ -18726,80 +18745,28 @@ async function finishHeldWishFeedback(messages = null, item = null) {
     if (grantAmuletWish) game._command_mode = 'amuletBestowMore';
 }
 
-// C ref: invent.c mergable()/merged() — a wished potion that stacks with an
-// existing one merges into it (hold_another_object observes the new object
-// first, invent.c:1217, maximizing mergeability); when the two stacks differ
-// in type/BUC knowledge the combined stack is learned "by comparing them"
-// (invent.c:862-875, message at invent.c:941).
-function wishedPotionMergeTypeKey(item) {
-    if (item?.potionIndex != null) return `index:${item.potionIndex}`;
-    const kind = String(item?.actualKind || item?.kind || '')
-        .replace(/^potion of /, '').toLowerCase();
-    if (kind === 'water' || kind === 'holy water' || kind === 'unholy water') return 'water';
-    return '';
-}
-
-function wishedPotionKindIsTypeName(item) {
-    if (item?.potionIndex == null) {
-        const kind = String(item?.kind || '').toLowerCase();
-        return kind === 'water' || kind === 'holy water' || kind === 'unholy water';
-    }
-    const typeName = String(IDENTIFIED_POTION_NAMES[item.potionIndex] || '').toLowerCase();
-    const kind = String(item?.kind || '').replace(/^potion of /, '').toLowerCase();
-    return !!typeName && kind === typeName;
-}
-
-function findWishedPotionInventoryMergeTarget(item) {
-    if (item?.cls !== 'potion' || item.artifact || item.nomerge) return null;
-    const sourceType = wishedPotionMergeTypeKey(item);
-    if (!sourceType) return null;
-    for (const target of game.inventory || []) {
-        if (target === item || target.artifact || target.nomerge) continue;
-        if (target.cls !== 'potion') continue;
-        if (wishedPotionMergeTypeKey(target) !== sourceType) continue;
-        // C ref: invent.c mergable — BUC, spe, dilution and grease must match.
-        if (!!target.blessed !== !!item.blessed || !!target.cursed !== !!item.cursed) continue;
-        if ((target.spe ?? 0) !== (item.spe ?? 0)) continue;
-        if ((target.odiluted ?? false) !== (item.odiluted ?? false)) continue;
-        if ((target.greased ?? false) !== (item.greased ?? false)) continue;
-        if (!objectInstanceNamesMergeCompatible(target, item)) continue;
-        return target;
+// invent.c:addinv_core0 prefers the quiver, then walks the inventory.
+function findWishedInventoryMergeTarget(item) {
+    const inventory = game.inventory || [];
+    const quiver = game.u.uquiver || inventory.find(isQuiveredItem);
+    const candidates = quiver ? [quiver, ...inventory.filter(obj => obj !== quiver)] : inventory;
+    for (const target of candidates) {
+        if (pickedObjectInventoryMergeCompatible(target, item, false)) return target;
     }
     return null;
 }
 
-function mergeWishedPotionIntoInventory(item, target) {
-    // C ref: invent.c merged() — knowledge carries over to the combined stack.
-    let discovered = false;
-    if (wishedPotionKindIsTypeName(item) !== wishedPotionKindIsTypeName(target)) {
-        const typeName = target.potionIndex != null
-            ? IDENTIFIED_POTION_NAMES[target.potionIndex]
-            : String(target.actualKind || target.kind || '').replace(/^potion of /, '');
-        if (typeName) target.kind = typeName;
-        target.known = true;
-        discovered = true;
-    }
-    const isPriest = (game._startup_role || game.urole?.name?.m) === 'Priest';
-    if ((item.bknown === true) !== (target.bknown === true) && !isPriest) {
-        target.bknown = true;
-        discovered = true;
-    }
-    const addedQuan = Math.max(1, Math.trunc(Number(item.quan || 1)));
-    target.quan = Math.max(1, Math.trunc(Number(target.quan || 1))) + addedQuan;
-    const unitWeight = target.quan > addedQuan && Number.isFinite(Number(target.owt))
-        ? Number(target.owt) / (target.quan - addedQuan)
-        : 20;
-    target.owt = Math.max(1, Math.round(unitWeight * target.quan));
-    target.line = normalInventoryLine({ ...target, line: '' });
-    // C ref: invent.c prinv (via hold_another_object) — the landing line shows
-    // the wished-for quantity of the combined stack, without a period.
-    const bucPrefix = target.bknown === true
-        ? (target.blessed ? 'blessed ' : target.cursed ? 'cursed ' : 'uncursed ')
-        : '';
-    const visibleName = pickupObjectName({ ...target, quan: addedQuan });
-    const phrase = addedQuan > 1 ? `${addedQuan} ${bucPrefix}${visibleName}`
-        : `${/^[aeiou]/i.test(`${bucPrefix}${visibleName}`) ? 'an' : 'a'} ${bucPrefix}${visibleName}`;
-    return { target, discovered, landing: `${target.letter} - ${phrase}` };
+function mergeWishedObjectIntoInventory(item, target) {
+    const quantity = item.quan || 1;
+    const priest = (game._startup_role || game.urole?.name?.m) === 'Priest';
+    const discovered = !!item.known !== !!target.known
+        || !!item.rknown !== !!target.rknown && !!target.oerodeproof
+        || !!item.bknown !== !!target.bknown && !priest;
+    mergePickedObjectIntoInventory(item, target);
+    target.owt = wishedObjectFinalWeight(target);
+    const landing = normalInventoryLine({ ...target, line: '', quan: quantity })
+        + (game.flags?.verbose === false ? '' : ' (' + target.quan + ' in total).');
+    return { target, discovered, landing };
 }
 
 function wishedInventoryPhrase(item, wishedQuan = 1) {
@@ -18839,7 +18806,8 @@ async function finishRandomBlankWish(prefix = '') {
     game._wish_tries = 0;
     const letter = nextInventoryLetter();
     const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
-    const item = Object.assign({ letter, quan: 1 }, makeRandomWishObject());
+    const item = makeRandomWishObject();
+    item.letter = letter;
     item.line = `${letter} - ${wishedInventoryPhrase(item)}`;
     game.inventory ??= [];
     game.inventory.push(item);
@@ -45379,15 +45347,18 @@ function pickupObjectCanInventoryMerge(obj) {
     if (obj.cls === 'food' || obj.otyp === FOOD_CLASS) return false;
     const cls = shopObjectClassCode(obj);
     if (cls === SCROLL_CLASS || cls === POTION_CLASS || cls === GEM_CLASS) return true;
-    if (cls === WEAPON_CLASS) return pickupWeaponCanStack(obj);
+    if (cls === WEAPON_CLASS) return objectMergeableByCMetadata(obj);
     return isCandleObject(obj);
 }
 
 function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid, shkp = null) {
     if (!target || !source || target === source) return false;
     if (!pickupObjectCanInventoryMerge(target) || !pickupObjectCanInventoryMerge(source)) return false;
-    if (target.worn || target.wielded || target.alternate || source.worn || source.wielded || source.alternate) return false;
     if (target.nomerge || source.nomerge || target.artifact || source.artifact) return false;
+    if (target.how_lost === 4 || source.how_lost === 4
+        || target.how_lost === 'LOST_EXPLODING' || source.how_lost === 'LOST_EXPLODING') return false;
+    // addinv resets the incoming object's how_lost before considering merges.
+    if (target.how_lost && target.how_lost !== 'LOST_NONE') return false;
     const targetUnpaid = !!(target.unpaid || shopBillEntryForObject(shkp, target));
     if (targetUnpaid !== !!sourceWillBeUnpaid) return false;
     const sourceNoCharge = sourceWillBeUnpaid ? !!source.no_charge : false;
@@ -45396,6 +45367,7 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.spe ?? 0) !== (source.spe ?? 0)) return false;
     if ((target.oeaten ?? 0) !== (source.oeaten ?? 0) || (target.orotten ?? 0) !== (source.orotten ?? 0)) return false;
     if ((target.obroken ?? false) !== (source.obroken ?? false)) return false;
+    if (!!(target.otrapped || target.opoisoned) !== !!(source.otrapped || source.opoisoned)) return false;
     if ((target.lamplit ?? false) !== (source.lamplit ?? false)) return false;
     if (isPotionOfOil(source) && source.lamplit) return false;
     if (!sameStackCorpseEggTinFields(target, source)) return false;
@@ -45405,12 +45377,26 @@ function pickedObjectInventoryMergeCompatible(target, source, sourceWillBeUnpaid
     if ((target.odiluted ?? false) !== (source.odiluted ?? false)) return false;
     if ((target.oeroded ?? 0) !== (source.oeroded ?? 0) || (target.oeroded2 ?? 0) !== (source.oeroded2 ?? 0)) return false;
     if ((target.greased ?? false) !== (source.greased ?? false)) return false;
+    const impaired = !!game.u?.blind || heroIsHallucinating();
+    const priest = (game._startup_role || game.urole?.name?.m) === 'Priest';
+    if ((target.dknown !== false) !== (source.dknown !== false)
+        || impaired && (!!target.known !== !!source.known || !priest && !!target.bknown !== !!source.bknown)) return false;
+    if (wishedDamageProfile(source).erosionMatters
+        && (!!(target.oerodeproof || target.rustproof) !== !!(source.oerodeproof || source.rustproof)
+            || impaired && !!target.rknown !== !!source.rknown)) return false;
+    if (target.omonst || target.omid || target.oextra?.omonst || target.oextra?.omid
+        || source.omonst || source.omid || source.oextra?.omonst || source.oextra?.omid) return false;
+    if ((target.omailcmd || target.oextra?.omailcmd || '') !== (source.omailcmd || source.oextra?.omailcmd || '')) return false;
+    if (!stackedObjectInstanceNamesMergeCompatible(target, source)) return false;
     if (shopObjectClassCode(target) !== shopObjectClassCode(source)) return false;
-    if ((target.otyp ?? null) !== (source.otyp ?? null) && pickupMergeName(target) !== pickupMergeName(source)) return false;
+    const samePotion = target.cls === 'potion' && source.cls === 'potion'
+        && target.potionIndex != null && target.potionIndex === source.potionIndex;
+    if (!samePotion && (target.otyp ?? null) !== (source.otyp ?? null) && pickupMergeName(target) !== pickupMergeName(source)) return false;
     if ((target.scrollIndex ?? null) !== (source.scrollIndex ?? null)) return false;
     if ((target.potionIndex ?? null) !== (source.potionIndex ?? null)) return false;
     if ((target.gemDescription ?? null) !== (source.gemDescription ?? null)) return false;
     if ((target.actualKind || target.kind || '') !== (source.actualKind || source.kind || '')
+        && !samePotion
         && pickupMergeName(target) !== pickupMergeName(source)) return false;
     if ((isSimpleMergeableFoodObject(target) || isSimpleMergeableFoodObject(source))
         && (!isSimpleMergeableFoodObject(target)
@@ -45446,19 +45432,17 @@ function mergePickedObjectIntoInventory(source, target) {
         if (target.age != null || source.age != null)
             target.age = Math.trunc(((targetAge * targetCount) + (sourceAge * pickedCount)) / (targetCount + pickedCount));
     }
-    if (isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)) {
-        copyObjectInstanceNameForMerge(target, source);
-    } else if (isSpecialFoodMergeObject(target) && isSpecialFoodMergeObject(source) && !isCorpseItem(target)) {
-        copyObjectInstanceNameForMerge(target, source);
-    }
+    copyStackedObjectInstanceNameForMerge(target, source);
     target.quan = targetCount + pickedCount;
     // C ref: addinv_core0() sets pickup_prev on the resulting stack whenever
     // an object is added to inventory (invent.c:1142).
     target.pickup_prev = 1;
     if (source.plural && !target.plural) target.plural = source.plural;
-    if (source.known !== target.known) target.known = true;
-    if (source.bknown !== target.bknown && game._startup_role !== 'Priest') target.bknown = true;
-    if (source.rknown !== target.rknown) target.rknown = true;
+    if (!!source.known !== !!target.known) target.known = true;
+    if (!!source.bknown !== !!target.bknown) target.bknown = true;
+    if (!!source.rknown !== !!target.rknown) target.rknown = true;
+    if (source.bypass) target.bypass = true;
+    target.owt = wishedObjectFinalWeight(target);
     target.line = normalInventoryLine({ ...target, line: '' });
     if (target.unpaid) syncUnpaidBillLine(target);
     const pickedPhrase = isSimpleMergeableFoodObject(target) && isSimpleMergeableFoodObject(source)
@@ -49684,7 +49668,7 @@ function wishQuantityMergeable(item) {
     const cls = itemClassKey(item);
     if (cls === 'scroll' || cls === 'potion' || cls === 'gem') return true;
     if (cls === 'food' && objectKindKey(item) !== 'meat ring') return true;
-    if (cls === 'weapon') return true;
+    if (cls === 'weapon') return objectMergeableByCMetadata(item);
     if (cls === 'venom') return true;
     if (isCandleObject(item)) return true;
     return false;
@@ -50152,7 +50136,7 @@ for (const gem of WISH_GEMS) {
 function wishedGemObject(spec, { description = spec?.description || '', consumeNamedesc = true } = {}) {
     if (!spec) return null;
     if (consumeNamedesc) rn2(spec.prob + 1);
-    const otmp = mksobj(GEM_CLASS, false, false);
+    const otmp = mksobj(GEM_CLASS, true, false);
     const display = spec.displayName || spec.name;
     const color = WISH_GEM_COLORS.get(spec.description) ?? NO_COLOR;
     return Object.assign(otmp, {
@@ -50206,7 +50190,7 @@ function makeWishedGemObject(lowerName) {
     const glassName = canonicalWishedGlassName(name);
     if (glassName) name = glassName;
     const exact = WISH_GEMS_BY_DISPLAY.get(name);
-    if (exact) return wishedGemObject(exact);
+    if (exact) return wishedGemObject(exact, { consumeNamedesc: !WISH_REAL_GEMS.includes(exact) || name !== exact.name });
     return null;
 }
 
@@ -50237,6 +50221,8 @@ function applyWishedPluralQuantity(name, quantity) {
     if (rawFruit?.plural) return 2;
     const rawBaseObject = WISH_BASE_OBJECTS.get(rawLowerName);
     if (rawBaseObject?.plural && rawLowerName === String(rawBaseObject.plural).toLowerCase()) return 2;
+    if (WEAPON_ROLL_KINDS.some(([, name, , appearance]) =>
+        [name, appearance].some(value => value && rawLowerName === value + 's'))) return 2;
     const lowerName = resolveWishedSpellingAlias(rawLowerName).name;
     const fruit = fruitWishMatch(lowerName);
     if (fruit?.plural) return 2;
@@ -51562,7 +51548,8 @@ async function continueBagPutCommand(state, resumed = null) {
 
 function splitInventoryObjectForContainerPut(item, count) {
     if (!item || (item.quan || 1) <= count) return item;
-    const putItem = { ...item, quan: count, id: next_ident(), timed: 0 };
+    const putItem = { ...item, quan: count, id: next_ident(), timed: 0,
+        owornmask: 0, worn: false, wielded: false, alternate: false, quivered: false, pickup_prev: 0 };
     splitObjectTimers(item, putItem);
     delete putItem.o_id;
     delete putItem._shopBillObjectId;
@@ -67982,6 +67969,20 @@ function tutorialEnterStash() {
         return;
     }
 
+    if (game._command_mode === 'wizardWishLoadMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const state = game._wizard_wish_load;
+        await setMessage(ch === '\x1b' ? '' : state.message);
+        encumberMsg();
+        game.context.move = state.moveCost;
+        game._wizard_wish_load = null;
+        game._command_mode = null;
+        return;
+    }
+
     if (game._command_mode === 'heldWishMore') {
         if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
             game._keep_pending_message = 1;
@@ -75546,7 +75547,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
     }
 
     if (ch === '\x17' && game.flags?.debug && !game._command_mode) {
-        await beginWishPrompt();
+        await beginWishPrompt({ wizard: true });
         return;
     }
 
@@ -78855,7 +78856,9 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 await setWishResultMessage(wishedItem._wish_disappear_message);
                 return;
             }
-            const item = Object.assign({ quan: 1, pickup_prev: 1 }, wishedItem);
+            // Timers started by mksobj/readobjnam retain this object pointer.
+            const item = wishedItem;
+            item.pickup_prev = 1;
             recordWishConduct();
             if (item._artifact_wish_name) wishedQuan = 1;
             if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
@@ -78873,6 +78876,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             applyWishedQualifiers(item, wishedQualifiers);
             applyWishedQuantity(item, wishedQuan, wishedQuanForced);
             applyWishedTinVariety(item);
+            item.dknown = !game.u?.blind && !heroIsHallucinating();
+            if (item.dknown) recordObservedObjectDiscovery(item);
             const finalWishedWeight = wishedObjectFinalWeight(item);
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;
@@ -78880,14 +78885,12 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             delete item._wish_tin_requested_variety;
             delete item._wish_glob_size;
             delete item._wish_glob_default_count;
-            // C ref: invent.c addinv via hold_another_object — a wished potion
-            // that stacks with an existing one merges into it (zap.c makewish
-            // -> hold_another_object -> addinv -> merged) before the landing
-            // message; type/BUC knowledge gaps are learned by comparison.
+            // hold_another_object adds and merges before testing the new
+            // load. A rejected merge splits off only the incoming quantity.
             const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
-            const mergeTarget = heroIsFumbling() ? null : findWishedPotionInventoryMergeTarget(item);
+            const mergeTarget = heroIsFumbling() ? null : findWishedInventoryMergeTarget(item);
             if (mergeTarget) {
-                const merged = mergeWishedPotionIntoInventory(item, mergeTarget);
+                const merged = mergeWishedObjectIntoInventory(item, mergeTarget);
                 game._pet_food_scan_inventory = game.inventory;
                 if (heldObjectMustDrop(mergeTarget, previousEncumbrance)) {
                     const count = item.quan || 1;
@@ -81452,7 +81455,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 return;
             }
             if (command === 'wizwish' && game.flags?.debug) {
-                await beginWishPrompt();
+                await beginWishPrompt({ wizard: true });
                 return;
             }
 	            if (command === 'wizgenesis' && game.flags?.debug) {
