@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **5,171 passing tests**, with no
+The latest source-driven checkpoint has **5,247 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -72,9 +72,12 @@ Casting now uses C's effective attributes, role/intelligence nutrition costs,
 hunger-state transitions, load gate and peak-energy messages (43 tests).
 Spell study now follows the C refresh threshold and confirmations, effective
 reading ability, Wizard difficulty warnings, lens speed rolls, book fading,
-object identity and per-action occupation scheduling (30 tests). New learning
-and relearning preserve their distinct wisdom-exercise/message order. General
-hunger, study interruption/restart and dull-book sleep remain to be ported;
+object identity and per-action occupation scheduling (50 tests). New learning
+and relearning preserve their distinct wisdom-exercise/message order, including
+the separate exercise for discovering a book type. Dull books can cause sleep;
+interrupted study retains its object and remaining delay. Adjacent threats use
+C's attack, disguise, awareness and visibility gates. General hunger and
+distant-monster study interruption still require their source passes;
 cursed-book fatal/teleport callbacks need their own completion audit.
 
 Quest dispatch is **65/65 maps**: all 26 fillers and all 39 named stages.
@@ -90,11 +93,13 @@ in same-level limbo. Approximate returns retain position/wandering state and
 failed placement retries keep their destination (12 tests). Other migration
 modes and complete worm/shapechanger/punishment departure remain open.
 
-The last complete recording run, at preceding commit 518c7a6, passed 52/53
-public sessions (12,711/12,712 screens, 832,102/832,102 RNG calls) and 12/19
+The last complete recording run, at preceding commit ea6e24a, passed 51/53
+public sessions (11,400/12,712 screens, 773,863/832,102 RNG calls) and 12/19
 supplemental sessions (3,067/3,346 screens, 136,132/141,728 RNG calls), with
-zero worker errors. One Knight spell-retention screen still differs. Current
-full corpora will be rerun from the committed checkpoint.
+zero worker errors. The Priest refresh-prompt screen and Knight spell-study
+timing diverged; the current prompt correction and turn-order investigation
+are source driven. Current full corpora will be rerun from the committed
+checkpoint. These recording results do not establish full C behavior.
 
 Still open across the repository are the broader source-audit gaps below and
 in the per-subsystem audit files. Implemented callback kinds or dispatched

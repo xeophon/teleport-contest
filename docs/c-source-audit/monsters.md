@@ -341,8 +341,19 @@ float-down uses the shared artifact detachment API and serializable projectile
 continuation, with a save/restore test proving that water escape retains the
 detached object and does not repeat its cooldown before the upward flight.
 
-This is not a complete transfer audit: horizontal hero throw/fire object
-copies and returning weapons, other direct floor-removal destruction callers,
+The ordinary `f` command now detaches each real shot before flight, duplicating
+shop billing and timers only when splitting a stack (`dothrow.c:249-272`,
+`mkobj.c:457-507`). It retains an unthrown quiver stack, clears the final quiver
+slot, and transfers the actual gem to a receiving unicorn (`gem_accept:2373`).
+Horizontal landing snuffs candles after floor effects and before shipping
+(`dothrow.c:1818`), while lamps retain their burn timers. The flight and bars
+impact finish before recoil damage (`dothrow.c:1674-1682`). Ten new independent
+tests cover these states, including an actual `moveloop_core` firing turn and
+save/restore during an active Heart water escape; seven reproduced failures
+before fixes. The 72 ownership tests and existing 3,134 shop command tests pass.
+
+This is not a complete transfer audit: ordinary horizontal `t` object copies,
+returning weapons, specialized nonweapon `f` monster impacts, other direct floor-removal destruction callers,
 migration mode variations and the remaining non-timer stack compatibility
 properties still need review. Full drowning effects between every individual
 pline also remain broader than the successful-crawl continuation implemented

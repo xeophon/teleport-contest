@@ -54598,7 +54598,7 @@ test('robbed shopkeeper treats dropped container contents as restock contributio
     assert.equal(shop.shopkeeperCash(shkp), 100);
 });
 
-test('putting paid merchandise into a shop-floor container accepts cash sale', () => {
+test('putting paid merchandise into a shop-floor container accepts cash sale', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(5051);
     const item = dagger(5052, 'a');
@@ -54606,12 +54606,12 @@ test('putting paid merchandise into a shop-floor container accepts cash sale', (
     game.inventory = [item];
     game.level.objects = [container];
 
-    const pending = shop.beginShopFloorContainerPutSale(container, item);
+    const { pendingSale: pending } = await shop.putInventoryObjectIntoContainer(container, item);
 
     assert.equal(pending.prompt, true);
     assert.equal(pending.credit, false);
     assert.equal(pending.offer, 2);
-    assert.equal(game.inventory.includes(item), true);
+    assert.equal(game.inventory.includes(item), false);
 
     const result = shop.finishShopFloorContainerPutSale(pending, true);
 
@@ -54628,7 +54628,7 @@ test('putting paid merchandise into a shop-floor container accepts cash sale', (
     assert.equal(shkp.billct, 0);
 });
 
-test('putting paid merchandise into a shop-floor ice box accepts cash sale', () => {
+test('putting paid merchandise into a shop-floor ice box accepts cash sale', async () => {
     const { shkp } = installShopState();
     const iceBox = shopFloorIceBox(5056);
     const item = dagger(5057, 'a');
@@ -54636,7 +54636,7 @@ test('putting paid merchandise into a shop-floor ice box accepts cash sale', () 
     game.inventory = [item];
     game.level.objects = [iceBox];
 
-    const pending = shop.beginShopFloorContainerPutSale(iceBox, item);
+    const { pendingSale: pending } = await shop.putInventoryObjectIntoContainer(iceBox, item);
     assert.equal(pending.prompt, true);
     assert.equal(pending.offer, 2);
 
@@ -54650,7 +54650,7 @@ test('putting paid merchandise into a shop-floor ice box accepts cash sale', () 
     assert.equal(shop.shopkeeperCash(shkp), 98);
 });
 
-test('putting paid merchandise into a shop-floor container declines cash sale', () => {
+test('putting paid merchandise into a shop-floor container declines cash sale', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(5061);
     const item = dagger(5062, 'a');
@@ -54658,7 +54658,7 @@ test('putting paid merchandise into a shop-floor container declines cash sale', 
     game.inventory = [item];
     game.level.objects = [container];
 
-    const pending = shop.beginShopFloorContainerPutSale(container, item);
+    const { pendingSale: pending } = await shop.putInventoryObjectIntoContainer(container, item);
     const result = shop.finishShopFloorContainerPutSale(pending, false);
 
     assert.equal(result.moved, true);
@@ -54672,7 +54672,7 @@ test('putting paid merchandise into a shop-floor container declines cash sale', 
     assert.equal(shkp.billct, 0);
 });
 
-test('putting paid merchandise into a shop-floor container accepts cashless credit sale', () => {
+test('putting paid merchandise into a shop-floor container accepts cashless credit sale', async () => {
     const { shkp } = installShopState();
     shkp.minvent = [];
     const container = shopFloorContainer(5071);
@@ -54681,7 +54681,7 @@ test('putting paid merchandise into a shop-floor container accepts cashless cred
     game.inventory = [item];
     game.level.objects = [container];
 
-    const pending = shop.beginShopFloorContainerPutSale(container, item);
+    const { pendingSale: pending } = await shop.putInventoryObjectIntoContainer(container, item);
 
     assert.equal(pending.prompt, true);
     assert.equal(pending.credit, true);
@@ -54699,7 +54699,7 @@ test('putting paid merchandise into a shop-floor container accepts cashless cred
     assert.equal(shkp.billct, 0);
 });
 
-test('putting paid merchandise into a shop-floor container for an angry shopkeeper does not mark no-charge', () => {
+test('putting paid merchandise into a shop-floor container for an angry shopkeeper does not mark no-charge', async () => {
     const { shkp } = installShopState();
     shkp.angry = true;
     const container = shopFloorContainer(5075);
@@ -54707,7 +54707,7 @@ test('putting paid merchandise into a shop-floor container for an angry shopkeep
     game.inventory = [item];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, item);
+    const result = await shop.putInventoryObjectIntoContainer(container, item);
 
     assert.equal(result.moved, true);
     assert.match(result.message, /smirks/);
@@ -54721,7 +54721,7 @@ test('putting paid merchandise into a shop-floor container for an angry shopkeep
     assert.equal(shkp.billct, 0);
 });
 
-test('putting paid merchandise into a robbed shop-floor container is a restock contribution', () => {
+test('putting paid merchandise into a robbed shop-floor container is a restock contribution', async () => {
     const { shkp } = installShopState();
     shkp.robbed = 20;
     const container = shopFloorContainer(5077);
@@ -54729,7 +54729,7 @@ test('putting paid merchandise into a robbed shop-floor container is a restock c
     game.inventory = [item];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, item);
+    const result = await shop.putInventoryObjectIntoContainer(container, item);
 
     assert.equal(result.moved, true);
     assert.match(result.message, /contribution/);
@@ -54744,7 +54744,7 @@ test('putting paid merchandise into a robbed shop-floor container is a restock c
     assert.equal(shkp.billct, 0);
 });
 
-test('putting a paid container into a shop-floor container can sell saleable contents', () => {
+test('putting a paid container into a shop-floor container can sell saleable contents', async () => {
     const { shkp } = installShopState();
     const target = shopFloorContainer(5081);
     const bag = sack(5082, 'b');
@@ -54753,7 +54753,7 @@ test('putting a paid container into a shop-floor container can sell saleable con
     game.inventory = [bag];
     game.level.objects = [target];
 
-    const pending = shop.beginShopFloorContainerPutSale(target, bag);
+    const { pendingSale: pending } = await shop.putInventoryObjectIntoContainer(target, bag);
     const expectedOffer = shop.shopSaleOffer(bag, shkp) + shop.shopSaleOffer(blade, shkp);
 
     assert.equal(pending.prompt, true);
@@ -58085,7 +58085,7 @@ test('taking contents from a carried container does not use shop-floor billing',
     assert.doesNotMatch(line, /unpaid/);
 });
 
-test('putting a whole unpaid item into a shop-floor container returns it to shop billing', () => {
+test('putting a whole unpaid item into a shop-floor container returns it to shop billing', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6401);
     const item = foodRation(6402, 'a');
@@ -58093,7 +58093,7 @@ test('putting a whole unpaid item into a shop-floor container returns it to shop
     game.inventory = [item];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, item);
+    const result = await shop.putInventoryObjectIntoContainer(container, item);
 
     assert.equal(result.moved, true);
     assert.equal(game.inventory.includes(item), false);
@@ -58107,7 +58107,7 @@ test('putting a whole unpaid item into a shop-floor container returns it to shop
     assert.equal(shkp.bill.length, 0);
 });
 
-test('putting gold into a shop-floor container pays debt before adding excess credit', () => {
+test('putting gold into a shop-floor container pays debt before adding excess credit', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6451);
     const wallet = goldPieces(6452, 20);
@@ -58118,7 +58118,7 @@ test('putting gold into a shop-floor container pays debt before adding excess cr
     game.inventory = [wallet];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, wallet, 12);
+    const result = await shop.putInventoryObjectIntoContainer(container, wallet, 12);
 
     assert.equal(result.moved, true);
     assert.match(result.message, /Your debt is paid off/);
@@ -58134,7 +58134,7 @@ test('putting gold into a shop-floor container pays debt before adding excess cr
     assert.equal(shop.shopkeeperCash(shkp), 100);
 });
 
-test('putting gold into a shop-floor container for angry or robbed shopkeepers does not donate', () => {
+test('putting gold into a shop-floor container for angry or robbed shopkeepers does not donate', async () => {
     const { shkp } = installShopState();
     const angryContainer = shopFloorContainer(6453);
     const angryWallet = goldPieces(6454, 20);
@@ -58145,7 +58145,7 @@ test('putting gold into a shop-floor container for angry or robbed shopkeepers d
     game.inventory = [angryWallet];
     game.level.objects = [angryContainer];
 
-    const angry = shop.putInventoryObjectIntoContainer(angryContainer, angryWallet, 8);
+    const angry = await shop.putInventoryObjectIntoContainer(angryContainer, angryWallet, 8);
 
     assert.equal(angry.moved, true);
     assert.match(angry.message, /smirks/);
@@ -58163,7 +58163,7 @@ test('putting gold into a shop-floor container for angry or robbed shopkeepers d
     game.inventory = [robbedWallet];
     game.level.objects = [robbedContainer];
 
-    const robbed = shop.putInventoryObjectIntoContainer(robbedContainer, robbedWallet, 5);
+    const robbed = await shop.putInventoryObjectIntoContainer(robbedContainer, robbedWallet, 5);
 
     assert.equal(robbed.moved, true);
     assert.match(robbed.message, /contribution/);
@@ -58175,7 +58175,7 @@ test('putting gold into a shop-floor container for angry or robbed shopkeepers d
     assert.equal(shkp.credit || 0, 0);
 });
 
-test('putting a carried container with contents into a shop-floor container donates contained gold', () => {
+test('putting a carried container with contents into a shop-floor container donates contained gold', async () => {
     const { shkp } = installShopState();
     const target = shopFloorContainer(6461);
     const bag = sack(6462, 'b');
@@ -58189,7 +58189,7 @@ test('putting a carried container with contents into a shop-floor container dona
     game.inventory = [bag];
     game.level.objects = [target];
 
-    const prompt = shop.putInventoryObjectIntoContainer(target, bag);
+    const prompt = await shop.putInventoryObjectIntoContainer(target, bag);
     assert.equal(prompt.pendingSale.prompt, true);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
@@ -58207,7 +58207,7 @@ test('putting a carried container with contents into a shop-floor container dona
     assert.notEqual(coins.unpaid, true);
 });
 
-test('putting part of an unpaid stack into a shop-floor container reduces only the live bill', () => {
+test('putting part of an unpaid stack into a shop-floor container reduces only the live bill', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6501);
     const stack = { ...dagger(6502, 'd'), quan: 3, line: 'd - 3 +0 daggers' };
@@ -58215,7 +58215,7 @@ test('putting part of an unpaid stack into a shop-floor container reduces only t
     game.inventory = [stack];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, stack, 1);
+    const result = await shop.putInventoryObjectIntoContainer(container, stack, 1);
     const contained = container.contents[0];
     const parentEntry = shop.shopBillEntryForObject(shkp, stack);
 
@@ -58233,16 +58233,17 @@ test('putting part of an unpaid stack into a shop-floor container reduces only t
     assert.equal(shkp.billct, 1);
 });
 
-test('putting unpaid merchandise into an outside-shop container preserves the debt', () => {
+test('putting unpaid merchandise into an outside-shop container preserves the debt', async () => {
     const { shkp } = installShopState();
     game.level.at = (x, y) => ({ roomno: x === 9 && y === 5 ? 0 : ROOMOFFSET });
     const container = shopFloorContainer(6601, 9, 5);
+    game.u.ux = 9; game.u.uy = 5;
     const item = foodRation(6602, 'a');
     shop.addObjectToShopBill(shkp, item, 45);
     game.inventory = [item];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, item);
+    const result = await shop.putInventoryObjectIntoContainer(container, item);
 
     assert.equal(result.moved, true);
     assert.equal(container.contents.includes(item), true);
@@ -58252,7 +58253,7 @@ test('putting unpaid merchandise into an outside-shop container preserves the de
     assert.equal(shkp.billct, 1);
 });
 
-test('putting paid and no-charge items into a shop-floor container does not create debt', () => {
+test('putting paid and no-charge items into a shop-floor container does not create debt', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6701);
     const paid = dagger(6702, 'd');
@@ -58261,11 +58262,11 @@ test('putting paid and no-charge items into a shop-floor container does not crea
     game.inventory = [paid, free];
     game.level.objects = [container];
 
-    const paidPrompt = shop.putInventoryObjectIntoContainer(container, paid);
+    const paidPrompt = await shop.putInventoryObjectIntoContainer(container, paid);
     assert.equal(paidPrompt.moved, false);
     assert.equal(paidPrompt.pendingSale.prompt, true);
     assert.equal(shop.finishShopFloorContainerPutSale(paidPrompt.pendingSale, false).moved, true);
-    assert.equal(shop.putInventoryObjectIntoContainer(container, free).moved, true);
+    assert.equal((await shop.putInventoryObjectIntoContainer(container, free)).moved, true);
 
     assert.equal(shkp.billct, 0);
     assert.equal(shkp.bill.length, 0);
@@ -58276,7 +58277,7 @@ test('putting paid and no-charge items into a shop-floor container does not crea
     assert.equal(game._goldCount, 0);
 });
 
-test('putting an unsaleable paid item into a shop-floor container reports uninterested', () => {
+test('putting an unsaleable paid item into a shop-floor container reports uninterested', async () => {
     const { shkp } = installShopState();
     makeCandleShop(shkp);
     const container = shopFloorContainer(6704);
@@ -58284,7 +58285,7 @@ test('putting an unsaleable paid item into a shop-floor container reports uninte
     game.inventory = [paper];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, paper);
+    const result = await shop.putInventoryObjectIntoContainer(container, paper);
 
     assert.equal(result.moved, true);
     assert.equal(result.pendingSale, undefined);
@@ -58296,7 +58297,7 @@ test('putting an unsaleable paid item into a shop-floor container reports uninte
     assert.equal(shkp.bill.length, 0);
 });
 
-test('putting saleable goods into a shop-floor container with a full bill reports uninterested', () => {
+test('putting saleable goods into a shop-floor container with a full bill reports uninterested', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6710);
     const paid = dagger(6711);
@@ -58310,7 +58311,7 @@ test('putting saleable goods into a shop-floor container with a full bill report
     game.inventory = [paid];
     game.level.objects = [container];
 
-    const result = shop.putInventoryObjectIntoContainer(container, paid);
+    const result = await shop.putInventoryObjectIntoContainer(container, paid);
 
     assert.equal(result.moved, true);
     assert.equal(result.pendingSale, undefined);
@@ -58321,7 +58322,7 @@ test('putting saleable goods into a shop-floor container with a full bill report
     assert.equal(shkp.billct, 200);
 });
 
-test('shop-floor container put-in does not merge no-charge goods into chargeable stacks', () => {
+test('shop-floor container put-in does not merge no-charge goods into chargeable stacks', async () => {
     const { shkp } = installShopState();
     const container = shopFloorContainer(6801);
     const stocked = { ...dagger(6802), letter: undefined, line: undefined };
@@ -58332,7 +58333,7 @@ test('shop-floor container put-in does not merge no-charge goods into chargeable
     game.inventory = [paid];
     game.level.objects = [container];
 
-    const prompt = shop.putInventoryObjectIntoContainer(container, paid);
+    const prompt = await shop.putInventoryObjectIntoContainer(container, paid);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
     assert.equal(result.moved, true);
@@ -58950,7 +58951,7 @@ test('looting no-charge cursed shop-floor magic bag contents vanishes without tu
     assert.ok((game._overlay_lines || []).some(row => row[2] === 'q * do nothing'));
 });
 
-test('putting a paid cancellation wand into a shop-floor magic bag prompts before explosion', () => {
+test('putting a paid cancellation wand into a shop-floor magic bag prompts before explosion', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(6928);
     const wand = cancellationWand(6929);
@@ -58961,12 +58962,12 @@ test('putting a paid cancellation wand into a shop-floor magic bag prompts befor
     game.level.objects = [source];
     const cashBefore = shop.shopkeeperCash(shkp);
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.moved, false);
     assert.equal(result.pendingSale.prompt, true);
     assert.match(result.message, /Sell it\?/);
-    assert.equal(game.inventory.includes(wand), true);
+    assert.equal(game.inventory.includes(wand), false);
     assert.equal(game.level.objects.includes(source), true);
     assert.equal(source.contents.length, 0);
     assert.equal(game.u.uhp, 100);
@@ -58974,7 +58975,7 @@ test('putting a paid cancellation wand into a shop-floor magic bag prompts befor
     assert.equal(shkp.billct, 0);
 });
 
-test('accepting sale before shop-floor magic bag explosion bills only the destroyed bag', () => {
+test('accepting sale before shop-floor magic bag explosion bills only the destroyed bag', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(6940);
     const wand = cancellationWand(6941);
@@ -58988,7 +58989,7 @@ test('accepting sale before shop-floor magic bag explosion bills only the destro
     const expectedOffer = shop.shopSaleOffer(wand, shkp);
     const cashBefore = shop.shopkeeperCash(shkp);
 
-    const prompt = shop.putInventoryObjectIntoContainer(source, wand);
+    const prompt = await shop.putInventoryObjectIntoContainer(source, wand);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, true);
 
     assert.equal(result.moved, true);
@@ -59012,7 +59013,7 @@ test('accepting sale before shop-floor magic bag explosion bills only the destro
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
 });
 
-test('declining sale before shop-floor magic bag explosion leaves only the destroyed bag on the bill', () => {
+test('declining sale before shop-floor magic bag explosion leaves only the destroyed bag on the bill', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(6942);
     const wand = cancellationWand(6943);
@@ -59025,7 +59026,7 @@ test('declining sale before shop-floor magic bag explosion leaves only the destr
     const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
     const cashBefore = shop.shopkeeperCash(shkp);
 
-    const prompt = shop.putInventoryObjectIntoContainer(source, wand);
+    const prompt = await shop.putInventoryObjectIntoContainer(source, wand);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
     assert.equal(result.moved, true);
@@ -59046,7 +59047,7 @@ test('declining sale before shop-floor magic bag explosion leaves only the destr
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
 });
 
-test('accepting sale of paid container with unpaid trigger contents clears contents before shop-floor magic bag explosion', () => {
+test('accepting sale of paid container with unpaid trigger contents clears contents before shop-floor magic bag explosion', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(69418);
     const outer = sack(69419, 's');
@@ -59062,7 +59063,7 @@ test('accepting sale of paid container with unpaid trigger contents clears conte
     const expectedOffer = shop.shopSaleOffer(outer, shkp);
     const cashBefore = shop.shopkeeperCash(shkp);
 
-    const prompt = shop.putInventoryObjectIntoContainer(source, outer);
+    const prompt = await shop.putInventoryObjectIntoContainer(source, outer);
     assert.equal(prompt.pendingSale.prompt, true);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, true);
 
@@ -59088,7 +59089,7 @@ test('accepting sale of paid container with unpaid trigger contents clears conte
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), false);
 });
 
-test('declining sale of paid container with unpaid trigger contents clears contents before shop-floor magic bag explosion', () => {
+test('declining sale of paid container with unpaid trigger contents clears contents before shop-floor magic bag explosion', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(69421);
     const outer = sack(69422, 's');
@@ -59102,7 +59103,7 @@ test('declining sale of paid container with unpaid trigger contents clears conte
     game.level.objects = [source];
     const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
 
-    const prompt = shop.putInventoryObjectIntoContainer(source, outer);
+    const prompt = await shop.putInventoryObjectIntoContainer(source, outer);
     assert.equal(prompt.pendingSale.prompt, true);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
@@ -59125,7 +59126,7 @@ test('declining sale of paid container with unpaid trigger contents clears conte
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(wand.id)), false);
 });
 
-test('shop-floor magic bag explosion charges contents destroyed by the bag blast as lost merchandise', () => {
+test('shop-floor magic bag explosion charges contents destroyed by the bag blast as lost merchandise', async () => {
     const { shkp } = installShopState();
     initRng(13);
     const source = bagOfHolding(6930);
@@ -59139,7 +59140,7 @@ test('shop-floor magic bag explosion charges contents destroyed by the bag blast
     game.inventory = [wand];
     game.level.objects = [source];
 
-    const prompt = shop.putInventoryObjectIntoContainer(source, wand);
+    const prompt = await shop.putInventoryObjectIntoContainer(source, wand);
     assert.equal(prompt.pendingSale.prompt, true);
     const result = shop.finishShopFloorContainerPutSale(prompt.pendingSale, false);
 
@@ -59157,7 +59158,7 @@ test('shop-floor magic bag explosion charges contents destroyed by the bag blast
     assert.equal(shop.shopBillEntryTotal(bagEntry), expectedBagPrice);
 });
 
-test('unpaid cancellation wand that explodes a shop-floor magic bag remains as a used-up bill row', () => {
+test('unpaid cancellation wand that explodes a shop-floor magic bag remains as a used-up bill row', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(6936);
     const wand = cancellationWand(6937);
@@ -59168,7 +59169,7 @@ test('unpaid cancellation wand that explodes a shop-floor magic bag remains as a
     game.inventory = [wand];
     game.level.objects = [source];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.equal(game.inventory.includes(wand), false);
@@ -59186,7 +59187,7 @@ test('unpaid cancellation wand that explodes a shop-floor magic bag remains as a
     assert.equal(game._usedUpShopBills.some(entry => String(entry.bo_id) === String(source.id)), true);
 });
 
-test('stale unpaid cancellation wand that explodes a shop-floor magic bag does not create trigger bill', () => {
+test('stale unpaid cancellation wand that explodes a shop-floor magic bag does not create trigger bill', async () => {
     const { shkp } = installShopState();
     const source = bagOfHolding(69361);
     const wand = cancellationWand(69371);
@@ -59199,7 +59200,7 @@ test('stale unpaid cancellation wand that explodes a shop-floor magic bag does n
     game.level.objects = [source];
     const expectedBagPrice = shop.shopItemPrice(source, 5, 5);
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.equal(game.inventory.includes(wand), false);
@@ -59397,7 +59398,7 @@ test('paid carried container lost from a cursed magic bag preserves nested unpai
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(ration.id)), true);
 });
 
-test('carried magic bag explosion converts unpaid contents destroyed by the blast to debt', () => {
+test('carried magic bag explosion converts unpaid contents destroyed by the blast to debt', async () => {
     const { shkp } = installShopState();
     initRng(13);
     const source = bagOfHolding(6943);
@@ -59408,7 +59409,7 @@ test('carried magic bag explosion converts unpaid contents destroyed by the blas
     game.u.uhp = 100;
     game.inventory = [source, wand];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.match(result.messages.join(' '), /magical explosion/);
@@ -59420,7 +59421,7 @@ test('carried magic bag explosion converts unpaid contents destroyed by the blas
     assert.equal(shkp.billct, 0);
 });
 
-test('carried magic bag explosion outside a shop preserves unpaid blast-lost contents as used-up bills', () => {
+test('carried magic bag explosion outside a shop preserves unpaid blast-lost contents as used-up bills', async () => {
     const { shkp } = installShopState();
     initRng(13);
     const source = bagOfHolding(69431);
@@ -59437,7 +59438,7 @@ test('carried magic bag explosion outside a shop preserves unpaid blast-lost con
     });
     game.inventory = [source, wand];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.match(result.messages.join(' '), /magical explosion/);
@@ -59454,7 +59455,7 @@ test('carried magic bag explosion outside a shop preserves unpaid blast-lost con
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(blade.id)), true);
 });
 
-test('unpaid carried magic bag destroyed by its own explosion remains as a used-up bill', () => {
+test('unpaid carried magic bag destroyed by its own explosion remains as a used-up bill', async () => {
     const { shkp } = installShopState();
     initRng(1);
     const source = bagOfHolding(6946);
@@ -59463,7 +59464,7 @@ test('unpaid carried magic bag destroyed by its own explosion remains as a used-
     game.u.uhp = 100;
     game.inventory = [source, wand];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.equal(game.inventory.includes(source), false);
@@ -59478,7 +59479,7 @@ test('unpaid carried magic bag destroyed by its own explosion remains as a used-
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(source.id)), true);
 });
 
-test('carried magic bag scatter break preserves unpaid destroyed contents as used-up bills', () => {
+test('carried magic bag scatter break preserves unpaid destroyed contents as used-up bills', async () => {
     const { shkp } = installShopState();
     initRng(1);
     const source = bagOfHolding(6948);
@@ -59488,7 +59489,7 @@ test('carried magic bag scatter break preserves unpaid destroyed contents as use
     game.u.uhp = 100;
     game.inventory = [source, wand];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.equal(game.level.objects.includes(thrownEgg), false);
@@ -59503,7 +59504,7 @@ test('carried magic bag scatter break preserves unpaid destroyed contents as use
     assert.equal(game._usedUpShopBills.some(bill => String(bill.bo_id) === String(thrownEgg.id)), true);
 });
 
-test('carried magic bag scatter splits unpaid stacks before preserving used-up bills', () => {
+test('carried magic bag scatter splits unpaid stacks before preserving used-up bills', async () => {
     const { shkp } = installShopState();
     initRng(1);
     const source = bagOfHolding(6951);
@@ -59513,7 +59514,7 @@ test('carried magic bag scatter splits unpaid stacks before preserving used-up b
     game.u.uhp = 100;
     game.inventory = [source, wand];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.equal(source.contents.length, 0);
@@ -59528,7 +59529,7 @@ test('carried magic bag scatter splits unpaid stacks before preserving used-up b
     assert.equal(shop.shopBillEntryTotal(originalEntry), 45);
 });
 
-test('carried magic bag scatter into lava preserves unpaid landing destruction as used-up bill', () => {
+test('carried magic bag scatter into lava preserves unpaid landing destruction as used-up bill', async () => {
     const { shkp } = installShopState();
     initRng(2);
     game.level.at = (x, y) => ({
@@ -59543,7 +59544,7 @@ test('carried magic bag scatter into lava preserves unpaid landing destruction a
     game.u.uhp = 100;
     game.inventory = [source, wand];
 
-    const result = shop.putInventoryObjectIntoContainer(source, wand);
+    const result = await shop.putInventoryObjectIntoContainer(source, wand);
 
     assert.equal(result.bagGone, true);
     assert.equal(game.level.objects.includes(ration), false);

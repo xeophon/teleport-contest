@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game, resetGame } from '../js/gstate.js';
 import { GameMap } from '../js/game.js';
-import { ROOM, W_WEP, LANDMINE, LAVAPOOL, LADDER, HOLE, POOL, LEVITATION, W_ARTI } from '../js/const.js';
+import { ROOM, STONE, IRONBARS, W_WEP, W_QUIVER, LANDMINE, LAVAPOOL, LADDER, HOLE, POOL, LEVITATION, W_ARTI } from '../js/const.js';
 import { initRng, enableRngLog, getRngLog } from '../js/rng.js';
 import { vision_reset, vision_recalc } from '../js/vision.js';
 import { rhack, holdCaughtThrownObject, landMonsterThrownObject, earthFloorEffects, queueImpactDroppedObjects,
@@ -13,7 +13,8 @@ import { BURN_OBJECT, HATCH_EGG, ROT_CORPSE, TIMER_OBJECT, startTimer, peekTimer
 import { objectLocations } from '../js/obj_location.js';
 import { dropMonsterInventory, monsterByRndName, artifactDefinitionForName } from '../js/mklev.js';
 import { encodeSaveState, restoreSaveState } from '../js/save.js';
-import { processMonsterTurns } from '../js/allmain.js';
+import { processMonsterTurns, moveloop_core } from '../js/allmain.js';
+import { pushKey, resetInputState } from '../js/input.js';
 import { stealarm } from '../js/steal.js';
 
 function setup() {
@@ -742,3 +743,169 @@ for (const water of [false, true]) {
         assert.equal(game.u.levitating, false);
     });
 }
+
+test('firing a readied burning lamp moves its original object and clears the quiver slot', async () => {
+    setup();
+    const lamp = { kind: 'oil lamp', cls: 'tool', otyp: 227, letter: 'a', quan: 1, age: 1,
+        quivered: true, owornmask: W_QUIVER };
+    game.inventory.push(lamp); game.u.uquiver = lamp;
+    beginBurn(lamp);
+    await rhack('f'); await rhack('l');
+    assert.equal(game.level.objects[0], lamp);
+    assert.equal(game.u.uquiver, null);
+    assert.equal(lamp.owornmask, 0);
+    assert.equal(lamp.quivered, false);
+    assert.equal(peekTimer(BURN_OBJECT, lamp), 101);
+});
+
+test('firing one readied hatching egg deletes only its split timer on a hard landing', async () => {
+    setup();
+    const eggs = { kind: 'egg', cls: 'food', otyp: 10001, letter: 'a', quan: 3,
+        quivered: true, owornmask: W_QUIVER };
+    game.inventory.push(eggs); game.u.uquiver = eggs;
+    attachEggHatchTimeout(eggs, 100);
+    await rhack('f'); await rhack('l');
+    assert.equal(eggs.quan, 2);
+    assert.equal(game.u.uquiver, eggs);
+    assert.equal(game.timers.length, 1);
+    assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+    assert.equal(game.level.objects.length, 0);
+});
+
+test('firing a readied egg onto water preserves both independently hatching portions', async () => {
+    setup();
+    for (let x = 11; x < 30; x++) game.level.at(x, 10).typ = POOL;
+    const eggs = { kind: 'egg', cls: 'food', otyp: 10001, letter: 'a', quan: 3, quivered: true };
+    game.inventory.push(eggs);
+    attachEggHatchTimeout(eggs, 100);
+    await rhack('f'); await rhack('l');
+    const landed = game.level.objects.find(obj => obj.kind === 'egg');
+    assert.ok(landed);
+    assert.equal(eggs.quan, 2);
+    assert.equal(peekTimer(HATCH_EGG, landed), 200);
+    assert.equal(peekTimer(HATCH_EGG, eggs), 200);
+});
+
+test('firing one burning candle snuffs the thrown portion and leaves the readied remainder lit', async () => {
+    // C throwit calls snuff_candle after flooreffects, before ship_object.
+    setup();
+    const candles = { kind: 'tallow candle', cls: 'tool', otyp: 370, letter: 'a', quan: 3, age: 100,
+        quivered: true, owornmask: W_QUIVER };
+    game.inventory.push(candles); game.u.uquiver = candles;
+    beginBurn(candles);
+    await rhack('f'); await rhack('l');
+    const landed = game.level.objects.find(obj => obj.kind === 'tallow candle');
+    assert.ok(landed);
+    assert.equal(landed.lamplit, false);
+    assert.equal(landed.age, 100);
+    assert.equal(peekTimer(BURN_OBJECT, landed), 0);
+    assert.equal(peekTimer(BURN_OBJECT, candles), 125);
+    assert.equal(candles.lamplit, true);
+    assert.equal(candles.quan, 2);
+});
+
+test('moveloop firing a lamp consumes one turn and expires the landed original', async () => {
+    setup(); resetInputState();
+    game.u.umovement = 12;
+    const lamp = { kind: 'oil lamp', cls: 'tool', otyp: 227, letter: 'a', quan: 1, age: 1, quivered: true };
+    game.inventory.push(lamp); beginBurn(lamp);
+    pushKey('f'); await moveloop_core();
+    assert.equal(game.moves, 100);
+    pushKey('l'); await moveloop_core();
+    while (game._message_more) await rhack(' ');
+    pushKey('\x1b'); await moveloop_core();
+    assert.equal(game.moves, 101);
+    assert.equal(game.level.objects[0], lamp);
+    assert.equal(lamp.lamplit, false);
+    assert.equal(game.timers.length, 0);
+    resetInputState();
+});
+
+for (const quantity of [1, 3]) {
+    test(`firing quivered gold with quantity ${quantity} preserves only the surviving slot`, async () => {
+        setup();
+        const coins = { id: 50, kind: 'gold piece', cls: 'coin', glyph: '$', letter: '$',
+            quan: quantity, quivered: true, owornmask: W_QUIVER };
+        game.inventory.push(coins); game.u.uquiver = coins; game._goldCount = quantity;
+        await rhack('f'); await rhack('l');
+        assert.equal(game._goldCount, quantity - 1);
+        if (quantity === 1) {
+            assert.equal(game.u.uquiver, null);
+            assert.equal(game.level.objects[0], coins);
+        } else {
+            assert.equal(game.u.uquiver, coins);
+            assert.equal(coins.quan, quantity - 1);
+            assert.match(coins.line, /2 gold pieces \(in quiver pouch\)$/);
+        }
+    });
+}
+
+test('firing a gem to a unicorn transfers the same detached object into monster inventory', async () => {
+    // C dothrow.c:gem_accept passes the projectile itself to mpickobj.
+    setup();
+    game.level.flags.noteleport = true;
+    game.u.ualign = { type: 1, record: 0 };
+    const ruby = { id: 51, kind: 'ruby', actualKind: 'ruby', cls: 'gem', glyph: '*',
+        quan: 1, letter: 'a', quivered: true, known: true, gemDescription: 'ruby', gemTough: true };
+    const unicorn = { mx: 11, my: 10, mhp: 24, mhpmax: 24, mcanmove: true,
+        data: { name: 'white unicorn', mlet: 'u', maligntyp: 7 } };
+    game.inventory.push(ruby); game.level.monsters.push(unicorn);
+    await rhack('f'); await rhack('l');
+    assert.match(game._pending_message, /accepts your gift/);
+    assert.equal(game.inventory.includes(ruby), false);
+    assert.equal(unicorn.minvent[0], ruby);
+    assert.equal(ruby.quivered, false);
+});
+
+test('firing the active Heart resumes the detached projectile after a saved water escape', async () => {
+    setup(); initRng(31);
+    game._startup_role = 'Barbarian'; game._startup_align = 'neutral';
+    Object.assign(game.u, { ulevel: 12, uhp: 100, uhpmax: 100, uen: 30, uenmax: 30,
+        teleportation: true, teleportControl: true, ualign: { type: 0, record: 10 } });
+    const def = artifactDefinitionForName('The Heart of Ahriman');
+    let heart = { id: 52, artifact: def.name, kind: def.base, cls: def.cls, otyp: def.otyp,
+        glyph: def.glyph, letter: 'a', quan: 1, age: 0, quivered: true, owornmask: W_QUIVER };
+    game.inventory.push(heart); game.u.uquiver = heart;
+    game.u.uprops = { [LEVITATION]: { intrinsic: 0, extrinsic: W_ARTI } };
+    game.u.levitating = game.u.levitation = true;
+    game.level.at(10, 10).typ = POOL;
+    enableRngLog();
+    await rhack('f'); await rhack('l');
+    assert.equal(game._command_mode, 'waterTeleportCursor');
+    assert.equal(game.u.uquiver, null);
+    assert.equal(game.inventory.includes(heart), false);
+    assert.equal(game.level.objects.includes(heart), false);
+    assert.equal(game._artifact_float_continuation.after.object, heart);
+    const cooldown = heart.age;
+    const saved = encodeSaveState(); resetGame(); restoreSaveState(saved);
+    initRng(31, { resetLog: false });
+    heart = game._artifact_float_continuation.after.object;
+    while (game._message_more) await rhack(' ');
+    await rhack('l'); await rhack('.');
+    assert.equal(game._artifact_float_continuation, null);
+    assert.equal(game.level.objects.includes(heart), true);
+    assert.equal(heart.ox > 11, true);
+    assert.equal(heart.age, cooldown);
+    assert.equal(getRngLog().filter(entry => entry.startsWith('rnz(100)')).length, 1);
+});
+
+test('firing completes the bars impact before recoil collision damage', async () => {
+    // C dothrow.c:1674-1682 calls bhit before hurtle, which can roll damage.
+    setup();
+    game.u.levitating = true;
+    game.level.at(9, 10).typ = STONE;
+    game.level.at(12, 10).typ = IRONBARS;
+    const lamp = { kind: 'oil lamp', cls: 'tool', otyp: 227, letter: 'a', quan: 1,
+        quivered: true, age: 100 };
+    game.inventory.push(lamp); beginBurn(lamp);
+    const burnDeadline = peekTimer(BURN_OBJECT, lamp);
+    enableRngLog();
+    await rhack('f'); await rhack('l');
+    const calls = getRngLog().map(entry => entry.replace(/=.*/, ''));
+    const bars = calls.indexOf('rn2(5)');
+    const collision = calls.indexOf('rnd(3)');
+    assert.equal(bars >= 0, true);
+    assert.equal(collision > bars, true);
+    assert.equal(game.level.objects[0], lamp);
+    assert.equal(peekTimer(BURN_OBJECT, lamp), burnDeadline);
+});

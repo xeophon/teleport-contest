@@ -1,14 +1,15 @@
 import { ARMOR_MAGIC_NEGATION } from './armor.js';
 import { setArtifactEquipmentLight } from './artifact.js';
 import { afterMeltHeroSpotEffects } from './cmd.js';
-import { clearHeroSickness, adjustHeroAttribute } from './cmd.js';
+import { clearHeroSickness, adjustHeroAttribute, heroCanSpotMonster } from './cmd.js';
+import { AT_BOOM, is_hider } from './permonst.js';
 // allmain.js — Main game setup and move loop.
 
 // C refs: src/allmain.c:newgame(), moveloop_core().
 
 import { game } from './gstate.js';
 import { amulet as wizardAmuletTurn, demigodTurnHook, clonewiz, noOfWizards, aggravate as wizardAggravate } from './wizard.js';
-import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv } from './mklev.js';
+import { mklev, l_nhcore_init, u_on_upstairs, makemon, mkcorpstat, mksobj, maketrap, wipe_engr_at, dropMonsterInventory, wandIndexForRoll, scrollIndexForRoll, potionIndexForRoll, RANDOM_MONSTER_BY_NAME, STONE_RESISTANT_MONSTERS, adjustedMonsterLevel, monsterByRndName, monster_hp, rndmonnum, syncDungeonContext, next_ident, set_malign, enextoMonsterSpot, getbogusmon, pickNasty, chameleonAnimalForm, doppelgangerHumanoidForm, noteleportLevelForMonster, rlocNoMsg, rlocToCoreNoMsg, somexyspace, fumaroles, createMonsterCorpseOrGlob, monsterCorpseDropSucceeds, monsterLeavesCorpseLikeDrop, movebubbles, add_to_minv, putSaddleOnMonster } from './mklev.js';
 import { rhack, travelStepEndsAtTarget, pickupObjectName, inventoryItemName, inventoryLetterRank, recordVanquished, finishForceLock, loseExperienceLevel, finishLevelTeleport, finishPickDigDownwardHole, finishPickDigDownwardPit, triggerPickDigTrapUnderHero, billDigShopTerrainDamage, maybeQueueQuestTalk, monsterGrowUp, monsterHostileCussNoise, monsterTurnDemonBribeArtifact, monsterTurnDemonBribeDemand, monsterTurnDemonBribeNoGold, processForceLockOccupationTick, forceLockOccupationShouldGiveUp, processSpellbookStudyOccupation, processTinOpeningOccupation, finishTinOpeningOccupation, refreshSwallowOverlay, finishSwallowExpel, travelPathKeys, updateGauntletsOfPowerStrength, takeOffGlovesPetrifyingSelfTouchMessages, addBootsOffSideEffects, consumeLifeSavingAmulet, activateStatueTrap, breakStatueObject, burnFloorObjectsByFire, burnRayFloorObjectsByFire, erodeArmorByFireTrap, dryWetTowelFromFire, igniteMonsterFireInventoryItems, monsterFireInventoryDamage, dropMonsterObject, earthFloorEffects, projectileTopLevelBreakKind, projectileTopLevelBreakMessage, brokenPotionBreathe, landMonsterThrownObject, heroCanAttemptThrownObjectCatch, holdCaughtThrownObject, monsterThrownPotionHitMonster, monsterPolyTrapEffect, stoneMonster, CORPSE_TIMER_HANDLERS, runOrganicRotTimer, shrinkGlob, addDelayedFoodBiteNutrition, addShopTerrainDamage, repairShopDamageForShopkeeper, heroHasAntimagic, heroHasSlowDigestion, applyHeroOrdinaryHunger, applyHeroFireExplosionInventoryDamage, applyHeroColdExplosionInventoryDamage, applyHeroElectricExplosionInventoryDamage, applyChestTrapPayload, applyLifeSavingOrFatalCommandMode, processHeroLavaSinkingTurn, randomTeleportDepth, levelTeleportNumericTarget, downGateAt, impactDropFloorObjects, queueImpactDroppedObjects, maybeTurnPolyselfIntoStoneGolem, randomMonsterPolymorphTarget, applyMonsterPolymorphTarget, heroMeleeFireInventoryBurn, coldTouchDestroyItemsProgram } from './cmd.js';
 import { docrt, cls, bot, flush_screen, pline, newsym, refreshHallucinatedMap, show_glyph_cell } from './display.js';
 import { vision_recalc, vision_reset, init_vision_globals, cansee, couldsee, view_from } from './vision.js';
@@ -1582,61 +1583,63 @@ function initializeHero() {
 }
 
 function initializePet() {
-    if (game.preferred_pet === 'n') return;
+    if (game.preferred_pet === 'n') {
+        game.context.startingpet_typ = -1; // dog.c:makedog uses NON_PM.
+        return;
+    }
 
     const roleName = game._startup_role || 'Tourist';
-    const fixed = ROLE_PET[roleName];
-    let pet = fixed;
+    let pet = ROLE_PET[roleName];
     if (!pet) {
         if (game.preferred_pet === 'c') pet = 'cat';
         else if (game.preferred_pet === 'd') pet = 'dog';
         else pet = rn2(2) ? 'cat' : 'dog';
     }
-
+    const petName = pet === 'cat' ? 'kitten' : pet === 'dog' ? 'little dog' : pet;
+    game.context.startingpet_typ = MONS.find(mon => mon.name === petName).pm;
     const spots = collectCoords(game.u.ux, game.u.uy, 3);
-
-    next_ident();
-    const hp = d(pet === 'pony' ? 2 : 1, 8);
-    const petFemale = !!rn2(2);
-    if (pet === 'pony') next_ident();
+    const mon = {
+        m_id: next_ident(),
+        mhp: d(pet === 'pony' ? 2 : 1, 8),
+        female: !!rn2(2),
+        m_lev: pet === 'pony' ? 2 : 1,
+        pet: true,
+        givenName: game.petNames?.[pet] || (pet === 'dog' ? DEFAULT_DOG_NAMES[roleName] : ''),
+        saddled: false,
+        minvent: [],
+        mtame: 10,
+        mpeaceful: 1,
+        mextra: { edog: { apport: 3, hungrytime: 1001, dropdist: 10000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
+        data: {
+            name: petName,
+            mlet: pet === 'cat' ? 'feline' : pet === 'pony' ? 'unicorn' : 'dog',
+            mlevel: pet === 'pony' ? 3 : 2,
+            mac: 6,
+            mmove: pet === 'pony' ? 16 : 18,
+            small: pet === 'cat' || pet === 'dog',
+            nohands: true,
+            wanderer: pet === 'cat' || pet === 'pony',
+            attack: pet === 'pony' ? { dice: 1, sides: 6, verb: 'kicks' } : { dice: 1, sides: 6, verb: 'bites' },
+        },
+    };
+    mon.mhpmax = mon.mhp;
+    mon.mextra.edog.parentmid = mon.m_id;
+    // dog.c:makedog explicitly equips the initial pony after NO_MINVENT
+    // creation. Pauper characters keep the pony but do not receive a saddle.
+    if (pet === 'pony' && !game.u.uroleplay?.pauper) putSaddleOnMonster(mon);
     if ((game._startup_align || 'neutral') === 'neutral') {
         if (rn2(16 + (game.u?.ualign?.record || 0))) rn2(2);
     }
 
     for (const { x, y } of spots) {
         const loc = game.level?.at(x, y);
-        const occupied = game.level?.monsters?.some(mon => mon.mx === x && mon.my === y);
+        const occupied = game.level?.monsters?.some(other => other.mx === x && other.my === y);
         if (!loc || IS_OBSTRUCTED(loc.typ) || occupied) continue;
-        const petName = pet === 'cat' ? 'kitten' : pet === 'dog' ? 'little dog' : pet;
-        const givenName = game.petNames?.[pet] || (pet === 'dog' ? DEFAULT_DOG_NAMES[roleName] : '');
-        const mlet = pet === 'cat' ? 'feline' : pet === 'pony' ? 'unicorn' : 'dog';
+        mon.mx = x; mon.my = y;
+        game.context.startingpet_mid = mon.m_id;
         game.u.uconduct ??= {};
         game.u.uconduct.pets = (game.u.uconduct.pets || 0) + 1;
-        game.level?.monsters?.push({
-            mx: x,
-            my: y,
-            mhp: hp,
-            mhpmax: hp,
-            m_lev: pet === 'pony' ? 2 : 1,
-            pet: true,
-            female: petFemale,
-            givenName,
-            saddled: pet === 'pony',
-            mtame: 10,
-            mpeaceful: 1,
-            mextra: { edog: { apport: 3, hungrytime: 1001, dropdist: 10000, whistletime: 0, ogoal: { x: 0, y: 0 } } },
-            data: {
-                name: petName,
-                mlet,
-                mlevel: pet === 'pony' ? 3 : 2,
-                mac: pet === 'pony' ? 6 : 6,
-	                mmove: pet === 'pony' ? 16 : 18,
-                small: pet === 'cat' || pet === 'dog',
-	                nohands: true,
-	                wanderer: pet === 'cat' || pet === 'pony',
-	                attack: pet === 'pony' ? { dice: 1, sides: 6, verb: 'kicks' } : { dice: 1, sides: 6, verb: 'bites' },
-	            },
-	        });
+        game.level.monsters.push(mon);
         return;
     }
 }
@@ -2589,6 +2592,7 @@ function addToplineMessage(msg) {
 // which rhack(0) reads the next key (allmain.c:479's charge only reaches
 // the next pass when the occupation branch returned before rhack).
 function stopCountedSearchOccupationOnHeroHit(fatalHit = false) {
+    if (!fatalHit) interruptSpellbookStudy();
     if (!game._counted_repeat_interruptible || !(game._search_pending_count > 0))
         return;
     if (fatalHit) {
@@ -3345,6 +3349,19 @@ function interruptPositiveMultiForStoning() {
     interruptPositiveMulti();
 }
 
+export function interruptSpellbookStudy() {
+    const study = game._spellbook_study_occupation;
+    if (!study) return;
+    // stop_occupation retains context.spbook so reading this same object can
+    // resume its remaining delay; obfree/book_disappears invalidates it.
+    game._spellbook_interrupted_study = study;
+    game._spellbook_study_occupation = null;
+    game._pending_time_passed = Math.min(game._pending_time_passed || 0, 1);
+    game._run_steps_remaining = 0;
+    addToplineMessage('You stop studying.');
+    game._keep_pending_message = 1;
+}
+
 export function clearActiveDelayedOccupations(options = {}) {
     const activeEating = game._eating_turns_remaining > 0;
     if (activeEating || options.clearEatingAlways) {
@@ -3374,7 +3391,7 @@ export function clearActiveDelayedOccupations(options = {}) {
     game._tin_opening_occupation = null;
     game._tin_finish_after_turn = null;
     game._tin_opened_pending = null;
-    game._spellbook_study_occupation = null;
+    interruptSpellbookStudy();
     game._spellbook_finish_after_topline_more = null;
     if (!options.interruptibleOnly) {
         game._prayer_occupation = 0;
@@ -18554,6 +18571,16 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
         // turn loop. Slow heroes must not study twice during one action.
         if (g._spellbook_study_occupation && !g._message_more) {
             await processSpellbookStudyOccupation();
+            if ((g.level?.monsters || []).some(mon => mon && !mon.dead && mon.mhp > 0
+                && Math.max(Math.abs(mon.mx - g.u.ux), Math.abs(mon.my - g.u.uy)) === 1
+                && ![M_AP_FURNITURE, M_AP_OBJECT].includes(M_AP_TYPE(mon))
+                && (heroIsHallucinatingForMonsterFeedback() || (!mon.mpeaceful
+                    && monsterPermonstAttacks(mon).some(attack => attack.aatyp && attack.aatyp !== AT_BOOM)))
+                && (!is_hider(monsterSpecies(mon) || mon.data) || !mon.mundetected)
+                && !mon.msleeping && mon.mcanmove !== false && mon.mcanmove !== 0
+                && !scaryObjectAt(mon, g.u.ux, g.u.uy) && !scaryEngravingAt(mon, g.u.ux, g.u.uy)
+                && heroCanSpotMonster(mon)))
+                interruptSpellbookStudy();
             g._pending_time_passed = Math.max(g._pending_time_passed || 0, 1);
         }
         if (g._force_lock_continue_time) {
@@ -18626,7 +18653,8 @@ const prayerMessageComplete = !!g._prayer_message_complete_once;
                     || g._pick_lock_occupation
                     || g._pick_dig_occupation
                     || g._tin_opening_occupation;
-            const completedTurnTailMore = g._turn_tail_topline_more && !moreNeedsTimeResume;
+            const completedTurnTailMore = (g._turn_tail_topline_more || g._spellbook_finish_after_topline_more)
+                && !moreNeedsTimeResume;
             if (g._armor_finish_after_more) g._armor_finish_after_more = 0;
             else if (g._suppress_more_time_once > 0) g._suppress_more_time_once--;
             else if (!g._pet_message_resume && !completedTurnTailMore) g._pending_time_passed++;
@@ -19334,6 +19362,7 @@ setMonsterMonsterCombatHooks({
 });
 
 export const __allmainTestHooks = {
+    initializePet,
     mfndposForTest: mfndpos,
     monsterAllowFlagsForTest: monsterAllowFlags,
     monsterAvoidsKnownTrapBeforeEffectForTest: monsterAvoidsKnownTrapBeforeEffect,

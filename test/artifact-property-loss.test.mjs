@@ -122,7 +122,7 @@ for (const [name, role, align, prop, field] of powers) {
         const box = { id: 2, cls: 'tool', kind, contents: [], quan: 1, ox: 10, oy: 10 };
         game.level.objects.push(box);
         await command('invokeObject');
-        const result = shop.putInventoryObjectIntoContainer(box, item);
+        const result = await shop.putInventoryObjectIntoContainer(box, item);
         assert.equal(game.u[field], false);
         assert.ok(box.contents.includes(item));
         assert.match(result.message, field === 'conflict' ? /tension decrease.*You put/ : /body seems to unfade.*You put/);

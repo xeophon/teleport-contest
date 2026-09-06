@@ -11334,7 +11334,7 @@ function simulatedNextInventoryLetters(count) {
 }
 
 function updateMoneyLine(money) {
-    if (money) money.line = `$ - ${money.quan || 0} gold piece${(money.quan || 0) === 1 ? '' : 's'}`;
+    if (money) money.line = `$ - ${money.quan || 0} gold piece${(money.quan || 0) === 1 ? '' : 's'}${money.quivered ? quiverSuffix(money) : ''}`;
 }
 
 function compactInventoryLetters(letters) {
@@ -12266,7 +12266,7 @@ function removeInventoryItem(item, amount = 1) {
 async function detachInventoryItemWithArtifactEffects(item, amount, messages, after) {
     const removed = amount >= (item.quan || 1);
     messages.push(...removeInventoryItem(item, amount));
-    if (after?.type === 'heroProjectile' || after?.type === 'bagPut') {
+    if (after?.type === 'heroProjectile' || after?.type === 'bagPut' || after?.type === 'containerPut') {
         after.object.owornmask = 0;
         after.object.worn = after.object.wielded = after.object.quivered = after.object.alternate = false;
     }
@@ -12296,6 +12296,8 @@ function useUpInventoryItem(item, amount = 1) {
 
 // C obfree deletes contents before dealloc_obj stops each object's timers.
 function stopDestroyedObjectTreeTimers(obj) {
+    for (const key of ['_spellbook_study_occupation', '_spellbook_interrupted_study'])
+        if (game[key]?.item === obj) game[key] = null;
     for (const child of globContents(obj)) stopDestroyedObjectTreeTimers(child);
     stopObjectTimers(obj, { [BURN_OBJECT]: { cleanup: cleanupBurn } });
     if (obj.lamplit || obj.burning) endBurn(obj, false);
@@ -23663,12 +23665,12 @@ function heroThrownUnicornGemImpact(obj, mon) {
 
     changeHeroLuck(accept.delta);
     if (!game.u?.blind) messages.push(`${monName} ${accept.word} accepts your gift.`);
-    const accepted = { ...obj, quan: 1, hidden: false, buried: false, transientProjectile: false };
-    delete accepted.letter;
-    delete accepted.line;
-    delete accepted.ox;
-    delete accepted.oy;
-    add_to_minv(mon, accepted);
+    Object.assign(obj, { hidden: false, buried: false, transientProjectile: false });
+    delete obj.letter;
+    delete obj.line;
+    delete obj.ox;
+    delete obj.oy;
+    add_to_minv(mon, obj);
     relocateHeroThrownUnicornGemRecipient(mon);
     return { handled: true, consumed: true, messages };
 }
@@ -26897,13 +26899,6 @@ function heroFireProjectileFlightResult(startX, startY, dir, range, obj = null, 
     return { ox, oy, targetMon };
 }
 
-function heroFireProjectileTargetUsesImpact(obj, targetMon, launcher, firedFromLauncher) {
-    return !!(targetMon
-        && (firedFromLauncher || heroThrownByHandAmmoObject(obj, launcher)
-            || (!launcher && (heroThrownGemClassObject(obj)
-                || heroProjectileSupportedWeaponObject(obj)))));
-}
-
 function heroThrownStackableWeaponMultishotMeta(obj) {
     const key = tossUpWeaponObjectKey(obj);
     if (key === 'throwing star') return HERO_THROWN_WEAPON_MONSTER_DATA.get('shuriken');
@@ -29741,6 +29736,7 @@ function heroUpwardThrowEffect(item) {
 
 // The continuation holds the actual detached object across float-down prompts.
 async function resumeHeroProjectileCommand(after) {
+    if (after.operation === 'fire') return resumeHeroFireVolley(after);
     const obj = after.object;
     Object.assign(obj, {
         letter: undefined, line: undefined, worn: false, wielded: false,
@@ -29814,6 +29810,120 @@ async function beginHeroUpwardThrow(item, effect) {
         return;
     }
     await resumeHeroProjectileCommand(after);
+}
+
+async function beginHeroFireVolley(source, launcher, dir) {
+    const shotLimit = Math.max(0, Math.trunc(Number(game._fire_count || 0)));
+    const firedFromLauncher = !!(launcher && heroThrowAmmoAndLauncher(source, launcher));
+    const shotCount = firedFromLauncher
+        ? heroLauncherAmmoMultishotCount(source, launcher, shotLimit)
+        : heroThrownStackableWeaponMultishotCount(source, shotLimit);
+    const after = {
+        type: 'heroProjectile', operation: 'fire', phase: 'detach',
+        source, launcher, dir, shotLimit, shotCount, firedFromLauncher, shot: 0,
+        name: heroProjectileVolleyName(source, shotCount),
+        messages: [], impactMessages: [], landingMessages: [], more: false,
+    };
+    await resumeHeroFireVolley(after);
+}
+
+async function resumeHeroFireVolley(after) {
+    const { source, launcher, dir, firedFromLauncher, shotCount, shotLimit } = after;
+    while (after.shot < shotCount) {
+        if (after.phase === 'detach') {
+            const split = (source.quan || 1) > 1;
+            const obj = split ? { ...source, id: next_ident(), quan: 1, timed: 0, owornmask: 0 } : source;
+            if (split) {
+                delete obj.o_id;
+                delete obj._shopBillObjectId;
+                splitCarriedObjectShopBill(source, obj, 1);
+                splitObjectTimers(source, obj);
+            }
+            after.object = obj;
+            after.phase = 'flight';
+            const detach = await detachInventoryItemWithArtifactEffects(source, 1, after.messages, after);
+            if (detach.pending) {
+                await setMessage(after.messages.join('  '), true);
+                game.context.move = 0;
+                if ((detach.fatal || detach.lifeSaving) && !detach.lavaDeath)
+                    applyLifeSavingOrFatalCommandMode(detach);
+                return;
+            }
+        }
+        const obj = after.object;
+        stopCarriedFigurineTimerOnLeave(obj);
+        Object.assign(obj, {
+            letter: undefined, line: undefined, wielded: false, worn: false,
+            alternate: false, quivered: false, owornmask: 0,
+            glyph: obj.glyph || (obj.cls === 'gem' ? '*' : ')'),
+            color: obj.color || (obj.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
+        });
+        const startX = game.u?.ux || 0, startY = game.u?.uy || 0;
+        const ammoRange = heroHorizontalThrowAmmoRange(obj, launcher);
+        after.noLauncherMessage = ammoRange?.noLauncherMessage || '';
+        let range = heroHorizontalThrowFinalRange(obj,
+            ammoRange?.range ?? heroHorizontalThrowWeightedRange(obj).range);
+        let recoilRange = 0;
+        if (heroHorizontalThrowAirRecoilActive()) {
+            const airSplit = heroHorizontalThrowAirSplitRange(obj, launcher);
+            range = heroHorizontalThrowFinalRange(obj, airSplit.throwRange);
+            recoilRange = airSplit.recoilRange;
+        }
+        const flight = heroFireProjectileFlightResult(startX, startY, dir, range, obj, { ironBars: true });
+        obj.ox = flight.ox; obj.oy = flight.oy;
+        const bars = await appendHeroProjectileIronBarsImpact(obj, flight, after.impactMessages);
+        if (recoilRange) {
+            // C throwit completes bhit before hurtle changes the hero's position.
+            after.recoil = heroHorizontalThrowRecoilResult(dir, recoilRange);
+            if (after.recoil.message) after.impactMessages.push(after.recoil.message);
+        }
+        const impact = !bars.handled && flight.targetMon
+            ? await heroFireProjectileMonsterImpact(obj, flight.targetMon, launcher, firedFromLauncher)
+            : { handled: false };
+        if (impact.handled) after.impactMessages.push(...impact.messages);
+        after.more ||= !!impact.more;
+        if (impact.consumed || bars.broke) {
+            // A consumed gem can belong to a unicorn; only destroyed shots lose timers.
+            if (!objectLocations().has(obj)) stopDestroyedObjectTreeTimers(obj);
+        } else {
+            const landing = landProjectileObjectWithShopHandling(obj, flight.ox, flight.oy, {
+                breakRoll: !projectileLandingIsSoft(flight.ox, flight.oy) ? rn2(100) : null,
+                ohit: !!impact.hit, passiveTarget: impact.passiveTarget, snuffCandles: true,
+            });
+            after.landingMessages.push(...landing.messages);
+        }
+        if (flight.targetMon) newsym(flight.targetMon.mx, flight.targetMon.my);
+        if (firedFromLauncher && after.shot === 0) {
+            game._stale_projectile_marks ??= [];
+            game._stale_projectile_marks.push({ x: startX + dir.dx * 2, y: startY + dir.dy * 2, ch: '%', color: CLR_BROWN });
+        }
+        after.shot++;
+        after.phase = 'detach';
+    }
+    const fireMessage = !after.noLauncherMessage && shotCount === 1 && shotLimit <= 0 ? ''
+        : `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount > 1 || shotLimit > 0 ? `${shotCount} ` : ''}${after.name}.`;
+    const message = [
+        ...after.messages, after.noLauncherMessage ? '' : fireMessage, ...after.impactMessages,
+    ].filter(Boolean).join('  ');
+    const landingMessage = after.landingMessages.join('  ');
+    if (after.noLauncherMessage) {
+        const followup = [message, landingMessage].filter(Boolean).join('  ');
+        if (followup) game._queued_message_after_more = followup;
+        await setMessage(after.noLauncherMessage, !!followup || !!after.recoil?.more || after.more);
+    } else if (message || landingMessage) {
+        if (landingMessage) game._queued_message_after_more = landingMessage;
+        await setMessage(message, !!landingMessage || !!after.recoil?.more || after.more);
+    } else {
+        game._pending_message = '';
+        game._message_more = 0;
+    }
+    game._command_mode = null;
+    game._fire_item_letter = null;
+    game._fire_launcher_letter = null;
+    game._fire_count = null;
+    game.context.move = 1;
+    if (after.recoil?.trapResult?.lifeSaving || after.recoil?.trapResult?.fatal)
+        applyLifeSavingOrFatalCommandMode(after.recoil.trapResult);
 }
 
 function monsterTouchPetrifies(mon) {
@@ -40931,6 +41041,8 @@ function landProjectileObjectWithShopHandling(obj, x, y, options = {}) {
             messages,
         };
     }
+    if (options.snuffCandles && (isCandleObject(obj) || isCandelabrumOfInvocationItem(obj)))
+        snuffLitObject(obj, messages);
     if (!shopBillableGold(obj)) {
         shipObject = maybeShipRemoteProjectileObject(obj, x, y, messages);
     }
@@ -41250,6 +41362,7 @@ function removeGoldFromHero(amount) {
         money.quan = game._goldCount;
         updateMoneyLine(money);
     } else {
+        if (game.u?.uquiver === money) game.u.uquiver = null;
         game.inventory = (game.inventory || []).filter(item => item.letter !== '$' && item.cls !== 'coin' && item.otyp !== GOLD_PIECE);
     }
     game._pet_food_scan_inventory = game.inventory;
@@ -41676,13 +41789,13 @@ function beginDroppedPaidObjectSale(obj, x, y, declineMessage = '') {
     return sale;
 }
 
-function shopFloorContainerPutSaleInfo(container, putItem) {
-    const x = container?.ox ?? game.u?.ux;
-    const y = container?.oy ?? game.u?.uy;
+function shopFloorContainerPutSaleInfo(container, putItem, location = null) {
+    const x = location?.x ?? container?.ox ?? game.u?.ux;
+    const y = location?.y ?? container?.oy ?? game.u?.uy;
     if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
         return null;
     if (shopBillableGold(putItem) || putItem.unpaid || putItem.no_charge || container.no_charge) return null;
-    const shkp = shopFloorContainerShopkeeper(container);
+    const shkp = location ? shopkeeperForCostlySpot(x, y) : shopFloorContainerShopkeeper(container);
     if (!shopkeeperInHisShop(shkp)) return null;
     if (shopkeeperAngryForSellobj(shkp)) return {
         ...shopSellobjAngryResult(putItem, shkp, 'containerPutIn'),
@@ -41738,7 +41851,7 @@ function shopFloorContainerPutSaleInfo(container, putItem) {
     };
 }
 
-function beginShopFloorContainerPutSale(container, item, amount = item?.quan || 1) {
+function beginShopFloorContainerPutSale(container, item, amount = item?.quan || 1, location = null) {
     if (!container) return null;
     if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') return null;
     if (item?.unpaid) return null;
@@ -41747,7 +41860,7 @@ function beginShopFloorContainerPutSale(container, item, amount = item?.quan || 
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
     // A sale preview is not yet a split object in an inventory chain.
     const putItem = count < (item.quan || 1) ? { ...item, quan: count } : item;
-    const sale = shopFloorContainerPutSaleInfo(container, putItem);
+    const sale = shopFloorContainerPutSaleInfo(container, putItem, location);
     if (!sale?.prompt) return sale;
     return {
         ...sale,
@@ -44521,6 +44634,15 @@ async function resumeArtifactFloatCommand(messages = []) {
         game.context.move = 1;
         return put;
     }
+    if (!result.pending && after?.type === 'containerPut') {
+        const put = finishContainerPut(after, messages);
+        if (after.command) return continueContainerPutCommand(after.command, put);
+        if (put.pendingSale) {
+            await showContainerSalePrompt(put.pendingSale, put.messages);
+        } else await showIceBoxMessageList(put.messages);
+        game.context.move = put.pendingSale ? 0 : 1;
+        return put;
+    }
     if (messages.length) await setMessage(messages.join('  '), !!(result.pending || result.more));
     game.context.move = result.pending ? 0 : 1;
     if ((result.fatal || result.lifeSaving) && !result.lavaDeath) applyLifeSavingOrFatalCommandMode(result);
@@ -46559,6 +46681,7 @@ function enchantArmorScrollEffect(item) {
 
 function loseAmnesiaSpells() {
     game._spellbook_study_occupation = null;
+    game._spellbook_interrupted_study = null;
     const spells = game._known_spells || [];
     const n = spells.length;
     let nzap = rn2(n + 1);
@@ -48763,59 +48886,6 @@ function clearContainerPutEquipmentState(item, name) {
     if (item.line) item.line = `${item.letter || '?'} - ${name}`;
 }
 
-function putInventoryObjectIntoIceBox(iceBox, item, amount = item?.quan || 1, options = {}) {
-    if (!iceBoxContainerAvailable(iceBox)) return { moved: false, message: '' };
-    iceBox.contents ??= [];
-    iceBox.cknown = true;
-    if (item?.letter === '$' || item?.otyp === GOLD_PIECE || item?.cls === 'coin' || item?.glyph === '$') {
-        const gold = Math.min(Math.max(0, amount || 0), game._goldCount || 0);
-        if (!gold) return { moved: false, message: 'You have no gold to put in.' };
-        const shopGold = donateShopGoldAt(iceBox, gold);
-        add_to_container(iceBox, { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: gold });
-        game._goldCount = Math.max(0, (game._goldCount || 0) - gold);
-        game._just_picked_gold = Math.max(0, (game._just_picked_gold || 0) - gold);
-        const money = (game.inventory || []).find(invItem => invItem.letter === '$' || invItem.cls === 'coin');
-        if (money && game._goldCount) {
-            money.quan = game._goldCount;
-            updateMoneyLine(money);
-        } else {
-            game.inventory = (game.inventory || []).filter(invItem => invItem.letter !== '$' && invItem.cls !== 'coin');
-        }
-        game._pet_food_scan_inventory = game.inventory;
-        const messages = [`You put ${gold} gold piece${gold === 1 ? '' : 's'} into the ice box.`, ...(shopGold.messages || [])];
-        return { moved: true, message: messages.join('  '), messages };
-    }
-
-    const reject = iceBoxPutRejectMessage(iceBox, item);
-    if (reject) return { moved: false, message: reject };
-
-    const name = inventoryItemName(item);
-    const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
-    const putItem = (item.quan || 1) > count ? { ...item, quan: count } : item;
-    clearContainerPutEquipmentState(putItem, name);
-    let sellobjResult = null;
-    if (!options.skipSalePrompt) {
-        const pendingSale = beginShopFloorContainerPutSale(iceBox, item, count);
-        if (pendingSale?.prompt)
-            return { moved: false, pendingSale, message: pendingSale.promptMessage };
-        if (pendingSale?.handled) sellobjResult = pendingSale;
-    }
-    curseLoadstoneLeavingInventory(putItem);
-    const billing = billShopFloorContainerPutObject(iceBox, putItem, {
-        acceptedSale: !!options.acceptedSale,
-        shkp: options.salePending?.shkp,
-        sellobjResult,
-    });
-    const propertyMessages = removeInventoryItem(item, count);
-    freezeObjectInIcebox(putItem);
-    const contained = add_to_container(iceBox, putItem);
-    if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
-    if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
-    game._pet_food_scan_inventory = game.inventory;
-    const messages = [sellobjResult?.message, ...propertyMessages, `You put ${name} into the ice box.`].filter(Boolean);
-    return { moved: true, message: messages.join('  '), messages };
-}
-
 async function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1, command = null) {
     if (!bag || !(game.inventory || []).includes(bag)) return { moved: false, message: '' };
     bag.contents ??= [];
@@ -48852,7 +48922,28 @@ async function putInventoryObjectIntoBag(bag, item, amount = item?.quan || 1, co
     return finishBagPut(after, messages);
 }
 
+// C apply.c:snuff_lit permits in-transit objects; visibility for these
+// hero-owned transfers depends on blindness, not a valid floor position.
+function snuffLitObject(object, messages) {
+    if (!(object.lamplit || object.burning)) return;
+    const kind = lightObjectKind(object);
+    const candle = isCandleObject(object);
+    const candelabrum = isCandelabrumOfInvocationItem(object);
+    if (!candle && !candelabrum && !['oil lamp', 'magic lamp', 'brass lantern', 'potion of oil'].includes(kind)) return;
+    if (!heroIsBlind()) {
+        const owner = object.unpaid ? shopkeeperOwningBillEntry(object).shkp : null;
+        const ownerName = owner ? shopkeeperDisplayName(owner) : '';
+        const possessive = ownerName ? `${ownerName}${ownerName.endsWith('s') ? "'" : "'s"}` : 'Your';
+        if (candle || candelabrum) {
+            const many = (candle ? object.quan || 1 : object.spe || 0) > 1;
+            messages.push(`${possessive} ${candelabrum ? "candelabrum's " : ''}candle${many ? "s' flames are" : "'s flame is"} extinguished.`);
+        } else messages.push(`${possessive} ${pickupObjectName({ ...object, line: '', lamplit: false, burning: false })} ${(object.quan || 1) > 1 ? 'go' : 'goes'} out!`);
+    }
+    endBurn(object);
+}
+
 function finishBagPut({ bag, object, name }, messages) {
+    snuffLitObject(object, messages);
     if (isMagicBagObject(bag) && magicBagExplodesWithObject(object))
         return explodeMagicBagTransfer(bag, object, messages, { triggerHeld: true });
     add_to_container(bag, object);
@@ -48898,11 +48989,11 @@ function splitInventoryObjectForContainerPut(item, count) {
 }
 
 function billShopFloorContainerPutObject(container, putItem, options = {}) {
-    const x = container?.ox ?? game.u?.ux;
-    const y = container?.oy ?? game.u?.uy;
+    const x = options.location?.x ?? container?.ox ?? game.u?.ux;
+    const y = options.location?.y ?? container?.oy ?? game.u?.uy;
     if (!container || !putItem || (game.inventory || []).includes(container) || x == null || y == null)
         return { shkp: null, returned: false, noCharge: false };
-    const shkp = shopFloorContainerShopkeeper(container);
+    const shkp = options.location ? shopkeeperForCostlySpot(x, y) : shopFloorContainerShopkeeper(container);
     if (!shkp) return { shkp: null, returned: false, noCharge: false };
     if (shopBillableGold(putItem)) return { shkp, returned: false, noCharge: false };
     const sellobjResult = options.sellobjResult;
@@ -48936,9 +49027,9 @@ function preserveExplodedShopFloorPutTriggerBill(putItem, owner, fallbackShkp, p
     return markObjectShopBillUsedUp(putItem, shkp);
 }
 
-function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1, options = {}) {
+async function putInventoryObjectIntoContainer(container, item, amount = item?.quan || 1, command = null) {
     if (!container) return { moved: false, message: '' };
-    if (isIceBoxObject(container)) return putInventoryObjectIntoIceBox(container, item, amount, options);
+    if (isIceBoxObject(container) && !iceBoxContainerAvailable(container)) return { moved: false, message: '' };
     container.contents ??= [];
     container.cknown = true;
     const containerName = tipContainerSimpleName(container);
@@ -48967,60 +49058,125 @@ function putInventoryObjectIntoContainer(container, item, amount = item?.quan ||
 
     const name = inventoryItemName(item);
     const count = Math.min(Math.max(1, amount || 1), item.quan || 1);
-    let sellobjResult = null;
-    if (!options.skipSalePrompt) {
-        const pendingSale = beginShopFloorContainerPutSale(container, item, count);
-        if (pendingSale?.prompt)
-            return { moved: false, pendingSale, message: pendingSale.promptMessage };
-        if (pendingSale?.handled) sellobjResult = pendingSale;
+    const object = splitInventoryObjectForContainerPut(item, count);
+    clearContainerPutEquipmentState(object, name);
+    curseLoadstoneLeavingInventory(object);
+    const after = { type: 'containerPut', phase: 'afterDetach', container, object, name, command };
+    const messages = [];
+    const landing = await detachInventoryItemWithArtifactEffects(item, count, messages, after);
+    if (landing.pending) return { moved: false, ...landing, messages, message: messages.join('  ') };
+    return finishContainerPut(after, messages);
+}
+
+// C in_container continues from freeinv through snuff_lit and sellobj before
+// freezing contents or testing for a magical explosion. A sale owns the same
+// detached object, so answering it never removes or splits the object again.
+function finishContainerPut(state, messages = []) {
+    const { container, object, name } = state;
+    if (state.phase === 'afterDetach') {
+        snuffLitObject(object, messages);
+        state.location = { x: game.u.ux, y: game.u.uy };
+        state.phase = 'afterSale';
+        const sale = beginShopFloorContainerPutSale(container, object, object.quan || 1, state.location);
+        if (sale?.prompt) {
+            sale.after = state;
+            let response = state.command?.saleResponse;
+            if (sale.credit && response !== 'n') response = state.command?.autoCredit ? 'y' : null;
+            if (response) {
+                if (sale.credit && state.command.autoCredit) state.command.saleResponse = 'y';
+                return finishShopFloorContainerPutSale(sale, response === 'y', messages);
+            }
+            messages.push(sale.promptMessage);
+            return { moved: false, pendingSale: sale, messages, message: messages.join('  ') };
+        }
+        state.sellobjResult = sale;
+        if (sale?.message) messages.push(sale.message);
     }
-    const putItem = splitInventoryObjectForContainerPut(item, count);
-    clearContainerPutEquipmentState(putItem, name);
-    curseLoadstoneLeavingInventory(putItem);
-    if (isMagicBagObject(container) && magicBagExplodesWithObject(putItem)) {
-        const triggerOwner = shopkeeperOwningBillEntry(putItem);
-        const triggerPrice = triggerOwner.entry ? shopBillEntryTotal(triggerOwner.entry) : 0;
-        const wasUnpaid = !!triggerOwner.entry;
-        const billing = billShopFloorContainerPutObject(container, putItem, {
-            acceptedSale: !!options.acceptedSale,
-            shkp: options.salePending?.shkp,
-            sellobjResult,
-        });
-        if (wasUnpaid)
-            preserveExplodedShopFloorPutTriggerBill(putItem, triggerOwner, billing.shkp, triggerPrice);
-        billShopFloorMagicBagExplosionTarget(container);
-        removeInventoryItem(item, count);
-        const messages = sellobjResult?.message ? [sellobjResult.message] : [];
-        return explodeMagicBagTransfer(container, putItem, messages, { triggerHeld: true });
-    }
-    const billing = billShopFloorContainerPutObject(container, putItem, {
-        acceptedSale: !!options.acceptedSale,
-        shkp: options.salePending?.shkp,
-        sellobjResult,
+    const triggerOwner = shopkeeperOwningBillEntry(object);
+    const triggerPrice = triggerOwner.entry ? shopBillEntryTotal(triggerOwner.entry) : 0;
+    const billing = billShopFloorContainerPutObject(container, object, {
+        acceptedSale: !!state.acceptedSale,
+        shkp: state.salePending?.shkp,
+        sellobjResult: state.sellobjResult,
+        location: state.location,
     });
-    const propertyMessages = removeInventoryItem(item, count);
-    const contained = add_to_container(container, putItem);
-    if (options.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, options.salePending?.shkp || billing.shkp);
-    if (billing.noCharge && contained && contained !== putItem) markNoChargeRecursively(contained);
+    if (isIceBoxObject(container)) freezeObjectInIcebox(object);
+    else if (isMagicBagObject(container) && magicBagExplodesWithObject(object)) {
+        if (triggerOwner.entry)
+            preserveExplodedShopFloorPutTriggerBill(object, triggerOwner, billing.shkp, triggerPrice);
+        billShopFloorMagicBagExplosionTarget(container);
+        return explodeMagicBagTransfer(container, object, messages, { triggerHeld: true });
+    }
+    const contained = add_to_container(container, object);
+    if (state.acceptedSale && contained) markAcceptedShopContainerSaleState(contained, state.salePending?.shkp || billing.shkp);
+    if (billing.noCharge && contained && contained !== object) markNoChargeRecursively(contained);
     refreshTipContainerWeight(container);
     game._pet_food_scan_inventory = game.inventory;
-    const messages = [sellobjResult?.message, ...propertyMessages, `You put ${name} into the ${containerName}.`].filter(Boolean);
+    messages.push(`You put ${name} into the ${tipContainerSimpleName(container)}.`);
     return { moved: true, message: messages.join('  '), messages };
 }
 
-function finishShopFloorContainerPutSale(pending, accept) {
-    if (!pending?.container || !pending.item || !pending.putItem || !pending.shkp)
-        return { moved: false, message: '' };
-    const result = putInventoryObjectIntoContainer(
-        pending.container,
-        pending.item,
-        pending.amount || pending.item?.quan || 1,
-        { skipSalePrompt: true, acceptedSale: !!accept, salePending: pending },
-    );
-    if (!result.moved || !accept) return result;
-    const saleMessage = shopSalePaymentMessage({ ...pending, obj: pending.putItem }, 'sell');
-    const messages = [saleMessage, ...(result.messages || (result.message ? [result.message] : []))].filter(Boolean);
-    return { ...result, saleMessage, messages, message: messages.join('  ') };
+function finishShopFloorContainerPutSale(pending, accept, messages = []) {
+    const state = pending.after;
+    state.acceptedSale = !!accept;
+    state.salePending = pending;
+    const saleMessage = accept ? shopSalePaymentMessage({ ...pending, obj: state.object }, 'sell') : '';
+    if (saleMessage) messages.push(saleMessage);
+    const result = finishContainerPut(state, messages);
+    return { ...result, saleMessage, message: messages.join('  ') };
+}
+
+async function continueContainerPutCommand(state, resumed = null) {
+    for (; state.index < state.entries.length; state.index++) {
+        const entry = state.entries[state.index];
+        const result = resumed || await putInventoryObjectIntoContainer(state.container, entry.item, entry.amount, state);
+        resumed = null;
+        state.messages.push(...(result.messages || (result.message ? [result.message] : [])));
+        if (result.pending || result.pendingSale) {
+            game.context.move = 0;
+            if (result.pendingSale) {
+                await showContainerSalePrompt(result.pendingSale, state.messages);
+            } else {
+                await setMessage(state.messages.join('  '), true);
+                if ((result.fatal || result.lifeSaving) && !result.lavaDeath) applyLifeSavingOrFatalCommandMode(result);
+            }
+            state.messages = [];
+            return result;
+        }
+        state.moved ||= !!result.moved;
+        state.bagGone ||= !!result.bagGone;
+        if (state.bagGone) break;
+    }
+    const { container, messages, moved, bagGone } = state;
+    const ice = isIceBoxObject(container);
+    if (!bagGone && game[ice ? '_icebox_sequence_after_putin' : '_container_sequence_after_putin'] === 'takeout') {
+        if (ice) { markIceBoxSequenceUsed(moved); await continueIceBoxSequenceToTakeout(container, messages); }
+        else { markContainerSequenceUsed(moved); await continueContainerSequenceToTakeout(container, messages); }
+    } else if (ice ? iceBoxSequenceActive() : containerSequenceActive()) {
+        if (ice) await finishIceBoxSequence(messages, moved || bagGone);
+        else await finishContainerSequence(messages, moved || bagGone);
+    } else {
+        if (ice) clearIceBoxSequenceState();
+        else { clearContainerSequenceState(); game._floor_container_object = null; }
+        game._command_mode = null;
+        game.context.move = moved || bagGone ? 1 : 0;
+        await showIceBoxMessageList(messages);
+    }
+    return { moved, bagGone };
+}
+
+async function showContainerSalePrompt(pending, messages) {
+    game._shop_sale_pending = pending;
+    const preceding = messages.filter(message => message !== pending.promptMessage);
+    game._pending_message = '';
+    game._message_more = 0;
+    if (preceding.length) {
+        game._command_mode = 'containerSaleMore';
+        await setMessage(preceding.join('  '), true);
+    } else {
+        game._command_mode = 'shopSaleConfirm';
+        await setMessage(pending.promptMessage);
+    }
 }
 
 async function showIceBoxMessageList(messages) {
@@ -59578,7 +59734,7 @@ function heroWarnsOfMonsterTypeForRollingBoulder(mon) {
 
 // display.h:canspotmon distinguishes knowing a monster's position from seeing
 // its square. Telepathy, detection and species warning also reveal hiders.
-function heroCanSpotMonster(mon) {
+export function heroCanSpotMonster(mon) {
     if (!mon) return false;
     if (heroDetectsMonsterForRollingBoulder(mon)) return true;
     if (heroSensemonRestrictionsAllowRollingBoulder(mon) && sensesTelepathically(mon)) return true;
@@ -60540,6 +60696,42 @@ async function bookOfTheDeadStudyMessage(item) {
 
 // C spell.c:study_book resumes its prompts without repeating the read command.
 async function studySpellbook(item, { refresh = false, confirmed = false } = {}) {
+    const interrupted = game._spellbook_interrupted_study;
+    const resuming = interrupted?.item === item && interrupted.turns > 0;
+    const bookLevel = isBookOfTheDeadItem(item) ? 7
+        : SPELLBOOK_LEVELS[item.spellName || item.spell?.name || String(item.kind || '').replace(/^spellbook(?: of)? /, '')]
+            || item.level || item.spell?.level || 1;
+    // C study_book tests dullness before blank-paper and resume handling.
+    if (!refresh && !confirmed && !heroIsConfused() && !heroHasSleepResistance()
+        && spellbookCallAppearance(item) === 'dull') {
+        let tired = rnd(25) - currentHeroAttribute(A_WIS);
+        if (resuming) tired -= rnd(bookLevel);
+        if (tired > 0) {
+            const form = heroFormData();
+            const eye = bodyPart(form, 'eye');
+            const eyes = ['Cyclops', 'floating eye'].includes(form.name) || form.noeyes ? eye : pluralizeMonsterName(eye);
+            const duration = tired + rnd(2 * bookLevel);
+            clearActiveDelayedOccupations();
+            interruptPositiveMulti();
+            game._helpless_time = duration;
+            game._sleeping_time = duration + 1;
+            game._wake_message = 'You wake up.';
+            game.u.usleep = game.moves;
+            await setMessage(`This book is so dull that you can't keep your ${eyes} open.`);
+            game._command_mode = null;
+            game.context.move = duration;
+            return;
+        }
+    }
+    if (resuming && !heroIsConfused() && !isBlankSpellbookItem(item)) {
+        game._spellbook_study_occupation = interrupted;
+        game._spellbook_interrupted_study = null;
+        await setMessage('You continue your efforts to memorize the spell.');
+        game._command_mode = null;
+        game.context.move = 1;
+        return;
+    }
+    game._spellbook_interrupted_study = null;
     if (isBlankSpellbookItem(item)) {
         discoverSpellbook(item, 'blank paper');
         await setMessage('This spellbook is all blank.');
@@ -60627,6 +60819,9 @@ async function studySpellbook(item, { refresh = false, confirmed = false } = {})
 }
 
 function discoverSpellbook(item, name) {
+    // C makeknown -> discover_object credits newly identified types separately
+    // from learn's study exercises, including spells already known by gift.
+    if (!spellbookDiscoveryKnown(name)) exerciseAttribute(A_WIS, true);
     const discoveryName = `spellbook of ${name}`;
     const appearance = name === 'blank paper' ? 'plain' : spellbookCallAppearance(item);
     const text = appearance ? `${discoveryName} (${appearance})` : discoveryName;
@@ -64447,6 +64642,12 @@ function tutorialEnterStash() {
         return;
     }
 
+    if (game._command_mode === 'containerSaleMore') {
+        if ([' ', '\r', '\n', '\x1b'].includes(ch))
+            await showContainerSalePrompt(game._shop_sale_pending, []);
+        return;
+    }
+
     if (game._command_mode === 'shopSaleConfirm') {
         const pendingSale = game._shop_sale_pending;
         if (!pendingSale) {
@@ -64461,7 +64662,21 @@ function tutorialEnterStash() {
         const accepted = answer === 'y' || answer === 'a';
         let message;
         if (pendingSale.kind === 'containerPutIn') {
+            const command = pendingSale.after?.command;
+            if (command && answer === 'q') command.saleResponse = 'n';
+            if (command && answer === 'a') {
+                if (pendingSale.credit) command.autoCredit = true;
+                else command.saleResponse = 'y';
+            }
             const result = finishShopFloorContainerPutSale(pendingSale, accepted);
+            game._shop_sale_pending = null;
+            game._pending_message = '';
+            game._message_more = 0;
+            game._keep_pending_message = 0;
+            if (command) {
+                await continueContainerPutCommand(command, result);
+                return;
+            }
             message = (result.messages || (result.message ? [result.message] : [])).join('  ');
         } else {
             message = finishDroppedObjectSale(pendingSale, accepted);
@@ -66281,8 +66496,7 @@ function tutorialEnterStash() {
                     game._spellbook_finish_after_topline_more = null;
                     game._spellbook_study_occupation = finish;
                     await processSpellbookStudyOccupation(true);
-                    if ((game.u?.umovement ?? 0) >= NORMAL_SPEED)
-                        game.u.umovement -= NORMAL_SPEED;
+                    game._resume_time_after_more = 0;
                     game._pending_time_passed = Math.max(game._pending_time_passed || 0, 1);
                     game.context.move = 0;
                     game._process_command_time_now = 1;
@@ -72999,6 +73213,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         } else {
             if (prompt?.item) prompt.item.in_use = false;
             game.context.move = difficulty ? 1 : 0;
+            game._keep_pending_message = 1;
         }
         return;
     }
@@ -77317,40 +77532,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 await setMessage('No relevant items selected.');
                 return;
             }
-            const results = [];
-            let pendingSale = null;
-            for (const selectedEntry of selectedEntries) {
-                const result = putInventoryObjectIntoIceBox(iceBox, selectedEntry.item, selectedEntry.amount);
-                results.push(result);
-                if (result.pendingSale) {
-                    pendingSale = result.pendingSale;
-                    break;
-                }
-            }
-            const moved = results.some(result => result.moved);
-            const messages = iceBoxPutResultMessages(results);
             clearIceBoxPutState();
-            if (pendingSale) {
-                clearIceBoxSequenceState();
-                game._shop_sale_pending = pendingSale;
-                game._command_mode = 'shopSaleConfirm';
-                if (moved) game.context.move = 1;
-                await showIceBoxMessageList([...messages.filter(message => message !== pendingSale.promptMessage), pendingSale.promptMessage]);
-                return;
-            }
-            if (game._icebox_sequence_after_putin === 'takeout') {
-                markIceBoxSequenceUsed(moved);
-                await continueIceBoxSequenceToTakeout(iceBox, messages);
-                return;
-            }
-            if (iceBoxSequenceActive()) {
-                await finishIceBoxSequence(messages, moved);
-                return;
-            }
-            clearIceBoxSequenceState();
-            game._command_mode = null;
-            if (moved) game.context.move = 1;
-            await showIceBoxMessageList(messages);
+            await continueContainerPutCommand({ container: iceBox, entries: selectedEntries, index: 0, moved: false, messages: [] });
             return;
         }
         if (ch === '\x1b' || ch === 'q') {
@@ -77399,17 +77582,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const item = ch === '$'
             ? { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount || 0 }
             : (game.inventory || []).find(invItem => invItem.letter === ch);
-        const result = putInventoryObjectIntoIceBox(iceBox, item, item?.quan || 1);
         clearIceBoxPutState();
-        if (result.pendingSale) {
-            game._shop_sale_pending = result.pendingSale;
-            game._command_mode = 'shopSaleConfirm';
-            await showIceBoxMessageList([result.pendingSale.promptMessage]);
-            return;
-        }
-        game._command_mode = null;
-        if (result.moved) game.context.move = 1;
-        await showIceBoxPutMessages([result]);
+        await continueContainerPutCommand({ container: iceBox, entries: [{ item, amount: item?.quan || 1 }], index: 0, moved: false, messages: [] });
         return;
     }
 
@@ -77534,44 +77708,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
                 await setMessage('No relevant items selected.');
                 return;
             }
-            const results = [];
-            let pendingSale = null;
-            for (const selectedEntry of selectedEntries) {
-                const result = putInventoryObjectIntoContainer(container, selectedEntry.item, selectedEntry.amount);
-                results.push(result);
-                if (result.pendingSale) {
-                    pendingSale = result.pendingSale;
-                    break;
-                }
-                if (result.bagGone) break;
-            }
-            const moved = results.some(result => result.moved);
-            const bagGone = results.some(result => result.bagGone);
-            const messages = results.flatMap(result => result.messages || (result.message ? [result.message] : []));
             clearContainerPutState();
-            if (pendingSale) {
-                clearContainerSequenceState();
-                game._floor_container_object = null;
-                game._shop_sale_pending = pendingSale;
-                game._command_mode = 'shopSaleConfirm';
-                if (moved || bagGone) game.context.move = 1;
-                await showIceBoxMessageList([...messages.filter(message => message !== pendingSale.promptMessage), pendingSale.promptMessage]);
-                return;
-            }
-            if (!bagGone && game._container_sequence_after_putin === 'takeout') {
-                markContainerSequenceUsed(moved);
-                await continueContainerSequenceToTakeout(container, messages);
-                return;
-            }
-            if (containerSequenceActive()) {
-                await finishContainerSequence(messages, moved || bagGone);
-                return;
-            }
-            clearContainerSequenceState();
-            game._floor_container_object = null;
-            game._command_mode = null;
-            if (moved || bagGone) game.context.move = 1;
-            await showIceBoxMessageList(messages);
+            await continueContainerPutCommand({ container, entries: selectedEntries, index: 0, moved: false, messages: [] });
             return;
         }
         if (ch === '\x1b' || ch === 'q') {
@@ -77616,18 +77754,8 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         const item = ch === '$'
             ? { letter: '$', cls: 'coin', otyp: GOLD_PIECE, glyph: '$', quan: game._goldCount || 0 }
             : (game.inventory || []).find(invItem => invItem.letter === ch);
-        const result = putInventoryObjectIntoContainer(container, item, item?.quan || 1);
         clearContainerPutState();
-        game._floor_container_object = null;
-        if (result.pendingSale) {
-            game._shop_sale_pending = result.pendingSale;
-            game._command_mode = 'shopSaleConfirm';
-            await showIceBoxMessageList([result.pendingSale.promptMessage]);
-            return;
-        }
-        game._command_mode = null;
-        if (result.moved || result.bagGone) game.context.move = 1;
-        await showIceBoxMessageList(result.messages || (result.message ? [result.message] : []));
+        await continueContainerPutCommand({ container: container, entries: [{ item, amount: item?.quan || 1 }], index: 0, moved: false, messages: [] });
         return;
     }
 
@@ -81798,200 +81926,7 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
         }
         const launcher = (game.inventory || [])
             .find(invItem => invItem.letter === game._fire_launcher_letter) || null;
-        const ammoRange = heroHorizontalThrowAmmoRange(item, launcher);
-        const fireNoLauncherMessage = ammoRange?.noLauncherMessage || '';
-        let fireRange = heroHorizontalThrowFinalRange(
-            item,
-            ammoRange?.range ?? heroHorizontalThrowWeightedRange(item).range,
-        );
-        let fireRecoilResult = null;
-        const startX = game.u?.ux || 0;
-        const startY = game.u?.uy || 0;
-        if (heroHorizontalThrowAirRecoilActive()) {
-            const airSplit = heroHorizontalThrowAirSplitRange(item, launcher);
-            fireRange = heroHorizontalThrowFinalRange(item, airSplit.throwRange);
-            fireRecoilResult = heroHorizontalThrowRecoilResult(dir, airSplit.recoilRange);
-        }
-        const oldQuan = item.quan || 1;
-        const firedFromLauncher = !!(launcher && heroThrowAmmoAndLauncher(item, launcher));
-        const fireShotLimit = Math.max(0, Math.trunc(Number(game._fire_count || 0)));
-        const shotCount = firedFromLauncher
-            ? heroLauncherAmmoMultishotCount(item, launcher, fireShotLimit)
-            : heroThrownStackableWeaponMultishotCount(item, fireShotLimit);
-        const splitProjectileFlight = shotCount > 1;
-        const initialFlight = splitProjectileFlight
-            ? { ox: startX, oy: startY, targetMon: null, ironBarsImpact: null }
-            : heroFireProjectileFlightResult(startX, startY, dir, fireRange, item, { ironBars: true });
-        let ox = initialFlight.ox;
-        let oy = initialFlight.oy;
-        let targetMon = initialFlight.targetMon;
-        let impactMessage = '';
-        let landingMessage = '';
-        const targetUsesImpact = heroFireProjectileTargetUsesImpact(item, targetMon, launcher, firedFromLauncher);
-        const newsymTargets = [];
-        let projectileImpactMore = false;
-        if (splitProjectileFlight) {
-            const impactMessages = [];
-            const landingMessages = [];
-            for (let shot = 0; shot < shotCount; shot++) {
-                const shotId = oldQuan - shot > 1 ? next_ident() : item.id;
-                const splitShot = shotId !== item.id;
-                const projectileObject = {
-                    ...item,
-                    letter: undefined,
-                    line: undefined,
-                    wielded: false,
-                    quivered: false,
-                    id: shotId,
-                    o_id: splitShot ? undefined : item.o_id,
-                    _shopBillObjectId: splitShot ? undefined : item._shopBillObjectId,
-                    quan: 1,
-                    glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
-                    color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-                };
-                const flight = heroFireProjectileFlightResult(startX, startY, dir, fireRange, projectileObject, { ironBars: true });
-                ox = flight.ox;
-                oy = flight.oy;
-                targetMon = flight.targetMon;
-                projectileObject.ox = ox;
-                projectileObject.oy = oy;
-                if (oldQuan - shot > 1) splitCarriedObjectShopBill(item, projectileObject, 1);
-                const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, flight, impactMessages);
-                const shotUsesImpact = heroFireProjectileTargetUsesImpact(projectileObject, targetMon, launcher, firedFromLauncher);
-                const impact = !barsResult.handled && shotUsesImpact
-                    ? await heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher)
-                    : { handled: false, messages: [], consumed: false, hit: false, passiveTarget: null };
-                if (impact.handled) impactMessages.push(...impact.messages);
-                if (impact.more) projectileImpactMore = true;
-                if (targetMon) newsymTargets.push(targetMon);
-                if (!impact.consumed && !barsResult.broke) {
-                    const breakRoll = !projectileLandingIsSoft(ox, oy) ? rn2(100) : null;
-                    const landing = landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
-                        breakRoll,
-                        ohit: impact.hit,
-                        passiveTarget: impact.passiveTarget,
-                    });
-                    landingMessages.push(...landing.messages);
-                }
-            }
-            impactMessage = impactMessages.join('  ');
-            landingMessage = landingMessages.join('  ');
-        } else {
-            let projectileId = null;
-            let projectileBreakRoll = null;
-            const hardLanding = !projectileLandingIsSoft(ox, oy);
-            const splitBeforeImpact = targetUsesImpact;
-            if (splitBeforeImpact) {
-                for (let shot = 0; shot < shotCount; shot++) {
-                    if (oldQuan - shot > 1) projectileId = next_ident();
-                }
-            }
-            const projectileObject = {
-                ...item,
-                letter: undefined,
-                line: undefined,
-                wielded: false,
-                quivered: false,
-                id: projectileId ?? item.id,
-                o_id: projectileId != null && projectileId !== item.id ? undefined : item.o_id,
-                _shopBillObjectId: projectileId != null && projectileId !== item.id ? undefined : item._shopBillObjectId,
-                quan: shotCount,
-                ox,
-                oy,
-                glyph: item.glyph || (item.cls === 'gem' ? '*' : ')'),
-                color: item.color || (item.cls === 'gem' ? CLR_GRAY : CLR_CYAN),
-            };
-            if (oldQuan > shotCount) splitCarriedObjectShopBill(item, projectileObject, shotCount);
-            let impactConsumedProjectile = false;
-            let impactObjectHit = false;
-            let impactPassiveTarget = null;
-            const projectileImpactMessages = [];
-            const barsResult = await appendHeroProjectileIronBarsImpact(projectileObject, initialFlight, projectileImpactMessages);
-            if (barsResult.handled) impactMessage = projectileImpactMessages.join('  ');
-            if (!barsResult.handled && targetMon) {
-                const impact = await heroFireProjectileMonsterImpact(projectileObject, targetMon, launcher, firedFromLauncher);
-                if (impact.handled) {
-                    impactMessage = (impact.messages || []).join('  ');
-                    impactConsumedProjectile = !!impact.consumed;
-                    impactObjectHit = !!impact.hit;
-                    impactPassiveTarget = impact.passiveTarget || null;
-                    if (impact.more) projectileImpactMore = true;
-                    newsymTargets.push(targetMon);
-                }
-            }
-            if (!impactConsumedProjectile && !barsResult.broke && hardLanding) {
-                projectileBreakRoll = null;
-                for (let shot = 0; shot < shotCount; shot++) {
-                    if (!splitBeforeImpact && oldQuan - shot > 1) projectileId = next_ident();
-                    const roll = rn2(100);
-                    if (projectileBreakRoll == null) projectileBreakRoll = roll;
-                }
-            }
-            if (!splitBeforeImpact && projectileId != null) projectileObject.id = projectileId;
-            const landing = impactConsumedProjectile || barsResult.broke
-                ? { object: null, messages: [] }
-                : landProjectileObjectWithShopHandling(projectileObject, ox, oy, {
-                    breakRoll: projectileBreakRoll,
-                    ohit: impactObjectHit,
-                    passiveTarget: impactPassiveTarget,
-                });
-            landingMessage = landing.messages.join('  ');
-        }
-        if (firedFromLauncher) {
-            game._stale_projectile_marks ??= [];
-            game._stale_projectile_marks.push({
-                x: startX + dir.dx * 2,
-                y: startY + dir.dy * 2,
-                ch: '%',
-                color: CLR_BROWN,
-            });
-        }
-        if (shopBillableGold(item)) {
-            removeGoldFromHero(shotCount);
-            const money = (game.inventory || []).find(invItem =>
-                invItem.letter === '$' || invItem.cls === 'coin' || invItem.otyp === GOLD_PIECE);
-            if (money?.quivered) money.line = `${money.letter || '$'} - ${money.quan || 0} gold piece${(money.quan || 0) === 1 ? '' : 's'}${quiverSuffix(money)}`;
-        } else if (oldQuan > shotCount) {
-            item.quan = oldQuan - shotCount;
-            if (item.line) item.line = item.line.replace(/ - \d+ /, ` - ${item.quan} `);
-            if (item.unpaid) syncUnpaidBillLine(item);
-        } else {
-            game.inventory = (game.inventory || []).filter(invItem => invItem !== item);
-        }
-        updateWornDisplacement();
-        game._pet_food_scan_inventory = game.inventory;
-        const name = heroProjectileVolleyName(item, shotCount);
-        const fireMessage = !fireNoLauncherMessage && shotCount === 1
-            && fireShotLimit <= 0
-            ? ''
-            : shotCount > 1
-            ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
-            : fireShotLimit > 0
-            ? `${firedFromLauncher ? 'You shoot' : 'You throw'} ${shotCount} ${name}.`
-            : `${firedFromLauncher ? 'You shoot' : 'You throw'} ${name}.`;
-        const message = fireNoLauncherMessage
-            ? [fireRecoilResult?.message || '', impactMessage].filter(Boolean).join('  ')
-            : [fireMessage, fireRecoilResult?.message || '', impactMessage].filter(Boolean).join('  ');
-        const followUpMessage = [message, landingMessage].filter(Boolean).join('  ');
-        if (fireNoLauncherMessage) {
-            if (followUpMessage) game._queued_message_after_more = followUpMessage;
-            await setMessage(fireNoLauncherMessage, !!followUpMessage || !!fireRecoilResult?.more || projectileImpactMore);
-        } else if (message || landingMessage) {
-            if (landingMessage) game._queued_message_after_more = landingMessage;
-            await setMessage(message, !!landingMessage || !!fireRecoilResult?.more || projectileImpactMore);
-        } else {
-            game._pending_message = '';
-            game._message_more = 0;
-        }
-        for (const mon of newsymTargets) newsym(mon.mx, mon.my);
-        game._command_mode = null;
-        game._fire_item_letter = null;
-        game._fire_launcher_letter = null;
-        game._fire_count = null;
-        game.context.move = 1;
-        if (fireRecoilResult?.trapResult?.lifeSaving || fireRecoilResult?.trapResult?.fatal) {
-            if (applyLifeSavingOrFatalCommandMode(fireRecoilResult.trapResult)) return;
-        }
+        await beginHeroFireVolley(item, launcher, dir);
         return;
     }
 

@@ -1,5 +1,5 @@
 import { game } from './gstate.js';
-import { endBurn, cleanupBurn } from './burn.js';
+import { endBurn, cleanupBurn, lightObjectKind } from './burn.js';
 import { TIMER_LEVEL, TIMER_OBJECT, ROT_ORGANIC, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON,
     SHRINK_GLOB, BURN_OBJECT, MELT_ICE_AWAY, startTimer, stopTimer, peekTimer,
     stopObjectTimers, stopSpotTimers, spotTimerExpires, runTimers } from './timeout.js';
@@ -17,6 +17,9 @@ import {
 import { rn1, rn2, rnd, rnz } from './rng.js';
 import { newsym } from './display.js';
 import { vision_recalc } from './vision.js';
+
+const RELATIVE_AGE_KINDS = new Set(['brass lantern', 'oil lamp', 'candelabrum of invocation',
+    'tallow candle', 'wax candle', 'potion of oil']);
 
 const BOULDER = 465;
 const CORPSE = 471;
@@ -288,9 +291,11 @@ export function freezeObjectInIcebox(obj) {
     obj.inIceBox = true;
     obj.fromIceBox = true;
     if (isGlobbyObject(obj)) stopGlobShrinkTimeout(obj);
+    // C obj.h:age_is_relative excludes only fuel ages. Other absolute ages,
+    // including future artifact cooldowns, become a possibly negative offset.
+    if (!RELATIVE_AGE_KINDS.has(lightObjectKind(obj)))
+        obj.age = (game.moves || 0) - (obj.age ?? (game.moves || 0));
     if (!isCorpseObject(obj)) return;
-    const moves = Math.max(game.moves || 0, 1);
-    obj.age = Math.max(0, moves - (obj.age ?? moves));
     clearCorpseTimeout(obj);
     setCorpseOnIce(obj, false);
 }
@@ -298,11 +303,10 @@ export function freezeObjectInIcebox(obj) {
 export function removedFromIcebox(obj) {
     if (!obj) return;
     const moves = Math.max(game.moves || 0, 1);
+    if ((obj.inIceBox || obj.fromIceBox)
+        && !RELATIVE_AGE_KINDS.has(lightObjectKind(obj)))
+        obj.age = moves - (obj.age ?? 0);
     if (isCorpseObject(obj)) {
-        const frozenAge = obj.inIceBox || obj.fromIceBox
-            ? Math.max(0, obj.age ?? 0)
-            : Math.max(0, moves - (obj.age ?? moves));
-        obj.age = moves - frozenAge;
         const name = corpseName(obj);
         if (name) obj.norevive = name !== 'ice troll';
         setCorpseOnIce(obj, false);
