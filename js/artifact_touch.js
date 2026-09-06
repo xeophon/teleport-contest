@@ -96,8 +96,8 @@ export async function touchArtifactObject(item, D, state = {}) {
         const { badClass, badAlign, selfWilled } = status;
         state.phase = 'refusal';
         if (((badClass || badAlign) && selfWilled) || (badAlign && !rn2(4))) {
-            const name = definition.name.replace(/^The /, 'the ');
-            const message = `You are blasted by ${name}'s power!`;
+            const name = D.touchName?.(item) || definition.name.replace(/^The /, 'the ');
+            const message = `You are blasted by ${name}${name.endsWith('s') ? "'" : "'s"} power!`;
             state.blasted = true;
             state.phase = 'blastDamage';
             if (D.message) {
@@ -121,7 +121,8 @@ export async function touchArtifactObject(item, D, state = {}) {
         state.ok = !(status.badClass && status.badAlign && status.selfWilled);
         state.phase = 'done';
         if (!state.ok) {
-            const message = `${definition.name} ${(game.inventory || []).includes(item)
+            const carried = (game.inventory || []).includes(item);
+            const message = D.refusalMessage?.(item, carried) || `${definition.name} ${carried
                 ? 'is beyond your control!' : 'evades your grasp!'}`;
             if (D.message) {
                 if (!D.message(message)) return result({ pending: true });

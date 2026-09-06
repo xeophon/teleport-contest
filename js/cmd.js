@@ -42,7 +42,7 @@ import { INTRINSIC, TELEPORT, SEE_INVIS, POISON_RES, COLD_RES, ANTIMAGIC, SHOCK_
 import { S_MIMIC, S_NYMPH, PM_AMOROUS_DEMON, PM_ARCHON, AD_BLND, AD_STCK, AD_DGST, AD_CLRC, AD_SPEL, AT_MAGC, AT_HUGS, AT_ENGL, perceives, hides_under, PM_GREMLIN, infravisible, infravision } from './permonst.js';
 import { pmOf, resistsFire, resistsCold, resistsAcid, resistsElec, resistsSleep } from './mhitm.js';
 import { artifactInvocation, canInvokeItem, invokeArtifact, toggleArtifactProperty, finesseAhriman, INVOKED_PROPERTIES, openArtifactPortal, setArtifactEquipmentLight } from './artifact.js';
-import { artifactTouchStatus, retouchArtifactObject } from './artifact_touch.js';
+import { artifactTouchStatus, touchArtifactObject, retouchArtifactObject } from './artifact_touch.js';
 import { flashRay, flashBurnHero, flashResistance, lightDamageHero, lightHitsGremlin, resolveFlashDirection,
     recordCameraCloseup, FLASH_CMAP_EXPLANATIONS } from './flash.js';
 
@@ -2287,10 +2287,10 @@ function carriedDropDisplayColor(item) {
     return NO_COLOR;
 }
 
-function dropCarriedObjectAtHero(item, messages = [], dropTarget = null) {
+function dropCarriedObjectAtHero(item, messages = [], dropTarget = null, { carried = true } = {}) {
     const dropX = dropTarget?.x ?? game.u?.ux ?? 0;
     const dropY = dropTarget?.y ?? game.u?.uy ?? 0;
-    messages.push(...(removeInventoryItem(item, item.quan || 1) || []));
+    if (carried) messages.push(...(removeInventoryItem(item, item.quan || 1) || []));
     const dropped = Object.assign(item, {
         invlet: item.invlet ?? item.letter,
         letter: undefined,
@@ -18640,7 +18640,7 @@ function heldObjectMustDrop(item, previousEncumbrance) {
         && heroEncumbranceForWeight(heroCarriedWeight()) > Math.max(previousEncumbrance, pickupBurdenLimit());
 }
 
-async function beginRejectedWish(item, prefix = '', comparison = '') {
+async function beginRejectedWish(item, prefix = '', comparison = '', { append = false, fromFloor = false, skipMessages = false } = {}) {
     const unsafeCorpse = isPetrifyingCorpseObject(item) && !wornGlovesItem()
         && !heroPolyselfResistsStoning() && !game.u.stoneResistance
         && !(game.u.uprops?.[STONE_RES]?.intrinsic || game.u.uprops?.[STONE_RES]?.extrinsic);
@@ -18656,25 +18656,25 @@ async function beginRejectedWish(item, prefix = '', comparison = '') {
         + 'The ' + noun + ' ' + action + ' ' + ending + '!';
     item.wishedfor = unsafeCorpse ? false : item.wishedfor;
     item.nomerge = false;
-    game._rejected_wish = { item, phase: 'drop', messages: [], index: 0 };
-    await setMessage(comparison || message);
-    if (comparison && !addToplineMessage(message)) {
-        game._rejected_wish.pendingMessage = game._topline_after_more;
-        game._topline_after_more = '';
-        game._command_mode = 'rejectedWishMore';
-        game._process_time_with_more = 0;
-        return;
-    }
+    const messages = [comparison, message].filter(Boolean);
+    game._rejected_wish = { item, phase: 'feedback', messages, index: append ? 0 : 1, fromFloor, skipMessages };
+    if (!append) await setMessage(messages[0]);
     await resumeRejectedWish();
 }
 
 async function resumeRejectedWish() {
     const state = game._rejected_wish;
-    if (state.phase === 'drop') {
-        state.phase = 'messages';
-        dropCarriedObjectAtHero(state.item, state.messages);
-    }
-    while (state.index < state.messages.length) {
+    while (state.phase !== 'notice') {
+        if (state.phase === 'drop') {
+            state.phase = 'messages';
+            state.messages = [];
+            state.index = 0;
+            dropCarriedObjectAtHero(state.item, state.messages, null, { carried: !state.fromFloor });
+        }
+        if (state.index >= state.messages.length) {
+            state.phase = state.phase === 'feedback' ? 'drop' : 'notice';
+            continue;
+        }
         const message = state.messages[state.index++];
         if (!state.skipMessages && !addToplineMessage(message)) {
             state.pendingMessage = game._topline_after_more;
@@ -18691,7 +18691,7 @@ async function resumeRejectedWish() {
 }
 
 // prinv and encumber_msg both return before makewish advances divine notice.
-async function finishHeldWishFeedback(messages = null, item = null) {
+async function finishHeldWishFeedback(messages = null, item = null, { append = false, skipMessages = false } = {}) {
     if (messages) {
         // hold_another_object readies only missiles or ammunition matching
         // either wielded launcher, after the inventory/load gates accept it.
@@ -18706,8 +18706,8 @@ async function finishHeldWishFeedback(messages = null, item = null) {
             item.line += quiverSuffix(item);
             messages[messages.length - 1] = messages.at(-1).replace(/\.?$/, suffix => quiverSuffix(item) + suffix);
         }
-        game._held_wish = { messages, item, index: 1, phase: 'messages' };
-        await setMessage(messages[0]);
+        game._held_wish = { messages, item, index: append ? 0 : 1, phase: 'messages', skipMessages };
+        if (!append) await setMessage(messages[0]);
     }
     const state = game._held_wish;
     while (state.phase !== 'notice') {
@@ -18767,6 +18767,125 @@ function mergeWishedObjectIntoInventory(item, target) {
     const landing = normalInventoryLine({ ...target, line: '', quan: quantity })
         + (game.flags?.verbose === false ? '' : ' (' + target.quan + ' in total).');
     return { target, discovered, landing };
+}
+
+async function finishObjectWishDelivery(item, feedback = {}) {
+    // hold_another_object adds and merges before testing the new
+    // load. A rejected merge splits off only the incoming quantity.
+    const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
+    const mergeTarget = heroIsFumbling() ? null : findWishedInventoryMergeTarget(item);
+    if (mergeTarget) {
+        const merged = mergeWishedObjectIntoInventory(item, mergeTarget);
+        game._pet_food_scan_inventory = game.inventory;
+        if (heldObjectMustDrop(mergeTarget, previousEncumbrance)) {
+            const count = item.quan || 1;
+            const dropped = splitInventoryObjectForContainerPut(mergeTarget, count);
+            mergeTarget.quan -= count;
+            mergeTarget.owt = wishedObjectFinalWeight(mergeTarget);
+            mergeTarget.line = normalInventoryLine({ ...mergeTarget, line: '' });
+            dropped.owt = wishedObjectFinalWeight(dropped);
+            game.inventory.push(dropped);
+            await beginRejectedWish(dropped, '', merged.discovered
+                ? 'You learn more about your items by comparing them.' : '', feedback);
+            return;
+        }
+        await finishHeldWishFeedback([
+            ...(merged.discovered ? ['You learn more about your items by comparing them.'] : []),
+            merged.landing,
+        ], mergeTarget, feedback);
+        return;
+    }
+    let letter = nextInventoryLetter();
+    if (game.u?.uball && game.u?.uchain && letter === 'n'
+        && !(game.inventory || []).some(invItem => invItem.letter === 'n')) {
+        letter = nextInventoryLetter();
+    }
+    item.letter = letter;
+    item.line = `${letter} - ${wishedInventoryPhrase(item)}`;
+    game.inventory ??= [];
+    game.inventory.push(item);
+    maybeAttachCarriedFigurineTimeout(item);
+    game._pet_food_scan_inventory = game.inventory;
+    item.owt = wishedObjectFinalWeight(item);
+    if (heldObjectMustDrop(item, previousEncumbrance)) {
+        await beginRejectedWish(item, '', '', feedback);
+        return;
+    }
+    await finishHeldWishFeedback([`${item.line}.`], item, feedback);
+}
+
+// C hold_another_object temporarily puts artifacts on the floor before
+// touching them, so a fatal blast leaves the object outside inventory.
+async function beginObjectWishDelivery(item) {
+    if (!item.artifact && !item.oartifact) return finishObjectWishDelivery(item);
+    game._wish_object = { item, touch: {}, wasPoly: !!game.u._polyself_form, messages: [], index: 0 };
+    prepareProjectileFloorObject(item, game.u.ux, game.u.uy);
+    placeUnstackedFloorObject(item);
+    objectIceEffect(item, item.ox, item.oy);
+    await setMessage('');
+    await resumeWishedArtifact();
+}
+
+async function resumeWishedArtifact(messages = []) {
+    const state = game._wish_object;
+    if (messages.length) await setMessage(messages.join('  '));
+    const D = {
+        ...ARTIFACT_RETOUCH_DEPS,
+        touchName: item => 'the ' + pickupObjectName(item),
+        refusalMessage: (item, carried) => 'The ' + pickupObjectName(item) + ' '
+            + (carried ? floorObjectVerb(item, 'is', 'are') + ' beyond your control!'
+                : floorObjectVerb(item, 'evades', 'evade') + ' your grasp!'),
+        message: message => {
+            if (state.skipMessages || addToplineMessage(message)) return true;
+            state.pendingMessage = game._topline_after_more;
+            game._topline_after_more = '';
+            game._command_mode = 'artifactWishMore';
+            game._process_time_with_more = 0;
+            return false;
+        },
+        damageHero: (messages, damage, cause) => {
+            const result = applyHeroHitPointDamage(messages, damage, cause);
+            // losehp feedback returns before touch_artifact abuses Wisdom.
+            return messages.length ? { ...result, pending: true } : result;
+        },
+    };
+    while (true) {
+        while (state.index < state.messages.length) {
+            if (!D.message(state.messages[state.index++])) return;
+        }
+        if (state.deathResult) {
+            const result = state.deathResult;
+            state.deathResult = null;
+            game._message_more = 1;
+            applyLifeSavingOrFatalCommandMode(result);
+            game.context.move = 0;
+            return;
+        }
+        const touch = await touchArtifactObject(state.item, D, state.touch);
+        if (touch.fatal || touch.lifeSaving) {
+            state.messages.push(...touch.messages);
+            state.deathResult = touch;
+            continue;
+        }
+        if (touch.pending) {
+            state.messages.push(...touch.messages);
+            if (state.pendingMessage) return;
+            continue;
+        }
+        removeFloorObject(state.item);
+        newsym(state.item.ox, state.item.oy);
+        game._wish_object = null;
+        game._command_mode = null;
+        const feedback = { append: true, skipMessages: !!state.skipMessages };
+        if (!touch.ok) {
+            game._rejected_wish = { item: state.item, phase: 'drop', messages: [], index: 0,
+                fromFloor: true, skipMessages: !!state.skipMessages };
+            await resumeRejectedWish();
+        } else if (state.wasPoly && !game.u._polyself_form) {
+            await beginRejectedWish(state.item, '', '', { ...feedback, fromFloor: true });
+        } else await finishObjectWishDelivery(state.item, feedback);
+        return;
+    }
 }
 
 function wishedInventoryPhrase(item, wishedQuan = 1) {
@@ -66941,6 +67060,10 @@ async function rhackInternal(_cmd) {
                 await resumeArtifactFloatCommand([lifeSavingMessage]);
                 return;
             }
+            if (game._wish_object) {
+                await resumeWishedArtifact([lifeSavingMessage]);
+                return;
+            }
             if (game._artifact_retouch_command) {
                 await resumeArtifactTouchCommand([lifeSavingMessage]);
                 return;
@@ -67966,6 +68089,21 @@ function tutorialEnterStash() {
         game._apply_pick_dig_letter = letter;
         await setMessage(pickDigDirectionPrompt(item));
         game._command_mode = 'applyPickDigDirection';
+        return;
+    }
+
+    if (game._command_mode === 'artifactWishMore') {
+        if (![' ', '\x1b', '\r', '\n'].includes(ch)) {
+            game._keep_pending_message = 1;
+            return;
+        }
+        const state = game._wish_object;
+        game._dismissed_more_this_command = 1;
+        if (ch === '\x1b') state.skipMessages = true;
+        await setMessage(state.skipMessages ? '' : state.pendingMessage);
+        state.pendingMessage = '';
+        game._command_mode = null;
+        await resumeWishedArtifact();
         return;
     }
 
@@ -71484,6 +71622,10 @@ function tutorialEnterStash() {
             if (['afterWindDamage', 'selfTouch', 'afterTrap'].includes(game._artifact_float_continuation?.phase)
                 && !game._water_continuation) {
                 await resumeArtifactFloatCommand(survivalMessages);
+                return;
+            }
+            if (game._wish_object) {
+                await resumeWishedArtifact(survivalMessages);
                 return;
             }
             if (game._artifact_retouch_command) {
@@ -78862,7 +79004,6 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             recordWishConduct();
             if (item._artifact_wish_name) wishedQuan = 1;
             if (item._artifact_wish_name || item.artifact) addConductCount('wisharti');
-            if (item.artifact) touchArtifact(item);
             if (wishedSpe !== undefined && !item._wish_ignore_requested_spe && !item._wish_spe_from_suffix) {
                 const requestedSpe = wishedSpeNegative ? -Math.abs(wishedSpe) : Math.abs(wishedSpe);
                 item.spe = wishedSpeForItem(item, requestedSpe);
@@ -78878,69 +79019,14 @@ async function finishQuaffFateMessage(message, dry, { moves = 1 } = {}) {
             applyWishedTinVariety(item);
             item.dknown = !game.u?.blind && !heroIsHallucinating();
             if (item.dknown) recordObservedObjectDiscovery(item);
-            const finalWishedWeight = wishedObjectFinalWeight(item);
+            item.owt = wishedObjectFinalWeight(item);
             delete item._wish_ignore_requested_spe;
             delete item._wish_spe_from_suffix;
             delete item._wish_tin_explicit_content;
             delete item._wish_tin_requested_variety;
             delete item._wish_glob_size;
             delete item._wish_glob_default_count;
-            // hold_another_object adds and merges before testing the new
-            // load. A rejected merge splits off only the incoming quantity.
-            const previousEncumbrance = heroEncumbranceForWeight(heroCarriedWeight());
-            const mergeTarget = heroIsFumbling() ? null : findWishedInventoryMergeTarget(item);
-            if (mergeTarget) {
-                const merged = mergeWishedObjectIntoInventory(item, mergeTarget);
-                game._pet_food_scan_inventory = game.inventory;
-                if (heldObjectMustDrop(mergeTarget, previousEncumbrance)) {
-                    const count = item.quan || 1;
-                    const dropped = splitInventoryObjectForContainerPut(mergeTarget, count);
-                    mergeTarget.quan -= count;
-                    mergeTarget.owt = wishedObjectFinalWeight(mergeTarget);
-                    mergeTarget.line = normalInventoryLine({ ...mergeTarget, line: '' });
-                    dropped.owt = wishedObjectFinalWeight(dropped);
-                    game.inventory.push(dropped);
-                    await beginRejectedWish(dropped, '', merged.discovered
-                        ? 'You learn more about your items by comparing them.' : '');
-                    return;
-                }
-                await finishHeldWishFeedback([
-                    ...(merged.discovered ? ['You learn more about your items by comparing them.'] : []),
-                    merged.landing,
-                ], mergeTarget);
-                return;
-            }
-            let letter = nextInventoryLetter();
-            if (game.u?.uball && game.u?.uchain && letter === 'n'
-                && !(game.inventory || []).some(invItem => invItem.letter === 'n')) {
-                letter = nextInventoryLetter();
-            }
-            item.letter = letter;
-            const bucPrefix = knownBlessCursePrefix(item);
-            const baseVisibleName = game.u?.blind && item.cls === 'potion' ? 'potion'
-                : game.u?.blind && item.cls === 'ring' ? 'ring'
-                    : game.u?.blind && item.cls === 'wand' ? 'wand'
-                    : `${erosionPrefix(item)}${pickupObjectName(item)}`;
-            const visibleName = `${bucPrefix}${baseVisibleName}`;
-            const displayQuan = item.quan || wishedQuan;
-            const article = item.unique ? 'the'
-                : item.noArticle ? ''
-                : pairArticleObjectName(baseVisibleName) ? 'a pair of'
-                : /^[aeiou]/i.test(visibleName) ? 'an' : 'a';
-            const displayPhrase = displayQuan > 1 ? `${displayQuan} ${visibleName}`
-                : article === 'a pair of' ? `a ${bucPrefix}pair of ${baseVisibleName}`
-                    : article ? `${article} ${visibleName}` : visibleName;
-            item.line = `${letter} - ${displayPhrase}`;
-            game.inventory ??= [];
-            game.inventory.push(item);
-            maybeAttachCarriedFigurineTimeout(item);
-            game._pet_food_scan_inventory = game.inventory;
-            item.owt = finalWishedWeight;
-            if (heldObjectMustDrop(item, previousEncumbrance)) {
-                await beginRejectedWish(item);
-                return;
-            }
-            await finishHeldWishFeedback([`${item.line}.`], item);
+            await beginObjectWishDelivery(item);
             return;
         }
         if (key === 8 || key === 127) game._wish_text = (game._wish_text || '').slice(0, -1);

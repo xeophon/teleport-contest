@@ -4096,6 +4096,7 @@ function applyArtifactFields(otmp, def, extra = {}) {
     Object.assign(otmp, artifactBaseFields(def), {
         kind: artifactObjectNameForDef(def),
         artifact: def.name,
+        known: otmp.known ?? false,
     }, extra);
     recordArtifactExistence(def.name);
     return otmp;
@@ -4107,8 +4108,24 @@ function artifactObjectNameForDef(def) {
 }
 
 export function artifactObjectName(obj) {
-    const def = ARTIFACT_DEFS.find(candidate => candidate.name === obj?.artifact);
-    return def ? artifactObjectNameForDef(def) : (obj?.kind || '');
+    const def = artifactDefinitionForName(obj?.artifact || obj?.oartifact);
+    if (!def) return obj?.kind || '';
+    let base = def.base;
+    // xname uses the base type's description until that type is discovered.
+    // Seeing or naming an artifact does not identify its underlying type.
+    const typeKnown = obj.dknown !== false && (obj.known !== false || (game._discoveries || []).some(entry =>
+        entry.name === base && (entry.known || entry.starred)));
+    if (!typeKnown) {
+        const weapon = WEAPON_ROLL_KINDS.find(row => row[1] === base);
+        base = weapon?.[3] || ({ runesword: 'runed broadsword', tsurugi: 'long samurai sword',
+            'crystal ball': 'glass orb', mirror: 'looking glass', 'skeleton key': 'key',
+            luckstone: 'gray stone', 'helm of brilliance': 'crystal helmet',
+            'amulet of ESP': `${game._object_descriptions?.amulets?.[0] || 'circular'} amulet`,
+        }[base]) || base;
+    }
+    if (def.base === 'lenses') base = 'pair of ' + base;
+    if (obj.dknown === false) return def.cls === 'amulet' ? 'amulet' : base;
+    return `${base} named ${def.name.replace(/^The /, 'the ')}`;
 }
 
 export function makeArtifactWishObject(name, options = {}) {

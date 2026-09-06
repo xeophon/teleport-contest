@@ -25,7 +25,7 @@ interactive startup, `allmain.js` for turns, and `cmd.js` for commands.
 
 ## Latest continuation checkpoint
 
-The latest source-driven checkpoint has **6,554 passing tests**, with no
+The latest source-driven checkpoint has **6,595 passing tests**, with no
 failures, skips or TODOs. All five generated-data/source-inventory checks pass.
 These checks establish progress, not whole-game parity or hidden-test success.
 
@@ -52,8 +52,8 @@ gold identity. Comparison, landing and load feedback have saved continuations
 before divine notice; accepted missiles/ammunition follow C's autoquiver gates.
 Missing ordinary weapon wishes reuse the class generator's source tables.
 Twenty-nine new state tests pass, including save/restore and ignored More keys.
-Three fresh C recordings match all 138 screens and 8,270 random calls. Artifact
-touch, levitated/swallowed drops and full serial floor effects remain open.
+Three fresh C recordings match all 138 screens and 8,270 random calls.
+Levitated/swallowed drops and full serial floor effects remain open.
 Weapon name/quantity edge cases need a wider pass.
 Load status now commits after its report returns, as `encumber_msg` does;
 this restores both affected recordings (612 screens and 14,068 random calls).
@@ -77,6 +77,18 @@ Amulet observation and the worn-item discovery view now share type identity,
 so repeated sightings do not duplicate a row or suppress another amulet type.
 Four new tests pass; the four affected recordings again match all 1,742 screens
 and 241,544 random calls.
+
+Artifact wishes now call the shared C contact routine before entering inventory.
+The object remains on the floor through blast, refusal and fatal-damage prompts;
+revival returns after the same damage call, before Wisdom abuse. Refused artifacts
+are dropped without an extra Oops, and losing a polymorph form releases an
+otherwise permitted artifact. Contact stays separate from later silver/bane
+handling checks used by wield/invoke. Unknown artifact base descriptions and
+possessives follow the source; blind wishes retain no visible instance name.
+Eight shared-contact tests, thirty wish-state tests and three fresh C recordings
+pass (73 screens and 8,208 random calls). Full artifact discovery/personal-name
+formatting, pickup/apply/swap contact integration, carried extrinsics and the
+remaining general drop/life-saving phases still require source work.
 
 Effective attributes now share `attrib.c:acurr` and `acurrstr`: base, equipment
 and temporary values, source clamps, power gloves, dunce caps, Ogresmasher and

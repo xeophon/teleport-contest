@@ -322,3 +322,24 @@ The 52 source-state tests cover saved equipment, loss while wearing power
 gloves, life saving with Ogresmasher, combat/spell/digging consumers and capacity
 boundaries. The fresh C equipment oracle matches 119 screens and 2,949 RNG calls.
 Full attribute mutation and wounded-leg production remain separate work.
+
+## Artifact wish contact continuation (2026-09-06)
+
+C `invent.c:1208-1320 hold_another_object` now calls shared
+`artifact.c:908-982 touch_artifact` behavior in wish delivery. The incoming
+object is temporarily on the floor, with saved blast/refusal and damage
+continuations. Fatal feedback finishes before the death prompt; revival resumes
+before Wisdom abuse without rerolling generation or damage. Refusal drops
+without an Oops; polymorph reversion drops after its own feedback. Contact
+permits the C silver/bane cases that the later retouch handling operation
+rejects. Divine notice follows the complete holding operation.
+
+The shared routine has eight additional tests, the command integration has
+thirty new state tests, and three unchanged-C recordings match 73 screens
+and 8,208 random calls. The recordings include accepted contact, fatal contact
+with wizard refusal, and a refused quest helm. Source base-type descriptions
+(`objects.h`, `objnam.c:xname`) and possessives (`hacklib.c:s_suffix`)
+are retained while artifacts remain unidentified. Full artifact discovery
+and personal-name formatting, contact integration in pickup/apply/swap,
+carried intrinsic effects, and general serial drop/life-saving effects remain
+open; these tests do not establish whole-artifact-file parity.
