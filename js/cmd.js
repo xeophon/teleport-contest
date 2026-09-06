@@ -1,8 +1,8 @@
 import { tinVariety, TIN_VARIETY_TEXTS } from './eat.js';
-import { makePlural as pluralizeMonsterName, xname } from './objnam.js';
+import { makePlural as pluralizeMonsterName, xname, doname } from './objnam.js';
 import { sortLoot, SORTLOOT_PACK, SORTLOOT_INVLET, SORTLOOT_LOOT, DEFAULT_PACK_ORDER } from './inventory_sort.js';
 import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, fullyIdentifyObject } from './object_knowledge.js';
-import { FUMBLING, STONE_RES } from './const.js';
+import { W_ARM, W_ARMC, W_ARMH, W_ARMS, W_ARMG, W_ARMU, W_BALL, W_CHAIN, FUMBLING, STONE_RES } from './const.js';
 import { WEAPON_ROLL_KINDS, namedEquipment } from './mklev.js';
 import { hasWoundedLegs, setWoundedLegs } from './do.js';
 import { strongmonst, MZ_HUMAN } from './permonst.js';
@@ -35,7 +35,7 @@ import { recordWizardSpellbookDiscoveries, appendAfterMoreMessage } from './allm
 import { monCatchupElapsedTime } from './dog.js';
 import { objectLocations } from './obj_location.js';
 import { clearBypasses } from './worn.js';
-import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind } from './burn.js';
+import { beginBurn, endBurn, cleanupBurn, burnObject, processBurnTimers, lightObjectKind, artifactLight } from './burn.js';
 import { AMULET_OF_YENDOR, objectMergeableByCMetadata, mergeStackableObject, putSaddleOnMonster, arriveMigratingMonsters } from './mklev.js';
 import { BURN_OBJECT, ROT_CORPSE, REVIVE_MON, ZOMBIFY_MON, ROT_ORGANIC, SHRINK_GLOB,
     peekTimer, stopTimer, runTimers, splitObjectTimers, stopObjectTimers, fallAsleep } from './timeout.js';
@@ -51021,6 +51021,56 @@ function objectNameDependencies(override = false) {
         blind: heroIsBlind(), hallucinating: heroIsHallucinating(), override,
         wizard: game.flags?.debug, description, fallback: pickupObjectName,
         fruit: fruitNameForId,
+        hand: bodyPart(heroFormData(), 'hand'), leftHanded: game.u?.uhandedness === 'left',
+        twoWeapon: game.u?.twoweap, primaryWeapon: game.u?.uwep || game.inventory?.find(item => item.wielded),
+        skin: game.u?.uskin, glib: heroHasSlipperyFingers(),
+        implicitUncursed: game.flags?.implicit_uncursed,
+        wizweight: game.flags?.wizweight, wizmgender: game.flags?.wizmgender,
+        suppressPrice: game.iflags?.suppress_price, restoring: game.program_state?.restoring,
+        artifactName: name => artifactDefinitionForName(name)?.name,
+        knownEgg: species => game._known_egg_types?.includes(species?.name ?? species),
+        burnDeadline: item => peekTimer(BURN_OBJECT, item),
+        doffing: item => game._armor_wear_occupation?.itemLetter === item.letter
+            && game._armor_wear_occupation?.action === 'takeoff',
+        donning: item => item._armorDonPending || game._armor_wear_occupation?.itemLetter === item.letter,
+        wornMask: (item, type) => {
+            let mask = item.owornmask || 0;
+            if (item.wielded || game.u?.uwep === item) mask |= W_WEP;
+            if (item.alternate || game.u?.uswapwep === item) mask |= W_SWAPWEP;
+            if (item.quivered || game.u?.uquiver === item) mask |= W_QUIVER;
+            if (item.worn) mask |= type.class === 3 ? [W_ARM, W_ARMS, W_ARMH, W_ARMG, W_ARMF, W_ARMC, W_ARMU][type.subtype]
+                : type.class === 5 ? W_AMUL : type.class === 4 || type.symbol === 'MEAT_RING'
+                    ? item.worn === 'left' ? W_RINGL : W_RINGR : type.symbol === 'SADDLE' ? W_SADDLE : W_TOOL;
+            if (item === game.u?.uball) mask |= W_BALL;
+            if (item === game.u?.uchain) mask |= W_CHAIN;
+            return mask;
+        },
+        artifactLight: item => {
+            if (!artifactLight(item)) return '';
+            let radius = item.blessed ? 3 : item.cursed ? 1 : 2;
+            if (item === game.u?.uskin) radius = 1;
+            else if (objectTypeData(item)?.symbol === 'GOLD_DRAGON_SCALE_MAIL') radius++;
+            return ['', 'dimly', 'brightly', 'brilliantly', 'radiantly'][radius];
+        },
+        leashedMonster: id => {
+            const mon = game.level?.monsters?.find(mon => mon.m_id === id && !mon.dead && mon.mhp > 0);
+            return mon && spellMonsterTheName(mon);
+        },
+        priceSuffix: (item, withPrice) => {
+            let price = 0, unpaid = false;
+            const pending = [item];
+            while (pending.length) {
+                const object = pending.pop();
+                if (object.unpaid) {
+                    unpaid = true;
+                    const entry = shopkeeperOwningBillEntry(object).entry;
+                    price += entry ? shopBillEntryUnitPrice(entry) * (object.quan || 1) : object.unpaidPrice || 0;
+                }
+                pending.push(...globContents(object));
+            }
+            if (unpaid) return ` (${item.unpaid ? 'unpaid' : 'contents'}, ${price} zorkmid${price === 1 ? '' : 's'})`;
+            return withPrice ? shopItemPriceSuffix(item, item.ox ?? game.u?.ux, item.oy ?? game.u?.uy) : '';
+        },
         observe: recordObservedObjectDiscovery,
         called: (item, type = objectTypeData(item)) => {
             if (!type) return undefined;
@@ -58016,7 +58066,7 @@ function identifyInventoryItem(item) {
     } else if (isChargedTool(item)) {
         item.chargeKnown = true;
     }
-    item.line = wizardIdentifiedItemLine(item);
+    item.line = `${item.letter || '?'} - ${doname(item, objectNameDependencies())}`;
 }
 
 
@@ -63709,24 +63759,9 @@ function showInventoryOverlay(page = 0, identify = false, match = null) {
     setOverlay(lines, fullScreen ? 24 : lines.length, fullScreen, clearCol);
 }
 
-// Wizard override_ID reveals the complete name without modifying the object.
+// override_ID reveals the full name; xname still performs normal observation.
 function wizardIdentifiedItemLine(item) {
-    const type = objectTypeData(item);
-    const view = { ...item, known: true, dknown: true, bknown: true, rknown: true,
-        cknown: true, lknown: true, chargeKnown: true, line: '', _identify_override: true };
-    if (type) {
-        if (!item.artifact && !item.oartifact) view.kind = type.name;
-        view.actualKind = type.name;
-        if (type.class === 8) view.actualKind = 'potion of ' + type.name;
-        if (type.class === 11) view.wand = type.name;
-    }
-    let line = identifiedInventoryLine(view);
-    if (item.artifact || item.oartifact) {
-        const name = artifactObjectName(view);
-        if (type && (type.class === 5 || type.class === 13)) line = line.replace(type.name, name);
-        line = line.replace(/^([a-zA-Z$] - )an? /, '$1the ');
-    }
-    return line;
+    return `${item.letter || '?'} - ${doname(item, objectNameDependencies(true), { forMenu: true })}`;
 }
 
 async function beginWizardIdentify() {

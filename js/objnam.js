@@ -1,6 +1,7 @@
+import { W_AMUL, W_ARMOR, W_ARMG, W_TOOL, W_SADDLE, W_RINGL, W_RINGR, W_WEP, W_SWAPWEP, W_QUIVER, W_BALL, W_CHAIN } from './const.js';
 import { tinDetails } from './eat.js';
 import { game } from './gstate.js';
-import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified } from './object_knowledge.js';
+import { objectTypeData, objectTypeIsKnown, objectIsFullyIdentified, objectDamageTraits } from './object_knowledge.js';
 import { JAPANESE_ITEM_ALIASES } from './o_init.js';
 import { MONS, G_UNIQ, type_is_pname, PM_ALIGNED_CLERIC, PM_CLERIC, PM_HIGH_CLERIC, PM_LONG_WORM_TAIL } from './permonst.js';
 
@@ -300,4 +301,185 @@ export function xname(item, D = {}, { singular = false, partlyEaten = false } = 
     if (D.gameover && item.o_id) name += D.disclosureText?.(item, type) || '';
     if (oname && seen) name += ' named ' + (artifact ? oname.replace(/^The /, 'the ') : oname);
     return name.slice(0, 175).replace(/^the /, '');
+}
+
+export function erosionWords(item, override = false) {
+    const type = objectTypeData(item), crystal = type.symbol === 'CRYSKNIFE';
+    const traits = objectDamageTraits(item, type);
+    if (!traits.damageable && !crystal) return '';
+    let words = '';
+    for (const [amount, noun] of [[item.oeroded, traits.rusty ? 'rusty' : traits.cracked ? 'cracked' : 'burnt'],
+        [item.oeroded2, traits.corroded ? 'corroded' : 'rotted']])
+        if (amount && !crystal) words += (amount === 2 ? 'very ' : amount === 3 ? 'thoroughly ' : '') + noun + ' ';
+    if ((override || item.rknown) && item.oerodeproof)
+        words += crystal ? 'fixed ' : traits.rusty ? 'rustproof ' : traits.corroded ? 'corrodeproof '
+            : traits.burnt ? 'fireproof ' : traits.cracked ? 'tempered ' : traits.rotted ? 'rotproof ' : '';
+    return words;
+}
+
+// objnam.c:corpse_xname positions adjectives after a unique monster's
+// possessive name. Ordinary species put those adjectives before the name.
+export function corpseName(item, adjective = '', { singular = false, noPrefix = false,
+    thePrefix = false, article = false, omitCorpse = false } = {}) {
+    const type = objectTypeData(item), glob = type.symbol !== 'CORPSE' && item.globby;
+    const mon = typeof item.corpsenm === 'number' ? MONS[item.corpsenm]
+        : MONS.find(mon => mon.name === item.corpsenm?.name || mon.names?.includes(item.corpsenm?.name));
+    let name = glob ? type.name : item.corpsenm == null || item.corpsenm === -1 ? 'thing' : objectMonsterName(item);
+    const proper = !glob && mon && type_is_pname(mon);
+    const unique = !glob && mon && mon.geno & G_UNIQ && ![PM_HIGH_CLERIC, PM_LONG_WORM_TAIL].includes(mon.pm);
+    const possessive = proper || unique;
+    if (possessive) {
+        name += name.toLowerCase() === 'it' ? 's' : name.toLowerCase() === 'you' ? 'r' : name.endsWith('s') ? "'" : "'s";
+        if (proper) noPrefix = true;
+        else if (!noPrefix) thePrefix = true;
+    }
+    if (noPrefix) thePrefix = article = false;
+    else if (thePrefix) article = false;
+    if (adjective) {
+        name = (possessive ? name + ' ' + adjective : adjective + ' ' + name).replace(/\s+/g, ' ').trim();
+        if (/^\d/.test(adjective)) article = false;
+    }
+    if (thePrefix) name = 'the ' + name;
+    if (!glob && !omitCorpse) {
+        name += ' corpse';
+        if (item.quan > 1 && !singular) { name += 's'; article = false; }
+    }
+    return (article ? indefiniteArticle(name) : '') + name;
+}
+
+// objnam.c:doname_base adds knowledge-dependent qualifiers and equipment state
+// after xname has observed the object. Pricing and actor display use their
+// owning runtime callbacks, so formatting can be used for floor objects too.
+export function doname(item, D = {}, { withPrice = false, vagueQuantity = false, forMenu = false } = {}) {
+    const type = objectTypeData(item);
+    if (!type) return D.fallback?.(item) || item.kind || 'object?';
+    let name = xname(item, D);
+    const symbol = type.symbol, quan = item.quan ?? 1, spe = item.spe || 0;
+    const override = D.override || item._identify_override;
+    const known = override || (item.known ?? !type.usesKnown), seen = override || item.dknown;
+    const contentsKnown = override || item.cknown, bucKnown = override || item.bknown, lockKnown = override || item.lknown;
+    const worn = D.wornMask?.(item, type) ?? item.owornmask ?? 0;
+    const role = D.role || game._startup_role || game.urole?.name?.m;
+    const container = ['LARGE_BOX', 'CHEST', 'ICE_BOX', 'SACK', 'OILSKIN_SACK', 'BAG_OF_HOLDING', 'BAG_OF_TRICKS'].includes(symbol);
+    const box = symbol === 'LARGE_BOX' || symbol === 'CHEST';
+    const contents = item.contents || item.cobj || [];
+    const weaponTool = type.class === 6 && type.subtype !== 0;
+    const poisoned = item.opoisoned && name.startsWith('poisoned ');
+    if (poisoned) name = name.slice(9);
+    const artifact = item.artifact || item.oartifact;
+    const proper = artifact && (override || D.gameover || objectIsFullyIdentified(item));
+    const unique = seen && (symbol === 'FAKE_AMULET_OF_YENDOR' && !known
+        || type.unique && (known || symbol === 'AMULET_OF_YENDOR'));
+    const fruitArtifact = symbol === 'SLIME_MOLD' && D.artifactName?.(name);
+    let prefix = quan !== 1 ? seen || !vagueQuantity ? quan + ' ' : 'some '
+        : symbol === 'CORPSE' ? '' : proper || unique || /^the /i.test(fruitArtifact || '') ? 'the '
+            : fruitArtifact ? '' : 'a ';
+    if (prefix === 'the ') name = name.replace(/^the /i, '');
+    if (contentsKnown && (['BAG_OF_TRICKS', 'HORN_OF_PLENTY'].includes(symbol) ? spe === 0 && !known
+        : (container || symbol === 'STATUE') && !contents.length)) prefix += 'empty ';
+    if (bucKnown && type.class !== 12 && (symbol !== 'POT_WATER' || !objectTypeIsKnown(item, type) || !item.cursed && !item.blessed)) {
+        if (item.cursed) prefix += 'cursed ';
+        else if (item.blessed) prefix += 'blessed ';
+        else if (D.implicitUncursed === false || (D.implicitUncursed == null && game.flags?.implicit_uncursed === false)
+            || (!known || !type.charged || type.class === 3 || type.class === 4)
+                && !['SCR_MAIL', 'FAKE_AMULET_OF_YENDOR', 'AMULET_OF_YENDOR'].includes(symbol) && role !== 'Priest') prefix += 'uncursed ';
+    }
+    if (box && item.otrapped && item.tknown && item.dknown) prefix += 'trapped ';
+    if (box && lockKnown) prefix += item.obroken ? 'broken ' : item.olocked || item.locked ? 'locked ' : 'unlocked ';
+    if (item.greased) prefix += 'greased ';
+    if (contentsKnown && contents.length) name += ` containing ${contents.length} item${contents.length === 1 ? '' : 's'}`;
+    const hand = D.hand || 'hand', right = D.leftHanded ? 'left' : 'right', left = D.leftHanded ? 'right' : 'left';
+    switch (weaponTool ? 2 : type.class) {
+    case 5:
+        if (worn & W_AMUL) name += ' (being worn)';
+        break;
+    case 3:
+        if (worn & W_ARMOR) {
+            name += item === D.skin ? ' (embedded in your skin)' : D.doffing?.(item) ? ' (being doffed)'
+                : D.donning?.(item) ? ' (being donned)' : ' (being worn)';
+            if (worn & W_ARMG && D.glib) name = name.slice(0, -1) + '; slippery)';
+            if (!D.blind && item.lamplit && D.artifactLight?.(item)) name = name.slice(0, -1) + ', ' + D.artifactLight(item) + ' lit)';
+        }
+        // Armor and weapon-tools share weapon enchantment and erosion wording.
+        // fall through
+    case 2:
+        if (poisoned) prefix += 'poisoned ';
+        prefix += erosionWords(item, override);
+        if (known) prefix += (spe >= 0 ? '+' : '') + spe + ' ';
+        break;
+    case 6:
+        if (worn & (W_TOOL | W_SADDLE)) name += ' (being worn)';
+        else if (symbol === 'LEASH' && item.leashmon) {
+            const monster = D.leashedMonster?.(item.leashmon);
+            if (monster) name += ' (attached to ' + monster + ')';
+            else item.leashmon = 0;
+        } else if (symbol === 'CANDELABRUM_OF_INVOCATION')
+            name += ` (${spe} of 7 candle${spe === 1 ? '' : 's'}${item.lamplit ? ', lit' : ' attached'})`;
+        else if (['OIL_LAMP', 'MAGIC_LAMP', 'BRASS_LANTERN', 'TALLOW_CANDLE', 'WAX_CANDLE'].includes(symbol)) {
+            if (symbol.endsWith('_CANDLE')) {
+                const remaining = (item.age || 0) + (item.lamplit ? (D.burnDeadline?.(item) || 0) - (D.moves ?? game.moves) : 0);
+                if (remaining < 20 * type.cost) prefix += 'partly used ';
+            }
+            if (item.lamplit) name += ' (lit)';
+        } else if (type.charged && known) name += ` (${item.recharged || 0}:${spe})`;
+        break;
+    case 11:
+        if (known) name += ` (${item.recharged || 0}:${spe})`;
+        break;
+    case 8:
+        if (symbol === 'POT_OIL' && item.lamplit) name += ' (lit)';
+        break;
+    case 4:
+        if (worn & W_RINGR) name += ' (on right ';
+        if (worn & W_RINGL) name += ' (on left ';
+        if (worn & (W_RINGR | W_RINGL)) name += hand + ')';
+        if (known && type.charged) prefix += (spe >= 0 ? '+' : '') + spe + ' ';
+        break;
+    case 7:
+        if (item.oeaten) prefix += 'partly eaten ';
+        if (symbol === 'CORPSE') prefix = corpseName(item, prefix, { article: quan === 1, omitCorpse: true }) + ' ';
+        else if (symbol === 'EGG') {
+            const monster = typeof item.corpsenm === 'number' ? MONS[item.corpsenm] : item.corpsenm;
+            if (monster && (known || D.knownEgg?.(item.corpsenm))) {
+                prefix += (monster.names?.[2] || monster.name) + ' ';
+                if (spe === 1) name += ' (laid by you)';
+            }
+        } else if (symbol === 'MEAT_RING') {
+            if (worn & W_RINGR) name += ' (on right ';
+            if (worn & W_RINGL) name += ' (on left ';
+            if (worn & (W_RINGR | W_RINGL)) name += hand + ')';
+        }
+        break;
+    case 15:
+    case 16:
+        prefix += erosionWords(item, override);
+        if (worn & (W_BALL | W_CHAIN)) name += worn & W_BALL ? ' (chained to you)' : ' (attached to you)';
+        break;
+    }
+    if (D.wizard && D.wizmgender && ['STATUE', 'CORPSE', 'FIGURINE'].includes(symbol))
+        name += ' (' + ['unspecified gender', 'female', 'male', 'neuter'][spe & 3] + ')';
+    if (worn & W_WEP && !D.mergingToWielded) {
+        const twoWeapon = D.twoWeapon && item === D.primaryWeapon;
+        if ((quan !== 1 || (type.class === 2 ? type.subtype < 0 : !weaponTool)) && !twoWeapon) name += ' (wielded)';
+        else {
+            name += ' (' + (symbol === 'AKLYS' ? 'tethered to' : twoWeapon ? 'wielded in' : 'weapon in')
+                + ' ' + (type.big ? makePlural(hand) : right + ' ' + hand) + ')';
+            if (!D.blind) {
+                const warning = D.weaponWarning?.(item);
+                if (warning) name = name.slice(0, -1) + ', ' + warning + ')';
+                else if (item.lamplit && D.artifactLight?.(item)) name = name.slice(0, -1) + ', ' + D.artifactLight(item) + ' lit)';
+            }
+        }
+    }
+    if (worn & W_SWAPWEP) name += D.twoWeapon ? ' (wielded in ' + left + ' ' + hand + ')'
+        : ` (alternate weapon${quan === 1 ? '' : 's'}; not wielded)`;
+    if (worn & W_QUIVER) name += ' (' + (type.class === 2 ? type.subtype >= -22 && type.subtype <= -20
+        ? type.subtype === -20 ? 'in quiver' : 'in quiver pouch' : 'at the ready'
+        : [4, 5, 11, 12, 13].includes(type.class) ? 'in quiver pouch' : 'at the ready') + ')';
+    if (!D.suppressPrice && !D.restoring) name += D.priceSuffix?.(item, withPrice) || '';
+    if (prefix.startsWith('a ')) prefix = indefiniteArticle(prefix.slice(2) || name) + prefix.slice(2);
+    if (D.wizard && D.wizweight) name = withPrice && name.endsWith(')')
+        ? name.slice(0, -1) + `, ${item.owt || 0} aum)` : name + ` (${item.owt || 0} aum)`;
+    // strprepend rejects a prefix that exceeds its reserved buffer outright.
+    return ((prefix.length > 80 ? '' : prefix) + name.slice(0, 175)).slice(0, forMenu ? 251 : 255);
 }

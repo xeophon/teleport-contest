@@ -213,3 +213,30 @@ test('a custom pack order controls wizard headings and object choices', async ()
     const headings = game._overlay_lines.filter(row => row[3] === 1).map(row => row[2]);
     assert.deepEqual(headings, ['Wands', 'Potions']);
 });
+
+test('wizard name override preserves ordinary observation while blind cancellation reveals no appearance', async () => {
+    setup(); const item = add('WAN_WISHING', 'a', { spe: 3, dknown: false });
+    game.u.blind = true;
+    await command();
+    assert.ok(game._overlay_lines.some(row => row[2] === 'a - a wand of wishing (0:3)'));
+    assert.equal(item.dknown, false); assert.equal(item.known, false);
+    await rhack('\x1b'); game.u.blind = false;
+    await command();
+    assert.equal(item.dknown, true); assert.equal(item.known, false);
+});
+
+test('identification while hallucinating keeps unseen appearance out of the feedback', async () => {
+    setup(); game.u.hallucinating = true;
+    const item = add('WAN_WISHING', 'a', { spe: 3, dknown: false });
+    await command(); await rhack('a'); await rhack('\n'); await finish();
+    assert.equal(item.known, true); assert.equal(item.dknown, false);
+    assert.equal(item.line, 'a - a wand (0:3)');
+});
+
+test('wizard naming keeps a wielded ordinary item in its own class', async () => {
+    setup(); const item = add('APPLE', 'a', { wielded: true });
+    await command();
+    assert.ok(game._overlay_lines.some(row => row[2] === 'a - an uncursed apple (wielded)'));
+    await rhack('a'); await rhack('\n'); await finish();
+    assert.equal(item.line, 'a - an uncursed apple (wielded)');
+});

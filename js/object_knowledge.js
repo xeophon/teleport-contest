@@ -52,6 +52,20 @@ export function objectTypeIsKnown(item, type = objectTypeData(item)) {
     });
 }
 
+// objclass.h and mkobj.c: a material can have both primary and secondary
+// erosion. Candles and fire-resistant types have separate flammability rules.
+export function objectDamageTraits(item, type = objectTypeData(item)) {
+    const material = item.material ?? type.material;
+    const organic = material <= 8 && material !== 1;
+    const rusty = material === 11, corroded = rusty || material === 13;
+    const cracked = material === 19 && type.class === 3;
+    const rotted = organic || material === 10;
+    const burnt = !['TALLOW_CANDLE', 'WAX_CANDLE', 'WAN_FIRE'].includes(type.symbol)
+        && type.property !== 1 && (organic || material === 18);
+    return { rusty, corroded, cracked, rotted, burnt,
+        damageable: rusty || corroded || cracked || rotted || burnt };
+}
+
 export function objectIsFullyIdentified(item) {
     const type = objectTypeData(item);
     if (!type) return false;
@@ -64,13 +78,7 @@ export function objectIsFullyIdentified(item) {
     if ((item.artifact || item.oartifact) && !(game._identified_artifacts || []).includes(item.artifact || item.oartifact)) return false;
     // rknown matters only for vulnerable weapons, armor, weapon-tools and balls.
     if (item.rknown || !([2, 3, 15].includes(type.class) || type.class === 6 && type.subtype !== 0)) return true;
-    const material = type.material;
-    const rottable = material <= 8 && material !== 1 || material === 10;
-    const flammable = !['TALLOW_CANDLE', 'WAX_CANDLE', 'WAN_FIRE'].includes(type.symbol)
-        && type.property !== 1 && (material <= 8 && material !== 1 || material === 18);
-    const damageable = material === 11 || material === 13 || rottable || flammable
-        || material === 19 && type.class === 3;
-    return !damageable;
+    return !objectDamageTraits(item, type).damageable;
 }
 
 // invent.c:fully_identify_obj. This mutates one object, including a container
